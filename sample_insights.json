@@ -1,0 +1,26 @@
+{
+  "domain": "tech",
+  "insights": {
+    "strengths": [
+      "Strong Python development skills",
+      "Cloud infrastructure expertise",
+      "Container orchestration experience"
+    ],
+    "gaps": [
+      "Limited machine learning expertise",
+      "Frontend development could be stronger",
+      "DevOps pipeline automation"
+    ],
+    "recommendations": [
+      "Focus on MLOps and model deployment",
+      "Strengthen React/Next.js skills for full-stack development",
+      "Pursue AWS DevOps Professional certification",
+      "Build portfolio projects showcasing cloud-native applications"
+    ],
+    "market_alignment": 0.78
+  },
+  "processing_metadata": {
+    "sections_processed": ["experience", "skills", "projects"],
+    "optimizations_applied": ["domain_specific_processing", "confidence_weighting"]
+  }
+}

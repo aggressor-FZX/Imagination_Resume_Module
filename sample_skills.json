@@ -1,0 +1,19 @@
+{
+  "title": "Senior Software Engineer",
+  "canonical_title": "senior software engineer",
+  "skills": [
+    {"skill": "python", "confidence": 0.95},
+    {"skill": "javascript", "confidence": 0.89},
+    {"skill": "aws", "confidence": 0.92},
+    {"skill": "docker", "confidence": 0.87},
+    {"skill": "kubernetes", "confidence": 0.78},
+    {"skill": "machine learning", "confidence": 0.65},
+    {"skill": "react", "confidence": 0.72}
+  ],
+  "overall_confidence": 0.89,
+  "processing_metadata": {
+    "sections_processed": 4,
+    "skills_filtered": 12,
+    "domain_classified": "tech"
+  }
+}

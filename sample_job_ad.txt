@@ -1,0 +1,29 @@
+Senior Full-Stack Developer - Tech Startup
+
+We're looking for a Senior Full-Stack Developer to join our growing engineering team. You'll be responsible for designing, developing, and maintaining scalable web applications that serve millions of users.
+
+Key Requirements:
+- 5+ years of experience in full-stack development
+- Strong proficiency in Python and JavaScript
+- Experience with React, Node.js, and modern frontend frameworks
+- Cloud platforms (AWS, GCP, or Azure) - deployment and scaling
+- Container orchestration (Docker, Kubernetes)
+- Database design and optimization (SQL and NoSQL)
+- CI/CD pipeline implementation
+- Experience with microservices architecture
+- Knowledge of machine learning integration is a plus
+
+What You'll Do:
+- Design and implement scalable backend services
+- Build responsive, user-friendly frontend interfaces
+- Deploy and maintain applications on cloud infrastructure
+- Collaborate with data scientists to integrate ML models
+- Mentor junior developers and contribute to technical decisions
+- Participate in code reviews and architectural discussions
+
+Benefits:
+- Competitive salary and equity
+- Flexible work arrangements
+- Health, dental, and vision insurance
+- Professional development budget
+- Collaborative and innovative work environment

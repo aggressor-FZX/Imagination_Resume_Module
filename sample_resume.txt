@@ -1,0 +1,11 @@
+Senior Data Engineer — Acme Corp
+2021 - Present
+Built data pipelines in Python using AWS (S3, Lambda). Implemented CI/CD with Terraform and Jenkins. Created REST APIs for data access. Increased ETL throughput by 40%.
+
+Machine Learning Intern — Example Labs
+2020 - 2021
+Trained and evaluated classification models using scikit-learn and PyTorch. Conducted feature engineering and A/B testing. Wrote unit tests with pytest.
+
+Product Analyst — Widgets Inc
+2018 - 2020
+Performed product analytics using SQL and Tableau; presented findings to stakeholders and helped define roadmap priorities.
