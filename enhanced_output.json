@@ -1,0 +1,153 @@
+{
+  "experiences": [],
+  "aggregate_skills": [
+    "aws",
+    "docker",
+    "javascript",
+    "kubernetes",
+    "python",
+    "react"
+  ],
+  "processed_skills": {
+    "high_confidence_skills": [
+      "python",
+      "javascript",
+      "aws",
+      "docker",
+      "kubernetes",
+      "react"
+    ],
+    "medium_confidence_skills": [
+      "machine learning"
+    ],
+    "low_confidence_skills": [],
+    "skill_confidences": {
+      "python": 0.95,
+      "javascript": 0.89,
+      "aws": 0.92,
+      "docker": 0.87,
+      "kubernetes": 0.78,
+      "machine learning": 0.65,
+      "react": 0.72
+    },
+    "categories": {
+      "general": [
+        "python",
+        "aws",
+        "javascript",
+        "docker",
+        "kubernetes",
+        "react",
+        "machine learning"
+      ]
+    },
+    "filtered_count": 6,
+    "total_count": 7
+  },
+  "skills_data": {
+    "title": "Senior Software Engineer",
+    "canonical_title": "senior software engineer",
+    "skills": [
+      {
+        "skill": "python",
+        "confidence": 0.95
+      },
+      {
+        "skill": "javascript",
+        "confidence": 0.89
+      },
+      {
+        "skill": "aws",
+        "confidence": 0.92
+      },
+      {
+        "skill": "docker",
+        "confidence": 0.87
+      },
+      {
+        "skill": "kubernetes",
+        "confidence": 0.78
+      },
+      {
+        "skill": "machine learning",
+        "confidence": 0.65
+      },
+      {
+        "skill": "react",
+        "confidence": 0.72
+      }
+    ],
+    "overall_confidence": 0.89,
+    "processing_metadata": {
+      "sections_processed": 4,
+      "skills_filtered": 12,
+      "domain_classified": "tech"
+    }
+  },
+  "domain_insights": {
+    "domain": "tech",
+    "insights": {
+      "strengths": [
+        "Strong Python development skills",
+        "Cloud infrastructure expertise",
+        "Container orchestration experience"
+      ],
+      "gaps": [
+        "Limited machine learning expertise",
+        "Frontend development could be stronger",
+        "DevOps pipeline automation"
+      ],
+      "recommendations": [
+        "Focus on MLOps and model deployment",
+        "Strengthen React/Next.js skills for full-stack development",
+        "Pursue AWS DevOps Professional certification",
+        "Build portfolio projects showcasing cloud-native applications"
+      ],
+      "market_alignment": 0.78
+    },
+    "processing_metadata": {
+      "sections_processed": [
+        "experience",
+        "skills",
+        "projects"
+      ],
+      "optimizations_applied": [
+        "domain_specific_processing",
+        "confidence_weighting"
+      ]
+    }
+  },
+  "role_suggestions": [
+    {
+      "role": "data-scientist",
+      "score": 0.33,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "data-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "ml-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "software-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    }
+  ],
+  "target_job_ad": "sample_job_ad.txt",
+  "confidence_threshold": 0.7,
+  "gap_analysis": "{\n  \"_demo_mode_note\": \"OpenAI API Error: \\n\\nYou tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.\\n\\nYou can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. \\n\\nAlternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`\\n\\nA detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742\\n\",\n  \"gap_analysis\": {\n    \"critical_gaps\": [\n      \"react_production_experience\",\n      \"kubernetes_at_scale\"\n    ],\n    \"nice_to_have_gaps\": [\n      \"graphql\",\n      \"serverless_architecture\"\n    ],\n    \"gap_bridging_strategy\": \"Focus on React + AWS combination through portfolio projects. Critical to demonstrate production K8s experience through contributions or side projects.\"\n  },\n  \"implied_skills\": {\n    \"scripting\": {\n      \"confidence\": 0.95,\n      \"evidence\": \"Python expertise (0.95) strongly implies shell scripting, automation scripts, and general scripting capabilities\",\n      \"development_path\": \"Formalize with GitHub repos showcasing automation tooling and CI/CD scripts\"\n    },\n    \"backend_development\": {\n      \"confidence\": 0.88,\n      \"evidence\": \"Python (0.95) + API experience suggests strong backend development foundation\",\n      \"development_path\": \"Build RESTful API with FastAPI/Django, deploy on AWS with Docker\"\n    },\n    \"cloud_native\": {\n      \"confidence\": 0.85,\n      \"evidence\": \"AWS (0.92) + Docker (0.87) + Kubernetes (0.78) indicates cloud-native architecture understanding\",\n      \"development_path\": \"Design and document a cloud-native microservices architecture\"\n    },\n    \"devops\": {\n      \"confidence\": 0.82,\n      \"evidence\": \"Docker + Kubernetes + AWS combo strongly suggests DevOps practices\",\n      \"development_path\": \"Create end-to-end CI/CD pipeline with GitHub Actions + AWS + K8s\"\n    }\n  },\n  \"environment_capabilities\": {\n    \"tech_stack\": [\n      \"python_backend\",\n      \"node.js_services\",\n      \"react_frontend\",\n      \"postgresql\",\n      \"redis_caching\"\n    ],\n    \"tools\": [\n      \"git\",\n      \"github_actions\",\n      \"terraform\",\n      \"prometheus\",\n      \"grafana\",\n      \"elk_stack\"\n    ],\n    \"platforms\": [\n      \"aws_ec2\",\n      \"aws_lambda\",\n      \"aws_rds\",\n      \"aws_s3\",\n      \"docker_hub\",\n      \"kubernetes_clusters\"\n    ],\n    \"reasoning\": \"AWS + Docker + Python/JS stack suggests modern cloud-native development environment. K8s proficiency implies familiarity with monitoring (Prometheus/Grafana) and logging (ELK). React indicates frontend tooling (Webpack, Babel). Infrastructure-as-code tools like Terraform are standard with this profile.\"\n  },\n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Backend Python Developer\",\n      \"to_role\": \"Full-Stack Engineer (Target Role)\",\n      \"timeline\": \"4-6 months\",\n      \"key_bridges\": [\n        \"React production projects\",\n        \"TypeScript proficiency\",\n        \"full-stack authentication\"\n      ],\n      \"probability\": 0.85\n    },\n    {\n      \"from_role\": \"DevOps Engineer\",\n      \"to_role\": \"Platform/SRE Engineer\",\n      \"timeline\": \"6-9 months\",\n      \"key_bridges\": [\n        \"Advanced K8s (Helm, Operators)\",\n        \"Observability stack\",\n        \"Incident response\"\n      ],\n      \"probability\": 0.75\n    },\n    {\n      \"from_role\": \"Cloud Engineer\",\n      \"to_role\": \"Solutions Architect\",\n      \"timeline\": \"9-12 months\",\n      \"key_bridges\": [\n        \"Multi-cloud (GCP/Azure)\",\n        \"Enterprise architecture patterns\",\n        \"Cost optimization\"\n      ],\n      \"probability\": 0.65\n    }\n  ],\n  \"project_briefs\": [\n    {\n      \"title\": \"Real-Time Collaborative Task Manager\",\n      \"description\": \"Build a production-ready task management SaaS with React frontend, Python/FastAPI backend, WebSockets for real-time updates, PostgreSQL + Redis, deployed on AWS with K8s.\",\n      \"skills_practiced\": [\n        \"react\",\n        \"python\",\n        \"websockets\",\n        \"kubernetes\",\n        \"aws\",\n        \"postgresql\",\n        \"redis\"\n      ],\n      \"estimated_duration\": \"6-8 weeks\",\n      \"impact_on_gaps\": \"Directly addresses React production experience gap and demonstrates full-stack capabilities. Shows K8s deployment skills.\",\n      \"difficulty\": \"intermediate\"\n    },\n    {\n      \"title\": \"ML Model Deployment Pipeline\",\n      \"description\": \"Create MLOps pipeline: Train scikit-learn model, containerize with Docker, deploy to AWS Lambda + API Gateway, add monitoring with CloudWatch.\",\n      \"skills_practiced\": [\n        \"machine_learning\",\n        \"docker\",\n        \"aws_lambda\",\n        \"ci_cd\",\n        \"monitoring\"\n      ],\n      \"estimated_duration\": \"3-4 weeks\",\n      \"impact_on_gaps\": \"Bridges ML gap while leveraging existing AWS/Docker strengths. Demonstrates end-to-end ML deployment.\",\n      \"difficulty\": \"intermediate\"\n    },\n    {\n      \"title\": \"Infrastructure-as-Code Portfolio\",\n      \"description\": \"Use Terraform to provision multi-tier AWS architecture (VPC, EC2, RDS, S3, ALB). Document architecture decisions and cost optimization strategies.\",\n      \"skills_practiced\": [\n        \"terraform\",\n        \"aws\",\n        \"infrastructure_as_code\",\n        \"networking\",\n        \"security\"\n      ],\n      \"estimated_duration\": \"2-3 weeks\",\n      \"impact_on_gaps\": \"Formalizes cloud infrastructure knowledge, demonstrates architectural thinking.\",\n      \"difficulty\": \"beginner\"\n    },\n    {\n      \"title\": \"Kubernetes Operator for Custom Resource\",\n      \"description\": \"Build a simple K8s operator in Python to manage custom resources. Shows advanced K8s understanding beyond basic deployments.\",\n      \"skills_practiced\": [\n        \"kubernetes\",\n        \"python\",\n        \"api_development\",\n        \"operator_pattern\"\n      ],\n      \"estimated_duration\": \"4-5 weeks\",\n      \"impact_on_gaps\": \"Elevates K8s skills to advanced level, differentiates from typical DevOps candidates.\",\n      \"difficulty\": \"advanced\"\n    }\n  ],\n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Strong Python+AWS foundation makes this candidate immediately productive. Main concern: React experience seems limited. Would I hire for full-stack role? Maybe with conditional offer pending React proficiency demonstration. For backend/platform role? Definitely yes. Recommendation: Candidate should lead with backend/platform expertise and position React as 'actively developing' skill.\",\n    \"architect_view\": \"Solid technical depth in core areas (Python 0.95, AWS 0.92). Docker+K8s combo indicates understanding of containerization journey. Gap: No evidence of designing systems at scale - needs to articulate architectural decisions, trade-offs, CAP theorem applications. Should study system design patterns and contribute to architectural discussions/RFC documents. ML confidence is low (0.65) - either invest seriously or remove from resume to avoid false signals.\",\n    \"coach_view\": \"Excellent growth trajectory potential. High-confidence skills in demanded technologies position candidate well for 2025 market. Creative development strategy: Don't try to be 'full-stack' - instead, own the 'Backend + Infrastructure' niche with React as complementary skill. This differentiation is more valuable. Focus on depth over breadth. Consider T-shaped skill development: Deep in Python/AWS/K8s, broad awareness in frontend/ML. Networking strategy: Contribute to OSS in K8s ecosystem, write technical blogs about cloud-native patterns.\"\n  },\n  \"action_plan\": {\n    \"quick_wins\": [\n      \"Deploy existing Python project to AWS with Docker + K8s (document the process)\",\n      \"Build one complete React CRUD app and deploy to Netlify/Vercel\",\n      \"Write 2-3 technical blog posts about AWS + K8s learnings\",\n      \"Complete AWS Certified Solutions Architect Associate (validates existing knowledge)\"\n    ],\n    \"3_month_goals\": [\n      \"Complete 'Real-Time Collaborative Task Manager' portfolio project\",\n      \"Contribute meaningful PR to established OSS project (K8s ecosystem)\",\n      \"Achieve conversational TypeScript proficiency\",\n      \"Build personal brand: Tech blog + GitHub presence\"\n    ],\n    \"6_month_goals\": [\n      \"Transition to Senior Full-Stack or Platform Engineer role\",\n      \"Complete all 4 portfolio projects\",\n      \"AWS Certified DevOps Professional certification\",\n      \"Mentor 1-2 junior developers (builds leadership credibility)\"\n    ],\n    \"long_term_vision\": \"Within 18-24 months: Principal Engineer or Engineering Manager focusing on cloud-native architecture. Recognized expert in Python+K8s+AWS ecosystem through conference talks, blog, and OSS contributions. Leading design of large-scale distributed systems. Optionally pivot to Solutions Architect or DevRel if people-facing work appeals.\"\n  }\n}"
+}

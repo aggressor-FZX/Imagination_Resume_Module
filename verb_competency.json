@@ -1,0 +1,247 @@
+{
+  "description": "Action verb to competency domain mappings. Helps extract competencies from experience descriptions and project descriptions.",
+  "mappings": {
+    "built": {
+      "software_engineering": 0.90,
+      "system_design": 0.85,
+      "architecture": 0.80,
+      "implementation": 0.92,
+      "problem_solving": 0.78
+    },
+    "developed": {
+      "software_development": 0.95,
+      "programming": 0.90,
+      "feature_development": 0.88,
+      "product_development": 0.82,
+      "technical_implementation": 0.85
+    },
+    "designed": {
+      "system_architecture": 0.90,
+      "software_design": 0.88,
+      "ui_ux": 0.82,
+      "database_design": 0.80,
+      "api_design": 0.85,
+      "solution_architecture": 0.87
+    },
+    "implemented": {
+      "execution": 0.92,
+      "technical_implementation": 0.90,
+      "delivery": 0.85,
+      "coding": 0.88,
+      "integration": 0.82
+    },
+    "scaled": {
+      "performance_optimization": 0.95,
+      "scalability": 0.92,
+      "growth_management": 0.85,
+      "capacity_planning": 0.88,
+      "infrastructure_scaling": 0.90
+    },
+    "optimized": {
+      "performance_tuning": 0.95,
+      "efficiency": 0.90,
+      "cost_reduction": 0.82,
+      "resource_optimization": 0.88,
+      "code_optimization": 0.85
+    },
+    "migrated": {
+      "system_migration": 0.95,
+      "data_migration": 0.90,
+      "cloud_migration": 0.88,
+      "technology_transition": 0.85,
+      "legacy_modernization": 0.82
+    },
+    "automated": {
+      "automation": 0.95,
+      "process_improvement": 0.88,
+      "efficiency": 0.85,
+      "ci_cd": 0.82,
+      "devops": 0.87,
+      "scripting": 0.90
+    },
+    "deployed": {
+      "deployment": 0.95,
+      "release_management": 0.88,
+      "devops": 0.85,
+      "production_deployment": 0.90,
+      "continuous_delivery": 0.82
+    },
+    "managed": {
+      "project_management": 0.88,
+      "team_leadership": 0.85,
+      "resource_management": 0.82,
+      "stakeholder_management": 0.80,
+      "delivery_management": 0.83
+    },
+    "led": {
+      "leadership": 0.95,
+      "team_management": 0.90,
+      "project_leadership": 0.88,
+      "mentorship": 0.82,
+      "technical_leadership": 0.85
+    },
+    "architected": {
+      "system_architecture": 0.95,
+      "solution_design": 0.92,
+      "technical_architecture": 0.93,
+      "infrastructure_design": 0.88,
+      "scalable_design": 0.85
+    },
+    "integrated": {
+      "system_integration": 0.92,
+      "api_integration": 0.90,
+      "third_party_integration": 0.88,
+      "data_integration": 0.85,
+      "service_integration": 0.87
+    },
+    "refactored": {
+      "code_quality": 0.92,
+      "technical_debt_reduction": 0.90,
+      "code_improvement": 0.88,
+      "maintainability": 0.85,
+      "clean_code": 0.87
+    },
+    "collaborated": {
+      "teamwork": 0.95,
+      "cross_functional_collaboration": 0.90,
+      "communication": 0.88,
+      "stakeholder_engagement": 0.82,
+      "agile_collaboration": 0.85
+    },
+    "debugged": {
+      "troubleshooting": 0.95,
+      "problem_solving": 0.90,
+      "debugging": 0.95,
+      "error_resolution": 0.92,
+      "root_cause_analysis": 0.88
+    },
+    "tested": {
+      "quality_assurance": 0.92,
+      "testing": 0.95,
+      "test_automation": 0.88,
+      "unit_testing": 0.90,
+      "integration_testing": 0.85
+    },
+    "monitored": {
+      "observability": 0.92,
+      "monitoring": 0.95,
+      "performance_monitoring": 0.90,
+      "logging": 0.85,
+      "alerting": 0.82,
+      "metrics": 0.88
+    },
+    "maintained": {
+      "system_maintenance": 0.92,
+      "operational_support": 0.88,
+      "bug_fixes": 0.85,
+      "ongoing_development": 0.80,
+      "technical_support": 0.82
+    },
+    "documented": {
+      "technical_documentation": 0.95,
+      "knowledge_sharing": 0.88,
+      "api_documentation": 0.90,
+      "process_documentation": 0.85,
+      "architecture_documentation": 0.87
+    },
+    "reviewed": {
+      "code_review": 0.92,
+      "quality_control": 0.88,
+      "peer_review": 0.85,
+      "technical_assessment": 0.80,
+      "best_practices": 0.83
+    },
+    "streamlined": {
+      "process_optimization": 0.92,
+      "efficiency_improvement": 0.90,
+      "workflow_optimization": 0.88,
+      "productivity": 0.85,
+      "simplification": 0.80
+    },
+    "delivered": {
+      "project_delivery": 0.92,
+      "execution": 0.90,
+      "product_shipping": 0.88,
+      "timeline_management": 0.82,
+      "stakeholder_satisfaction": 0.80
+    },
+    "configured": {
+      "system_configuration": 0.92,
+      "infrastructure_setup": 0.88,
+      "environment_setup": 0.85,
+      "tooling": 0.82,
+      "deployment_configuration": 0.87
+    },
+    "secured": {
+      "security": 0.95,
+      "cybersecurity": 0.92,
+      "access_control": 0.88,
+      "authentication": 0.85,
+      "authorization": 0.85,
+      "security_best_practices": 0.87
+    },
+    "analyzed": {
+      "data_analysis": 0.92,
+      "analytical_thinking": 0.90,
+      "problem_analysis": 0.88,
+      "requirements_analysis": 0.85,
+      "performance_analysis": 0.82
+    },
+    "mentored": {
+      "mentorship": 0.95,
+      "knowledge_transfer": 0.90,
+      "team_development": 0.88,
+      "coaching": 0.85,
+      "leadership": 0.82
+    },
+    "presented": {
+      "communication": 0.92,
+      "presentation_skills": 0.95,
+      "stakeholder_communication": 0.88,
+      "technical_communication": 0.85,
+      "public_speaking": 0.82
+    },
+    "coordinated": {
+      "project_coordination": 0.92,
+      "cross_team_coordination": 0.90,
+      "resource_coordination": 0.85,
+      "workflow_management": 0.82,
+      "organizational_skills": 0.88
+    },
+    "researched": {
+      "research": 0.95,
+      "technical_research": 0.92,
+      "investigation": 0.88,
+      "feasibility_analysis": 0.82,
+      "technology_evaluation": 0.85
+    },
+    "improved": {
+      "continuous_improvement": 0.92,
+      "performance_improvement": 0.90,
+      "process_improvement": 0.88,
+      "quality_improvement": 0.85,
+      "optimization": 0.87
+    },
+    "trained": {
+      "training": 0.95,
+      "knowledge_transfer": 0.90,
+      "onboarding": 0.85,
+      "skill_development": 0.82,
+      "education": 0.88
+    },
+    "investigated": {
+      "investigation": 0.95,
+      "root_cause_analysis": 0.92,
+      "troubleshooting": 0.90,
+      "problem_solving": 0.88,
+      "debugging": 0.85
+    },
+    "established": {
+      "foundation_building": 0.90,
+      "process_establishment": 0.88,
+      "standards_definition": 0.85,
+      "framework_creation": 0.82,
+      "best_practices": 0.87
+    }
+  }
+}

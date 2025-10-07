@@ -1,0 +1,153 @@
+{
+  "experiences": [],
+  "aggregate_skills": [
+    "aws",
+    "docker",
+    "javascript",
+    "kubernetes",
+    "python",
+    "react"
+  ],
+  "processed_skills": {
+    "high_confidence_skills": [
+      "python",
+      "javascript",
+      "aws",
+      "docker",
+      "kubernetes",
+      "react"
+    ],
+    "medium_confidence_skills": [
+      "machine learning"
+    ],
+    "low_confidence_skills": [],
+    "skill_confidences": {
+      "python": 0.95,
+      "javascript": 0.89,
+      "aws": 0.92,
+      "docker": 0.87,
+      "kubernetes": 0.78,
+      "machine learning": 0.65,
+      "react": 0.72
+    },
+    "categories": {
+      "general": [
+        "python",
+        "aws",
+        "javascript",
+        "docker",
+        "kubernetes",
+        "react",
+        "machine learning"
+      ]
+    },
+    "filtered_count": 6,
+    "total_count": 7
+  },
+  "skills_data": {
+    "title": "Senior Software Engineer",
+    "canonical_title": "senior software engineer",
+    "skills": [
+      {
+        "skill": "python",
+        "confidence": 0.95
+      },
+      {
+        "skill": "javascript",
+        "confidence": 0.89
+      },
+      {
+        "skill": "aws",
+        "confidence": 0.92
+      },
+      {
+        "skill": "docker",
+        "confidence": 0.87
+      },
+      {
+        "skill": "kubernetes",
+        "confidence": 0.78
+      },
+      {
+        "skill": "machine learning",
+        "confidence": 0.65
+      },
+      {
+        "skill": "react",
+        "confidence": 0.72
+      }
+    ],
+    "overall_confidence": 0.89,
+    "processing_metadata": {
+      "sections_processed": 4,
+      "skills_filtered": 12,
+      "domain_classified": "tech"
+    }
+  },
+  "domain_insights": {
+    "domain": "tech",
+    "insights": {
+      "strengths": [
+        "Strong Python development skills",
+        "Cloud infrastructure expertise",
+        "Container orchestration experience"
+      ],
+      "gaps": [
+        "Limited machine learning expertise",
+        "Frontend development could be stronger",
+        "DevOps pipeline automation"
+      ],
+      "recommendations": [
+        "Focus on MLOps and model deployment",
+        "Strengthen React/Next.js skills for full-stack development",
+        "Pursue AWS DevOps Professional certification",
+        "Build portfolio projects showcasing cloud-native applications"
+      ],
+      "market_alignment": 0.78
+    },
+    "processing_metadata": {
+      "sections_processed": [
+        "experience",
+        "skills",
+        "projects"
+      ],
+      "optimizations_applied": [
+        "domain_specific_processing",
+        "confidence_weighting"
+      ]
+    }
+  },
+  "role_suggestions": [
+    {
+      "role": "data-scientist",
+      "score": 0.33,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "data-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "ml-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    },
+    {
+      "role": "software-engineer",
+      "score": 0.25,
+      "matched_skills": [
+        "python"
+      ]
+    }
+  ],
+  "target_job_ad": "sample_job_ad.txt",
+  "confidence_threshold": 0.7,
+  "gap_analysis": "[DEMO MODE - OpenAI Error: \n\nYou tried to access openai.ChatCompletion, but this is no longer supported in openai>=1.0.0 - see the README at https://github.com/openai/openai-python for the API.\n\nYou can run `openai migrate` to automatically upgrade your codebase to use the 1.0.0 interface. \n\nAlternatively, you can pin your installation to the old version, e.g. `pip install openai==0.28`\n\nA detailed migration guide is available here: https://github.com/openai/openai-python/discussions/742\n]\n\nBased on the structured analysis, here's a creative gap analysis:\n\n\ud83c\udfaf **Key Strengths Identified:**\n\u2022 High-confidence Python skills (0.95) - Strong foundation for backend development\n\u2022 AWS expertise (0.92) - Excellent for cloud-native applications  \n\u2022 JavaScript proficiency (0.89) - Good for full-stack capabilities\n\n\ud83d\ude80 **Creative Development Recommendations:**\n1. **Bridge ML Gap**: Leverage existing Python skills to build practical ML projects using scikit-learn\n2. **Frontend Enhancement**: Strengthen React skills through targeted projects and tutorials\n3. **DevOps Integration**: Combine AWS and Docker knowledge for complete CI/CD pipelines\n\n\ud83d\udca1 **Domain-Specific Insights:**\n\u2022 Tech industry favors full-stack developers with cloud expertise\n\u2022 ML integration is becoming essential for modern applications\n\u2022 Focus on production-ready deployments and scalability\n\n\ud83d\udcc8 **Action Plan:**\n\u2022 Short-term: Build 2-3 React projects to complement backend skills\n\u2022 Medium-term: Complete AWS DevOps Professional certification\n\u2022 Long-term: Develop expertise in MLOps for ML model deployment"
+}

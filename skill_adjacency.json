@@ -1,0 +1,187 @@
+{
+  "description": "Skill adjacency mappings with confidence decay factors. Helps identify implied/adjacent skills and enriches analysis.",
+  "mappings": {
+    "python": {
+      "scripting": 0.95,
+      "automation": 0.90,
+      "data_processing": 0.85,
+      "backend_development": 0.88,
+      "api_development": 0.82,
+      "testing": 0.78,
+      "debugging": 0.92
+    },
+    "javascript": {
+      "frontend_development": 0.92,
+      "dom_manipulation": 0.88,
+      "async_programming": 0.85,
+      "web_development": 0.90,
+      "api_integration": 0.80,
+      "event_handling": 0.87,
+      "typescript": 0.75
+    },
+    "react": {
+      "frontend_frameworks": 0.92,
+      "component_architecture": 0.90,
+      "state_management": 0.85,
+      "jsx": 0.95,
+      "hooks": 0.88,
+      "ui_development": 0.87,
+      "single_page_applications": 0.83
+    },
+    "aws": {
+      "cloud_computing": 0.95,
+      "infrastructure": 0.88,
+      "scalability": 0.85,
+      "devops": 0.80,
+      "serverless": 0.78,
+      "cloud_security": 0.75,
+      "s3": 0.85,
+      "ec2": 0.82,
+      "lambda": 0.75
+    },
+    "docker": {
+      "containerization": 0.95,
+      "microservices": 0.85,
+      "orchestration": 0.80,
+      "devops": 0.88,
+      "deployment": 0.82,
+      "isolation": 0.87,
+      "kubernetes": 0.75
+    },
+    "kubernetes": {
+      "container_orchestration": 0.95,
+      "cluster_management": 0.90,
+      "scaling": 0.88,
+      "service_mesh": 0.75,
+      "deployment_automation": 0.85,
+      "cloud_native": 0.82,
+      "helm": 0.78
+    },
+    "machine learning": {
+      "data_science": 0.92,
+      "statistical_analysis": 0.85,
+      "model_training": 0.90,
+      "feature_engineering": 0.87,
+      "deep_learning": 0.80,
+      "neural_networks": 0.78,
+      "scikit_learn": 0.85,
+      "tensorflow": 0.75,
+      "pytorch": 0.75
+    },
+    "sql": {
+      "database_design": 0.88,
+      "query_optimization": 0.85,
+      "data_modeling": 0.82,
+      "relational_databases": 0.90,
+      "mysql": 0.85,
+      "postgresql": 0.83,
+      "data_analysis": 0.78
+    },
+    "git": {
+      "version_control": 0.95,
+      "collaboration": 0.88,
+      "branching": 0.92,
+      "code_review": 0.85,
+      "github": 0.90,
+      "gitlab": 0.85,
+      "ci_cd": 0.75
+    },
+    "rest_api": {
+      "api_design": 0.92,
+      "http_protocols": 0.90,
+      "json": 0.88,
+      "web_services": 0.85,
+      "authentication": 0.80,
+      "api_documentation": 0.78,
+      "postman": 0.75
+    },
+    "agile": {
+      "scrum": 0.90,
+      "sprint_planning": 0.88,
+      "project_management": 0.82,
+      "team_collaboration": 0.85,
+      "jira": 0.80,
+      "retrospectives": 0.83,
+      "continuous_improvement": 0.78
+    },
+    "ci_cd": {
+      "continuous_integration": 0.95,
+      "continuous_deployment": 0.95,
+      "automation": 0.88,
+      "jenkins": 0.82,
+      "github_actions": 0.80,
+      "gitlab_ci": 0.80,
+      "testing_automation": 0.85
+    },
+    "node.js": {
+      "backend_javascript": 0.92,
+      "npm": 0.88,
+      "express": 0.85,
+      "async_io": 0.87,
+      "event_loop": 0.82,
+      "server_development": 0.88,
+      "rest_api": 0.80
+    },
+    "typescript": {
+      "type_safety": 0.95,
+      "javascript": 0.90,
+      "static_typing": 0.92,
+      "modern_javascript": 0.88,
+      "oop": 0.82,
+      "interfaces": 0.87,
+      "generics": 0.80
+    },
+    "mongodb": {
+      "nosql": 0.95,
+      "document_databases": 0.92,
+      "json_storage": 0.88,
+      "aggregation": 0.82,
+      "schema_design": 0.80,
+      "indexing": 0.85,
+      "replica_sets": 0.75
+    },
+    "redis": {
+      "caching": 0.95,
+      "in_memory_storage": 0.92,
+      "key_value_store": 0.90,
+      "pub_sub": 0.82,
+      "session_management": 0.78,
+      "performance_optimization": 0.85
+    },
+    "graphql": {
+      "api_design": 0.88,
+      "query_language": 0.92,
+      "schema_definition": 0.85,
+      "apollo": 0.80,
+      "data_fetching": 0.87,
+      "type_system": 0.82
+    },
+    "terraform": {
+      "infrastructure_as_code": 0.95,
+      "cloud_provisioning": 0.90,
+      "aws": 0.85,
+      "azure": 0.82,
+      "gcp": 0.82,
+      "automation": 0.88,
+      "state_management": 0.80
+    },
+    "linux": {
+      "command_line": 0.92,
+      "bash_scripting": 0.88,
+      "system_administration": 0.85,
+      "networking": 0.78,
+      "file_systems": 0.82,
+      "process_management": 0.80,
+      "security": 0.75
+    },
+    "networking": {
+      "tcp_ip": 0.88,
+      "http_https": 0.85,
+      "dns": 0.80,
+      "load_balancing": 0.78,
+      "firewalls": 0.75,
+      "vpn": 0.72,
+      "protocols": 0.87
+    }
+  }
+}
