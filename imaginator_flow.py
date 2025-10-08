@@ -11,14 +11,20 @@ import os
 from typing import List, Dict, Set
 
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
+from anthropic import Anthropic
 
-# Load environment variables (expects OPENAI_API_KEY)
+# Load environment variables (expects OPENAI_API_KEY and ANTHROPIC_API_KEY)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise RuntimeError("Missing OPENAI_API_KEY. Copy .env.sample to .env and set your key.")
-openai.api_key = OPENAI_API_KEY
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+if not OPENAI_API_KEY and not ANTHROPIC_API_KEY:
+    raise RuntimeError("Missing both OPENAI_API_KEY and ANTHROPIC_API_KEY. At least one is required. Copy .env.sample to .env and set your keys.")
+
+# Initialize clients (1.0+ APIs)
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -132,6 +138,55 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
         )
     
     return processed
+
+
+def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.9, max_tokens: int = 1500) -> str:
+    """
+    Call LLM with automatic fallback: OpenAI first, then Anthropic
+    Returns the response text or raises an exception if both fail
+    """
+    errors = []
+    
+    # Try OpenAI first
+    if openai_client:
+        try:
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            errors.append(f"OpenAI Error: {type(e).__name__}: {str(e)}")
+            print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+    
+    # Fallback to Anthropic
+    if anthropic_client:
+        try:
+            response = anthropic_client.messages.create(
+                model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
+            # Extract text from response
+            return response.content[0].text
+        except Exception as e:
+            errors.append(f"Anthropic Error: {type(e).__name__}: {str(e)}")
+            print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
+    
+    # Both failed
+    error_msg = "All LLM providers failed:\n" + "\n".join(errors)
+    raise RuntimeError(error_msg)
 
 
 def suggest_roles(skills: Set[str]) -> List[Dict]:
@@ -379,21 +434,48 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
     
     prompt = "\n".join(prompt_parts)
     
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.9,  # Increased for maximum creativity
-            max_tokens=1500,  # Increased for comprehensive JSON output
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        # Enhanced fallback with structured JSON output
-        return json.dumps({
-            "_demo_mode_note": f"OpenAI API Error: {str(e)}",
+    # Call LLM with automatic fallback (OpenAI → Anthropic)
+    system_prompt = "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."
+    return call_llm(system_prompt, prompt, temperature=0.9, max_tokens=1500)
+
+
+def generate_gap_analysis_baseline(resume_text: str, processed_skills: Dict, roles: List[Dict], target_job_ad: str, domain_insights: Dict = None) -> str:
+    """Original baseline prompt for comparison testing - simpler single-perspective approach"""
+    
+    high_conf_skills = processed_skills.get("high_confidence_skills", [])
+    skill_confidences = processed_skills.get("skill_confidences", {})
+    
+    prompt = f"""You are a career coach analyzing a candidate's profile.
+
+RESUME EXTRACT:
+{resume_text[:500]}...
+
+HIGH-CONFIDENCE SKILLS: {', '.join(sorted(high_conf_skills))}
+
+SKILL CONFIDENCE SCORES:
+{json.dumps(skill_confidences, indent=2)}
+
+TARGET JOB:
+{target_job_ad}
+
+Provide a creative gap analysis with:
+- Key strengths
+- Development recommendations  
+- Domain-specific insights
+- Action plan
+
+Use emojis and bullet points for readability."""
+    
+    # Call LLM with automatic fallback (OpenAI → Anthropic)
+    system_prompt = "You are a helpful career coach. Provide creative, actionable advice."
+    return call_llm(system_prompt, prompt, temperature=0.8, max_tokens=800)
+
+
+# Removed all fallback code below - errors will now propagate properly
+def _old_fallback_removed():
+    """This function marks where the old 400+ line fallback JSON was removed"""
+    return json.dumps({
+        "_note": "Demo fallback removed. OpenAI API errors will now propagate.",
             "gap_analysis": {
                 "critical_gaps": ["react_production_experience", "kubernetes_at_scale"],
                 "nice_to_have_gaps": ["graphql", "serverless_architecture"],
@@ -508,9 +590,10 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
                     "AWS Certified DevOps Professional certification",
                     "Mentor 1-2 junior developers (builds leadership credibility)"
                 ],
-                "long_term_vision": "Within 18-24 months: Principal Engineer or Engineering Manager focusing on cloud-native architecture. Recognized expert in Python+K8s+AWS ecosystem through conference talks, blog, and OSS contributions. Leading design of large-scale distributed systems. Optionally pivot to Solutions Architect or DevRel if people-facing work appeals."
+                "gap_bridging": "removed"
             }
         }, indent=2)
+    # This fallback code is no longer used - kept as reference only
 
 
 def main():
