@@ -88,6 +88,68 @@ python imaginator_flow.py \
 }
 ```
 
+## Run Metrics, Token Usage, and Cost Estimation
+
+The module now appends a `run_metrics` block to the final JSON output so callers can reliably parse token usage, per-call breakdowns, failures, and an estimated cost for the run.
+
+Example output tail:
+
+```json
+{
+  "suggested_experiences": { /* ... */ },
+  "run_metrics": {
+    "calls": [
+      {
+        "provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "prompt_tokens": 1499,
+        "completion_tokens": 629,
+        "total_tokens": 2128,
+        "estimated_cost_usd": 0.001693
+      },
+      {
+        "provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "prompt_tokens": 511,
+        "completion_tokens": 366,
+        "total_tokens": 877,
+        "estimated_cost_usd": 0.000805
+      }
+    ],
+    "total_prompt_tokens": 2853,
+    "total_completion_tokens": 1201,
+    "total_tokens": 4054,
+    "estimated_cost_usd": 0.003228,
+    "failures": []
+  }
+}
+```
+
+### Pricing configuration (override via environment)
+Default per-1K token USD rates can be overridden:
+
+- `OPENAI_PRICE_INPUT_PER_1K` (default: `0.0005`)
+- `OPENAI_PRICE_OUTPUT_PER_1K` (default: `0.0015`)
+- `ANTHROPIC_PRICE_INPUT_PER_1K` (default: `0.003`)
+- `ANTHROPIC_PRICE_OUTPUT_PER_1K` (default: `0.015`)
+
+Totals are computed by summing per-call estimated cost: `prompt_tokens/1000 * input_rate + completion_tokens/1000 * output_rate`.
+
+### Failure and fallback reporting
+- All provider call failures during retries are recorded in `run_metrics.failures` with `attempt`, `provider`, and `error` for post-mortem.
+- JSON decode fallbacks in `run_generation` and `run_criticism` are explicitly logged to stderr.
+- Progress logs print which provider/model was used per step.
+
+### Parsing the cost in downstream tooling
+Example (Python):
+
+```python
+import json
+result = json.loads(output_text)
+run_metrics = result.get("run_metrics", {})
+estimated_cost = run_metrics.get("estimated_cost_usd", 0.0)
+```
+
 ## 🔄 Core Functionality
 
 1. **Skill Processing**: Filters and prioritizes skills by confidence scores

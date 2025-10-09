@@ -8,19 +8,33 @@ import re
 import json
 import argparse
 import os
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
+import jsonschema
 
 # Load environment variables (expects OPENAI_API_KEY and ANTHROPIC_API_KEY)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-if not OPENAI_API_KEY and not ANTHROPIC_API_KEY:
-    raise RuntimeError("Missing both OPENAI_API_KEY and ANTHROPIC_API_KEY. At least one is required. Copy .env.sample to .env and set your keys.")
+# Pricing (USD) per 1K tokens; can be overridden via env vars
+OPENAI_PRICE_IN_K = float(os.getenv("OPENAI_PRICE_INPUT_PER_1K", "0.0005"))
+OPENAI_PRICE_OUT_K = float(os.getenv("OPENAI_PRICE_OUTPUT_PER_1K", "0.0015"))
+ANTHROPIC_PRICE_IN_K = float(os.getenv("ANTHROPIC_PRICE_INPUT_PER_1K", "0.003"))
+ANTHROPIC_PRICE_OUT_K = float(os.getenv("ANTHROPIC_PRICE_OUTPUT_PER_1K", "0.015"))
+
+# Run metrics accumulator
+RUN_METRICS: Dict[str, Any] = {
+    "calls": [],            # list of per-call usage/cost entries
+    "total_prompt_tokens": 0,
+    "total_completion_tokens": 0,
+    "total_tokens": 0,
+    "estimated_cost_usd": 0.0,
+    "failures": []          # list of failure dicts with provider/attempt/error
+}
 
 # Initialize clients (1.0+ APIs)
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -140,52 +154,111 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
     return processed
 
 
-def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.9, max_tokens: int = 1500) -> str:
+def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.9, max_tokens: int = 1500, max_retries: int = 3) -> str:
     """
     Call LLM with automatic fallback: OpenAI first, then Anthropic
+    Includes retry logic with exponential backoff and timeout handling.
     Returns the response text or raises an exception if both fail
     """
+    import time
+    
     errors = []
     
-    # Try OpenAI first
-    if openai_client:
-        try:
-            response = openai_client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            errors.append(f"OpenAI Error: {type(e).__name__}: {str(e)}")
-            print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+    for attempt in range(max_retries):
+        # Try OpenAI first
+        if openai_client:
+            try:
+                response = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=60.0  # 60 second timeout
+                )
+                print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
+                text = response.choices[0].message.content.strip()
+                # Usage and cost
+                try:
+                    u = getattr(response, "usage", None)
+                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
+                except Exception:
+                    prompt_t = completion_t = 0
+                    total_t = 0
+                cost = (prompt_t / 1000.0) * OPENAI_PRICE_IN_K + (completion_t / 1000.0) * OPENAI_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "prompt_tokens": prompt_t,
+                    "completion_tokens": completion_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += prompt_t
+                RUN_METRICS["total_completion_tokens"] += completion_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"OpenAI Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openai", "error": str(e)})
+                print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+        
+        # Fallback to Anthropic
+        if anthropic_client:
+            try:
+                response = anthropic_client.messages.create(
+                    model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt,
+                    messages=[
+                        {"role": "user", "content": user_prompt}
+                    ]
+                )
+                print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
+                # Extract text and usage
+                text = response.content[0].text
+                try:
+                    u = getattr(response, "usage", None)
+                    input_t = int(getattr(u, "input_tokens", 0) or 0)
+                    output_t = int(getattr(u, "output_tokens", 0) or 0)
+                    total_t = input_t + output_t
+                except Exception:
+                    input_t = output_t = total_t = 0
+                cost = (input_t / 1000.0) * ANTHROPIC_PRICE_IN_K + (output_t / 1000.0) * ANTHROPIC_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "anthropic",
+                    "model": "claude-3-5-sonnet-20241022",
+                    "prompt_tokens": input_t,
+                    "completion_tokens": output_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += input_t
+                RUN_METRICS["total_completion_tokens"] += output_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"Anthropic Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
+                print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
+        
+        # If we get here, both providers failed on this attempt
+        if attempt < max_retries - 1:
+            wait_time = min(2 ** attempt, 30)
+            print(f"🔄 Both providers failed, retrying in {wait_time}s...", flush=True)
+            time.sleep(wait_time)
     
-    # Fallback to Anthropic
-    if anthropic_client:
-        try:
-            response = anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_prompt,
-                messages=[
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
-            # Extract text from response
-            return response.content[0].text
-        except Exception as e:
-            errors.append(f"Anthropic Error: {type(e).__name__}: {str(e)}")
-            print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
-    
-    # Both failed
-    error_msg = "All LLM providers failed:\n" + "\n".join(errors)
+    # All retries exhausted
+    error_msg = f"All LLM providers failed after {max_retries} attempts:\n" + "\n".join(errors)
     raise RuntimeError(error_msg)
 
 
@@ -596,35 +669,30 @@ def _old_fallback_removed():
     # This fallback code is no longer used - kept as reference only
 
 
-def main():
-    import argparse
-    p = argparse.ArgumentParser(description="Enhanced Imaginator with structured skill analysis and domain insights")
-    p.add_argument("--resume", help="Path to resume file")
-    p.add_argument("--parsed_resume_text", help="Parsed resume text from Resume_Document_Loader")
-    p.add_argument("--extracted_skills_json", help="JSON file with extracted skills from FastSVM_Skill_Title_Extraction or Hermes")
-    p.add_argument("--domain_insights_json", help="JSON file with domain insights from Hermes")
-    p.add_argument("--target_job_ad", required=True, help="Target job ad text to focus creativity")
-    p.add_argument("--confidence_threshold", type=float, default=0.7, help="Minimum confidence threshold for skills (default: 0.7)")
-    args = p.parse_args()
+def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = None, domain_insights_json: str = None, confidence_threshold: float = 0.7) -> Dict:
+    """
+    Run the analysis phase of the generative resume co-writer.
     
-    # Load resume text
-    if args.parsed_resume_text:
-        text = args.parsed_resume_text
-    elif args.resume:
-        text = open(args.resume, encoding="utf-8").read()
-    else:
-        raise ValueError("Either --resume or --parsed_resume_text must be provided")
-    
+    Args:
+        resume_text: Raw resume text
+        job_ad: Target job description text
+        extracted_skills_json: Path to JSON file with extracted skills (optional)
+        domain_insights_json: Path to JSON file with domain insights (optional)
+        confidence_threshold: Minimum confidence threshold for skills
+        
+    Returns:
+        Dict containing: experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis
+    """
     # Load structured skills data
     skills_data = {}
     domain_insights = {}
     
-    if args.extracted_skills_json:
-        with open(args.extracted_skills_json, encoding="utf-8") as f:
+    if extracted_skills_json:
+        with open(extracted_skills_json, encoding="utf-8") as f:
             skills_data = json.load(f)
     
-    if args.domain_insights_json:
-        with open(args.domain_insights_json, encoding="utf-8") as f:
+    if domain_insights_json:
+        with open(domain_insights_json, encoding="utf-8") as f:
             domain_insights = json.load(f)
     
     # Process skills with confidence filtering
@@ -633,7 +701,7 @@ def main():
     
     if skills_data:
         # Use structured skill processing
-        processed_skills = process_structured_skills(skills_data, args.confidence_threshold, domain)
+        processed_skills = process_structured_skills(skills_data, confidence_threshold, domain)
         all_skills = set(processed_skills["high_confidence_skills"])
         
         # Build experience results from structured data
@@ -641,7 +709,7 @@ def main():
         
     else:
         # Fallback to keyword-based extraction
-        experiences = parse_experiences(text)
+        experiences = parse_experiences(resume_text)
         all_skills = set()
         exp_results = []
         for exp in experiences:
@@ -657,19 +725,423 @@ def main():
     roles = suggest_roles(all_skills)
     
     # Generate enhanced gap analysis
-    gap = generate_gap_analysis(text, processed_skills, roles, args.target_job_ad, domain_insights)
+    try:
+        gap = generate_gap_analysis(resume_text, processed_skills, roles, job_ad, domain_insights)
+    except Exception as e:
+        print(f"⚠️  Gap analysis failed: {str(e)}", flush=True)
+        print("🔄 Continuing with basic gap analysis...", flush=True)
+        gap = json.dumps({
+            "skill_gaps": [],
+            "experience_gaps": [],
+            "recommendations": ["Unable to perform detailed gap analysis due to API issues"]
+        })
     
-    # Prepare output
-    output = {
+    return {
         "experiences": exp_results,
         "aggregate_skills": sorted(all_skills),
         "processed_skills": processed_skills,
-        "skills_data": skills_data,
         "domain_insights": domain_insights,
-        "role_suggestions": roles,
-        "target_job_ad": args.target_job_ad,
-        "confidence_threshold": args.confidence_threshold,
-        "gap_analysis": gap
+        "gap_analysis": gap,
+        "role_suggestions": roles  # Keep for compatibility
     }
+
+
+def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
+    """
+    Run the generation phase of the generative resume co-writer.
+    Acts as a creative career coach to generate resume bullet points bridging skill gaps.
+    
+    Args:
+        analysis_json: Output from run_analysis containing gap_analysis and other data
+        job_ad: Target job description text
+        
+    Returns:
+        Dict containing generated_suggestions with gap_bridging and metric_improvements
+    """
+    gap_analysis = analysis_json.get("gap_analysis", "")
+    aggregate_skills = analysis_json.get("aggregate_skills", [])
+    processed_skills = analysis_json.get("processed_skills", {})
+    
+    # Extract critical gaps - try to parse as JSON first, fallback to text extraction
+    critical_gaps = []
+    if isinstance(gap_analysis, str):
+        try:
+            gap_data = json.loads(gap_analysis)
+            if isinstance(gap_data, dict) and "gap_analysis" in gap_data:
+                critical_gaps = gap_data["gap_analysis"].get("critical_gaps", [])
+            elif isinstance(gap_data, dict) and "critical_gaps" in gap_data:
+                critical_gaps = gap_data.get("critical_gaps", [])
+        except (json.JSONDecodeError, KeyError, TypeError):
+            # Fallback: extract common tech gaps from text
+            gap_text = gap_analysis.lower()
+            potential_gaps = ["react", "kubernetes", "docker", "aws", "typescript", "node.js", "graphql"]
+            critical_gaps = [gap for gap in potential_gaps if gap in gap_text][:3]
+    elif isinstance(gap_analysis, dict) and "gap_analysis" in gap_analysis:
+        critical_gaps = gap_analysis["gap_analysis"].get("critical_gaps", [])
+    
+    # If no gaps found, use some defaults based on common tech roles
+    if not critical_gaps:
+        critical_gaps = ["react", "kubernetes", "typescript"]
+    
+    system_prompt = """You are a creative career coach specializing in resume optimization and skill gap bridging. Your expertise is in crafting compelling, specific resume bullet points that demonstrate transferable skills and quantifiable achievements.
+
+Your task is to generate resume bullet points that bridge skill gaps by:
+1. Connecting existing skills to missing requirements plausibly
+2. Using strong action verbs (Engineered, Architected, Optimized, etc.)
+3. Including specific metrics and measurable outcomes
+4. Making skill connections that hiring managers will believe
+
+Focus on creating 2-3 bullet points for each major skill gap, plus suggestions for enhancing existing strengths with better metrics."""
+
+    user_prompt = f"""Based on this candidate analysis, generate resume bullet point suggestions:
+
+CANDIDATE SKILLS: {', '.join(aggregate_skills)}
+CRITICAL SKILL GAPS: {', '.join(critical_gaps)}
+TARGET JOB: {job_ad[:500]}...
+
+For each critical skill gap, generate 2-3 specific resume bullet points that:
+- Connect existing skills to the missing skill plausibly
+- Use strong action verbs and specific metrics
+- Demonstrate the skill through concrete examples
+
+Also suggest improvements to existing skills by adding quantifiable metrics.
+
+Return JSON format:
+{{
+  "gap_bridging": [
+    {{
+      "skill_focus": "react",
+      "suggestions": [
+        "Engineered interactive React components serving 10,000+ users, demonstrating frontend expertise transferable to modern frameworks",
+        "Architected component library reducing development time by 40%, showcasing framework-agnostic UI development skills"
+      ]
+    }}
+  ],
+  "metric_improvements": [
+    {{
+      "skill_focus": "python",
+      "suggestions": [
+        "Developed Python automation scripts processing 1M+ records daily, reducing manual work by 80%",
+        "Built machine learning models with 95% accuracy on 500K+ data points using scikit-learn and pandas"
+      ]
+    }}
+  ]
+}}"""
+
+    try:
+        response = call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500)
+    except Exception as e:
+        print(f"⚠️  Generation LLM call failed: {str(e)}", flush=True)
+        print("🔄 Using fallback generation structure...", flush=True)
+        # Fallback structure
+        return {
+            "gap_bridging": [
+                {
+                    "skill_focus": critical_gaps[0] if critical_gaps else "leadership",
+                    "suggestions": [
+                        "Demonstrated strong problem-solving skills in high-pressure environments",
+                        "Led cross-functional teams to deliver complex projects on time"
+                    ]
+                }
+            ],
+            "metric_improvements": [
+                {
+                    "skill_focus": aggregate_skills[0] if aggregate_skills else "python",
+                    "suggestions": [
+                        "Developed solutions that improved efficiency by 50%",
+                        "Created tools used by hundreds of users"
+                    ]
+                }
+            ]
+        }
+    
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        # Explicitly report fallback due to decode failure
+        import sys as _sys
+        print("⚠️  Generation JSON decode failed; using fallback structure.", file=_sys.stderr, flush=True)
+        # Fallback structure
+        return {
+            "gap_bridging": [
+                {
+                    "skill_focus": critical_gaps[0] if critical_gaps else "leadership",
+                    "suggestions": [
+                        "Demonstrated strong problem-solving skills in high-pressure environments",
+                        "Led cross-functional teams to deliver complex projects on time"
+                    ]
+                }
+            ],
+            "metric_improvements": [
+                {
+                    "skill_focus": aggregate_skills[0] if aggregate_skills else "python",
+                    "suggestions": [
+                        "Developed solutions that improved efficiency by 50%",
+                        "Created tools used by hundreds of users"
+                    ]
+                }
+            ]
+        }
+
+
+def run_criticism(generated_suggestions: Dict, job_ad: str) -> Dict:
+    """
+    Run the criticism phase of the generative resume co-writer.
+    Acts as a skeptical hiring manager to polish and improve generated suggestions.
+    
+    Args:
+        generated_suggestions: Output from run_generation
+        job_ad: Target job description text
+        
+    Returns:
+        Dict containing suggested_experiences with refined suggestions
+    """
+    system_prompt = """You are a cynical, experienced hiring manager with 15+ years in tech recruiting. You've seen thousands of resumes and can spot bullshit from a mile away.
+
+Your job is to review resume bullet points and:
+1. Remove passive language, clichés, and vague statements
+2. Replace weak verbs with strong action verbs (Engineered, Architected, Optimized, etc.)
+3. Ensure metrics are specific, believable, and impressive
+4. Make suggestions sound like real accomplishments, not generic fluff
+5. Add credibility through concrete details and outcomes
+
+Be constructively critical - improve the content while maintaining honesty."""
+
+    user_prompt = f"""Review these generated resume suggestions and make them better. Be brutally honest about what's weak or unbelievable.
+
+TARGET JOB REQUIREMENTS: {job_ad[:300]}...
+
+GENERATED SUGGESTIONS:
+{json.dumps(generated_suggestions, indent=2)}
+
+For each suggestion, provide a refined version that:
+- Uses stronger, more specific action verbs
+- Includes believable, specific metrics
+- Removes generic phrases like "improved efficiency"
+- Adds concrete details that hiring managers trust
+- Sounds like real experience, not wishful thinking
+
+Return JSON format:
+{{
+  "suggested_experiences": {{
+    "bridging_gaps": [
+      {{
+        "skill_focus": "react",
+        "refined_suggestions": [
+          "Architected React component library serving 50,000+ monthly active users, reducing development time by 60% through reusable design patterns",
+          "Engineered interactive dashboard processing 2M+ data points in real-time, improving user engagement metrics by 40%"
+        ]
+      }}
+    ],
+    "metric_improvements": [
+      {{
+        "skill_focus": "python",
+        "refined_suggestions": [
+          "Developed Python ETL pipeline processing 10TB+ of financial data daily with 99.9% uptime, supporting 500+ concurrent analysts",
+          "Built machine learning recommendation engine with 94% accuracy on 50M+ user interactions, increasing conversion rates by 35%"
+        ]
+      }}
+    ]
+  }}
+}}"""
+
+    try:
+        response = call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=1500)
+    except Exception as e:
+        print(f"⚠️  Criticism LLM call failed: {str(e)}", flush=True)
+        print("🔄 Using fallback criticism structure...", flush=True)
+        # Fallback structure - transform suggestions to refined_suggestions
+        def transform_suggestions(items):
+            return [
+                {
+                    "skill_focus": item.get("skill_focus", ""),
+                    "refined_suggestions": item.get("suggestions", [])
+                }
+                for item in items
+            ]
+        
+        return {
+            "suggested_experiences": {
+                "bridging_gaps": transform_suggestions(generated_suggestions.get("gap_bridging", [])),
+                "metric_improvements": transform_suggestions(generated_suggestions.get("metric_improvements", []))
+            }
+        }
+    
+    try:
+        result = json.loads(response)
+        return result
+    except json.JSONDecodeError:
+        # Explicitly report fallback due to decode failure
+        import sys as _sys
+        print("⚠️  Criticism JSON decode failed; transforming suggestions to refined_suggestions.", file=_sys.stderr, flush=True)
+        # Fallback structure - transform suggestions to refined_suggestions
+        def transform_suggestions(items):
+            return [
+                {
+                    "skill_focus": item.get("skill_focus", ""),
+                    "refined_suggestions": item.get("suggestions", [])
+                }
+                for item in items
+            ]
+        
+        return {
+            "suggested_experiences": {
+                "bridging_gaps": transform_suggestions(generated_suggestions.get("gap_bridging", [])),
+                "metric_improvements": transform_suggestions(generated_suggestions.get("metric_improvements", []))
+            }
+        }
+
+
+# JSON Schema for the output
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "experiences": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title_line": {"type": "string"},
+                    "skills": {"type": "array", "items": {"type": "string"}},
+                    "snippet": {"type": "string"}
+                },
+                "required": ["title_line", "skills", "snippet"]
+            }
+        },
+        "aggregate_skills": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "processed_skills": {"type": "object"},
+        "domain_insights": {"type": "object"},
+        "gap_analysis": {"type": "string"},
+        "suggested_experiences": {
+            "type": "object",
+            "properties": {
+                "bridging_gaps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "skill_focus": {"type": "string"},
+                            "refined_suggestions": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        },
+                        "required": ["skill_focus", "refined_suggestions"]
+                    }
+                },
+                "metric_improvements": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "skill_focus": {"type": "string"},
+                            "refined_suggestions": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        },
+                        "required": ["skill_focus", "refined_suggestions"]
+                    }
+                }
+            },
+            "required": ["bridging_gaps", "metric_improvements"]
+        }
+    },
+    "required": ["experiences", "aggregate_skills", "processed_skills", "domain_insights", "gap_analysis", "suggested_experiences"]
+}
+
+def validate_output_schema(output: Dict[str, Any]) -> bool:
+    """
+    Validate the output JSON against the schema.
+    
+    Args:
+        output: The output dictionary to validate
+        
+    Returns:
+        True if valid, raises ValidationError if invalid
+    """
+    try:
+        jsonschema.validate(instance=output, schema=OUTPUT_SCHEMA)
+        return True
+    except jsonschema.ValidationError as e:
+        raise ValueError(f"Output schema validation failed: {e.message}") from e
+
+
+def main():
+    import argparse
+    p = argparse.ArgumentParser(description="Generative Resume Co-Writer with Adversarial Refinement")
+    p.add_argument("--resume", help="Path to resume file")
+    p.add_argument("--parsed_resume_text", help="Parsed resume text from Resume_Document_Loader")
+    p.add_argument("--extracted_skills_json", help="JSON file with extracted skills from FastSVM_Skill_Title_Extraction or Hermes")
+    p.add_argument("--domain_insights_json", help="JSON file with domain insights from Hermes")
+    p.add_argument("--target_job_ad", required=True, help="Target job ad text to focus creativity")
+    p.add_argument("--confidence_threshold", type=float, default=0.7, help="Minimum confidence threshold for skills (default: 0.7)")
+    args = p.parse_args()
+    
+    # Load resume text
+    if args.parsed_resume_text:
+        resume_text = args.parsed_resume_text
+    elif args.resume:
+        resume_text = open(args.resume, encoding="utf-8").read()
+    else:
+        raise ValueError("Either --resume or --parsed_resume_text must be provided")
+    
+    # Step 1: Run Analysis
+    print("🔍 Step 1: Analyzing resume and job requirements...", flush=True)
+    analysis_result = run_analysis(
+        resume_text=resume_text,
+        job_ad=args.target_job_ad,
+        extracted_skills_json=args.extracted_skills_json,
+        domain_insights_json=args.domain_insights_json,
+        confidence_threshold=args.confidence_threshold
+    )
+    
+    # Step 2: Run Generation (with graceful degradation)
+    print("🎨 Step 2: Generating resume improvement suggestions...", flush=True)
+    try:
+        generation_result = run_generation(
+            analysis_json=analysis_result,
+            job_ad=args.target_job_ad
+        )
+    except Exception as e:
+        print(f"⚠️  Generation step failed: {str(e)}", flush=True)
+        print("🔄 Continuing with analysis results only...", flush=True)
+        generation_result = {"gap_bridging": [], "metric_improvements": []}
+    
+    # Step 3: Run Criticism (with graceful degradation)
+    print("🎯 Step 3: Refining suggestions with adversarial review...", flush=True)
+    try:
+        criticism_result = run_criticism(
+            generated_suggestions=generation_result,
+            job_ad=args.target_job_ad
+        )
+    except Exception as e:
+        print(f"⚠️  Criticism step failed: {str(e)}", flush=True)
+        print("🔄 Continuing with generation results only...", flush=True)
+        criticism_result = {
+            "suggested_experiences": {
+                "bridging_gaps": generation_result.get("gap_bridging", []),
+                "metric_improvements": generation_result.get("metric_improvements", [])
+            }
+        }
+    
+    # Assemble final output
+    output = {
+        **analysis_result,  # Includes experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis
+        **criticism_result  # Includes suggested_experiences
+    }
+
+    # Append run metrics for caller to parse (tokens, cost, failures)
+    output["run_metrics"] = RUN_METRICS
+    
+    # Validate output schema
+    validate_output_schema(output)
     
     print(json.dumps(output, indent=2))
+
+
+if __name__ == "__main__":
+    main()
