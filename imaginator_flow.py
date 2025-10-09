@@ -10,6 +10,9 @@ import argparse
 import os
 from typing import List, Dict, Set, Any
 
+import aiohttp
+import asyncio
+
 from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
@@ -39,6 +42,10 @@ RUN_METRICS: Dict[str, Any] = {
 # Initialize clients (1.0+ APIs)
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+# Initialize async clients
+openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
+anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -262,6 +269,110 @@ def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.9, max
     raise RuntimeError(error_msg)
 
 
+async def call_llm_async(system_prompt: str, user_prompt: str, temperature: float = 0.9, max_tokens: int = 1500, max_retries: int = 3) -> str:
+    """
+    Async version of call_llm: Call LLM with automatic fallback using async clients.
+    Includes retry logic with exponential backoff and timeout handling.
+    Returns the response text or raises an exception if both fail
+    """
+    errors = []
+
+    for attempt in range(max_retries):
+        # Try OpenAI first
+        if openai_async_client:
+            try:
+                response = await openai_async_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=60.0  # 60 second timeout
+                )
+                print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
+                text = response.choices[0].message.content.strip()
+                # Usage and cost
+                try:
+                    u = getattr(response, "usage", None)
+                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
+                except Exception:
+                    prompt_t = completion_t = 0
+                    total_t = 0
+                cost = (prompt_t / 1000.0) * OPENAI_PRICE_IN_K + (completion_t / 1000.0) * OPENAI_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "prompt_tokens": prompt_t,
+                    "completion_tokens": completion_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += prompt_t
+                RUN_METRICS["total_completion_tokens"] += completion_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"OpenAI Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openai", "error": str(e)})
+                print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+
+        # Fallback to Anthropic
+        if anthropic_async_client:
+            try:
+                response = await anthropic_async_client.messages.create(
+                    model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_prompt,
+                    messages=[
+                        {"role": "user", "content": user_prompt}
+                    ]
+                )
+                print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
+                # Extract text and usage
+                text = response.content[0].text
+                try:
+                    u = getattr(response, "usage", None)
+                    input_t = int(getattr(u, "input_tokens", 0) or 0)
+                    output_t = int(getattr(u, "output_tokens", 0) or 0)
+                    total_t = input_t + output_t
+                except Exception:
+                    input_t = output_t = total_t = 0
+                cost = (input_t / 1000.0) * ANTHROPIC_PRICE_IN_K + (output_t / 1000.0) * ANTHROPIC_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "anthropic",
+                    "model": "claude-3-5-sonnet-20241022",
+                    "prompt_tokens": input_t,
+                    "completion_tokens": output_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += input_t
+                RUN_METRICS["total_completion_tokens"] += output_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"Anthropic Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
+                print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
+
+        # If we get here, both providers failed on this attempt
+        if attempt < max_retries - 1:
+            wait_time = min(2 ** attempt, 30)
+            print(f"🔄 Both providers failed, retrying in {wait_time}s...", flush=True)
+            await asyncio.sleep(wait_time)
+
+    # All retries exhausted
+    error_msg = f"All LLM providers failed after {max_retries} attempts:\n" + "\n".join(errors)
+    raise RuntimeError(error_msg)
 def suggest_roles(skills: Set[str]) -> List[Dict]:
     suggestions = []
     for role, reqs in _ROLE_MAP.items():
@@ -512,6 +623,180 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
     return call_llm(system_prompt, prompt, temperature=0.9, max_tokens=1500)
 
 
+async def generate_gap_analysis_async(resume_text: str, processed_skills: Dict, roles: List[Dict], target_job_ad: str, domain_insights: Dict = None) -> str:
+    """
+    Async version of generate_gap_analysis: Generate creative gap analysis using multi-perspective synthesis and knowledge bases
+
+    Args:
+        resume_text: Raw resume text
+        processed_skills: Processed skills with confidence filtering from process_structured_skills
+        roles: Role suggestions
+        target_job_ad: Target job description
+        domain_insights: Domain-specific insights from Hermes (optional)
+    """
+
+    # Load knowledge bases
+    skill_adjacency, verb_competency = load_knowledge_bases()
+
+    # Extract skill information
+    high_conf_skills = processed_skills.get("high_confidence_skills", [])
+    skill_confidences = processed_skills.get("skill_confidences", {})
+    skill_categories = processed_skills.get("categories", {})
+
+    # Infer implied skills using knowledge base
+    implied_skills = infer_implied_skills(high_conf_skills, skill_adjacency)
+
+    # Extract competencies from resume verbs
+    competencies = extract_competencies(resume_text, verb_competency)
+
+    # Build enhanced multi-perspective prompt
+    prompt_parts = [
+        "You are an AI career strategist with three expert perspectives:",
+        "",
+        "🎯 PERSPECTIVE 1: HIRING MANAGER",
+        "Focus: What would make this candidate stand out to me? What gaps are dealbreakers vs. nice-to-haves?",
+        "",
+        "🏗️ PERSPECTIVE 2: DOMAIN ARCHITECT  ",
+        "Focus: Technical depth, system design capabilities, architectural thinking, scalability mindset.",
+        "",
+        "🚀 PERSPECTIVE 3: CAREER COACH",
+        "Focus: Growth trajectory, learning agility, transferable skills, creative development paths.",
+        "",
+        "=== CANDIDATE PROFILE ===",
+        f"Resume Extract:\n{resume_text[:500]}...\n",
+        "",
+        f"🔥 HIGH-CONFIDENCE SKILLS (≥0.7): {', '.join(sorted(high_conf_skills))}",
+        "",
+        f"📊 SKILL CONFIDENCE MATRIX:\n{json.dumps(skill_confidences, indent=2)}",
+        ""
+    ]
+
+    # Add implied skills section
+    if implied_skills:
+        prompt_parts.extend([
+            f"💡 IMPLIED SKILLS (inferred from adjacent skill mappings):",
+            json.dumps(dict(sorted(implied_skills.items(), key=lambda x: x[1], reverse=True)[:10]), indent=2),
+            ""
+        ])
+
+    # Add competency domains
+    if competencies:
+        top_competencies = sorted(
+            [(domain, sum(v['confidence'] * v['occurrences'] for v in verbs))
+             for domain, verbs in competencies.items()],
+            key=lambda x: x[1],
+            reverse=True
+        )[:8]
+        prompt_parts.extend([
+            f"🎓 EXTRACTED COMPETENCY DOMAINS (from action verbs):",
+            ", ".join([f"{domain} ({score:.2f})" for domain, score in top_competencies]),
+            ""
+        ])
+
+    # Add skill categories if available
+    if skill_categories:
+        prompt_parts.append("📚 SKILL CATEGORIES:")
+        for category, skills in skill_categories.items():
+            if skills:
+                prompt_parts.append(f"  • {category.title()}: {', '.join(skills[:5])}")
+        prompt_parts.append("")
+
+    prompt_parts.extend([
+        f"🎯 TARGET ROLE MATCHES: {', '.join(r['role'] for r in roles)}",
+        "",
+        f"📋 TARGET JOB DESCRIPTION:\n{target_job_ad}\n"
+    ])
+
+    # Add domain insights if available
+    if domain_insights:
+        if "domain" in domain_insights:
+            prompt_parts.append(f"🏢 INDUSTRY DOMAIN: {domain_insights['domain'].upper()}")
+
+        if "insights" in domain_insights:
+            insights = domain_insights["insights"]
+            if "strengths" in insights:
+                prompt_parts.append(f"✅ AI-DETECTED STRENGTHS: {', '.join(insights['strengths'])}")
+            if "gaps" in insights:
+                prompt_parts.append(f"⚠️ AI-DETECTED GAPS: {', '.join(insights['gaps'])}")
+            if "market_alignment" in insights:
+                prompt_parts.append(f"📈 MARKET ALIGNMENT: {insights['market_alignment']}/1.0")
+        prompt_parts.append("")
+
+    prompt_parts.append("""
+=== SYNTHESIS TASK ===
+
+Synthesize the THREE perspectives above into a comprehensive career development analysis with the following structure:
+
+**OUTPUT MUST BE VALID JSON WITH THIS EXACT STRUCTURE:**
+
+```json
+{
+  "gap_analysis": {
+    "critical_gaps": ["skill1", "skill2"],
+    "nice_to_have_gaps": ["skill3", "skill4"],
+    "gap_bridging_strategy": "2-3 sentences on how to prioritize"
+  },
+
+  "implied_skills": {
+    "skill_name": {
+      "confidence": 0.85,
+      "evidence": "Why we think candidate has this",
+      "development_path": "How to formalize/strengthen it"
+    }
+  },
+
+  "environment_capabilities": {
+    "tech_stack": ["inferred_tech1", "inferred_tech2"],
+    "tools": ["tool1", "tool2"],
+    "platforms": ["platform1", "platform2"],
+    "reasoning": "Why we infer these based on skills/experience"
+  },
+
+  "transfer_paths": [
+    {
+      "from_role": "current likely role",
+      "to_role": "target role",
+      "timeline": "6-12 months",
+      "key_bridges": ["skill to develop", "experience to gain"],
+      "probability": 0.75
+    }
+  ],
+
+  "project_briefs": [
+    {
+      "title": "Concrete Project Idea",
+      "description": "1-2 sentences what to build",
+      "skills_practiced": ["skill1", "skill2"],
+      "estimated_duration": "2-4 weeks",
+      "impact_on_gaps": "How this project bridges specific gaps",
+      "difficulty": "beginner|intermediate|advanced"
+    }
+  ],
+
+  "multi_perspective_insights": {
+    "hiring_manager_view": "What would excite/concern a hiring manager",
+    "architect_view": "Technical depth assessment and growth areas",
+    "coach_view": "Growth potential and creative development strategies"
+  },
+
+  "action_plan": {
+    "quick_wins": ["actionable item 1", "actionable item 2"],
+    "3_month_goals": ["goal1", "goal2"],
+    "6_month_goals": ["goal1", "goal2"],
+    "long_term_vision": "Where this candidate should aim in 1-2 years"
+  }
+}
+```
+
+Be creative, specific, and actionable. Use the implied skills, competency domains, and confidence scores to make nuanced recommendations.""")
+
+    prompt = "\n".join(prompt_parts)
+
+    # Call LLM with automatic fallback (OpenAI → Anthropic) - async version
+    system_prompt = "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."
+    return await call_llm_async(system_prompt, prompt, temperature=0.9, max_tokens=1500)
+
+
 def generate_gap_analysis_baseline(resume_text: str, processed_skills: Dict, roles: List[Dict], target_job_ad: str, domain_insights: Dict = None) -> str:
     """Original baseline prompt for comparison testing - simpler single-perspective approach"""
     
@@ -669,44 +954,44 @@ def _old_fallback_removed():
     # This fallback code is no longer used - kept as reference only
 
 
-def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = None, domain_insights_json: str = None, confidence_threshold: float = 0.7) -> Dict:
+async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_json: str = None, domain_insights_json: str = None, confidence_threshold: float = 0.7) -> Dict:
     """
-    Run the analysis phase of the generative resume co-writer.
-    
+    Async version of run_analysis: Run the analysis phase of the generative resume co-writer.
+
     Args:
         resume_text: Raw resume text
         job_ad: Target job description text
         extracted_skills_json: Path to JSON file with extracted skills (optional)
         domain_insights_json: Path to JSON file with domain insights (optional)
         confidence_threshold: Minimum confidence threshold for skills
-        
+
     Returns:
         Dict containing: experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis
     """
     # Load structured skills data
     skills_data = {}
     domain_insights = {}
-    
+
     if extracted_skills_json:
         with open(extracted_skills_json, encoding="utf-8") as f:
             skills_data = json.load(f)
-    
+
     if domain_insights_json:
         with open(domain_insights_json, encoding="utf-8") as f:
             domain_insights = json.load(f)
-    
+
     # Process skills with confidence filtering
     processed_skills = {}
     domain = domain_insights.get("domain") if domain_insights else None
-    
+
     if skills_data:
         # Use structured skill processing
         processed_skills = process_structured_skills(skills_data, confidence_threshold, domain)
         all_skills = set(processed_skills["high_confidence_skills"])
-        
+
         # Build experience results from structured data
         exp_results = skills_data.get("experiences", [])
-        
+
     else:
         # Fallback to keyword-based extraction
         experiences = parse_experiences(resume_text)
@@ -720,13 +1005,13 @@ def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = Non
                 "snippet": exp['raw'][:200]
             })
             all_skills.update(skills)
-    
+
     # Generate role suggestions
     roles = suggest_roles(all_skills)
-    
+
     # Generate enhanced gap analysis
     try:
-        gap = generate_gap_analysis(resume_text, processed_skills, roles, job_ad, domain_insights)
+        gap = await generate_gap_analysis_async(resume_text, processed_skills, roles, job_ad, domain_insights)
     except Exception as e:
         print(f"⚠️  Gap analysis failed: {str(e)}", flush=True)
         print("🔄 Continuing with basic gap analysis...", flush=True)
@@ -735,7 +1020,7 @@ def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = Non
             "experience_gaps": [],
             "recommendations": ["Unable to perform detailed gap analysis due to API issues"]
         })
-    
+
     return {
         "experiences": exp_results,
         "aggregate_skills": sorted(all_skills),
@@ -746,22 +1031,22 @@ def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = Non
     }
 
 
-def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
+async def run_generation_async(analysis_json: Dict, job_ad: str) -> Dict:
     """
-    Run the generation phase of the generative resume co-writer.
+    Async version of run_generation: Run the generation phase of the generative resume co-writer.
     Acts as a creative career coach to generate resume bullet points bridging skill gaps.
-    
+
     Args:
-        analysis_json: Output from run_analysis containing gap_analysis and other data
+        analysis_json: Output from run_analysis_async containing gap_analysis and other data
         job_ad: Target job description text
-        
+
     Returns:
         Dict containing generated_suggestions with gap_bridging and metric_improvements
     """
     gap_analysis = analysis_json.get("gap_analysis", "")
     aggregate_skills = analysis_json.get("aggregate_skills", [])
     processed_skills = analysis_json.get("processed_skills", {})
-    
+
     # Extract critical gaps - try to parse as JSON first, fallback to text extraction
     critical_gaps = []
     if isinstance(gap_analysis, str):
@@ -778,11 +1063,11 @@ def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
             critical_gaps = [gap for gap in potential_gaps if gap in gap_text][:3]
     elif isinstance(gap_analysis, dict) and "gap_analysis" in gap_analysis:
         critical_gaps = gap_analysis["gap_analysis"].get("critical_gaps", [])
-    
+
     # If no gaps found, use some defaults based on common tech roles
     if not critical_gaps:
         critical_gaps = ["react", "kubernetes", "typescript"]
-    
+
     system_prompt = """You are a creative career coach specializing in resume optimization and skill gap bridging. Your expertise is in crafting compelling, specific resume bullet points that demonstrate transferable skills and quantifiable achievements.
 
 Your task is to generate resume bullet points that bridge skill gaps by:
@@ -829,7 +1114,7 @@ Return JSON format:
 }}"""
 
     try:
-        response = call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500)
+        response = await call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500)
     except Exception as e:
         print(f"⚠️  Generation LLM call failed: {str(e)}", flush=True)
         print("🔄 Using fallback generation structure...", flush=True)
@@ -854,7 +1139,7 @@ Return JSON format:
                 }
             ]
         }
-    
+
     try:
         return json.loads(response)
     except json.JSONDecodeError:
@@ -1141,6 +1426,19 @@ def main():
     validate_output_schema(output)
     
     print(json.dumps(output, indent=2))
+
+
+# Sync wrapper functions for backward compatibility (CLI usage)
+def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = None, domain_insights_json: str = None, confidence_threshold: float = 0.7) -> Dict:
+    """Sync wrapper for run_analysis_async for CLI compatibility"""
+    import asyncio
+    return asyncio.run(run_analysis_async(resume_text, job_ad, extracted_skills_json, domain_insights_json, confidence_threshold))
+
+
+def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
+    """Sync wrapper for run_generation_async for CLI compatibility"""
+    import asyncio
+    return asyncio.run(run_generation_async(analysis_json, job_ad))
 
 
 if __name__ == "__main__":

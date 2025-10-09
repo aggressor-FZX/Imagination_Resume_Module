@@ -1,0 +1,36 @@
+Test Results Summary:
+====================
+................                                                         [100%]
+=============================== warnings summary ===============================
+tests/test_app.py:18
+  /home/skystarved/Render_Dockers/Imaginator/tests/test_app.py:18: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/test_app.py:33
+  /home/skystarved/Render_Dockers/Imaginator/tests/test_app.py:33: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/test_app.py:49
+  /home/skystarved/Render_Dockers/Imaginator/tests/test_app.py:49: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/test_app.py:155
+  /home/skystarved/Render_Dockers/Imaginator/tests/test_app.py:155: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/test_app.py:193
+  /home/skystarved/Render_Dockers/Imaginator/tests/test_app.py:193: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.unit
+
+tests/test_imaginator_flow_unit.py::test_run_generation_with_mock_llm
+tests/test_imaginator_flow_unit.py::test_run_generation_with_mock_llm
+tests/test_imaginator_flow_unit.py::test_run_generation_with_mock_llm
+tests/test_imaginator_flow_unit.py::test_run_generation_fallback_on_decode
+tests/test_imaginator_flow_unit.py::test_run_generation_fallback_on_decode
+tests/test_imaginator_flow_unit.py::test_run_generation_fallback_on_decode
+  /home/skystarved/Render_Dockers/Imaginator/imaginator_flow.py:328: DeprecationWarning: The model 'claude-3-5-sonnet-20241022' is deprecated and will reach end-of-life on October 22, 2025.
+  Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resources/model-deprecations for more information.
+    response = await anthropic_async_client.messages.create(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+16 passed, 11 warnings in 33.55s

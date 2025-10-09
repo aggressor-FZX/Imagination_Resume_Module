@@ -1,0 +1,59 @@
+# Render deployment configuration
+# Based on Context7 research findings for Render platform
+
+services:
+  - type: web
+    name: imaginator-resume-cowriter
+    runtime: docker
+    plan: starter  # $7/month - 1GB RAM, 1 CPU, 750 hours
+
+    # Build configuration
+    buildCommand: "docker build -t imaginator ."
+    startCommand: "docker run -p $PORT:8000 imaginator"
+
+    # Health check - required for web services
+    healthCheckPath: /health
+
+    # Environment variables (set in Render dashboard, not in code)
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false  # Manual entry in dashboard
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Manual entry in dashboard
+      - key: CONTEXT7_API_KEY
+        sync: false  # Optional - for documentation features
+
+      # Application configuration
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: CONFIDENCE_THRESHOLD
+        value: 0.7
+      - key: MAX_CONCURRENT_REQUESTS
+        value: 10
+      - key: REQUEST_TIMEOUT
+        value: 60
+
+      # Server configuration
+      - key: HOST
+        value: 0.0.0.0
+      - key: WORKERS
+        value: 1
+
+      # CORS (restrictive for production)
+      - key: CORS_ORIGINS
+        value: "*"
+
+    # Optional: Add persistent disk for data/cache
+    disk:
+      name: app-data
+      mountPath: /app/data
+      sizeGB: 1
+
+# Optional: Add a Redis service for caching (if needed later)
+# databases:
+#   - name: redis-cache
+#     databaseName: cache
+#     user: imaginator
+#     plan: free  # 30MB, no persistence

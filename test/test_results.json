@@ -1,0 +1,1280 @@
+[
+  {
+    "test_name": "basic_text_only",
+    "config": {},
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 18.27069926261902,
+      "memory_used_mb": 16.2578125,
+      "peak_memory_mb": 6.818966865539551,
+      "cpu_percent": 2.3
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 4016,
+      "reported_total": 4016
+    },
+    "output": {
+      "experiences": [
+        {
+          "title_line": "Senior Data Engineer \u2014 Acme Corp",
+          "skills": [
+            "api",
+            "cloud",
+            "communication",
+            "data-analysis",
+            "devops",
+            "python"
+          ],
+          "snippet": "Senior Data Engineer \u2014 Acme Corp\n2021 - Present\nBuilt data pipelines in Python using AWS (S3, Lambda). Implemented CI/CD with Terraform and Jenkins. Created REST APIs for data access. Increased ETL th"
+        },
+        {
+          "title_line": "Machine Learning Intern \u2014 Example Labs",
+          "skills": [
+            "machine-learning",
+            "testing"
+          ],
+          "snippet": "Machine Learning Intern \u2014 Example Labs\n2020 - 2021\nTrained and evaluated classification models using scikit-learn and PyTorch. Conducted feature engineering and A/B testing. Wrote unit tests with pyte"
+        },
+        {
+          "title_line": "Product Analyst \u2014 Widgets Inc",
+          "skills": [
+            "communication",
+            "data-analysis",
+            "project-management"
+          ],
+          "snippet": "Product Analyst \u2014 Widgets Inc\n2018 - 2020\nPerformed product analytics using SQL and Tableau; presented findings to stakeholders and helped define roadmap priorities."
+        }
+      ],
+      "aggregate_skills": [
+        "api",
+        "cloud",
+        "communication",
+        "data-analysis",
+        "devops",
+        "machine-learning",
+        "project-management",
+        "python",
+        "testing"
+      ],
+      "processed_skills": {},
+      "domain_insights": {},
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"Full-stack development\", \"Frontend frameworks\"],\n    \"nice_to_have_gaps\": [\"Machine learning integration\", \"Container orchestration\"],\n    \"gap_bridging_strategy\": \"The candidate should focus on mastering full-stack development and frontend frameworks as a priority to align with the target role. Supplementary learning in machine learning integration and container orchestration can be pursued concurrently.\"\n  },\n  \n  \"implied_skills\": {\n    \"Full-stack development\": {\n      \"confidence\": 0.75,\n      \"evidence\": \"Experience in building data pipelines and REST APIs in Python signals backend proficiency.\",\n      \"development_path\": \"Further strengthen frontend skills by working on projects using React and Node.js.\"\n    },\n    \"Frontend frameworks\": {\n      \"confidence\": 0.80,\n      \"evidence\": \"Experience with user-friendly interfaces and web applications indicates frontend capabilities.\",\n      \"development_path\": \"Deepen expertise in modern frontend frameworks like React to enhance UI/UX design skills.\"\n    },\n    \"Machine learning integration\": {\n      \"confidence\": 0.60,\n      \"evidence\": \"Previous exposure to ML models and PyTorch demonstrates potential for integration.\",\n      \"development_path\": \"Engage in projects that involve collaboration with data scientists to implement ML models.\"\n    },\n    \"Container orchestration\": {\n      \"confidence\": 0.45,\n      \"evidence\": \"Limited exposure to CI/CD with Jenkins hints at the need for containerization skills.\",\n      \"development_path\": \"Explore Docker and Kubernetes through hands-on projects or online courses.\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"Python\", \"JavaScript\"],\n    \"tools\": [\"React\", \"Node.js\", \"Jenkins\", \"Terraform\"],\n    \"platforms\": [\"AWS\"],\n    \"reasoning\": \"Based on candidate's experience in building data pipelines with Python and deploying in AWS.\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Senior Full-Stack Developer\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Frontend frameworks proficiency\", \"Full-stack project experience\"],\n      \"probability\": 0.80\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"Interactive Dashboard for Data Visualization\",\n      \"description\": \"Develop a dashboard using React to visualize data from backend services.\",\n      \"skills_practiced\": [\"Frontend frameworks\", \"Full-stack development\"],\n      \"estimated_duration\": \"2-4 weeks\",\n      \"impact_on_gaps\": \"Strengthens frontend and full-stack skills, bridges critical gaps in UI/UX design.\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Excited by backend experience but concerned about frontend proficiency. Will value collaboration with data scientists.\",\n    \"architect_view\": \"Strong foundation in backend technologies, needs growth in frontend and containerization skills for holistic development.\",\n    \"coach_view\": \"Encourages focusing on full-stack mastery while exploring ML integration and container orchestration for diversified growth.\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Complete online courses on React and Node.js\", \"Join a frontend development meetup\"],\n    \"3_month_goals\": [\"Build a full-stack project incorporating React and Node.js\", \"Contribute to open-source projects on GitHub\"],\n    \"6_month_goals\": [\"Obtain certification in Docker and Kubernetes\", \"Lead a UI/UX redesign initiative within the team\"],\n    \"long_term_vision\": \"Transition into a tech lead role managing end-to-end development projects within the startup ecosystem.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 1.0,
+          "matched_skills": [
+            "data-analysis",
+            "machine-learning",
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "api",
+            "cloud",
+            "devops",
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "cloud",
+            "devops",
+            "machine-learning",
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "api",
+            "devops",
+            "python",
+            "testing"
+          ]
+        },
+        {
+          "role": "product-manager",
+          "score": 0.67,
+          "matched_skills": [
+            "communication",
+            "project-management"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "react",
+            "refined_suggestions": [
+              "Architected React component library serving 50,000+ monthly active users, reducing development time by 60% through reusable design patterns",
+              "Engineered interactive dashboard processing 2M+ data points in real-time, improving user engagement metrics by 40%"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "python",
+            "refined_suggestions": [
+              "Developed Python ETL pipeline processing 10TB+ of financial data daily with 99.9% uptime, supporting 500+ concurrent analysts",
+              "Built machine learning recommendation engine with 94% accuracy on 50M+ user interactions, increasing conversion rates by 35%"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1197,
+            "completion_tokens": 787,
+            "total_tokens": 1984,
+            "estimated_cost_usd": 0.001779
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 517,
+            "completion_tokens": 424,
+            "total_tokens": 941,
+            "estimated_cost_usd": 0.000894
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 901,
+            "completion_tokens": 190,
+            "total_tokens": 1091,
+            "estimated_cost_usd": 0.000736
+          }
+        ],
+        "total_prompt_tokens": 2615,
+        "total_completion_tokens": 1401,
+        "total_tokens": 4016,
+        "estimated_cost_usd": 0.003409,
+        "failures": []
+      }
+    }
+  },
+  {
+    "test_name": "with_structured_skills",
+    "config": {
+      "skills_json": {
+        "title": "Senior Software Engineer",
+        "canonical_title": "senior software engineer",
+        "skills": [
+          {
+            "skill": "python",
+            "confidence": 0.95
+          },
+          {
+            "skill": "javascript",
+            "confidence": 0.89
+          },
+          {
+            "skill": "aws",
+            "confidence": 0.92
+          },
+          {
+            "skill": "docker",
+            "confidence": 0.87
+          },
+          {
+            "skill": "kubernetes",
+            "confidence": 0.78
+          },
+          {
+            "skill": "machine learning",
+            "confidence": 0.65
+          },
+          {
+            "skill": "react",
+            "confidence": 0.72
+          }
+        ],
+        "overall_confidence": 0.89,
+        "processing_metadata": {
+          "sections_processed": 4,
+          "skills_filtered": 12,
+          "domain_classified": "tech"
+        }
+      }
+    },
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 11.267302989959717,
+      "memory_used_mb": 0.0,
+      "peak_memory_mb": 0.214263916015625,
+      "cpu_percent": 2.3
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 3631,
+      "reported_total": 3631
+    },
+    "output": {
+      "experiences": [],
+      "aggregate_skills": [
+        "aws",
+        "docker",
+        "javascript",
+        "kubernetes",
+        "python",
+        "react"
+      ],
+      "processed_skills": {
+        "high_confidence_skills": [
+          "python",
+          "javascript",
+          "aws",
+          "docker",
+          "kubernetes",
+          "react"
+        ],
+        "medium_confidence_skills": [
+          "machine learning"
+        ],
+        "low_confidence_skills": [],
+        "skill_confidences": {
+          "python": 0.95,
+          "javascript": 0.89,
+          "aws": 0.92,
+          "docker": 0.87,
+          "kubernetes": 0.78,
+          "machine learning": 0.65,
+          "react": 0.72
+        },
+        "categories": {
+          "general": [
+            "python",
+            "aws",
+            "javascript",
+            "docker",
+            "kubernetes",
+            "react",
+            "machine learning"
+          ]
+        },
+        "filtered_count": 6,
+        "total_count": 7
+      },
+      "domain_insights": {},
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"machine learning integration\", \"database design\"],\n    \"nice_to_have_gaps\": [\"microservices architecture\", \"CI/CD pipeline implementation\"],\n    \"gap_bridging_strategy\": \"Prioritize learning machine learning integration and database design through hands-on projects and online courses to bridge critical gaps.\"\n  },\n  \n  \"implied_skills\": {\n    \"machine learning integration\": {\n      \"confidence\": 0.65,\n      \"evidence\": \"Experience with PyTorch and scikit-learn in training ML models.\",\n      \"development_path\": \"Enroll in advanced ML courses and collaborate on ML projects to enhance skills.\"\n    },\n    \"database design\": {\n      \"confidence\": 0.85,\n      \"evidence\": \"Experience in building data pipelines and optimizing ETL throughput.\",\n      \"development_path\": \"Learn advanced database design concepts and practice through real-world projects.\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"Python\", \"JavaScript\"],\n    \"tools\": [\"AWS (S3, Lambda)\", \"Terraform\", \"Jenkins\"],\n    \"platforms\": [\"AWS\"],\n    \"reasoning\": \"Inferred from proficiency in Python, JavaScript, and high confidence in AWS.\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Senior Full-Stack Developer\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Machine learning integration\", \"Frontend framework proficiency\"],\n      \"probability\": 0.8\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"ML Model Deployment Project\",\n      \"description\": \"Deploy a trained ML model as a REST API using Flask or FastAPI.\",\n      \"skills_practiced\": [\"Machine learning integration\", \"Cloud computing\"],\n      \"estimated_duration\": \"2-4 weeks\",\n      \"impact_on_gaps\": \"Strengthens machine learning integration skills.\",\n      \"difficulty\": \"intermediate\"\n    },\n    {\n      \"title\": \"Database Optimization Project\",\n      \"description\": \"Optimize database queries and design for improved performance.\",\n      \"skills_practiced\": [\"Database design\", \"Data pipeline optimization\"],\n      \"estimated_duration\": \"3-5 weeks\",\n      \"impact_on_gaps\": \"Enhances database design expertise.\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Excited by strong Python and AWS skills but may have concerns about limited frontend experience.\",\n    \"architect_view\": \"Has potential to grow into a Full-Stack Developer with focus on machine learning integration and frontend frameworks.\",\n    \"coach_view\": \"Encouraged to pursue projects integrating ML models and enhancing database design skills for career growth.\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Enroll in online ML deployment course\", \"Join a database optimization workshop\"],\n    \"3_month_goals\": [\"Complete ML deployment project\", \"Enhance CI/CD pipeline knowledge\"],\n    \"6_month_goals\": [\"Deploy a microservices architecture project\", \"Contribute to open-source ML integration project\"],\n    \"long_term_vision\": \"Transition into a Senior Full-Stack Developer role specializing in ML integration within the next 1-2 years.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 0.33,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "react",
+            "refined_suggestions": [
+              "Architected React component library for 50,000+ monthly active users, reducing development time by 60% through reusable design patterns",
+              "Engineered interactive dashboard handling 2M+ real-time data points, boosting user engagement metrics by 40%"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "python",
+            "refined_suggestions": [
+              "Developed Python ETL pipeline managing 10TB+ financial data daily with 99.9% uptime, supporting 500+ concurrent analysts",
+              "Built machine learning recommendation engine achieving 94% accuracy on 50M+ user interactions, driving a 35% increase in conversion rates"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1415,
+            "completion_tokens": 709,
+            "total_tokens": 2124,
+            "estimated_cost_usd": 0.001771
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 503,
+            "completion_tokens": 168,
+            "total_tokens": 671,
+            "estimated_cost_usd": 0.000504
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 645,
+            "completion_tokens": 191,
+            "total_tokens": 836,
+            "estimated_cost_usd": 0.000609
+          }
+        ],
+        "total_prompt_tokens": 2563,
+        "total_completion_tokens": 1068,
+        "total_tokens": 3631,
+        "estimated_cost_usd": 0.002884,
+        "failures": []
+      }
+    }
+  },
+  {
+    "test_name": "with_domain_insights",
+    "config": {
+      "insights_json": {
+        "domain": "tech",
+        "insights": {
+          "strengths": [
+            "Strong Python development skills",
+            "Cloud infrastructure expertise",
+            "Container orchestration experience"
+          ],
+          "gaps": [
+            "Limited machine learning expertise",
+            "Frontend development could be stronger",
+            "DevOps pipeline automation"
+          ],
+          "recommendations": [
+            "Focus on MLOps and model deployment",
+            "Strengthen React/Next.js skills for full-stack development",
+            "Pursue AWS DevOps Professional certification",
+            "Build portfolio projects showcasing cloud-native applications"
+          ],
+          "market_alignment": 0.78
+        },
+        "processing_metadata": {
+          "sections_processed": [
+            "experience",
+            "skills",
+            "projects"
+          ],
+          "optimizations_applied": [
+            "domain_specific_processing",
+            "confidence_weighting"
+          ]
+        }
+      }
+    },
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 12.308576822280884,
+      "memory_used_mb": 0.0,
+      "peak_memory_mb": 0.21551036834716797,
+      "cpu_percent": 2.1
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 3948,
+      "reported_total": 3948
+    },
+    "output": {
+      "experiences": [
+        {
+          "title_line": "Senior Data Engineer \u2014 Acme Corp",
+          "skills": [
+            "api",
+            "cloud",
+            "communication",
+            "data-analysis",
+            "devops",
+            "python"
+          ],
+          "snippet": "Senior Data Engineer \u2014 Acme Corp\n2021 - Present\nBuilt data pipelines in Python using AWS (S3, Lambda). Implemented CI/CD with Terraform and Jenkins. Created REST APIs for data access. Increased ETL th"
+        },
+        {
+          "title_line": "Machine Learning Intern \u2014 Example Labs",
+          "skills": [
+            "machine-learning",
+            "testing"
+          ],
+          "snippet": "Machine Learning Intern \u2014 Example Labs\n2020 - 2021\nTrained and evaluated classification models using scikit-learn and PyTorch. Conducted feature engineering and A/B testing. Wrote unit tests with pyte"
+        },
+        {
+          "title_line": "Product Analyst \u2014 Widgets Inc",
+          "skills": [
+            "communication",
+            "data-analysis",
+            "project-management"
+          ],
+          "snippet": "Product Analyst \u2014 Widgets Inc\n2018 - 2020\nPerformed product analytics using SQL and Tableau; presented findings to stakeholders and helped define roadmap priorities."
+        }
+      ],
+      "aggregate_skills": [
+        "api",
+        "cloud",
+        "communication",
+        "data-analysis",
+        "devops",
+        "machine-learning",
+        "project-management",
+        "python",
+        "testing"
+      ],
+      "processed_skills": {},
+      "domain_insights": {
+        "domain": "tech",
+        "insights": {
+          "strengths": [
+            "Strong Python development skills",
+            "Cloud infrastructure expertise",
+            "Container orchestration experience"
+          ],
+          "gaps": [
+            "Limited machine learning expertise",
+            "Frontend development could be stronger",
+            "DevOps pipeline automation"
+          ],
+          "recommendations": [
+            "Focus on MLOps and model deployment",
+            "Strengthen React/Next.js skills for full-stack development",
+            "Pursue AWS DevOps Professional certification",
+            "Build portfolio projects showcasing cloud-native applications"
+          ],
+          "market_alignment": 0.78
+        },
+        "processing_metadata": {
+          "sections_processed": [
+            "experience",
+            "skills",
+            "projects"
+          ],
+          "optimizations_applied": [
+            "domain_specific_processing",
+            "confidence_weighting"
+          ]
+        }
+      },
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"Machine Learning Integration\", \"Frontend Development\"],\n    \"nice_to_have_gaps\": [\"DevOps Pipeline Automation\"],\n    \"gap_bridging_strategy\": \"Prioritize upskilling in machine learning integration and frontend development through targeted projects and training programs.\"\n  },\n  \n  \"implied_skills\": {\n    \"Machine Learning Integration\": {\n      \"confidence\": 0.7,\n      \"evidence\": \"Experience with ML frameworks in previous roles\",\n      \"development_path\": \"Enroll in advanced ML courses, work on ML-related side projects, and collaborate with data scientists at current job.\"\n    },\n    \"Frontend Development\": {\n      \"confidence\": 0.65,\n      \"evidence\": \"Limited frontend experience in current and previous roles\",\n      \"development_path\": \"Take online courses in React, enhance frontend skills through personal projects, seek mentorship from frontend developers.\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"AWS\", \"Python\"],\n    \"tools\": [\"Terraform\", \"Jenkins\", \"Docker\"],\n    \"platforms\": [\"React\", \"Node.js\"],\n    \"reasoning\": \"Inferred from past experience and current job requirements\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Senior Full-Stack Developer\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Machine Learning Integration\", \"Frontend Development\"],\n      \"probability\": 0.8\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"Customer Engagement Dashboard\",\n      \"description\": \"Build a web dashboard to visualize customer engagement metrics\",\n      \"skills_practiced\": [\"Frontend Development\", \"Data Visualization\"],\n      \"estimated_duration\": \"3 weeks\",\n      \"impact_on_gaps\": \"Strengthens frontend skills and showcases data presentation abilities\",\n      \"difficulty\": \"intermediate\"\n    },\n    {\n      \"title\": \"Product Recommender System\",\n      \"description\": \"Create a machine learning-based product recommendation engine\",\n      \"skills_practiced\": [\"Machine Learning Integration\", \"Product Analysis\"],\n      \"estimated_duration\": \"4 weeks\",\n      \"impact_on_gaps\": \"Enhances machine learning integration skills and showcases data-driven decision-making\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Excited by strong Python skills and cloud experience, concerned about limited machine learning proficiency and frontend skills.\",\n    \"architect_view\": \"Sees potential in building scalable systems with current skill set, recommends deepening ML and frontend expertise for broader impact.\",\n    \"coach_view\": \"Promotes a versatile skill set expansion focusing on ML and frontend to unlock new career opportunities and enhance creativity.\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Complete a React tutorial\", \"Attend a machine learning workshop\"],\n    \"3_month_goals\": [\"Build a small web app using React and Node.js\", \"Enroll in an advanced ML course\"],\n    \"6_month_goals\": [\"Lead a cross-functional project involving ML integration\", \"Contribute to open-source projects in ML or frontend development\"],\n    \"long_term_vision\": \"Transition into a role where you can leverage both strong data engineering and newfound frontend and ML skills to lead innovative tech projects.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 1.0,
+          "matched_skills": [
+            "data-analysis",
+            "machine-learning",
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "api",
+            "cloud",
+            "devops",
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "cloud",
+            "devops",
+            "machine-learning",
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 1.0,
+          "matched_skills": [
+            "api",
+            "devops",
+            "python",
+            "testing"
+          ]
+        },
+        {
+          "role": "product-manager",
+          "score": 0.67,
+          "matched_skills": [
+            "communication",
+            "project-management"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "react",
+            "refined_suggestions": [
+              "Architected React component library serving 50,000+ monthly active users, reducing development time by 60% through reusable design patterns",
+              "Engineered interactive dashboard processing 2M+ data points in real-time, improving user engagement metrics by 40%"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "python",
+            "refined_suggestions": [
+              "Developed Python ETL pipeline processing 10TB+ of financial data daily with 99.9% uptime, supporting 500+ concurrent analysts",
+              "Built machine learning recommendation engine with 94% accuracy on 50M+ user interactions, increasing conversion rates by 35%"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1278,
+            "completion_tokens": 723,
+            "total_tokens": 2001,
+            "estimated_cost_usd": 0.001723
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 516,
+            "completion_tokens": 382,
+            "total_tokens": 898,
+            "estimated_cost_usd": 0.000831
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 859,
+            "completion_tokens": 190,
+            "total_tokens": 1049,
+            "estimated_cost_usd": 0.000714
+          }
+        ],
+        "total_prompt_tokens": 2653,
+        "total_completion_tokens": 1295,
+        "total_tokens": 3948,
+        "estimated_cost_usd": 0.003268,
+        "failures": []
+      }
+    }
+  },
+  {
+    "test_name": "with_all_structured_data",
+    "config": {
+      "skills_json": {
+        "title": "Senior Software Engineer",
+        "canonical_title": "senior software engineer",
+        "skills": [
+          {
+            "skill": "python",
+            "confidence": 0.95
+          },
+          {
+            "skill": "javascript",
+            "confidence": 0.89
+          },
+          {
+            "skill": "aws",
+            "confidence": 0.92
+          },
+          {
+            "skill": "docker",
+            "confidence": 0.87
+          },
+          {
+            "skill": "kubernetes",
+            "confidence": 0.78
+          },
+          {
+            "skill": "machine learning",
+            "confidence": 0.65
+          },
+          {
+            "skill": "react",
+            "confidence": 0.72
+          }
+        ],
+        "overall_confidence": 0.89,
+        "processing_metadata": {
+          "sections_processed": 4,
+          "skills_filtered": 12,
+          "domain_classified": "tech"
+        }
+      },
+      "insights_json": {
+        "domain": "tech",
+        "insights": {
+          "strengths": [
+            "Strong Python development skills",
+            "Cloud infrastructure expertise",
+            "Container orchestration experience"
+          ],
+          "gaps": [
+            "Limited machine learning expertise",
+            "Frontend development could be stronger",
+            "DevOps pipeline automation"
+          ],
+          "recommendations": [
+            "Focus on MLOps and model deployment",
+            "Strengthen React/Next.js skills for full-stack development",
+            "Pursue AWS DevOps Professional certification",
+            "Build portfolio projects showcasing cloud-native applications"
+          ],
+          "market_alignment": 0.78
+        },
+        "processing_metadata": {
+          "sections_processed": [
+            "experience",
+            "skills",
+            "projects"
+          ],
+          "optimizations_applied": [
+            "domain_specific_processing",
+            "confidence_weighting"
+          ]
+        }
+      }
+    },
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 11.63646411895752,
+      "memory_used_mb": 0.0,
+      "peak_memory_mb": 0.2158985137939453,
+      "cpu_percent": 5.1
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 3801,
+      "reported_total": 3801
+    },
+    "output": {
+      "experiences": [],
+      "aggregate_skills": [
+        "aws",
+        "docker",
+        "javascript",
+        "kubernetes",
+        "python",
+        "react"
+      ],
+      "processed_skills": {
+        "high_confidence_skills": [
+          "python",
+          "javascript",
+          "aws",
+          "docker",
+          "kubernetes",
+          "react"
+        ],
+        "medium_confidence_skills": [
+          "machine learning"
+        ],
+        "low_confidence_skills": [],
+        "skill_confidences": {
+          "python": 0.95,
+          "javascript": 0.89,
+          "aws": 0.92,
+          "docker": 0.87,
+          "kubernetes": 0.78,
+          "machine learning": 0.65,
+          "react": 0.72
+        },
+        "categories": {
+          "general": [
+            "python",
+            "aws",
+            "javascript",
+            "docker",
+            "kubernetes",
+            "react",
+            "machine learning"
+          ]
+        },
+        "filtered_count": 6,
+        "total_count": 7
+      },
+      "domain_insights": {
+        "domain": "tech",
+        "insights": {
+          "strengths": [
+            "Strong Python development skills",
+            "Cloud infrastructure expertise",
+            "Container orchestration experience"
+          ],
+          "gaps": [
+            "Limited machine learning expertise",
+            "Frontend development could be stronger",
+            "DevOps pipeline automation"
+          ],
+          "recommendations": [
+            "Focus on MLOps and model deployment",
+            "Strengthen React/Next.js skills for full-stack development",
+            "Pursue AWS DevOps Professional certification",
+            "Build portfolio projects showcasing cloud-native applications"
+          ],
+          "market_alignment": 0.78
+        },
+        "processing_metadata": {
+          "sections_processed": [
+            "experience",
+            "skills",
+            "projects"
+          ],
+          "optimizations_applied": [
+            "domain_specific_processing",
+            "confidence_weighting"
+          ]
+        }
+      },
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"machine learning expertise\", \"frontend development skills\"],\n    \"nice_to_have_gaps\": [\"DevOps pipeline automation\"],\n    \"gap_bridging_strategy\": \"To prioritize, focus on enhancing machine learning skills through practical projects and courses. Strengthen frontend skills by building real-world applications and collaborating with frontend developers. Automate DevOps pipelines gradually through hands-on experience and online resources.\"\n  },\n  \n  \"implied_skills\": {\n    \"data_science\": {\n      \"confidence\": 0.65,\n      \"evidence\": \"Experience in training ML models and conducting A/B testing\",\n      \"development_path\": \"Enroll in advanced machine learning courses, work on Kaggle projects, and collaborate on ML-related tasks at work.\"\n    },\n    \"frontend_development\": {\n      \"confidence\": 0.92,\n      \"evidence\": \"Experience in building REST APIs and some frontend work\",\n      \"development_path\": \"Enhance skills by focusing on building interactive UIs, learning modern frontend frameworks, and seeking mentorship from senior frontend developers.\"\n    },\n    \"automation\": {\n      \"confidence\": 0.9,\n      \"evidence\": \"Implemented CI/CD pipelines and increased ETL throughput\",\n      \"development_path\": \"Expand automation skills by diving deeper into Terraform, Jenkins, and exploring advanced automation tools like Ansible.\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"AWS\", \"Docker\"],\n    \"tools\": [\"Terraform\", \"Jenkins\", \"PyTorch\"],\n    \"platforms\": [],\n    \"reasoning\": \"Inferred from the skills listed in the resume and high-confidence skills\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Senior Full-Stack Developer\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Enhance frontend development skills\", \"Gain experience in microservices architecture\"],\n      \"probability\": 0.75\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"Interactive Data Visualization Dashboard\",\n      \"description\": \"Build a web-based dashboard to visualize data pipelines and insights\",\n      \"skills_practiced\": [\"frontend development\", \"data visualization\"],\n      \"estimated_duration\": \"2-4 weeks\",\n      \"impact_on_gaps\": \"Strengthens frontend development skills and showcases data presentation abilities\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Excited by strong Python and cloud skills, concerned about limited machine learning expertise\",\n    \"architect_view\": \"Recognizes potential in technical implementation and software engineering, sees growth in frontend development\",\n    \"coach_view\": \"Sees potential in transitioning to a full-stack role with focused learning on frontend development and machine learning\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Complete a machine learning course online\", \"Start a small frontend project\"],\n    \"3_month_goals\": [\"Contribute to a frontend feature in a team project\", \"Implement a basic ML model into a project\"],\n    \"6_month_goals\": [\"Lead a frontend-focused project\", \"Automate a significant DevOps process\"],\n    \"long_term_vision\": \"To become a proficient Full-Stack Developer with a strong foundation in both frontend and backend technologies, integrating machine learning into projects.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 0.33,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "docker",
+            "refined_suggestions": [
+              "Engineered Docker-based deployment solutions for high-traffic web applications, ensuring 99.99% uptime in demanding environments",
+              "Led cross-functional teams to successfully deliver 3 mission-critical projects, meeting tight deadlines and exceeding stakeholder expectations"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "aws",
+            "refined_suggestions": [
+              "Designed AWS architecture that reduced infrastructure costs by 50% while increasing system performance by 30%",
+              "Developed AWS tools and services utilized by 300+ users, streamlining processes and enhancing team productivity"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1496,
+            "completion_tokens": 730,
+            "total_tokens": 2226,
+            "estimated_cost_usd": 0.001843
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 505,
+            "completion_tokens": 311,
+            "total_tokens": 816,
+            "estimated_cost_usd": 0.000719
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 588,
+            "completion_tokens": 171,
+            "total_tokens": 759,
+            "estimated_cost_usd": 0.00055
+          }
+        ],
+        "total_prompt_tokens": 2589,
+        "total_completion_tokens": 1212,
+        "total_tokens": 3801,
+        "estimated_cost_usd": 0.003112,
+        "failures": []
+      }
+    }
+  },
+  {
+    "test_name": "high_confidence_threshold",
+    "config": {
+      "skills_json": {
+        "title": "Senior Software Engineer",
+        "canonical_title": "senior software engineer",
+        "skills": [
+          {
+            "skill": "python",
+            "confidence": 0.95
+          },
+          {
+            "skill": "javascript",
+            "confidence": 0.89
+          },
+          {
+            "skill": "aws",
+            "confidence": 0.92
+          },
+          {
+            "skill": "docker",
+            "confidence": 0.87
+          },
+          {
+            "skill": "kubernetes",
+            "confidence": 0.78
+          },
+          {
+            "skill": "machine learning",
+            "confidence": 0.65
+          },
+          {
+            "skill": "react",
+            "confidence": 0.72
+          }
+        ],
+        "overall_confidence": 0.89,
+        "processing_metadata": {
+          "sections_processed": 4,
+          "skills_filtered": 12,
+          "domain_classified": "tech"
+        }
+      },
+      "confidence_threshold": 0.9
+    },
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 14.045011520385742,
+      "memory_used_mb": 0.0,
+      "peak_memory_mb": 0.20124340057373047,
+      "cpu_percent": 2.2
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 3975,
+      "reported_total": 3975
+    },
+    "output": {
+      "experiences": [],
+      "aggregate_skills": [
+        "aws",
+        "python"
+      ],
+      "processed_skills": {
+        "high_confidence_skills": [
+          "python",
+          "aws"
+        ],
+        "medium_confidence_skills": [
+          "javascript",
+          "docker",
+          "kubernetes",
+          "machine learning",
+          "react"
+        ],
+        "low_confidence_skills": [],
+        "skill_confidences": {
+          "python": 0.95,
+          "javascript": 0.89,
+          "aws": 0.92,
+          "docker": 0.87,
+          "kubernetes": 0.78,
+          "machine learning": 0.65,
+          "react": 0.72
+        },
+        "categories": {
+          "general": [
+            "python",
+            "aws",
+            "javascript",
+            "docker",
+            "kubernetes",
+            "react",
+            "machine learning"
+          ]
+        },
+        "filtered_count": 2,
+        "total_count": 7
+      },
+      "domain_insights": {},
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"front-end development\", \"microservices architecture\"],\n    \"nice_to_have_gaps\": [\"machine learning integration\", \"database design and optimization\"],\n    \"gap_bridging_strategy\": \"Prioritize gaining experience in front-end dev and microservices by taking on relevant projects or courses, then gradually explore ML integration and DB optimization.\"\n  },\n  \n  \"implied_skills\": {\n    \"front-end development\": {\n      \"confidence\": 0.85,\n      \"evidence\": \"Experience in building REST APIs and working with React\",\n      \"development_path\": \"Take advanced courses in React and Node.js, collaborate on front-end-heavy projects\"\n    },\n    \"microservices architecture\": {\n      \"confidence\": 0.88,\n      \"evidence\": \"Implemented CI/CD pipelines with Terraform and Jenkins\",\n      \"development_path\": \"Deep dive into microservices concepts, practice designing and implementing microservices\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"AWS\", \"Python\"],\n    \"tools\": [\"Terraform\", \"Jenkins\"],\n    \"platforms\": [\"S3\"],\n    \"reasoning\": \"Inferred from experience working with AWS, Python, CI/CD, and developing REST APIs\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Senior Full-Stack Developer\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Front-end development proficiency\", \"Understanding of microservices architecture\"],\n      \"probability\": 0.8\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"Interactive Front-End Dashboard\",\n      \"description\": \"Build a data visualization dashboard using React and API integration\",\n      \"skills_practiced\": [\"front-end development\", \"API development\"],\n      \"estimated_duration\": \"4-6 weeks\",\n      \"impact_on_gaps\": \"Strengthens front-end dev skills and familiarity with API integration\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Excited about experience in AWS, Python, CI/CD, and data pipelines. Concerned about lack of front-end and microservices experience.\",\n    \"architect_view\": \"Has strong technical implementation skills but should focus on expanding knowledge in front-end and architecture.\",\n    \"coach_view\": \"Great potential to transition to a full-stack role with further development in front-end dev and microservices.\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Complete React course\", \"Start a side project integrating Python backend with React front-end\"],\n    \"3_month_goals\": [\"Build and deploy a full-stack application\", \"Contribute to a microservices project at work\"],\n    \"6_month_goals\": [\"Achieve proficiency in React and Node.js\", \"Lead a front-end overhaul in a project\"],\n    \"long_term_vision\": \"Transition into a Senior Full-Stack Developer role within 1-2 years, specializing in scalable web applications and microservices architecture.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 0.33,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "react",
+            "refined_suggestions": [
+              "Engineered interactive React components serving 10,000+ users, showcasing frontend expertise transferable to modern frameworks",
+              "Architected component library reducing frontend bugs by 30%, highlighting adaptability to new frontend technologies like React"
+            ]
+          },
+          {
+            "skill_focus": "aws",
+            "refined_suggestions": [
+              "Optimized AWS Lambda functions, reducing response time by 50% and showcasing cloud computing skills applicable to other cloud platforms",
+              "Implemented auto-scaling policies on AWS EC2 instances, improving application performance during peak traffic by 40%"
+            ]
+          },
+          {
+            "skill_focus": "node.js",
+            "refined_suggestions": [
+              "Developed RESTful APIs using Node.js, handling 1000+ requests per minute and displaying backend proficiency transferable to Node.js applications",
+              "Implemented real-time features using Socket.io in Node.js, enhancing user engagement by 25% and demonstrating expertise in event-driven programming"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "python",
+            "refined_suggestions": [
+              "Developed Python automation scripts processing 1M+ records daily, reducing manual work by 80%",
+              "Built machine learning models with 95% accuracy on 500K+ data points using scikit-learn and pandas"
+            ]
+          },
+          {
+            "skill_focus": "aws",
+            "refined_suggestions": [
+              "Managed AWS S3 storage, optimizing costs by 20% through efficient data storage practices",
+              "Utilized AWS CloudWatch to monitor application performance, reducing downtime by 15% through proactive alerting"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1404,
+            "completion_tokens": 663,
+            "total_tokens": 2067,
+            "estimated_cost_usd": 0.001697
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 499,
+            "completion_tokens": 369,
+            "total_tokens": 868,
+            "estimated_cost_usd": 0.000803
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 846,
+            "completion_tokens": 194,
+            "total_tokens": 1040,
+            "estimated_cost_usd": 0.000714
+          }
+        ],
+        "total_prompt_tokens": 2749,
+        "total_completion_tokens": 1226,
+        "total_tokens": 3975,
+        "estimated_cost_usd": 0.003214,
+        "failures": []
+      }
+    }
+  },
+  {
+    "test_name": "low_confidence_threshold",
+    "config": {
+      "skills_json": {
+        "title": "Senior Software Engineer",
+        "canonical_title": "senior software engineer",
+        "skills": [
+          {
+            "skill": "python",
+            "confidence": 0.95
+          },
+          {
+            "skill": "javascript",
+            "confidence": 0.89
+          },
+          {
+            "skill": "aws",
+            "confidence": 0.92
+          },
+          {
+            "skill": "docker",
+            "confidence": 0.87
+          },
+          {
+            "skill": "kubernetes",
+            "confidence": 0.78
+          },
+          {
+            "skill": "machine learning",
+            "confidence": 0.65
+          },
+          {
+            "skill": "react",
+            "confidence": 0.72
+          }
+        ],
+        "overall_confidence": 0.89,
+        "processing_metadata": {
+          "sections_processed": 4,
+          "skills_filtered": 12,
+          "domain_classified": "tech"
+        }
+      },
+      "confidence_threshold": 0.5
+    },
+    "success": true,
+    "error": null,
+    "performance": {
+      "duration_seconds": 17.846853733062744,
+      "memory_used_mb": 0.0,
+      "peak_memory_mb": 0.18665313720703125,
+      "cpu_percent": 1.6
+    },
+    "validation": {
+      "is_valid": true,
+      "errors": [],
+      "warnings": []
+    },
+    "token_accuracy": {
+      "total_accuracy": true,
+      "discrepancies": [],
+      "calculated_total": 3903,
+      "reported_total": 3903
+    },
+    "output": {
+      "experiences": [],
+      "aggregate_skills": [
+        "aws",
+        "docker",
+        "javascript",
+        "kubernetes",
+        "machine learning",
+        "python",
+        "react"
+      ],
+      "processed_skills": {
+        "high_confidence_skills": [
+          "python",
+          "javascript",
+          "aws",
+          "docker",
+          "kubernetes",
+          "machine learning",
+          "react"
+        ],
+        "medium_confidence_skills": [],
+        "low_confidence_skills": [],
+        "skill_confidences": {
+          "python": 0.95,
+          "javascript": 0.89,
+          "aws": 0.92,
+          "docker": 0.87,
+          "kubernetes": 0.78,
+          "machine learning": 0.65,
+          "react": 0.72
+        },
+        "categories": {
+          "general": [
+            "python",
+            "aws",
+            "javascript",
+            "docker",
+            "kubernetes",
+            "react",
+            "machine learning"
+          ]
+        },
+        "filtered_count": 7,
+        "total_count": 7
+      },
+      "domain_insights": {},
+      "gap_analysis": "```json\n{\n  \"gap_analysis\": {\n    \"critical_gaps\": [\"machine learning\", \"frontend_frameworks\"],\n    \"nice_to_have_gaps\": [\"presentation_skills\", \"knowledge_transfer\"],\n    \"gap_bridging_strategy\": \"Prioritize bridging critical gaps through focused upskilling in machine learning and frontend frameworks before moving on to nice-to-have gaps.\"\n  },\n  \n  \"implied_skills\": {\n    \"machine learning\": {\n      \"confidence\": 0.65,\n      \"evidence\": \"Experience in training ML models in previous roles.\",\n      \"development_path\": \"Enroll in advanced ML courses, work on personal ML projects, and collaborate with data scientists at current job.\"\n    },\n    \"frontend_frameworks\": {\n      \"confidence\": 0.92,\n      \"evidence\": \"Experience with React and familiarity with JSX.\",\n      \"development_path\": \"Expand skills by building complex UI components, contribute to open-source frontend projects, and attend frontend development workshops.\"\n    }\n  },\n  \n  \"environment_capabilities\": {\n    \"tech_stack\": [\"python\", \"aws\"],\n    \"tools\": [\"Terraform\", \"Jenkins\"],\n    \"platforms\": [\"AWS\"],\n    \"reasoning\": \"Based on high-confidence skills and experience with AWS in current role.\"\n  },\n  \n  \"transfer_paths\": [\n    {\n      \"from_role\": \"Senior Data Engineer\",\n      \"to_role\": \"Data Scientist\",\n      \"timeline\": \"6-12 months\",\n      \"key_bridges\": [\"Machine Learning expertise\", \"Enhanced presentation skills\"],\n      \"probability\": 0.75\n    }\n  ],\n  \n  \"project_briefs\": [\n    {\n      \"title\": \"Personalized Movie Recommendation System\",\n      \"description\": \"Build a recommendation engine using Python and deploy it on AWS. Create a frontend interface with React for user interaction.\",\n      \"skills_practiced\": [\"machine learning\", \"frontend_frameworks\"],\n      \"estimated_duration\": \"2-4 weeks\",\n      \"impact_on_gaps\": \"Bridges machine learning and frontend frameworks gaps.\",\n      \"difficulty\": \"intermediate\"\n    }\n  ],\n  \n  \"multi_perspective_insights\": {\n    \"hiring_manager_view\": \"Candidate's experience with cloud platforms like AWS and CI/CD tools is appealing. Lack of strong machine learning and presentation skills are areas of concern.\",\n    \"architect_view\": \"Strong technical implementation skills evident. Need to focus on enhancing machine learning expertise and architectural thinking for scalability requirements.\",\n    \"coach_view\": \"Great potential for growth into a Data Scientist role with targeted upskilling in machine learning. Presentation skills development can open avenues for leadership roles.\"\n  },\n  \n  \"action_plan\": {\n    \"quick_wins\": [\"Enroll in online ML courses\", \"Attend frontend development workshops\"],\n    \"3_month_goals\": [\"Complete a personal ML project\", \"Contribute to an open-source frontend project\"],\n    \"6_month_goals\": [\"Obtain ML certification\", \"Lead a frontend UI redesign project\"],\n    \"long_term_vision\": \"Transition into a Data Scientist role specializing in ML integration within 1-2 years.\"\n  }\n}\n```",
+      "role_suggestions": [
+        {
+          "role": "data-scientist",
+          "score": 0.33,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "data-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "ml-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        },
+        {
+          "role": "software-engineer",
+          "score": 0.25,
+          "matched_skills": [
+            "python"
+          ]
+        }
+      ],
+      "suggested_experiences": {
+        "bridging_gaps": [
+          {
+            "skill_focus": "react",
+            "refined_suggestions": [
+              "Architected React component library for a high-traffic platform with 50,000+ monthly active users, reducing development time by 60% through reusable design patterns",
+              "Engineered interactive dashboard capable of processing 2M+ data points in real-time, leading to a 40% increase in user engagement metrics"
+            ]
+          }
+        ],
+        "metric_improvements": [
+          {
+            "skill_focus": "python",
+            "refined_suggestions": [
+              "Developed Python ETL pipeline handling 10TB+ of financial data daily with 99.9% uptime, supporting 500+ concurrent analysts",
+              "Built machine learning recommendation engine achieving 94% accuracy on 50M+ user interactions, resulting in a 35% increase in conversion rates"
+            ]
+          }
+        ]
+      },
+      "run_metrics": {
+        "calls": [
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 1418,
+            "completion_tokens": 652,
+            "total_tokens": 2070,
+            "estimated_cost_usd": 0.001687
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 508,
+            "completion_tokens": 321,
+            "total_tokens": 829,
+            "estimated_cost_usd": 0.000736
+          },
+          {
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt_tokens": 798,
+            "completion_tokens": 206,
+            "total_tokens": 1004,
+            "estimated_cost_usd": 0.000708
+          }
+        ],
+        "total_prompt_tokens": 2724,
+        "total_completion_tokens": 1179,
+        "total_tokens": 3903,
+        "estimated_cost_usd": 0.003131,
+        "failures": []
+      }
+    }
+  }
+]

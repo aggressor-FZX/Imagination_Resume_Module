@@ -1,0 +1,61 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache
+.coverage
+.tox
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Taskmaster
+.taskmaster
+
+# Environment files (don't copy to container)
+.env
+.env.local
+.env.production
+
+# Testing
+tests/
+test/
+*.test
+*_test.py
+conftest.py
+
+# Documentation (not needed in container)
+README.md
+SYSTEM_IO_SPECIFICATION.md
+CONTEXT7_RESEARCH.md
+*.md
+
+# Development files
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile.dev
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Logs
+logs/
+*.log

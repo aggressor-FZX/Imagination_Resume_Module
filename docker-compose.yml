@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  imaginator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys loaded from .env file
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CONTEXT7_API_KEY=${CONTEXT7_API_KEY}
+      # App configuration
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - CONFIDENCE_THRESHOLD=0.7
+    volumes:
+      # Mount sample files for testing
+      - ./sample_resume.txt:/app/sample_resume.txt:ro
+      - ./sample_job_ad.txt:/app/sample_job_ad.txt:ro
+      - ./skill_adjacency.json:/app/skill_adjacency.json:ro
+      - ./verb_competency.json:/app/verb_competency.json:ro
+      - ./sample_skills.json:/app/sample_skills.json:ro
+      - ./sample_insights.json:/app/sample_insights.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Optional: Add a test service for running tests in container
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENVIRONMENT=test
+    volumes:
+      - ./test:/app/test:ro
+      - ./sample_resume.txt:/app/sample_resume.txt:ro
+      - ./sample_job_ad.txt:/app/sample_job_ad.txt:ro
+    command: ["python", "-m", "pytest", "test/", "-v"]
+    profiles:
+      - test
