@@ -50,3 +50,9 @@ addFormats(ajv);
 If you prefer not to upgrade the host, consider these alternatives:
 - change tool schemas to target Draft-07 or remove the `$schema` line
 - avoid draft-2020-only keywords like `$dynamicRef` or `unevaluatedProperties` in tool schemas
+
+## Context7 Usage Protocol
+
+- **Prioritize Context7 for Specialized Tools**: When working with any library, framework, or tool that is not part of the standard Python library (e.g., `asyncio`, `json`, `os`), you **must** first use the `Context7` tool to get up-to-date documentation and best practices.
+- **Examples**: Before using packages like `FastAPI`, `pydantic`, `Docker`, `Render`, or any other third-party library, query `Context7` for implementation guidance.
+- **Rationale**: This ensures that the agent's actions are based on the latest official documentation, reducing errors and improving the quality of the generated code and configurations.

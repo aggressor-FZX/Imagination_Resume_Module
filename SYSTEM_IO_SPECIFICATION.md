@@ -328,5 +328,71 @@ tests/                      # Test suite
   ├── test_imaginator_flow_unit.py    # Unit tests
   └── test_imaginator_flow_e2e.py     # End-to-end tests
 README.md                   # Documentation
-```</content>
-<parameter name="filePath">/home/skystarved/Render_Dockers/Imaginator/SYSTEM_IO_SPECIFICATION.md
+```
+
+## Backend System Integration
+
+### Calling the Container
+
+To integrate with the Generative Resume Co-Writer, backend systems should send a POST request to the `/analyze` endpoint of the containerized FastAPI application.
+
+**Endpoint**: `http://<container_ip>:8000/analyze`
+
+**Method**: `POST`
+
+**Headers**:
+- `Content-Type`: `application/json`
+
+**Request Body**:
+The request body should be a JSON object with the following structure:
+
+```json
+{
+  "resume_text": "...",
+  "job_ad": "...",
+  "extracted_skills_json": "...",
+  "domain_insights_json": "...",
+  "confidence_threshold": 0.7
+}
+```
+
+### Expected Response
+
+The system will respond with a JSON object containing the analysis, generation, and criticism results.
+
+**Success Response (200 OK)**:
+```json
+{
+  "analysis": {
+    "experiences": [...],
+    "aggregate_skills": [...],
+    "processed_skills": {...},
+    "domain_insights": {...},
+    "gap_analysis": "..."
+  },
+  "generation": {
+    "gap_bridging": [...],
+    "metric_improvements": [...]
+  },
+  "criticism": {
+    "suggested_experiences": {
+      "bridging_gaps": [...],
+      "metric_improvements": [...]
+    }
+  },
+  "run_metrics": {
+    "total_tokens": 1234,
+    "estimated_cost_usd": 0.0123,
+    "failures": []
+  }
+}
+```
+
+**Error Response (4xx/5xx)**:
+If an error occurs, the system will respond with a JSON object containing an error message.
+
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```

@@ -18,7 +18,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
-COPY requirements.txt pyproject.toml ./
+COPY requirements.txt ./
 
 # Install Python dependencies using UV (faster than pip)
 RUN uv pip install --system -r requirements.txt

@@ -5,10 +5,10 @@ Based on Context7 research findings for FastAPI best practices
 
 import time
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -71,7 +71,12 @@ async def health_check():
 
 
 @app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_resume(request: AnalysisRequest):
+async def analyze_resume(
+    request: AnalysisRequest,
+    x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
+    x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
+    x_google_api_key: Optional[str] = Header(None, description="Google API Key")
+):
     """
     Analyze a resume against a job description and provide career development recommendations.
 
@@ -83,6 +88,13 @@ async def analyze_resume(request: AnalysisRequest):
     start_time = time.time()
 
     try:
+        # Pass API keys to the async function
+        api_keys = {
+            "openai_api_key": x_openai_api_key,
+            "anthropic_api_key": x_anthropic_api_key,
+            "google_api_key": x_google_api_key
+        }
+
         # Reset run metrics for this request
         RUN_METRICS.update({
             "calls": [],
@@ -122,7 +134,8 @@ async def analyze_resume(request: AnalysisRequest):
             job_ad=request.job_ad,
             extracted_skills_json=extracted_skills,
             domain_insights_json=domain_insights,
-            confidence_threshold=request.confidence_threshold
+            confidence_threshold=request.confidence_threshold,
+            **api_keys
         )
 
         # Step 2: Run Generation (with graceful degradation)
@@ -130,7 +143,8 @@ async def analyze_resume(request: AnalysisRequest):
         try:
             generation_result = await run_generation_async(
                 analysis_json=analysis_result,
-                job_ad=request.job_ad
+                job_ad=request.job_ad,
+                **api_keys
             )
         except Exception as e:
             print(f"⚠️  Generation step failed: {str(e)}")
@@ -142,7 +156,8 @@ async def analyze_resume(request: AnalysisRequest):
         try:
             criticism_result = run_criticism(
                 generated_suggestions=generation_result,
-                job_ad=request.job_ad
+                job_ad=request.job_ad,
+                **api_keys
             )
         except Exception as e:
             print(f"⚠️  Criticism step failed: {str(e)}")
@@ -188,45 +203,35 @@ async def analyze_resume(request: AnalysisRequest):
 
 @app.post("/analyze-file", response_model=AnalysisResponse)
 async def analyze_resume_file(
-    job_ad: str = Form(..., description="Target job description text"),
-    resume_file: UploadFile = File(..., description="Resume file (text format)"),
-    confidence_threshold: float = Form(0.7, description="Confidence threshold for skills"),
-    extracted_skills_json: str = Form(None, description="JSON string of extracted skills"),
-    domain_insights_json: str = Form(None, description="JSON string of domain insights")
+    resume_file: UploadFile = File(...),
+    job_ad: str = Form(...),
+    extracted_skills_json: Optional[str] = Form(None),
+    domain_insights_json: Optional[str] = Form(None),
+    confidence_threshold: float = Form(0.7),
+    x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
+    x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
+    x_google_api_key: Optional[str] = Header(None, description="Google API Key")
 ):
     """
-    Analyze a resume file upload against a job description.
-
-    Accepts multipart form data with file upload for the resume.
+    Analyze a resume file against a job description and provide career development recommendations.
     """
-    # Read resume file content
-    try:
-        resume_content = await resume_file.read()
-        resume_text = resume_content.decode('utf-8')
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="Resume file must be valid UTF-8 text"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to read resume file: {str(e)}"
-        )
-    finally:
-        await resume_file.close()
-
-    # Create analysis request and delegate to main endpoint logic
+    resume_text = (await resume_file.read()).decode("utf-8")
+    
+    # Create a mock request object to reuse the analyze_resume logic
     request = AnalysisRequest(
         resume_text=resume_text,
         job_ad=job_ad,
-        confidence_threshold=confidence_threshold,
         extracted_skills_json=extracted_skills_json,
-        domain_insights_json=domain_insights_json
+        domain_insights_json=domain_insights_json,
+        confidence_threshold=confidence_threshold
     )
-
-    # Use the same logic as the JSON endpoint
-    return await analyze_resume(request)
+    
+    return await analyze_resume(
+        request,
+        x_openai_api_key,
+        x_anthropic_api_key,
+        x_google_api_key
+    )
 
 
 @app.get("/docs/{library}", response_model=Context7DocsResponse)

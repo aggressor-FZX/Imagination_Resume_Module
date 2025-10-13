@@ -28,7 +28,7 @@ AI-powered resume analysis tool that provides personalized career development re
 
 ### Robust Architecture
 - **Graceful Degradation**: Continues functioning even with API failures or partial data
-- **Provider Fallback**: Automatic fallback from OpenAI to Anthropic on failures
+- **Provider Fallback**: Automatic fallback from OpenAI to Google to Anthropic on failures
 - **Schema Validation**: Ensures output conforms to standardized JSON format
 - **Async Processing**: Concurrent LLM API calls for improved performance
 - **Usage Tracking**: Comprehensive metrics for tokens, costs, and performance monitoring
@@ -77,6 +77,7 @@ AI-powered resume analysis tool that provides personalized career development re
    ```bash
    OPENAI_API_KEY=your_openai_key_here
    ANTHROPIC_API_KEY=your_anthropic_key_here
+   GOOGLE_API_KEY=your_google_key_here
    CONTEXT7_API_KEY=your_context7_key_here  # Optional, for documentation features
 
    # Optional: Custom pricing (defaults provided)
@@ -84,20 +85,29 @@ AI-powered resume analysis tool that provides personalized career development re
    OPENAI_PRICE_OUTPUT_PER_1K=0.0015
    ANTHROPIC_PRICE_INPUT_PER_1K=0.003
    ANTHROPIC_PRICE_OUTPUT_PER_1K=0.015
+   GOOGLE_PRICE_INPUT_PER_1K=0.00025
+   GOOGLE_PRICE_OUTPUT_PER_1K=0.0005
    ```
 
 ### Docker Setup
+
+**Prerequisites:**
+- Docker and Docker Compose installed
+- `.env` file with API keys (see `.env.example`)
 
 **Build and run with Docker Compose:**
 ```bash
 # Build the container
 docker-compose build
 
-# Run the service
+# Run the service (port 8000 by default, or 8001 if 8000 is in use)
 docker-compose up
 
 # Or run in background
 docker-compose up -d
+
+# Check health endpoint
+curl http://localhost:8000/health
 ```
 
 **Manual Docker build:**
@@ -109,20 +119,39 @@ docker build -t imaginator .
 docker run -p 8000:8000 --env-file .env imaginator
 ```
 
+**Container Features:**
+- Multi-stage build with UV package manager for fast Python installs
+- Non-root user for security
+- Health checks configured
+- Optimized for production with minimal image size
+- Tested locally ✅
+
 ### Render Deployment
 
-The application is configured for easy deployment to Render:
+The application is configured for easy deployment to Render with production-ready settings:
 
 1. **Connect your GitHub repository to Render**
-2. **Create a new Web Service** with the following settings:
-   - **Runtime**: Docker
-   - **Build Command**: Automatically handled by render.yaml
-   - **Start Command**: Automatically handled by render.yaml
+2. **Create a new Web Service** using the `render.yaml` configuration:
+   - **Runtime**: Docker (automatically detected)
+   - **Plan**: Starter ($7/month - 1GB RAM, 1 CPU, 750 hours)
+   - **Build Command**: `docker build -t imaginator .`
+   - **Start Command**: `docker run -p $PORT:8000 imaginator`
 3. **Configure environment variables** in Render dashboard:
-   - `OPENAI_API_KEY`
-   - `ANTHROPIC_API_KEY`
-   - `CONTEXT7_API_KEY` (optional)
+   - `OPENAI_API_KEY` (required)
+   - `ANTHROPIC_API_KEY` (required)
+   - `GOOGLE_API_KEY` (required)
+   - `CONTEXT7_API_KEY` (optional - for documentation features)
+   - Other variables are pre-configured in render.yaml
 4. **Deploy**: Render will automatically build and deploy using the provided configuration
+
+**Render Configuration Features:**
+- Health check endpoint monitoring
+- Automatic scaling configuration
+- Environment-based settings (production mode)
+- CORS configuration for web applications
+- Persistent disk option for data storage (optional)
+
+**Status**: Configuration ready ✅ | Local testing complete ✅ | Production deployment pending
 
 The `render.yaml` file handles all deployment configuration including health checks, environment variables, and scaling settings.
 
@@ -406,6 +435,10 @@ OPENAI_PRICE_OUTPUT_PER_1K=0.0018- `OPENAI_PRICE_OUTPUT_PER_1K` (default: `0.001
 ```- `ANTHROPIC_PRICE_INPUT_PER_1K` (default: `0.003`)
 
 - `ANTHROPIC_PRICE_OUTPUT_PER_1K` (default: `0.015`)
+
+- `GOOGLE_PRICE_INPUT_PER_1K` (default: `0.00025`)
+
+- `GOOGLE_PRICE_OUTPUT_PER_1K` (default: `0.0005`)
 
 ## 🧪 Testing
 

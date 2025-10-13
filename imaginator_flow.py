@@ -8,26 +8,30 @@ import re
 import json
 import argparse
 import os
-from typing import List, Dict, Set, Any
+from typing import List, Dict, Set, Any, Optional, Optional
 
 import aiohttp
 import asyncio
+import google.generativeai as genai
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
 import jsonschema
 
-# Load environment variables (expects OPENAI_API_KEY and ANTHROPIC_API_KEY)
+# Load environment variables (expects OPENAI_API_KEY, ANTHROPIC_API_KEY, and GOOGLE_API_KEY)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Pricing (USD) per 1K tokens; can be overridden via env vars
 OPENAI_PRICE_IN_K = float(os.getenv("OPENAI_PRICE_INPUT_PER_1K", "0.0005"))
 OPENAI_PRICE_OUT_K = float(os.getenv("OPENAI_PRICE_OUTPUT_PER_1K", "0.0015"))
 ANTHROPIC_PRICE_IN_K = float(os.getenv("ANTHROPIC_PRICE_INPUT_PER_1K", "0.003"))
 ANTHROPIC_PRICE_OUT_K = float(os.getenv("ANTHROPIC_PRICE_OUTPUT_PER_1K", "0.015"))
+GOOGLE_PRICE_IN_K = float(os.getenv("GOOGLE_PRICE_INPUT_PER_1K", "0.00025"))
+GOOGLE_PRICE_OUT_K = float(os.getenv("GOOGLE_PRICE_OUTPUT_PER_1K", "0.0005"))
 
 # Run metrics accumulator
 RUN_METRICS: Dict[str, Any] = {
@@ -42,10 +46,13 @@ RUN_METRICS: Dict[str, Any] = {
 # Initialize clients (1.0+ APIs)
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
 
 # Initialize async clients
 openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
 anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
+google_async_client = genai.GenerativeModel('gemini-pro') if GOOGLE_API_KEY else None  # Google Gemini client
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -269,19 +276,38 @@ def call_llm(system_prompt: str, user_prompt: str, temperature: float = 0.9, max
     raise RuntimeError(error_msg)
 
 
-async def call_llm_async(system_prompt: str, user_prompt: str, temperature: float = 0.9, max_tokens: int = 1500, max_retries: int = 3) -> str:
+async def call_llm_async(
+    system_prompt: str, 
+    user_prompt: str, 
+    temperature: float = 0.9, 
+    max_tokens: int = 1500, 
+    max_retries: int = 3,
+    openai_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
+    google_api_key: Optional[str] = None
+) -> str:
     """
     Async version of call_llm: Call LLM with automatic fallback using async clients.
     Includes retry logic with exponential backoff and timeout handling.
-    Returns the response text or raises an exception if both fail
+    Returns the response text or raises an exception if all fail
     """
     errors = []
 
     for attempt in range(max_retries):
+        # Use temporary clients if API keys are provided
+        temp_openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else openai_async_client
+        temp_anthropic_client = Anthropic(api_key=anthropic_api_key) if anthropic_api_key else anthropic_async_client
+        
+        if google_api_key:
+            genai.configure(api_key=google_api_key)
+            temp_google_client = genai.GenerativeModel('gemini-pro')
+        else:
+            temp_google_client = google_async_client
+
         # Try OpenAI first
-        if openai_async_client:
+        if temp_openai_client:
             try:
-                response = await openai_async_client.chat.completions.create(
+                response = await temp_openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -322,10 +348,50 @@ async def call_llm_async(system_prompt: str, user_prompt: str, temperature: floa
                 RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openai", "error": str(e)})
                 print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
 
-        # Fallback to Anthropic
-        if anthropic_async_client:
+        # Try Google next
+        if temp_google_client:
             try:
-                response = await anthropic_async_client.messages.create(
+                response = await temp_google_client.generate_content_async(
+                    f"{system_prompt}\n\n{user_prompt}",
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens
+                    )
+                )
+                print("✅ Using Google Gemini", flush=True)
+                # Extract text and usage
+                text = response.text
+                try:
+                    u = getattr(response, "usage", None)
+                    input_t = int(getattr(u, "input_tokens", 0) or 0)
+                    output_t = int(getattr(u, "output_tokens", 0) or 0)
+                    total_t = input_t + output_t
+                except Exception:
+                    input_t = output_t = total_t = 0
+                cost = (input_t / 1000.0) * GOOGLE_PRICE_IN_K + (output_t / 1000.0) * GOOGLE_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "google",
+                    "model": "gemini-pro",
+                    "prompt_tokens": input_t,
+                    "completion_tokens": output_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += input_t
+                RUN_METRICS["total_completion_tokens"] += output_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"Google Gemini Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "google", "error": str(e)})
+                print(f"⚠️  Google Gemini failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+
+        # Fallback to Anthropic
+        if temp_anthropic_client:
+            try:
+                response = await temp_anthropic_client.messages.create(
                     model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
                     max_tokens=max_tokens,
                     temperature=temperature,
@@ -364,10 +430,10 @@ async def call_llm_async(system_prompt: str, user_prompt: str, temperature: floa
                 RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
                 print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
 
-        # If we get here, both providers failed on this attempt
+        # If we get here, all providers failed on this attempt
         if attempt < max_retries - 1:
             wait_time = min(2 ** attempt, 30)
-            print(f"🔄 Both providers failed, retrying in {wait_time}s...", flush=True)
+            print(f"🔄 All providers failed, retrying in {wait_time}s...", flush=True)
             await asyncio.sleep(wait_time)
 
     # All retries exhausted
