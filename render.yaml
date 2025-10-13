@@ -19,6 +19,10 @@ services:
         sync: false  # Manual entry in dashboard
       - key: ANTHROPIC_API_KEY
         sync: false  # Manual entry in dashboard
+      - key: GOOGLE_API_KEY
+        sync: false  # Manual entry in dashboard
+      - key: DEEPSEEK_API_KEY
+        sync: false  # Manual entry in dashboard
       - key: CONTEXT7_API_KEY
         sync: false  # Optional - for documentation features
 
