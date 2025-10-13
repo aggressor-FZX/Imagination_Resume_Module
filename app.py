@@ -8,9 +8,10 @@ import json
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Header, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 
 from config import settings
 from models import (
@@ -53,11 +54,23 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
+    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# Security: API Key Authentication
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key == settings.API_KEY:
+        return api_key
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="Could not validate credentials",
+        )
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -70,12 +83,13 @@ async def health_check():
     )
 
 
-@app.post("/analyze", response_model=AnalysisResponse)
+@app.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume(
     request: AnalysisRequest,
     x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
     x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
-    x_google_api_key: Optional[str] = Header(None, description="Google API Key")
+    x_google_api_key: Optional[str] = Header(None, description="Google API Key"),
+    api_key: str = Depends(get_api_key)
 ):
     """
     Analyze a resume against a job description and provide career development recommendations.
@@ -86,6 +100,10 @@ async def analyze_resume(
     3. Criticism: Refine suggestions with adversarial review
     """
     start_time = time.time()
+
+    # Validate API key
+    if api_key != settings.api_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
         # Pass API keys to the async function
@@ -201,7 +219,7 @@ async def analyze_resume(
         )
 
 
-@app.post("/analyze-file", response_model=AnalysisResponse)
+@app.post("/analyze-file", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume_file(
     resume_file: UploadFile = File(...),
     job_ad: str = Form(...),
@@ -210,7 +228,8 @@ async def analyze_resume_file(
     confidence_threshold: float = Form(0.7),
     x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
     x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
-    x_google_api_key: Optional[str] = Header(None, description="Google API Key")
+    x_google_api_key: Optional[str] = Header(None, description="Google API Key"),
+    api_key: str = Depends(get_api_key)
 ):
     """
     Analyze a resume file against a job description and provide career development recommendations.

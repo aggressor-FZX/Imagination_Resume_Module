@@ -44,9 +44,10 @@ services:
       - key: WORKERS
         value: 1
 
-      # CORS (restrictive for production)
+      - key: API_KEY
+        generateValue: true  # Auto-generate a secure key on Render
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://your-website.com"  # Replace with your actual website domain
 
     # Optional: Add persistent disk for data/cache
     disk:

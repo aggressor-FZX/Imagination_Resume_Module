@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     cors_allow_methods: list[str] = ["*"]
     cors_allow_headers: list[str] = ["*"]
 
+    # Security
+    API_KEY: str
+    CORS_ORIGINS: str = "*"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
