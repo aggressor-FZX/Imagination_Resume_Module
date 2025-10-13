@@ -56,3 +56,18 @@ If you prefer not to upgrade the host, consider these alternatives:
 - **Prioritize Context7 for Specialized Tools**: When working with any library, framework, or tool that is not part of the standard Python library (e.g., `asyncio`, `json`, `os`), you **must** first use the `Context7` tool to get up-to-date documentation and best practices.
 - **Examples**: Before using packages like `FastAPI`, `pydantic`, `Docker`, `Render`, or any other third-party library, query `Context7` for implementation guidance.
 - **Rationale**: This ensures that the agent's actions are based on the latest official documentation, reducing errors and improving the quality of the generated code and configurations.
+
+## MCP Memory Protocol
+
+- **Purpose**: To maintain a persistent knowledge graph of the project, including key files, functions, architectural components, and user preferences. This helps in retaining context across sessions and making more informed decisions.
+
+- **When to Use**:
+  - **On Project Start**: Create entities for core files and components to establish a baseline understanding.
+  - **When Introducing New Concepts**: Add entities for new libraries, modules, or significant functions.
+  - **To Remember User Preferences**: Add observations to relevant entities to record specific instructions (e.g., "DeepSeek should be the last resort in the fallback chain.").
+  - **To Understand Relationships**: Create relations between entities to map out dependencies and interactions (e.g., `function_A` *uses* `service_B`).
+
+- **Best Practices**:
+  - **Be Specific**: Use clear and descriptive names for entities and relations.
+  - **Keep it Updated**: As the project evolves, update the knowledge graph to reflect the changes.
+  - **Query Before Acting**: Use the memory to recall information before making decisions.
