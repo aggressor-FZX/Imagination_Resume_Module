@@ -1,7 +1,7 @@
 ---
 description: 'General purpose chat mode with standard tools and safety guardrails for command execution.'
 
-tools: ['createFile', 'createDirectory', 'editFiles', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'todos', 'runTests', 'taskmaster-ai', 'task-master-ai', 'playwright-browser-automation', 'Context7', 'pylance mcp server', 'memory']
+tools: ['edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'new', 'runCommands', 'runTasks', 'memory/*', 'Context7/*', 'extensions', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'todos']
 ---
 Define the purpose of this chat mode and how AI should behave: response style, available tools, focus areas, and any mode-specific instructions or constraints.
 

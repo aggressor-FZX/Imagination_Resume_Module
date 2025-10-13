@@ -13,6 +13,7 @@ from typing import List, Dict, Set, Any, Optional, Optional
 import aiohttp
 import asyncio
 import google.generativeai as genai
+from deepseek import DeepSeekAPI
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -24,6 +25,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 # Pricing (USD) per 1K tokens; can be overridden via env vars
 OPENAI_PRICE_IN_K = float(os.getenv("OPENAI_PRICE_INPUT_PER_1K", "0.0005"))
@@ -32,6 +34,8 @@ ANTHROPIC_PRICE_IN_K = float(os.getenv("ANTHROPIC_PRICE_INPUT_PER_1K", "0.003"))
 ANTHROPIC_PRICE_OUT_K = float(os.getenv("ANTHROPIC_PRICE_OUTPUT_PER_1K", "0.015"))
 GOOGLE_PRICE_IN_K = float(os.getenv("GOOGLE_PRICE_INPUT_PER_1K", "0.00025"))
 GOOGLE_PRICE_OUT_K = float(os.getenv("GOOGLE_PRICE_OUTPUT_PER_1K", "0.0005"))
+DEEPSEEK_PRICE_IN_K = float(os.getenv("DEEPSEEK_PRICE_INPUT_PER_1K", "0.00014"))
+DEEPSEEK_PRICE_OUT_K = float(os.getenv("DEEPSEEK_PRICE_OUTPUT_PER_1K", "0.00028"))
 
 # Run metrics accumulator
 RUN_METRICS: Dict[str, Any] = {
@@ -48,11 +52,13 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
+deepseek_client = DeepSeekAPI(api_key=DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else None
 
 # Initialize async clients
 openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
 anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
 google_async_client = genai.GenerativeModel('gemini-pro') if GOOGLE_API_KEY else None  # Google Gemini client
+deepseek_async_client = DeepSeekAPI(api_key=DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else None  # DeepSeek client
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -176,10 +182,11 @@ def call_llm(
     max_retries: int = 3,
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
-    google_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None,
+    deepseek_api_key: Optional[str] = None
 ) -> str:
     """
-    Call LLM with automatic fallback: OpenAI -> Google -> Anthropic
+    Call LLM with automatic fallback: OpenAI -> Google -> Anthropic -> DeepSeek
     Includes retry logic with exponential backoff and timeout handling.
     Returns the response text or raises an exception if all fail
     """
@@ -196,6 +203,8 @@ def call_llm(
         temp_google_client = genai.GenerativeModel('gemini-pro')
     else:
         temp_google_client = google_async_client
+
+    temp_deepseek_client = DeepSeekAPI(api_key=deepseek_api_key) if deepseek_api_key else deepseek_client
 
     for attempt in range(max_retries):
         # Try OpenAI first
@@ -324,6 +333,49 @@ def call_llm(
                 RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
                 print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
         
+        # Fall-back to DeepSeek
+        if deepseek_client:
+            try:
+                response = deepseek_client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                print("✅ Using DeepSeek", flush=True)
+                text = response.choices[0].message.content.strip()
+                # Usage and cost
+                try:
+                    u = getattr(response, "usage", None)
+                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
+                except Exception:
+                    prompt_t = completion_t = 0
+                    total_t = 0
+                cost = (prompt_t / 1000.0) * DEEPSEEK_PRICE_IN_K + (completion_t / 1000.0) * DEEPSEEK_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "deepseek",
+                    "model": "gemini-pro",
+                    "prompt_tokens": prompt_t,
+                    "completion_tokens": completion_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += prompt_t
+                RUN_METRICS["total_completion_tokens"] += completion_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"DeepSeek Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "deepseek", "error": str(e)})
+                print(f"❌ DeepSeek also failed: {error_msg}", flush=True)
+        
         # If we get here, all providers failed on this attempt
         if attempt < max_retries - 1:
             wait_time = min(2 ** attempt, 30)
@@ -343,7 +395,8 @@ async def call_llm_async(
     max_retries: int = 3,
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
-    google_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None,
+    deepseek_api_key: Optional[str] = None
 ) -> str:
     """
     Async version of call_llm: Call LLM with automatic fallback using async clients.
@@ -362,6 +415,8 @@ async def call_llm_async(
             temp_google_client = genai.GenerativeModel('gemini-pro')
         else:
             temp_google_client = google_async_client
+
+        temp_deepseek_client = DeepSeekAPI(api_key=deepseek_api_key) if deepseek_api_key else deepseek_async_client
 
         # Try OpenAI first
         if temp_openai_client:
@@ -489,6 +544,49 @@ async def call_llm_async(
                 RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
                 print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
 
+        # Fall-back to DeepSeek
+        if deepseek_async_client:
+            try:
+                response = await deepseek_async_client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                print("✅ Using DeepSeek", flush=True)
+                text = response.choices[0].message.content.strip()
+                # Usage and cost
+                try:
+                    u = getattr(response, "usage", None)
+                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
+                except Exception:
+                    prompt_t = completion_t = 0
+                    total_t = 0
+                cost = (prompt_t / 1000.0) * DEEPSEEK_PRICE_IN_K + (completion_t / 1000.0) * DEEPSEEK_PRICE_OUT_K
+                RUN_METRICS["calls"].append({
+                    "provider": "deepseek",
+                    "model": "gemini-pro",
+                    "prompt_tokens": prompt_t,
+                    "completion_tokens": completion_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += prompt_t
+                RUN_METRICS["total_completion_tokens"] += completion_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"DeepSeek Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "deepseek", "error": str(e)})
+                print(f"❌ DeepSeek also failed: {error_msg}", flush=True)
+        
         # If we get here, all providers failed on this attempt
         if attempt < max_retries - 1:
             wait_time = min(2 ** attempt, 30)
@@ -861,7 +959,7 @@ Synthesize the THREE perspectives above into a comprehensive career development 
     "nice_to_have_gaps": ["skill3", "skill4"],
     "gap_bridging_strategy": "2-3 sentences on how to prioritize"
   },
-
+  
   "implied_skills": {
     "skill_name": {
       "confidence": 0.85,
@@ -869,14 +967,14 @@ Synthesize the THREE perspectives above into a comprehensive career development 
       "development_path": "How to formalize/strengthen it"
     }
   },
-
+  
   "environment_capabilities": {
     "tech_stack": ["inferred_tech1", "inferred_tech2"],
     "tools": ["tool1", "tool2"],
     "platforms": ["platform1", "platform2"],
     "reasoning": "Why we infer these based on skills/experience"
   },
-
+  
   "transfer_paths": [
     {
       "from_role": "current likely role",
@@ -886,7 +984,7 @@ Synthesize the THREE perspectives above into a comprehensive career development 
       "probability": 0.75
     }
   ],
-
+  
   "project_briefs": [
     {
       "title": "Concrete Project Idea",
@@ -897,13 +995,13 @@ Synthesize the THREE perspectives above into a comprehensive career development 
       "difficulty": "beginner|intermediate|advanced"
     }
   ],
-
+  
   "multi_perspective_insights": {
     "hiring_manager_view": "What would excite/concern a hiring manager",
     "architect_view": "Technical depth assessment and growth areas",
     "coach_view": "Growth potential and creative development strategies"
   },
-
+  
   "action_plan": {
     "quick_wins": ["actionable item 1", "actionable item 2"],
     "3_month_goals": ["goal1", "goal2"],
@@ -914,10 +1012,10 @@ Synthesize the THREE perspectives above into a comprehensive career development 
 ```
 
 Be creative, specific, and actionable. Use the implied skills, competency domains, and confidence scores to make nuanced recommendations.""")
-
+    
     prompt = "\n".join(prompt_parts)
-
-    # Call LLM with automatic fallback (OpenAI → Anthropic) - async version
+    
+    # Call LLM with automatic fallback (OpenAI → Anthropic)
     system_prompt = "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."
     return await call_llm_async(system_prompt, prompt, temperature=0.9, max_tokens=1500)
 
@@ -1558,12 +1656,17 @@ def run_analysis(resume_text: str, job_ad: str, extracted_skills_json: str = Non
     """Sync wrapper for run_analysis_async for CLI compatibility"""
     import asyncio
     return asyncio.run(run_analysis_async(resume_text, job_ad, extracted_skills_json, domain_insights_json, confidence_threshold))
-
+    
 
 def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
     """Sync wrapper for run_generation_async for CLI compatibility"""
     import asyncio
     return asyncio.run(run_generation_async(analysis_json, job_ad))
+
+
+def run_criticism_sync(generated_suggestions: Dict, job_ad: str) -> Dict:
+    """Sync wrapper for run_criticism for CLI compatibility"""
+    return run_criticism(generated_suggestions, job_ad)
 
 
 if __name__ == "__main__":
