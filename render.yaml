@@ -9,7 +9,6 @@ services:
 
     # Build configuration
     buildCommand: "docker build -t imaginator ."
-    startCommand: "docker run -p $PORT:8000 imaginator"
 
     # Health check - required for web services
     healthCheckPath: /health
