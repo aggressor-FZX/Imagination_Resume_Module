@@ -46,6 +46,7 @@ services:
 
       - key: API_KEY
         generateValue: true  # Auto-generate a secure key on Render
+      # CORS (restrictive for production)
       - key: CORS_ORIGINS
         value: "https://your-website.com"  # Replace with your actual website domain
 
