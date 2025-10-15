@@ -18,6 +18,10 @@
 				"AZURE_OPENAI_API_KEY": "YOUR_AZURE_KEY_HERE",
 				"OLLAMA_API_KEY": "YOUR_OLLAMA_API_KEY_HERE"
 			}
+		},
+		"render": {
+			"type": "docker",
+			"command": "docker run -i --rm -e RENDER_API_KEY=${env:RENDER_API_KEY} -v render-mcp-server-config:/config ghcr.io/render-oss/render-mcp-server"
 		}
 	}
 }
