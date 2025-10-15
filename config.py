@@ -46,15 +46,14 @@ class Settings(BaseSettings):
     port: int = 8000
     workers: int = 1
 
-    # CORS Settings
-    cors_origins: list[str] = ["*"]
+    # CORS Settings - CORS_ORIGINS should be a comma-separated string
+    CORS_ORIGINS: str = "*"
     cors_allow_credentials: bool = True
     cors_allow_methods: list[str] = ["*"]
     cors_allow_headers: list[str] = ["*"]
 
     # Security
     API_KEY: str
-    CORS_ORIGINS: str = "*"
 
     model_config = SettingsConfigDict(
         env_file=".env",
