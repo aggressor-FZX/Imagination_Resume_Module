@@ -13,7 +13,7 @@ from typing import List, Dict, Set, Any, Optional, Optional
 import aiohttp
 import asyncio
 import google.generativeai as genai
-from deepseek import DeepSeekAPI
+# from deepseek import DeepSeekAPI  # Commented out - module not available
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -52,13 +52,13 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
-deepseek_client = DeepSeekAPI(api_key=DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else None
+deepseek_client = None  # DeepSeekAPI module not available
 
 # Initialize async clients
 openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
 anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
 google_async_client = genai.GenerativeModel('gemini-pro') if GOOGLE_API_KEY else None  # Google Gemini client
-deepseek_async_client = DeepSeekAPI(api_key=DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else None  # DeepSeek client
+deepseek_async_client = None  # DeepSeekAPI module not available
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -204,7 +204,7 @@ def call_llm(
     else:
         temp_google_client = google_async_client
 
-    temp_deepseek_client = DeepSeekAPI(api_key=deepseek_api_key) if deepseek_api_key else deepseek_client
+    temp_deepseek_client = None  # DeepSeekAPI module not available
 
     for attempt in range(max_retries):
         # Try OpenAI first
