@@ -332,16 +332,19 @@ README.md                   # Documentation
 
 ## Backend System Integration
 
-### Calling the Container
+### Calling the Live API
 
-To integrate with the Generative Resume Co-Writer, backend systems should send a POST request to the `/analyze` endpoint of the containerized FastAPI application.
+To integrate with the Generative Resume Co-Writer, backend systems should send a POST request to the `/analyze` endpoint of the deployed FastAPI application.
 
-**Endpoint**: `http://<container_ip>:8000/analyze`
+**Production Endpoint**: `https://imaginator-resume-cowriter.onrender.com/analyze`
+
+**Local/Container Endpoint**: `http://localhost:8000/analyze`
 
 **Method**: `POST`
 
 **Headers**:
 - `Content-Type`: `application/json`
+- `X-API-Key`: `your-api-key-here` **(Required for production)**
 
 **Request Body**:
 The request body should be a JSON object with the following structure:
@@ -388,11 +391,54 @@ The system will respond with a JSON object containing the analysis, generation, 
 }
 ```
 
-**Error Response (4xx/5xx)**:
-If an error occurs, the system will respond with a JSON object containing an error message.
+**Authentication Error (403 Forbidden)**:
+If the `X-API-Key` header is missing or invalid:
+
+```json
+{
+  "detail": "X-API-Key header is required"
+}
+```
+
+**Validation Error (422 Unprocessable Entity)**:
+If the request body is invalid:
+
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "resume_text"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+**Server Error (500 Internal Server Error)**:
+If an unexpected error occurs during processing:
 
 ```json
 {
   "detail": "Error message describing the issue"
 }
 ```
+
+### Authentication
+
+The production API requires authentication using the `X-API-Key` header:
+
+```bash
+curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key-here" \
+  -d '{"resume_text": "...", "job_ad": "..."}'
+```
+
+**Bring Your Own Key (BYOK):**
+You can also provide your own LLM API keys via request headers:
+- `X-OpenAI-API-Key`: Your OpenAI API key
+- `X-Google-API-Key`: Your Google API key  
+- `X-Anthropic-API-Key`: Your Anthropic API key
+
+If provided, these keys will be used for the request instead of the server's configured keys.

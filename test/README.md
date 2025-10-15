@@ -92,12 +92,55 @@ Based on recent test executions with OpenAI GPT-4 and Anthropic Claude:
 - **Success Rate**: 100% (all test cases passing)
 - **Token Accuracy**: 100% (API-reported counts match calculations)
 
+## Testing the Live Production API
+
+The production service is deployed at: **https://imaginator-resume-cowriter.onrender.com**
+
+### Quick Production Tests
+
+```bash
+# Test health endpoint (no auth required)
+curl https://imaginator-resume-cowriter.onrender.com/health
+
+# Test with authentication (requires API key)
+export API_KEY='your-api-key-here'
+python ../test_live_api.py
+```
+
+### Integration Testing
+
+To test against the production API in your backend:
+
+```python
+import requests
+
+API_URL = "https://imaginator-resume-cowriter.onrender.com"
+API_KEY = "your-api-key"
+
+response = requests.post(
+    f"{API_URL}/analyze",
+    headers={
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY
+    },
+    json={
+        "resume_text": "resume content...",
+        "job_ad": "job description..."
+    },
+    timeout=120
+)
+
+print(response.json())
+```
+
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Missing API keys**: Ensure `.env` file exists with valid keys
 2. **Import errors**: Run from project root or adjust Python path
+3. **Production API 403 errors**: Ensure `X-API-Key` header is included
+4. **Timeout errors**: Production analysis can take 30-120 seconds
 3. **Memory issues**: Tests may require 500MB+ available RAM
 4. **Rate limits**: API rate limiting may cause delays or failures
 

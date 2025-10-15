@@ -2,6 +2,17 @@
 
 AI-powered resume analysis tool that provides personalized career development recommendations by analyzing resumes against target job descriptions using advanced language models and structured skill processing.
 
+## 🌐 Live Service
+
+**Production API**: https://imaginator-resume-cowriter.onrender.com  
+**Status**: ✅ Live and Operational  
+**Documentation**: https://imaginator-resume-cowriter.onrender.com/docs
+
+**Quick Start**: See [QUICKSTART.md](QUICKSTART.md) for 5-minute integration guide  
+**API Reference**: See [API_REFERENCE.md](API_REFERENCE.md) for complete endpoint documentation
+
+---
+
 ## 🚀 Features
 
 ### Three-Stage AI Pipeline
@@ -35,21 +46,37 @@ AI-powered resume analysis tool that provides personalized career development re
 
 ## 📋 Files
 
+### Core Application
 - `app.py`: FastAPI web service with async endpoints
 - `config.py`: Configuration management with pydantic-settings
 - `models.py`: Pydantic models for API request/response validation
 - `imaginator_flow.py`: Core analysis functions (CLI compatibility maintained)
 - `requirements.txt`: Python dependencies
+
+### Deployment & Configuration
 - `Dockerfile`: Multi-stage container build with UV package manager
 - `docker-compose.yml`: Local development setup
-- `render.yaml`: Render deployment configuration
+- `render.yaml`: Render deployment configuration (✅ deployed)
+- `.env`: Environment file with API keys (create from .env.example)
+
+### Testing
 - `pytest.ini`: Test configuration
 - `run_tests.py`: Test runner script
 - `tests/test_app.py`: FastAPI endpoint tests
+- `test_live_api.py`: Production API test suite
+- `test_live_api.sh`: Bash test script
+- `test/`: Additional test files and reports
+
+### Sample Data
 - `sample_resume.txt`: Sample resume for testing
 - `sample_job_ad.txt`: Sample job description for testing
-- `SYSTEM_IO_SPECIFICATION.md`: Comprehensive input/output specification
-- `.env`: Environment file with API keys (create from .env.example)
+
+### Documentation
+- 📖 **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
+- 📖 **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API documentation
+- 📖 **[SYSTEM_IO_SPECIFICATION.md](SYSTEM_IO_SPECIFICATION.md)** - Input/output specification
+- 📖 **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Deployment details and status
+- 📖 **[deployment_readiness_log.md](deployment_readiness_log.md)** - Deployment history
 
 ## 🛠 Setup
 
@@ -128,32 +155,85 @@ docker run -p 8000:8000 --env-file .env imaginator
 
 ### Render Deployment
 
-The application is configured for easy deployment to Render with production-ready settings:
+The application is **LIVE** and deployed to Render with production-ready settings.
 
-1. **Connect your GitHub repository to Render**
-2. **Create a new Web Service** using the `render.yaml` configuration:
-   - **Runtime**: Docker (automatically detected)
-   - **Plan**: Starter ($7/month - 1GB RAM, 1 CPU, 750 hours)
-   - **Build Command**: `docker build -t imaginator .`
-   - **Start Command**: `docker run -p $PORT:8000 imaginator`
-3. **Configure environment variables** in Render dashboard:
-   - `OPENAI_API_KEY` (required)
-   - `ANTHROPIC_API_KEY` (required)
-   - `GOOGLE_API_KEY` (required)
-   - `CONTEXT7_API_KEY` (optional - for documentation features)
-   - Other variables are pre-configured in render.yaml
-4. **Deploy**: Render will automatically build and deploy using the provided configuration
+**Live Service:**
+- **URL**: https://imaginator-resume-cowriter.onrender.com
+- **Service ID**: srv-d3nf73ur433s73bh9j00
+- **Region**: Oregon (US West)
+- **Plan**: Starter ($7/month - 0.5 CPU, 512 MB RAM)
+- **Runtime**: Docker
+- **Status**: ✅ Active and Healthy
 
-**Render Configuration Features:**
-- Health check endpoint monitoring
-- Automatic scaling configuration
-- Environment-based settings (production mode)
-- CORS configuration for web applications
-- Persistent disk option for data storage (optional)
+**Deployment Configuration:**
+1. **GitHub Integration**: Automatic deployment on push to master branch
+2. **Health Monitoring**: `/health` endpoint checked every 30 seconds
+3. **Environment Variables**: Configured via Render dashboard and `render.yaml`
+4. **CORS**: Restricted to `https://www.cogitometric.org`
+5. **API Authentication**: Requires `X-API-Key` header for `/analyze` endpoint
 
-**Status**: Configuration ready ✅ | Local testing complete ✅ | Production deployment pending
+**Environment Variables (configured in Render):**
+- `OPENAI_API_KEY` ✅
+- `ANTHROPIC_API_KEY` ✅
+- `GOOGLE_API_KEY` ✅
+- `X_API_KEY` - Custom API key for endpoint authentication ✅
+- `CORS_ORIGINS` - Set to cogitometric.org domain ✅
+- `ENVIRONMENT` - Set to "production" ✅
+
+**Deployment Features:**
+- ✅ Auto-deploy on git push
+- ✅ Docker container build and run
+- ✅ Health check monitoring
+- ✅ SSL/TLS encryption (HTTPS)
+- ✅ Custom domain support ready
+- ✅ Environment-based configuration
+- ✅ API key authentication
+- ✅ CORS security
+
+**Status**: ✅ Deployed | ✅ Live | ✅ Tested
 
 The `render.yaml` file handles all deployment configuration including health checks, environment variables, and scaling settings.
+
+### Testing the Live API
+
+The deployed service includes a comprehensive test suite for verifying functionality:
+
+**Test Script**: `test_live_api.py`
+
+```bash
+# Run basic tests (health check and authentication)
+python test_live_api.py
+
+# Run full analysis test with your API key
+export API_KEY='your-api-key-here'
+python test_live_api.py
+```
+
+**Test Cases:**
+1. ✅ **Health Check** - Verifies service is running and responding
+2. ✅ **Authentication** - Confirms API key is required (403 without key)
+3. ⏳ **Full Analysis** - Tests complete resume analysis workflow (requires API_KEY)
+
+**Manual API Testing:**
+
+```bash
+# Health check (no auth required)
+curl https://imaginator-resume-cowriter.onrender.com/health
+
+# Analyze resume (requires API key)
+curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "resume_text": "Your resume text here",
+    "job_ad": "Job description here"
+  }'
+```
+
+**Expected Responses:**
+- Health: `{"status":"healthy","version":"1.0.0","environment":"production"}`
+- No Auth: `{"detail":"X-API-Key header is required"}`
+- Success: Full analysis JSON with skills, gaps, and recommendations
 
 ### Render MCP Server
 
@@ -182,14 +262,29 @@ python -m uvicorn app:app --reload
 ```
 
 **Access the API:**
+
+**Local Development:**
 - **Interactive API Docs**: http://localhost:8000/docs (Swagger UI)
 - **ReDoc Documentation**: http://localhost:8000/redoc
 - **OpenAPI Schema**: http://localhost:8000/openapi.json
+
+**Production (Live):**
+- **API Base URL**: https://imaginator-resume-cowriter.onrender.com
+- **Interactive API Docs**: https://imaginator-resume-cowriter.onrender.com/docs
+- **Health Check**: https://imaginator-resume-cowriter.onrender.com/health
 
 #### API Endpoints
 
 ##### POST `/analyze`
 Analyze a resume against a job description.
+
+**Authentication**: Requires `X-API-Key` header
+
+**Request Headers:**
+```
+Content-Type: application/json
+X-API-Key: your-api-key-here
+```
 
 **Request Body:**
 ```json
@@ -269,15 +364,31 @@ Get library documentation using Context7 (if configured).
 ```python
 import requests
 
-# Analyze resume
-response = requests.post("http://localhost:8000/analyze", json={
-    "resume_text": "Your resume text here",
-    "job_ad": "Job description here",
-    "confidence_threshold": 0.8
-})
+# Production API (requires API key)
+API_URL = "https://imaginator-resume-cowriter.onrender.com"
+API_KEY = "your-api-key-here"
 
-result = response.json()
-print(f"Skills found: {result['aggregate_skills']}")
+# Analyze resume
+response = requests.post(
+    f"{API_URL}/analyze",
+    headers={
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY
+    },
+    json={
+        "resume_text": "Your resume text here",
+        "job_ad": "Job description here",
+        "confidence_threshold": 0.8
+    },
+    timeout=120  # Analysis can take time
+)
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"Skills found: {result['aggregate_skills']}")
+    print(f"Skill gap: {result['gap_analysis']}")
+else:
+    print(f"Error: {response.status_code} - {response.text}")
 ```
 
 ### CLI Compatibility
