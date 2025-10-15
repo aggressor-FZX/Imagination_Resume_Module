@@ -155,6 +155,15 @@ The application is configured for easy deployment to Render with production-read
 
 The `render.yaml` file handles all deployment configuration including health checks, environment variables, and scaling settings.
 
+### Render MCP Server
+
+This project is configured to use the Render MCP server, which allows for direct interaction with your Render account from within the development environment. This enables automated deployments, environment management, and monitoring.
+
+To use the Render MCP server, you will need to:
+1.  Have Docker installed and running.
+2.  Set the `RENDER_API_KEY` in your `.env` file.
+3.  Reload the VS Code window to activate the MCP server.
+
 ## 🎯 Usage
 
 ### Web Service API
