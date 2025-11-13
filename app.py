@@ -145,8 +145,7 @@ async def analyze_resume(
             job_ad=request.job_ad,
             extracted_skills_json=extracted_skills,
             domain_insights_json=domain_insights,
-            confidence_threshold=request.confidence_threshold,
-            **api_keys
+            confidence_threshold=request.confidence_threshold
         )
 
         # Step 2: Run Generation (with graceful degradation)
@@ -154,8 +153,7 @@ async def analyze_resume(
         try:
             generation_result = await run_generation_async(
                 analysis_json=analysis_result,
-                job_ad=request.job_ad,
-                **api_keys
+                job_ad=request.job_ad
             )
         except Exception as e:
             print(f"⚠️  Generation step failed: {str(e)}")
@@ -167,8 +165,7 @@ async def analyze_resume(
         try:
             criticism_result = run_criticism(
                 generated_suggestions=generation_result,
-                job_ad=request.job_ad,
-                **api_keys
+                job_ad=request.job_ad
             )
         except Exception as e:
             print(f"⚠️  Criticism step failed: {str(e)}")
