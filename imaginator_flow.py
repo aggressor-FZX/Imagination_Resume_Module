@@ -37,8 +37,10 @@ ANTHROPIC_PRICE_IN_K = float(os.getenv("ANTHROPIC_PRICE_INPUT_PER_1K", "0.003"))
 ANTHROPIC_PRICE_OUT_K = float(os.getenv("ANTHROPIC_PRICE_OUTPUT_PER_1K", "0.015"))
 GOOGLE_PRICE_IN_K = float(os.getenv("GOOGLE_PRICE_INPUT_PER_1K", "0.00025"))
 GOOGLE_PRICE_OUT_K = float(os.getenv("GOOGLE_PRICE_OUTPUT_PER_1K", "0.0005"))
-DEEPSEEK_PRICE_IN_K = float(os.getenv("DEEPSEEK_PRICE_INPUT_PER_1K", "0.00014"))
-DEEPSEEK_PRICE_OUT_K = float(os.getenv("DEEPSEEK_PRICE_OUTPUT_PER_1K", "0.00028"))
+DEEPSEEK_PRICE_IN_K = float(os.getenv("DEEPSEEK_PRICE_INPUT_PER_1K", "0.0002"))
+DEEPSEEK_PRICE_OUT_K = float(os.getenv("DEEPSEEK_PRICE_OUTPUT_PER_1K", "0.0008"))
+QWEN_PRICE_IN_K = float(os.getenv("QWEN_PRICE_INPUT_PER_1K", "0.00006"))
+QWEN_PRICE_OUT_K = float(os.getenv("QWEN_PRICE_OUTPUT_PER_1K", "0.00022"))
 OPENROUTER_PRICE_IN_K = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", "0.0005"))
 OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.0015"))
 
@@ -271,15 +273,15 @@ def call_llm(
             prompt_t = completion_t = 0
 
         # Estimate cost using OpenRouter pricing fields
-        if model == "qwen/qwen3-30b-a3b":
-            input_price = 0.0008
-            output_price = 0.0016
-        elif model == "deepseek/deepseek-chat-v3.1":
-            input_price = 0.0003
-            output_price = 0.0006
+        if model == "meta-llama/llama-3.1-70b-instruct":
+            input_price = 0.0000004
+            output_price = 0.0000004
+        elif model == "mistralai/mistral-large":
+            input_price = 0.000002
+            output_price = 0.000006
         else:
-            input_price = 0.00025
-            output_price = 0.00125
+            input_price = 0.00000025
+            output_price = 0.00000125
 
         cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
         RUN_METRICS["calls"].append({
@@ -336,10 +338,10 @@ async def call_llm_async(
             # Determine best model for the task
             if "creative" in system_prompt.lower() or "generation" in user_prompt.lower():
                 model = "qwen/qwen3-30b-a3b"  # Creative writing specialist
-                print("🎨 Using OpenRouter (Qwen3-30B for creative generation)", flush=True)
+                print("🎨 Using OpenRouter (Qwen3-30B-A3B for creative generation)", flush=True)
             elif "critic" in system_prompt.lower() or "review" in user_prompt.lower():
                 model = "deepseek/deepseek-chat-v3.1"  # Critical analysis specialist  
-                print("🎯 Using OpenRouter (DeepSeek Chat for critical analysis)", flush=True)
+                print("🎯 Using OpenRouter (DeepSeek Chat v3.1 for critical analysis)", flush=True)
             else:
                 model = "anthropic/claude-3-haiku"  # General purpose analysis
                 print("🔍 Using OpenRouter (Claude-3-Haiku for analysis)", flush=True)
@@ -367,15 +369,18 @@ async def call_llm_async(
                     total_t = 0
                 
                 # Calculate cost based on actual model used
-                if model == "qwen/qwen3-30b-a3b":
-                    input_price = 0.0008
-                    output_price = 0.0016
-                elif model == "deepseek/deepseek-chat-v3.1":
-                    input_price = 0.0003
-                    output_price = 0.0006
-                else:  # claude-3-haiku or others
-                    input_price = 0.00025
-                    output_price = 0.00125
+                if "qwen" in model:
+                    input_price = QWEN_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
+                    output_price = QWEN_PRICE_OUT_K / 1000.0
+                elif "deepseek" in model:
+                    input_price = DEEPSEEK_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
+                    output_price = DEEPSEEK_PRICE_OUT_K / 1000.0
+                elif "claude" in model:
+                    input_price = ANTHROPIC_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
+                    output_price = ANTHROPIC_PRICE_OUT_K / 1000.0
+                else:  # fallback to OpenRouter default
+                    input_price = OPENROUTER_PRICE_IN_K / 1000.0
+                    output_price = OPENROUTER_PRICE_OUT_K / 1000.0
                 
                 cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
                 RUN_METRICS["calls"].append({
@@ -1197,12 +1202,15 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
         for exp in raw_exp_results:
             # Ensure experiences have required fields for seniority detection
             exp_data = {
-                "title": exp.get("title", exp.get("title_line", "")),
+                "title_line": exp.get("title", exp.get("title_line", "")),
                 "duration": exp.get("duration", ""),
                 "description": exp.get("description", exp.get("snippet", "")),
                 "skills": exp.get("skills", []),
                 "snippet": exp.get("snippet", "")
             }
+            # Ensure title_line is present
+            if "title_line" not in exp_data:
+                exp_data["title_line"] = exp_data.get("title", "")
             exp_results.append(exp_data)
 
     else:
@@ -1214,7 +1222,7 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
             skills = extrapolate_skills_from_text(exp['raw'])
             # Create structured experience data for seniority detection
             exp_data = {
-                "title": exp['title_line'],
+                "title_line": exp['title_line'],
                 "duration": exp['duration'],
                 "description": exp['description'],
                 "skills": sorted(skills),
@@ -1233,7 +1241,7 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
     seniority_experiences = []
     for exp in exp_results:
         seniority_exp = {
-            "title": exp.get("title", exp.get("title_line", "")),
+            "title": exp.get("title_line", exp.get("title", "")),
             "duration": exp.get("duration", ""),
             "description": exp.get("description", exp.get("snippet", ""))
         }
