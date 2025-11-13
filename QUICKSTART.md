@@ -108,10 +108,9 @@ pip install -r requirements.txt
 
 Create `.env` file:
 ```bash
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-GOOGLE_API_KEY=your_google_key
-X_API_KEY=your_custom_api_key
+OPENROUTER_API_KEY=your_openrouter_key
+API_KEY=your_custom_api_key
+CONTEXT7_API_KEY=your_context7_key  # Optional
 ```
 
 ### 3. Run Locally
@@ -225,18 +224,7 @@ result = requests.post(
 ).json()
 ```
 
-### 3. File Upload
-
-```python
-# Upload resume file directly
-with open('resume.txt', 'rb') as f:
-    response = requests.post(
-        f"{API_URL}/analyze-file",
-        headers={"X-API-Key": API_KEY},
-        files={"resume_file": f},
-        data={"job_ad": job_ad}
-    )
-```
+> Note: The preferred integration method is for the FrontEnd to POST structured JSON to the `/analyze` endpoint. File uploads are not required.
 
 ### 4. Using Your Own LLM Keys (BYOK)
 

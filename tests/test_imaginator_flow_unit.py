@@ -138,6 +138,17 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
                 {"skill_focus": "aws", "refined_suggestions": ["C1", "D1"]}
             ],
         },
+        "seniority_analysis": {
+            "level": "mid-level",
+            "confidence": 0.83,
+            "total_years_experience": 5.0,
+            "experience_quality_score": 0.7,
+            "leadership_score": 0.6,
+            "skill_depth_score": 0.8,
+            "achievement_complexity_score": 0.5,
+            "reasoning": "5.0 years of experience demonstrates significant expertise",
+            "recommendations": ["Focus on building technical depth", "Seek mentorship opportunities"]
+        },
     }
 
     assert mod.validate_output_schema(output) is True

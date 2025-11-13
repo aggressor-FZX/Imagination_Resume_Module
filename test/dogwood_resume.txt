@@ -1,0 +1,57 @@
+JeffCalderon
+♂phone-alt9167128396•/envel⌢pejeff.d.calderon@gmail.com•/gl⌢be-americaswww.cogitometric.com
+/linkedin-inin/jeffdcalderon•/githubaggressor-FZX
+Professional Experience
+Data Analyst, Washington State Data Exchange for Public Safety(04/2025 – Present)
+-Partner with operations teams to gather and review requisitions for software licenses, hardware upgrades, and service
+contracts; organize RFQ specifications in SharePoint and Adobe PDF forms.
+-Developandmaintaininventory-forecastdashboardsinPowerBI,leveragingPythonandSQLtotrackconsumables,equipment
+usage, and licensing—ensuring timely reorders and zero “down time.”
+-Automate reporting tools and KPI visualizations in Excel and Power BI to surface vendor performance metrics—on-time
+delivery, order accuracy, and lead-time trends—for continuous supply-chain optimization.
+Operations Manager, National Oceanic and Atmospheric Administration (NOAA)(12/2019 – 05/2023)
+-Liaised with suppliers to troubleshoot shipping delays, negotiate expedited freight, and adjust delivery schedules for mission-
+critical deployments.
+-Automated requisition processes using Python scripts and Excel macros, reducing manual entry errors and accelerating order
+fulfillment by 40%.
+-Served as Contracting Officer Representative on contracts exceeding $100K—solicited bids, drafted Statements of Work
+(SOWs), and created and tracked solicitations in partnership with engineering, finance, and legal stakeholders.
+-Supportedenterpriseoperationsacross13oceanographicvessels,translatingleadershipneedsintoreusablesoftwaretools,
+dashboards, and process improvements that delivered an elevated operational experience.
+-ImplementedaSmartsheet-basedprocurementworkflow—integratingapprovals,compliancechecks,andbudgettracking—to
+reduce order-to-delivery cycle time by 30%.
+-Coordinatedwithinventorycontrolandaccountingtoreconcileinvoices,resolvePOdiscrepancies,andmaintainaccurate
+ERP records for forecasting and audit readiness.
+Marine Data Analyst, NOAA Commissioned Officer Corps(12/2016 – 05/2019)
+-Analyzed large datasets from weather sensors and sonar equipment to identify anomalies and deliver strategic recommenda-
+tions, improving decision-making and contributing to measurable operational outcomes.
+-AutomatedreportingandcorrespondencetoolsusingPythonGUIsandsupportedtestingandintegrationofsoftwareinto
+operations.
+-Oversawprocurementandinventoryofoceanographicsensors,data-collectionhardware,andfieldconsumables;reviewed
+specs, placed orders, and verified deliveries against technical requirements.
+Research Physicist, Naval Research Laboratory(1/2014 - 6/2016)
+-AuthoredtechnicalRFQsandsupplierscope-of-workdocumentsusingMicrosoftWordandAdobeAcrobattoensureclear
+communication of complex requirements.
+-Presented simulations and findings to a federal funding panel, demonstrating clear business benefits and resulting in $500K
+in additional support for program expansion
+Faculty Assistant Researcher, University of Maryland College Park(01/2013 – 04/2015)
+-Managedprocurementoflaboratorysupplies,computingresources,andgrant-fundedinstrumentation;coordinatedwith
+campus purchasing and external vendors to meet budgetary and regulatory guidelines.
+-Presented simulations and findings to a federal funding panel, demonstrating clear business benefits and resulting in $500K
+in additional support for program expansion
+Aerospace Ground Equipment Craftsman, Air Force(05/2002 – 01/2010)
+-AdministeredERP-drivenprocurementofground-supportequipment,parts,andconsumablesforF-16fighter-jetmaintenance;
+processed requisitions, tracked shipments, and validated technical specifications..
+-Presented simulations and findings to a federal funding panel, demonstrating clear business benefits and resulting in $500K
+in additional support for program expansion
+Certifications
+Data Analytics, Washington State University (12/2024)
+Cybersecurity Analyst, Everett Community College (07/2024)
+Network Security+, CompTIA (07/2024)
+Education
+B.S. in Data Analytics, Washington State University, Everett
+Expected 05/2026, 4.0 GPA
+A.A.S. in Computer Science, Everett Community College, Everett
+04/2024, 4.0 GPA (President’s List)
+B.S. in Physics, University of Maryland, College Park
+12/2015, 3.1 GPA

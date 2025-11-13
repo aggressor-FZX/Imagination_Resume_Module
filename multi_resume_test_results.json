@@ -1,0 +1,50 @@
+{
+  "service_status": {
+    "document-reader-service": true,
+    "hermes-resume-extractor": true,
+    "fastsvm-service": true,
+    "imaginator-service": true
+  },
+  "resume_results": {
+    "analyst_programmer_resume.txt": {
+      "experiences_count": 4,
+      "skills_count": 8,
+      "roles_count": 5,
+      "top_roles": [
+        "product-manager",
+        "data-engineer",
+        "software-engineer"
+      ],
+      "top_skills": [
+        "api",
+        "cloud",
+        "communication",
+        "data-analysis",
+        "leadership"
+      ]
+    },
+    "dogwood_resume.txt": {
+      "experiences_count": 3,
+      "skills_count": 8,
+      "roles_count": 5,
+      "top_roles": [
+        "product-manager",
+        "data-engineer",
+        "software-engineer"
+      ],
+      "top_skills": [
+        "api",
+        "cloud",
+        "communication",
+        "data-analysis",
+        "leadership"
+      ]
+    }
+  },
+  "processing_flow": {
+    "document_reader": "https://document-reader-service.onrender.com",
+    "hermes_extractor": "https://hermes-resume-extractor.onrender.com",
+    "fastsvm_processor": "https://fast-svm-ml-tools-for-skill-and-job.onrender.com",
+    "imaginator_analyzer": "https://imaginator-resume-cowriter.onrender.com"
+  }
+}

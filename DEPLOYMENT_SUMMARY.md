@@ -28,10 +28,9 @@
 
 ### Environment Variables
 All configured in Render dashboard:
-- ✅ `OPENAI_API_KEY`
-- ✅ `ANTHROPIC_API_KEY`
-- ✅ `GOOGLE_API_KEY`
-- ✅ `X_API_KEY` (for API authentication)
+- ✅ `OPENROUTER_API_KEY`
+- ✅ `API_KEY` (for API authentication)
+- ✅ `CONTEXT7_API_KEY` (optional, for documentation)
 - ✅ `CORS_ORIGINS` (https://www.cogitometric.org)
 - ✅ `ENVIRONMENT=production`
 
@@ -127,10 +126,9 @@ https://imaginator-resume-cowriter.onrender.com
 
 ### Available Endpoints
 1. **GET `/health`** - Health check (no auth)
-2. **POST `/analyze`** - Analyze resume (requires `X-API-Key`)
-3. **POST `/analyze-file`** - Upload & analyze resume file (requires `X-API-Key`)
-4. **GET `/docs`** - Interactive API documentation (Swagger UI)
-5. **GET `/redoc`** - Alternative API documentation (ReDoc)
+2. **POST `/analyze`** - Analyze resume (requires `X-API-Key`). The endpoint expects structured JSON input from the FrontEnd (document-loader output).
+3. **GET `/docs`** - Interactive API documentation (Swagger UI)
+4. **GET `/redoc`** - Alternative API documentation (ReDoc)
 
 ---
 

@@ -27,7 +27,7 @@ AI-powered resume analysis tool that provides personalized career development re
 
 ### Web Service Architecture (FastAPI)
 - **RESTful API**: Async endpoints with automatic OpenAPI documentation
-- **File Upload Support**: Direct resume file upload and processing
+- **Input Model**: The FrontEnd provides structured JSON payloads (parsed by a document loader). The service expects this structured JSON for analysis — file uploads are not required.
 - **Health Monitoring**: Built-in health checks and metrics endpoints
 - **Configuration Management**: Environment-based configuration with pydantic-settings
 - **CORS Support**: Cross-origin resource sharing for web applications
@@ -100,21 +100,16 @@ AI-powered resume analysis tool that provides personalized career development re
    ```
 
 4. **Configure environment variables:**
-   Create a `.env` file in the project root:
-   ```bash
-   OPENAI_API_KEY=your_openai_key_here
-   ANTHROPIC_API_KEY=your_anthropic_key_here
-   GOOGLE_API_KEY=your_google_key_here
-   CONTEXT7_API_KEY=your_context7_key_here  # Optional, for documentation features
+  Create a `.env` file in the project root (we use OpenRouter as the single LLM provider):
+  ```bash
+  OPENROUTER_API_KEY=your_openrouter_key_here
+  API_KEY=your_service_api_key_here
+  CONTEXT7_API_KEY=your_context7_key_here  # Optional, for documentation features
 
-   # Optional: Custom pricing (defaults provided)
-   OPENAI_PRICE_INPUT_PER_1K=0.0005
-   OPENAI_PRICE_OUTPUT_PER_1K=0.0015
-   ANTHROPIC_PRICE_INPUT_PER_1K=0.003
-   ANTHROPIC_PRICE_OUTPUT_PER_1K=0.015
-   GOOGLE_PRICE_INPUT_PER_1K=0.00025
-   GOOGLE_PRICE_OUTPUT_PER_1K=0.0005
-   ```
+  # Optional: Custom pricing (defaults provided) for OpenRouter models
+  OPENROUTER_PRICE_INPUT_PER_1K=0.0005
+  OPENROUTER_PRICE_OUTPUT_PER_1K=0.0015
+  ```
 
 ### Docker Setup
 
@@ -173,10 +168,8 @@ The application is **LIVE** and deployed to Render with production-ready setting
 5. **API Authentication**: Requires `X-API-Key` header for `/analyze` endpoint
 
 **Environment Variables (configured in Render):**
-- `OPENAI_API_KEY` ✅
-- `ANTHROPIC_API_KEY` ✅
-- `GOOGLE_API_KEY` ✅
-- `X_API_KEY` - Custom API key for endpoint authentication ✅
+- `OPENROUTER_API_KEY` ✅
+- `API_KEY` - Custom API key for endpoint authentication ✅
 - `CORS_ORIGINS` - Set to cogitometric.org domain ✅
 - `ENVIRONMENT` - Set to "production" ✅
 
@@ -329,13 +322,7 @@ X-API-Key: your-api-key-here
 }
 ```
 
-##### POST `/analyze-file`
-Upload and analyze a resume file directly.
-
-**Form Data:**
-- `resume_file`: Resume file (text/plain)
-- `job_ad`: Job description text
-- `confidence_threshold`: Skill confidence threshold (optional)
+> Note: This service expects structured JSON from the FrontEnd. The `POST /analyze` endpoint accepts the complete analysis payload as JSON (see `/analyze` above). File-upload endpoints are not required in the current integration.
 
 ##### GET `/health`
 Health check endpoint.
@@ -522,43 +509,28 @@ See `SYSTEM_IO_SPECIFICATION.md` for complete input/output documentation.       
 
       }
 
-| Variable | Description | Default |    ],
+| Variable | Description | Default | Example |
 
-|----------|-------------|---------|    "total_prompt_tokens": 2853,
+|----------|-------------|---------|---------|
 
-| `OPENAI_API_KEY` | OpenAI API key | Required |    "total_completion_tokens": 1201,
+| `OPENROUTER_API_KEY` | OpenRouter API key | Required | `sk-or-v1-...` |
 
-| `ANTHROPIC_API_KEY` | Anthropic API key (fallback) | Optional |    "total_tokens": 4054,
+| `API_KEY` | Service authentication key | Required | `your-secret-key` |
 
-| `OPENAI_PRICE_INPUT_PER_1K` | OpenAI input token price | 0.0005 |    "estimated_cost_usd": 0.003228,
+| `CONTEXT7_API_KEY` | Context7 documentation API key | Optional | `ctx7-...` |
 
-| `OPENAI_PRICE_OUTPUT_PER_1K` | OpenAI output token price | 0.0015 |    "failures": []
+| `OPENROUTER_PRICE_INPUT_PER_1K` | OpenRouter input token price | 0.0005 | `0.0005` |
 
-| `ANTHROPIC_PRICE_INPUT_PER_1K` | Anthropic input token price | 0.003 |  }
-
-| `ANTHROPIC_PRICE_OUT_PER_1K` | Anthropic output token price | 0.015 |}
+| `OPENROUTER_PRICE_OUTPUT_PER_1K` | OpenRouter output token price | 0.0015 | `0.0015` |
 
 ```
 
 ### Custom Pricing
 
-### Pricing configuration (override via environment)
+Default per-1K token USD rates can be overridden:
 
-Override default pricing in your `.env` file:Default per-1K token USD rates can be overridden:
-
-```bash
-
-OPENAI_PRICE_INPUT_PER_1K=0.0006- `OPENAI_PRICE_INPUT_PER_1K` (default: `0.0005`)
-
-OPENAI_PRICE_OUTPUT_PER_1K=0.0018- `OPENAI_PRICE_OUTPUT_PER_1K` (default: `0.0015`)
-
-```- `ANTHROPIC_PRICE_INPUT_PER_1K` (default: `0.003`)
-
-- `ANTHROPIC_PRICE_OUTPUT_PER_1K` (default: `0.015`)
-
-- `GOOGLE_PRICE_INPUT_PER_1K` (default: `0.00025`)
-
-- `GOOGLE_PRICE_OUTPUT_PER_1K` (default: `0.0005`)
+- `OPENROUTER_PRICE_INPUT_PER_1K` (default: `0.0005`)
+- `OPENROUTER_PRICE_OUTPUT_PER_1K` (default: `0.0015`)
 
 ## 🧪 Testing
 
@@ -610,7 +582,7 @@ The test suite includes:
   - Health check endpoint validation
   - Configuration endpoint testing
   - Resume analysis endpoint testing
-  - File upload functionality
+  - Structured JSON input validation (FrontEnd document-loader output)
   - Error handling and edge cases
   - Context7 integration (when available)
 

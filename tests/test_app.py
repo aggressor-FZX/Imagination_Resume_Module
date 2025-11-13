@@ -10,9 +10,10 @@ from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app import app
 from models import AnalysisRequest, ProcessingStatus
+from config import settings
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-API-Key": settings.API_KEY})
 
 
 @pytest.mark.unit
@@ -42,8 +43,8 @@ class TestConfigEndpoint:
         data = response.json()
         assert "environment" in data
         assert "confidence_threshold" in data
-        assert isinstance(data["has_openai_key"], bool)
-        assert isinstance(data["has_anthropic_key"], bool)
+        # Using OpenRouter as single provider
+        assert isinstance(data.get("has_openrouter_key"), bool)
 
 
 @pytest.mark.unit
@@ -71,7 +72,18 @@ class TestAnalysisEndpoint:
                 "market_demand": "high",
                 "skill_gap_priority": "medium"
             },
-            "gap_analysis": "Test gap analysis"
+            "gap_analysis": "Test gap analysis",
+            "seniority_analysis": {
+                "level": "mid-level",
+                "confidence": 0.83,
+                "total_years_experience": 5.0,
+                "experience_quality_score": 0.7,
+                "leadership_score": 0.6,
+                "skill_depth_score": 0.8,
+                "achievement_complexity_score": 0.5,
+                "reasoning": "5.0 years of experience demonstrates significant expertise",
+                "recommendations": ["Focus on building technical depth", "Seek mentorship opportunities"]
+            }
         }
 
         mock_generation.return_value = {
@@ -153,36 +165,46 @@ class TestAnalysisEndpoint:
 
 
 @pytest.mark.unit
-class TestFileUploadEndpoint:
-    """Test file upload endpoint"""
+class TestJSONIntegration:
+    """Test FrontEnd JSON integration (no file upload endpoint)"""
 
     @patch('app.run_analysis_async')
     @patch('app.run_generation_async')
     @patch('app.run_criticism')
     @patch('app.validate_output_schema')
-    def test_file_upload_analysis(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
-        """Test resume file upload analysis"""
+    def test_json_analysis(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
+        """Test resume analysis via JSON payload (FrontEnd integration)"""
         # Mock functions
         mock_analysis.return_value = {
             "experiences": [],
             "aggregate_skills": ["Python"],
             "processed_skills": {"high_confidence": ["Python"], "medium_confidence": [], "low_confidence": [], "inferred_skills": []},
             "domain_insights": {"domain": "tech", "market_demand": "high", "skill_gap_priority": "low"},
-            "gap_analysis": "Good fit"
+            "gap_analysis": "Good fit",
+            "seniority_analysis": {
+                "level": "mid-level",
+                "confidence": 0.83,
+                "total_years_experience": 5.0,
+                "experience_quality_score": 0.7,
+                "leadership_score": 0.6,
+                "skill_depth_score": 0.8,
+                "achievement_complexity_score": 0.5,
+                "reasoning": "5.0 years of experience demonstrates significant expertise",
+                "recommendations": ["Focus on building technical depth", "Seek mentorship opportunities"]
+            }
         }
         mock_generation.return_value = {"gap_bridging": [], "metric_improvements": []}
         mock_criticism.return_value = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
         mock_validate.return_value = None
 
-        # Test file upload
-        resume_content = b"John Doe\nSoftware Engineer\nPython experience"
-        files = {"resume_file": ("resume.txt", resume_content, "text/plain")}
-        data = {
-            "job_ad": "Senior Developer position",
-            "confidence_threshold": "0.8"
+        # FrontEnd sends structured JSON to /analyze endpoint
+        request_body = {
+            "resume_text": "John Doe\nSoftware Engineer\nPython experience",
+            "job_ad": "Senior Developer position requiring extensive Python experience and cloud platform knowledge",
+            "confidence_threshold": 0.8
         }
 
-        response = client.post("/analyze-file", files=files, data=data)
+        response = client.post("/analyze", json=request_body)
         assert response.status_code == 200
 
         result = response.json()

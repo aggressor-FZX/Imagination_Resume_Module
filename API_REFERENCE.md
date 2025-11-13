@@ -17,12 +17,10 @@ X-API-Key: your-api-key-here
 
 ### Bring Your Own Key (BYOK)
 
-Optionally provide your own LLM API keys to use your own credits:
+Optionally provide your own OpenRouter API key to use your own credits:
 
 ```bash
-X-OpenAI-API-Key: your-openai-key
-X-Google-API-Key: your-google-key
-X-Anthropic-API-Key: your-anthropic-key
+X-OpenRouter-API-Key: your-openrouter-key
 ```
 
 ---
@@ -122,8 +120,8 @@ X-API-Key: your-api-key-here
   "run_metrics": {
     "calls": [
       {
-        "provider": "openai",
-        "model": "gpt-4",
+        "provider": "openrouter",
+        "model": "claude-3-haiku",
         "prompt_tokens": 1500,
         "completion_tokens": 800,
         "cost_usd": 0.045
@@ -179,33 +177,7 @@ curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
 
 ---
 
-### 3. Analyze Resume File
-
-Upload a resume file and analyze it against a job description.
-
-**Endpoint**: `POST /analyze-file`  
-**Authentication**: Required (`X-API-Key` header)
-
-**Request Headers**:
-```
-Content-Type: multipart/form-data
-X-API-Key: your-api-key-here
-```
-
-**Form Data**:
-- `resume_file`: File (text/plain) - Resume text file
-- `job_ad`: String (required) - Job description text
-- `confidence_threshold`: Number (optional, default: 0.7)
-
-**Response**: Same as `/analyze` endpoint
-
-**Example**:
-```bash
-curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze-file \
-  -H "X-API-Key: your-api-key" \
-  -F "resume_file=@resume.txt" \
-  -F "job_ad=Senior Developer position requiring Python..."
-```
+> Note: This service expects the FrontEnd to POST structured JSON to `POST /analyze`. The legacy `analyze-file` multipart/form-data endpoint is no longer required for the current FrontEnd integration.
 
 ---
 
@@ -298,11 +270,8 @@ curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
 }
 EOF
 
-# File upload
-curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze-file \
-  -H "X-API-Key: your-api-key" \
-  -F "resume_file=@resume.txt" \
-  -F "job_ad=Senior Developer position..."
+# Note
+File uploads are not required for the current FrontEnd integration. Use `POST /analyze` with a structured JSON payload instead.
 ```
 
 ---
@@ -326,7 +295,7 @@ The `run_metrics` in the response includes:
 Typical costs:
 - Simple analysis: $0.02 - $0.05
 - Complex analysis: $0.05 - $0.15
-- With BYOK: Costs charged to your own API keys
+- Costs based on OpenRouter pricing (can be customized via environment variables)
 
 ---
 

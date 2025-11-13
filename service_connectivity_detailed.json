@@ -1,0 +1,46 @@
+{
+  "test_timestamp": "2025-11-01T20:59:21.027592",
+  "results": [
+    {
+      "service": "document-reader-service",
+      "url": "https://document-reader-service.onrender.com/health",
+      "accessible": true,
+      "status_code": 200,
+      "response_time_ms": 161.39,
+      "error": null,
+      "response_content": "{\"service\":\"document-reader\",\"status\":\"healthy\",\"timestamp\":\"2025-11-02T03:59:20.611743Z\",\"version\":\"1.0.0\"}\n"
+    },
+    {
+      "service": "hermes-resume-extractor",
+      "url": "https://hermes-resume-extractor.onrender.com/health",
+      "accessible": true,
+      "status_code": 200,
+      "response_time_ms": 126.57,
+      "error": null,
+      "response_content": "{\"status\":\"healthy\"}\n"
+    },
+    {
+      "service": "fastsvm-service",
+      "url": "https://fast-svm-ml-tools-for-skill-and-job.onrender.com/api/v1/health",
+      "accessible": true,
+      "status_code": 200,
+      "response_time_ms": 117.56,
+      "error": null,
+      "response_content": "{\"status\":\"healthy\",\"timestamp\":\"2025-11-02T03:59:20.858868\",\"version\":\"1.0.0\",\"pipeline_loaded\":true}"
+    },
+    {
+      "service": "imaginator-service",
+      "url": "https://imaginator-resume-cowriter.onrender.com/health",
+      "accessible": true,
+      "status_code": 200,
+      "response_time_ms": 141.54,
+      "error": null,
+      "response_content": "{\"status\":\"healthy\",\"version\":\"1.0.0\",\"environment\":\"production\"}"
+    }
+  ],
+  "summary": {
+    "total_services": 4,
+    "accessible_services": 4,
+    "success_rate": "100.0%"
+  }
+}

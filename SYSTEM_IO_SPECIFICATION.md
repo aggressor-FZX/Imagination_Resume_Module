@@ -298,14 +298,12 @@ The system implements comprehensive error handling:
 ## Configuration & Environment
 
 ### Required Environment Variables
-- `OPENAI_API_KEY`: Primary LLM provider
-- `ANTHROPIC_API_KEY`: Fallback LLM provider (optional but recommended)
+- `OPENROUTER_API_KEY`: OpenRouter API key (single LLM provider)
 
 ### Optional Environment Variables
-- `OPENAI_PRICE_INPUT_PER_1K`: Custom pricing for OpenAI input tokens
-- `OPENAI_PRICE_OUTPUT_PER_1K`: Custom pricing for OpenAI output tokens
-- `ANTHROPIC_PRICE_INPUT_PER_1K`: Custom pricing for Anthropic input tokens
-- `ANTHROPIC_PRICE_OUTPUT_PER_1K`: Custom pricing for Anthropic output tokens
+- `CONTEXT7_API_KEY`: Context7 API key for documentation features
+- `OPENROUTER_PRICE_INPUT_PER_1K`: Custom pricing for OpenRouter input tokens (default: 0.0005)
+- `OPENROUTER_PRICE_OUTPUT_PER_1K`: Custom pricing for OpenRouter output tokens (default: 0.0015)
 
 ## Dependencies
 

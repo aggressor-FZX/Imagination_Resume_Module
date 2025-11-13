@@ -15,14 +15,9 @@ services:
 
     # Environment variables (set in Render dashboard, not in code)
     envVars:
-      - key: OPENAI_API_KEY
+      - key: OPENROUTER_API_KEY
         sync: false  # Manual entry in dashboard
-      - key: ANTHROPIC_API_KEY
-        sync: false  # Manual entry in dashboard
-      - key: GOOGLE_API_KEY
-        sync: false  # Manual entry in dashboard
-      - key: DEEPSEEK_API_KEY
-        sync: false  # Manual entry in dashboard
+      # Note: This service is configured to use OpenRouter as the single LLM provider.
       - key: CONTEXT7_API_KEY
         sync: false  # Optional - for documentation features
 

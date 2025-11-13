@@ -64,8 +64,8 @@ python test/run_tests.py --summary
 pip install -r test/requirements-test.txt
 
 # Ensure API keys are configured in .env
-# OPENAI_API_KEY=your_key_here
-# ANTHROPIC_API_KEY=your_key_here
+# OPENROUTER_API_KEY=your_key_here
+# API_KEY=your_service_key_here
 
 # Run tests manually
 cd test

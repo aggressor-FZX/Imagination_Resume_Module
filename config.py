@@ -18,9 +18,8 @@ class Settings(BaseSettings):
     - Nested configuration support
     """
 
-    # Required API Keys
-    openai_api_key: str
-    anthropic_api_key: str
+    # Required API Keys - using OpenRouter only
+    openrouter_api_key: str
 
     # Optional Context7 API Key for documentation
     context7_api_key: Optional[str] = None
@@ -35,11 +34,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
-    # Pricing Configuration (customizable)
-    openai_price_input_per_1k: float = 0.0005
-    openai_price_output_per_1k: float = 0.0015
-    anthropic_price_input_per_1k: float = 0.003
-    anthropic_price_output_per_1k: float = 0.015
+    # Pricing Configuration (customizable) - OpenRouter models
+    openrouter_price_input_per_1k: float = 0.0005
+    openrouter_price_output_per_1k: float = 0.0015
 
     # Server Configuration
     host: str = "0.0.0.0"
@@ -71,6 +68,11 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment"""
         return self.environment.lower() == "development"
+
+    @property
+    def api_key(self) -> str:
+        """Get the API key for authentication"""
+        return self.API_KEY
 
 
 # Global settings instance

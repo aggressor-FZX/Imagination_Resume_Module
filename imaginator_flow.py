@@ -20,6 +20,9 @@ from openai import OpenAI
 from anthropic import Anthropic
 import jsonschema
 
+# Seniority detection integration
+from seniority_detector import SeniorityDetector
+
 # Load environment variables (expects OPENAI_API_KEY, ANTHROPIC_API_KEY, and GOOGLE_API_KEY)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -36,6 +39,8 @@ GOOGLE_PRICE_IN_K = float(os.getenv("GOOGLE_PRICE_INPUT_PER_1K", "0.00025"))
 GOOGLE_PRICE_OUT_K = float(os.getenv("GOOGLE_PRICE_OUTPUT_PER_1K", "0.0005"))
 DEEPSEEK_PRICE_IN_K = float(os.getenv("DEEPSEEK_PRICE_INPUT_PER_1K", "0.00014"))
 DEEPSEEK_PRICE_OUT_K = float(os.getenv("DEEPSEEK_PRICE_OUTPUT_PER_1K", "0.00028"))
+OPENROUTER_PRICE_IN_K = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", "0.0005"))
+OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.0015"))
 
 # Run metrics accumulator
 RUN_METRICS: Dict[str, Any] = {
@@ -53,6 +58,21 @@ anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY els
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 deepseek_client = None  # DeepSeekAPI module not available
+
+# Initialize OpenRouter client (unified API)
+openrouter_client = None
+openrouter_async_client = None
+if os.getenv("OPENROUTER_API_KEY"):
+    openrouter_client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        default_headers={
+            "HTTP-Referer": "https://imaginator-resume-cowriter.onrender.com",
+            "X-Title": "Imaginator Resume Co-Writer"
+        }
+    )
+    # For async operations, we use the same client (OpenAI client is async-compatible)
+    openrouter_async_client = openrouter_client
 
 # Initialize async clients
 openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
@@ -94,8 +114,36 @@ def parse_experiences(text: str) -> List[Dict]:
         lines = [l.strip() for l in b.splitlines() if l.strip()]
         title_line = lines[0] if lines else ""
         body = " ".join(lines[1:]) if len(lines) > 1 else " ".join(lines)
-        experiences.append({"raw": b, "title_line": title_line, "body": body})
+        
+        # Extract duration information for seniority detection
+        duration = extract_duration_from_text(b)
+        
+        experiences.append({
+            "raw": b, 
+            "title_line": title_line, 
+            "body": body,
+            "duration": duration,
+            "description": f"{title_line} {body}"
+        })
     return experiences
+
+
+def extract_duration_from_text(text: str) -> str:
+    """Extract duration information from experience text."""
+    # Look for common date patterns
+    date_patterns = [
+        r'\d{1,2}/\d{4}\s*-\s*(?:\d{1,2}/\d{4}|present|current)',
+        r'\w+\s+\d{4}\s*-\s*(?:\w+\s+\d{4}|present|current)',
+        r'\d{4}\s*-\s*(?:\d{4}|present|current)',
+        r'(?:\d+\s+years?|\d+\s+months?|\d+\s+yrs?)'
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group()
+    
+    return ""
 
 
 def extrapolate_skills_from_text(text: str) -> Set[str]:
@@ -186,205 +234,70 @@ def call_llm(
     deepseek_api_key: Optional[str] = None
 ) -> str:
     """
-    Call LLM with automatic fallback: OpenAI -> Google -> Anthropic -> DeepSeek
+    Call LLM with automatic fallback: OpenRouter -> OpenAI -> Google -> Anthropic
     Includes retry logic with exponential backoff and timeout handling.
     Returns the response text or raises an exception if all fail
     """
     import time
     
-    errors = []
-    
-    # Use temporary clients if API keys are provided
-    temp_openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else openai_client
-    temp_anthropic_client = Anthropic(api_key=anthropic_api_key) if anthropic_api_key else anthropic_client
-    
-    if google_api_key:
-        genai.configure(api_key=google_api_key)
-        temp_google_client = genai.GenerativeModel('gemini-pro')
+    # Simplified: Use OpenRouter as the sole LLM provider. If not configured, raise.
+    if openrouter_client is None:
+        raise RuntimeError("OpenRouter client is not configured. Set OPENROUTER_API_KEY in environment.")
+
+    # Choose model based on prompt intent
+    if "creative" in system_prompt.lower() or "generation" in user_prompt.lower():
+        model = "qwen/qwen3-30b-a3b"
+    elif "critic" in system_prompt.lower() or "review" in user_prompt.lower():
+        model = "deepseek/deepseek-chat-v3.1"
     else:
-        temp_google_client = google_async_client
+        model = "anthropic/claude-3-haiku"
 
-    temp_deepseek_client = None  # DeepSeekAPI module not available
+    try:
+        response = openrouter_client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=60.0
+        )
+        text = response.choices[0].message.content.strip()
 
-    for attempt in range(max_retries):
-        # Try OpenAI first
-        if temp_openai_client:
-            try:
-                response = temp_openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=60.0  # 60 second timeout
-                )
-                print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
-                text = response.choices[0].message.content.strip()
-                # Usage and cost
-                try:
-                    u = getattr(response, "usage", None)
-                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
-                except Exception:
-                    prompt_t = completion_t = 0
-                    total_t = 0
-                cost = (prompt_t / 1000.0) * OPENAI_PRICE_IN_K + (completion_t / 1000.0) * OPENAI_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "openai",
-                    "model": "gpt-3.5-turbo",
-                    "prompt_tokens": prompt_t,
-                    "completion_tokens": completion_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += prompt_t
-                RUN_METRICS["total_completion_tokens"] += completion_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"OpenAI Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openai", "error": str(e)})
-                print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Google...", flush=True)
-        
-        # Try Google next
-        if temp_google_client:
-            try:
-                response = temp_google_client.generate_content_async(
-                    f"{system_prompt}\n\n{user_prompt}",
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=temperature,
-                        max_output_tokens=max_tokens
-                    )
-                )
-                print("✅ Using Google Gemini", flush=True)
-                # Extract text and usage
-                text = response.text
-                try:
-                    u = getattr(response, "usage", None)
-                    input_t = int(getattr(u, "input_tokens", 0) or 0)
-                    output_t = int(getattr(u, "output_tokens", 0) or 0)
-                    total_t = input_t + output_t
-                except Exception:
-                    input_t = output_t = total_t = 0
-                cost = (input_t / 1000.0) * GOOGLE_PRICE_IN_K + (output_t / 1000.0) * GOOGLE_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "google",
-                    "model": "gemini-pro",
-                    "prompt_tokens": input_t,
-                    "completion_tokens": output_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += input_t
-                RUN_METRICS["total_completion_tokens"] += output_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"Google Gemini Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "google", "error": str(e)})
-                print(f"⚠️  Google Gemini failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+        # Attempt to track usage if available
+        try:
+            u = getattr(response, "usage", None)
+            prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+            completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+        except Exception:
+            prompt_t = completion_t = 0
 
-        # Fallback to Anthropic
-        if temp_anthropic_client:
-            try:
-                response = temp_anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    system=system_prompt,
-                    messages=[
-                        {"role": "user", "content": user_prompt}
-                    ]
-                )
-                print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
-                # Extract text and usage
-                text = response.content[0].text
-                try:
-                    u = getattr(response, "usage", None)
-                    input_t = int(getattr(u, "input_tokens", 0) or 0)
-                    output_t = int(getattr(u, "output_tokens", 0) or 0)
-                    total_t = input_t + output_t
-                except Exception:
-                    input_t = output_t = total_t = 0
-                cost = (input_t / 1000.0) * ANTHROPIC_PRICE_IN_K + (output_t / 1000.0) * ANTHROPIC_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "anthropic",
-                    "model": "claude-3-5-sonnet-20241022",
-                    "prompt_tokens": input_t,
-                    "completion_tokens": output_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += input_t
-                RUN_METRICS["total_completion_tokens"] += output_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"Anthropic Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
-                print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
-        
-        # Fall-back to DeepSeek
-        if deepseek_client:
-            try:
-                response = deepseek_client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=temperature,
-                    max_tokens=max_tokens
-                )
-                print("✅ Using DeepSeek", flush=True)
-                text = response.choices[0].message.content.strip()
-                # Usage and cost
-                try:
-                    u = getattr(response, "usage", None)
-                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
-                except Exception:
-                    prompt_t = completion_t = 0
-                    total_t = 0
-                cost = (prompt_t / 1000.0) * DEEPSEEK_PRICE_IN_K + (completion_t / 1000.0) * DEEPSEEK_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "deepseek",
-                    "model": "gemini-pro",
-                    "prompt_tokens": prompt_t,
-                    "completion_tokens": completion_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += prompt_t
-                RUN_METRICS["total_completion_tokens"] += completion_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"DeepSeek Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "deepseek", "error": str(e)})
-                print(f"❌ DeepSeek also failed: {error_msg}", flush=True)
-        
-        # If we get here, all providers failed on this attempt
-        if attempt < max_retries - 1:
-            wait_time = min(2 ** attempt, 30)
-            print(f"🔄 All providers failed, retrying in {wait_time}s...", flush=True)
-            time.sleep(wait_time)
-    
-    # All retries exhausted
-    error_msg = f"All LLM providers failed after {max_retries} attempts:\n" + "\n".join(errors)
-    raise RuntimeError(error_msg)
+        # Estimate cost using OpenRouter pricing fields
+        if model == "qwen/qwen3-30b-a3b":
+            input_price = 0.0008
+            output_price = 0.0016
+        elif model == "deepseek/deepseek-chat-v3.1":
+            input_price = 0.0003
+            output_price = 0.0006
+        else:
+            input_price = 0.00025
+            output_price = 0.00125
+
+        cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
+        RUN_METRICS["calls"].append({
+            "provider": "openrouter",
+            "model": model,
+            "prompt_tokens": prompt_t,
+            "completion_tokens": completion_t,
+            "total_tokens": prompt_t + completion_t,
+            "estimated_cost_usd": round(cost, 6)
+        })
+        RUN_METRICS["total_prompt_tokens"] += prompt_t
+        RUN_METRICS["total_completion_tokens"] += completion_t
+        RUN_METRICS["total_tokens"] += (prompt_t + completion_t)
+        RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+
+        return text
+    except Exception as e:
+        raise RuntimeError(f"OpenRouter call failed: {type(e).__name__}: {e}")
 
 
 async def call_llm_async(
@@ -416,9 +329,75 @@ async def call_llm_async(
         else:
             temp_google_client = google_async_client
 
-        temp_deepseek_client = DeepSeekAPI(api_key=deepseek_api_key) if deepseek_api_key else deepseek_async_client
+        temp_deepseek_client = deepseek_async_client  # DeepSeekAPI module not available
 
-        # Try OpenAI first
+        # Try OpenRouter first (primary provider)
+        if openrouter_async_client:
+            # Determine best model for the task
+            if "creative" in system_prompt.lower() or "generation" in user_prompt.lower():
+                model = "qwen/qwen3-30b-a3b"  # Creative writing specialist
+                print("🎨 Using OpenRouter (Qwen3-30B for creative generation)", flush=True)
+            elif "critic" in system_prompt.lower() or "review" in user_prompt.lower():
+                model = "deepseek/deepseek-chat-v3.1"  # Critical analysis specialist  
+                print("🎯 Using OpenRouter (DeepSeek Chat for critical analysis)", flush=True)
+            else:
+                model = "anthropic/claude-3-haiku"  # General purpose analysis
+                print("🔍 Using OpenRouter (Claude-3-Haiku for analysis)", flush=True)
+            
+            try:
+                response = await openrouter_async_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=60.0
+                )
+                text = response.choices[0].message.content.strip()
+                # Usage and cost tracking
+                try:
+                    u = getattr(response, "usage", None)
+                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
+                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
+                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
+                except Exception:
+                    prompt_t = completion_t = 0
+                    total_t = 0
+                
+                # Calculate cost based on actual model used
+                if model == "qwen/qwen3-30b-a3b":
+                    input_price = 0.0008
+                    output_price = 0.0016
+                elif model == "deepseek/deepseek-chat-v3.1":
+                    input_price = 0.0003
+                    output_price = 0.0006
+                else:  # claude-3-haiku or others
+                    input_price = 0.00025
+                    output_price = 0.00125
+                
+                cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
+                RUN_METRICS["calls"].append({
+                    "provider": "openrouter",
+                    "model": model,
+                    "prompt_tokens": prompt_t,
+                    "completion_tokens": completion_t,
+                    "total_tokens": total_t,
+                    "estimated_cost_usd": round(cost, 6)
+                })
+                RUN_METRICS["total_prompt_tokens"] += prompt_t
+                RUN_METRICS["total_completion_tokens"] += completion_t
+                RUN_METRICS["total_tokens"] += total_t
+                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
+                return text
+            except Exception as e:
+                error_msg = f"OpenRouter Error: {type(e).__name__}: {str(e)}"
+                errors.append(error_msg)
+                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openrouter", "error": str(e)})
+                print(f"⚠️  OpenRouter failed: {type(e).__name__}. Trying OpenAI...", flush=True)
+
+        # Try OpenAI next
         if temp_openai_client:
             try:
                 response = await temp_openai_client.chat.completions.create(
@@ -1213,7 +1192,18 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
         all_skills = set(processed_skills["high_confidence_skills"])
 
         # Build experience results from structured data
-        exp_results = skills_data.get("experiences", [])
+        raw_exp_results = skills_data.get("experiences", [])
+        exp_results = []
+        for exp in raw_exp_results:
+            # Ensure experiences have required fields for seniority detection
+            exp_data = {
+                "title": exp.get("title", exp.get("title_line", "")),
+                "duration": exp.get("duration", ""),
+                "description": exp.get("description", exp.get("snippet", "")),
+                "skills": exp.get("skills", []),
+                "snippet": exp.get("snippet", "")
+            }
+            exp_results.append(exp_data)
 
     else:
         # Fallback to keyword-based extraction
@@ -1222,15 +1212,37 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
         exp_results = []
         for exp in experiences:
             skills = extrapolate_skills_from_text(exp['raw'])
-            exp_results.append({
-                "title_line": exp['title_line'],
+            # Create structured experience data for seniority detection
+            exp_data = {
+                "title": exp['title_line'],
+                "duration": exp['duration'],
+                "description": exp['description'],
                 "skills": sorted(skills),
                 "snippet": exp['raw'][:200]
-            })
+            }
+            exp_results.append(exp_data)
             all_skills.update(skills)
 
     # Generate role suggestions
     roles = suggest_roles(all_skills)
+
+    # Perform seniority detection
+    seniority_detector = SeniorityDetector()
+    
+    # Prepare experiences for seniority detection
+    seniority_experiences = []
+    for exp in exp_results:
+        seniority_exp = {
+            "title": exp.get("title", exp.get("title_line", "")),
+            "duration": exp.get("duration", ""),
+            "description": exp.get("description", exp.get("snippet", ""))
+        }
+        seniority_experiences.append(seniority_exp)
+    
+    seniority_result = seniority_detector.detect_seniority(
+        experiences=seniority_experiences,
+        skills=all_skills
+    )
 
     # Generate enhanced gap analysis
     try:
@@ -1250,7 +1262,8 @@ async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_jso
         "processed_skills": processed_skills,
         "domain_insights": domain_insights,
         "gap_analysis": gap,
-        "role_suggestions": roles  # Keep for compatibility
+        "role_suggestions": roles,  # Keep for compatibility
+        "seniority_analysis": seniority_result
     }
 
 
@@ -1556,9 +1569,24 @@ OUTPUT_SCHEMA = {
                 }
             },
             "required": ["bridging_gaps", "metric_improvements"]
+        },
+        "seniority_analysis": {
+            "type": "object",
+            "properties": {
+                "level": {"type": "string"},
+                "confidence": {"type": "number"},
+                "total_years_experience": {"type": "number"},
+                "experience_quality_score": {"type": "number"},
+                "leadership_score": {"type": "number"},
+                "skill_depth_score": {"type": "number"},
+                "achievement_complexity_score": {"type": "number"},
+                "reasoning": {"type": "string"},
+                "recommendations": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["level", "confidence", "total_years_experience", "reasoning", "recommendations"]
         }
     },
-    "required": ["experiences", "aggregate_skills", "processed_skills", "domain_insights", "gap_analysis", "suggested_experiences"]
+    "required": ["experiences", "aggregate_skills", "processed_skills", "domain_insights", "gap_analysis", "suggested_experiences", "seniority_analysis"]
 }
 
 def validate_output_schema(output: Dict[str, Any]) -> bool:

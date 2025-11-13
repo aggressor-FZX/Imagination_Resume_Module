@@ -128,7 +128,7 @@ def test_full_analysis():
             },
             json={
                 "resume_text": SAMPLE_RESUME,
-                "job_description": SAMPLE_JOB
+                "job_ad": SAMPLE_JOB
             },
             timeout=120  # Analysis can take time
         )

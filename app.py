@@ -8,7 +8,7 @@ import json
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Header, Depends, Security
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
@@ -33,9 +33,9 @@ async def lifespan(app: FastAPI):
     # Startup
     print(f"🚀 Starting {settings.environment} server on {settings.host}:{settings.port}")
 
-    # Validate required API keys
-    if not settings.openai_api_key and not settings.anthropic_api_key:
-        raise RuntimeError("At least one API key (OpenAI or Anthropic) must be configured")
+    # Validate required API keys (OpenRouter only)
+    if not settings.openrouter_api_key:
+        raise RuntimeError("OPENROUTER_API_KEY must be configured")
 
     yield
 
@@ -86,9 +86,6 @@ async def health_check():
 @app.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume(
     request: AnalysisRequest,
-    x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
-    x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
-    x_google_api_key: Optional[str] = Header(None, description="Google API Key"),
     api_key: str = Depends(get_api_key)
 ):
     """
@@ -106,12 +103,8 @@ async def analyze_resume(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        # Pass API keys to the async function
-        api_keys = {
-            "openai_api_key": x_openai_api_key,
-            "anthropic_api_key": x_anthropic_api_key,
-            "google_api_key": x_google_api_key
-        }
+        # We use OpenRouter exclusively (configured via environment).
+        api_keys = {"openrouter_api_key": settings.openrouter_api_key}
 
         # Reset run metrics for this request
         RUN_METRICS.update({
@@ -219,38 +212,8 @@ async def analyze_resume(
         )
 
 
-@app.post("/analyze-file", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
-async def analyze_resume_file(
-    resume_file: UploadFile = File(...),
-    job_ad: str = Form(...),
-    extracted_skills_json: Optional[str] = Form(None),
-    domain_insights_json: Optional[str] = Form(None),
-    confidence_threshold: float = Form(0.7),
-    x_openai_api_key: Optional[str] = Header(None, description="OpenAI API Key"),
-    x_anthropic_api_key: Optional[str] = Header(None, description="Anthropic API Key"),
-    x_google_api_key: Optional[str] = Header(None, description="Google API Key"),
-    api_key: str = Depends(get_api_key)
-):
-    """
-    Analyze a resume file against a job description and provide career development recommendations.
-    """
-    resume_text = (await resume_file.read()).decode("utf-8")
-    
-    # Create a mock request object to reuse the analyze_resume logic
-    request = AnalysisRequest(
-        resume_text=resume_text,
-        job_ad=job_ad,
-        extracted_skills_json=extracted_skills_json,
-        domain_insights_json=domain_insights_json,
-        confidence_threshold=confidence_threshold
-    )
-    
-    return await analyze_resume(
-        request,
-        x_openai_api_key,
-        x_anthropic_api_key,
-        x_google_api_key
-    )
+# Note: File uploads are no longer required. FrontEnd sends structured JSON only.
+# The `/analyze` endpoint accepts the JSON payload and is the single supported entrypoint.
 
 
 @app.get("/docs/{library}", response_model=Context7DocsResponse)
@@ -301,8 +264,7 @@ async def get_config():
         "max_concurrent_requests": settings.max_concurrent_requests,
         "request_timeout": settings.request_timeout,
         "debug": settings.debug,
-        "has_openai_key": bool(settings.openai_api_key),
-        "has_anthropic_key": bool(settings.anthropic_api_key),
+        "has_openrouter_key": bool(settings.openrouter_api_key),
         "has_context7_key": bool(settings.context7_api_key)
     }
 

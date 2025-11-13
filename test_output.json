@@ -1,0 +1,101 @@
+{
+  "experiences": [
+    {
+      "title_line": "Jeff Calderon",
+      "skills": [],
+      "snippet": "Jeff Calderon\nData Scientist and IT Specialist\n\u2642\u00b6obile+1 916.712.8396 /envel\u2322pejeff.d.calderon@gmail.com /h\u2322meMarysville, WA\n/linkedinjeffdcalderon /githubaggressor-FZX\nSUMMARY\nSkilled and innovative "
+    },
+    {
+      "title_line": "in scripting and validating software solutions. Also skilled",
+      "skills": [
+        "api",
+        "cloud",
+        "data-analysis",
+        "project-management",
+        "python"
+      ],
+      "snippet": "in scripting and validating software solutions. Also skilled\nin software development, mustache templates, and automating workflow optimizing initiatives to realize operational efficiencies.\nDetail-ori"
+    },
+    {
+      "title_line": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid",
+      "skills": [
+        "communication",
+        "data-analysis",
+        "leadership"
+      ],
+      "snippet": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid\nunderstanding of Power BI, Excel macros, google suite and Windows/Linux/PowerShell scripting. Excellent"
+    },
+    {
+      "title_line": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023",
+      "skills": [
+        "api",
+        "cloud",
+        "communication",
+        "data-analysis",
+        "leadership",
+        "project-management",
+        "python",
+        "testing"
+      ],
+      "snippet": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023\n\u2022Served as Operations Manager of a Marine Operation Center; Managed military ID administration database"
+    }
+  ],
+  "aggregate_skills": [
+    "api",
+    "cloud",
+    "communication",
+    "data-analysis",
+    "leadership",
+    "project-management",
+    "python",
+    "testing"
+  ],
+  "processed_skills": {},
+  "domain_insights": {},
+  "gap_analysis": "{\"skill_gaps\": [], \"experience_gaps\": [], \"recommendations\": [\"Unable to perform detailed gap analysis due to API issues\"]}",
+  "role_suggestions": [
+    {
+      "role": "product-manager",
+      "score": 1.0,
+      "matched_skills": [
+        "communication",
+        "leadership",
+        "project-management"
+      ]
+    },
+    {
+      "role": "data-engineer",
+      "score": 0.75,
+      "matched_skills": [
+        "api",
+        "cloud",
+        "python"
+      ]
+    },
+    {
+      "role": "software-engineer",
+      "score": 0.75,
+      "matched_skills": [
+        "api",
+        "python",
+        "testing"
+      ]
+    },
+    {
+      "role": "data-scientist",
+      "score": 0.67,
+      "matched_skills": [
+        "data-analysis",
+        "python"
+      ]
+    },
+    {
+      "role": "ml-engineer",
+      "score": 0.5,
+      "matched_skills": [
+        "cloud",
+        "python"
+      ]
+    }
+  ]
+}

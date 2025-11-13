@@ -56,6 +56,19 @@ class ProcessedSkills(BaseModel):
     )
 
 
+class SeniorityAnalysis(BaseModel):
+    """Seniority level analysis results"""
+    level: str = Field(..., description="Detected seniority level")
+    confidence: float = Field(..., description="Confidence score (0-1)")
+    total_years_experience: float = Field(..., description="Total years of experience")
+    experience_quality_score: float = Field(..., description="Experience quality score")
+    leadership_score: float = Field(..., description="Leadership experience score")
+    skill_depth_score: float = Field(..., description="Technical skill depth score")
+    achievement_complexity_score: float = Field(..., description="Achievement complexity score")
+    reasoning: str = Field(..., description="Human-readable reasoning")
+    recommendations: List[str] = Field(..., description="Career development recommendations")
+
+
 class RunMetrics(BaseModel):
     """Usage metrics and cost tracking"""
     calls: List[Dict[str, Any]] = Field(..., description="Individual API calls")
@@ -117,6 +130,7 @@ class AnalysisResponse(BaseModel):
     suggested_experiences: Dict[str, Any] = Field(
         ..., description="Refined improvement suggestions"
     )
+    seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
     run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
