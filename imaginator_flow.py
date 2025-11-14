@@ -3546,4 +3546,4 @@ def infer_implied_skills(high_conf_skills: List[str], skill_adjacency: Dict) -> 
     for skill in high_conf_skills:
         skill_lower = skill.lower().replace(" ", "_")
         if skill_lower in skill_adjacency:
-            for adjacent_skill, confidence in skill_adjacency[skill_lower
+            for adjacent_skill, confidence in skill_adjacency[skill_lower].items():
