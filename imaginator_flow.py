@@ -73,11 +73,16 @@ if os.getenv("OPENROUTER_API_KEY"):
             "X-Title": "Imaginator Resume Co-Writer"
         }
     )
-    # For async operations, we use the same client (OpenAI client is async-compatible)
-    openrouter_async_client = openrouter_client
-
-# Initialize async clients
-openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
+# For async operations, initialize a separate async client
+openrouter_async_client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    default_headers={
+        "HTTP-Referer": "https://imaginator-resume-cowriter.onrender.com",
+        "X-Title": "Imaginator Resume Co-Writer"
+    }
+) if os.getenv("OPENROUTER_API_KEY") else None# Initialize async clients
+openai_async_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
 google_async_client = genai.GenerativeModel('gemini-pro') if GOOGLE_API_KEY else None  # Google Gemini client
 deepseek_async_client = None  # DeepSeekAPI module not available
