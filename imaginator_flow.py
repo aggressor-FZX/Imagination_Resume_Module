@@ -352,7 +352,8 @@ async def call_llm_async(
                 print("🔍 Using OpenRouter (Claude-3-Haiku for analysis)", flush=True)
             
             try:
-                response = await openrouter_async_client.chat.completions.create(
+                import inspect
+                maybe = openrouter_async_client.chat.completions.create(
                     model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -362,6 +363,7 @@ async def call_llm_async(
                     max_tokens=max_tokens,
                     timeout=60.0
                 )
+                response = await maybe if inspect.isawaitable(maybe) else maybe
                 text = response.choices[0].message.content.strip()
                 # Usage and cost
                 try:
