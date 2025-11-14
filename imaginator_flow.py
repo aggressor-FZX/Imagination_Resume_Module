@@ -621,10 +621,10 @@ def infer_implied_skills(high_conf_skills: List[str], skill_adjacency: Dict) -> 
     
     for skill in high_conf_skills:
         skill_lower = skill.lower().replace(" ", "_")
-        if skill_lower in skill_adjacency:
-            for adjacent_skill, confidence in skill_adjacency[skill_lower].items():
-                if adjacent_skill not in implied or implied[adjacent_skill] < confidence:
-                    implied[adjacent_skill] = confidence
+            if skill_lower in skill_adjacency:
+                for adjacent_skill, confidence in skill_adjacency[skill_lower].items():
+                    if adjacent_skill not in implied or implied[adjacent_skill] < confidence:
+                        implied[adjacent_skill] = confidence
     
     # Filter out low-confidence inferences (< 0.75)
     return {skill: conf for skill, conf in implied.items() if conf >= 0.75}
@@ -1027,14 +1027,14 @@ def load_knowledge_bases():
     try:
         with open("skill_adjacency.json", encoding="utf-8") as f:
             skill_adjacency = json.load(f).get("mappings", {})
-    except FileNotFoundError:
-        pass  # Optional knowledge base
+        except FileNotFoundError:
+            pass  # Optional knowledge base
     
     try:
         with open("verb_competency.json", encoding="utf-8") as f:
             verb_competency = json.load(f).get("mappings", {})
-    except FileNotFoundError:
-        pass  # Optional knowledge base
+        except FileNotFoundError:
+            pass  # Optional knowledge base
     
     return skill_adjacency, verb_competency
 
