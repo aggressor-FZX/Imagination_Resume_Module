@@ -22,7 +22,7 @@ from models import (
 
 # Import the existing flow functions (will be converted to async)
 from imaginator_flow import (
-    run_analysis_async, run_generation_async, run_criticism,
+    run_analysis_async, run_generation_async, run_criticism_async,
     validate_output_schema, RUN_METRICS
 )
 
@@ -148,48 +148,33 @@ async def analyze_resume(
             confidence_threshold=request.confidence_threshold
         )
 
-        # Step 2: Run Generation (with graceful degradation)
+        # Step 2: Run Generation
         print("🎨 Step 2: Generating resume improvement suggestions...")
-        try:
-            generation_result = await run_generation_async(
-                analysis_json=analysis_result,
-                job_ad=request.job_ad
-            )
-        except Exception as e:
-            print(f"⚠️  Generation step failed: {str(e)}")
-            print("🔄 Continuing with analysis results only...")
-            generation_result = {"gap_bridging": [], "metric_improvements": []}
+        generation_result = await run_generation_async(
+            analysis_json=analysis_result,
+            job_ad=request.job_ad
+        )
 
-        # Step 3: Run Criticism (with graceful degradation)
+        # Step 3: Run Criticism
         print("🎯 Step 3: Refining suggestions with adversarial review...")
-        try:
-            criticism_result = run_criticism(
-                generated_suggestions=generation_result,
-                job_ad=request.job_ad
-            )
-        except Exception as e:
-            print(f"⚠️  Criticism step failed: {str(e)}")
-            print("🔄 Continuing with generation results only...")
-            criticism_result = {
-                "suggested_experiences": {
-                    "bridging_gaps": generation_result.get("gap_bridging", []),
-                    "metric_improvements": generation_result.get("metric_improvements", [])
-                }
-            }
+        criticism_result = await run_criticism_async(
+            generated_suggestions=generation_result,
+            job_ad=request.job_ad
+        )
 
         # Assemble final output
         output = {
-            **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis
+            **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis, seniority_analysis
             **criticism_result,  # suggested_experiences
             "run_metrics": RUN_METRICS.copy(),
             "processing_status": ProcessingStatus.COMPLETED,
             "processing_time_seconds": time.time() - start_time
         }
 
-        # Validate output schema
-        validate_output_schema(output)
+        ## Validate output schema
+        # validate_output_schema(output)
 
-        return output
+        return AnalysisResponse(**output)
 
     except Exception as e:
         processing_time = time.time() - start_time

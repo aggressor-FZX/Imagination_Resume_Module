@@ -6,11 +6,11 @@ Parses a resume, extrapolates skills, suggests roles, and performs a gap analysi
 """
 import re
 import json
+import re
+import json
 import argparse
 import os
-from typing import List, Dict, Set, Any, Optional, Optional
-
-import aiohttp
+from typing import Any, Dict, List, Optional, Set, Union
 import asyncio
 import google.generativeai as genai
 # from deepseek import DeepSeekAPI  # Commented out - module not available
@@ -43,6 +43,24 @@ QWEN_PRICE_IN_K = float(os.getenv("QWEN_PRICE_INPUT_PER_1K", "0.00006"))
 QWEN_PRICE_OUT_K = float(os.getenv("QWEN_PRICE_OUTPUT_PER_1K", "0.00022"))
 OPENROUTER_PRICE_IN_K = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", "0.0005"))
 OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.0015"))
+
+
+def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Estimate per-call cost based on model-specific OpenRouter pricing."""
+    prompt_rate = OPENROUTER_PRICE_IN_K
+    completion_rate = OPENROUTER_PRICE_OUT_K
+
+    if "qwen/qwen3-30b-a3b" in model:
+        prompt_rate = QWEN_PRICE_IN_K
+        completion_rate = QWEN_PRICE_OUT_K
+    elif "deepseek/deepseek-chat-v3.1" in model:
+        prompt_rate = DEEPSEEK_PRICE_IN_K
+        completion_rate = DEEPSEEK_PRICE_OUT_K
+    elif "claude-3" in model:
+        prompt_rate = ANTHROPIC_PRICE_IN_K
+        completion_rate = ANTHROPIC_PRICE_OUT_K
+
+    return (prompt_tokens / 1000.0) * prompt_rate + (completion_tokens / 1000.0) * completion_rate
 
 # Run metrics accumulator
 RUN_METRICS: Dict[str, Any] = {
@@ -224,6 +242,93 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
     return processed
 
 
+def _load_json_payload(source: Union[str, Dict[str, Any], None], label: str) -> Dict[str, Any]:
+    """Normalize JSON payloads, accepting dicts, JSON strings, or file paths."""
+    if not source:
+        return {}
+
+    if isinstance(source, dict):
+        return source
+
+    if isinstance(source, str):
+        candidate = source.strip()
+        if not candidate:
+            return {}
+
+        if os.path.exists(candidate):
+            with open(candidate, encoding="utf-8") as handle:
+                data = json.load(handle)
+        else:
+            try:
+                data = json.loads(candidate)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"{label} must be a dict, valid JSON string, or file path"
+                ) from exc
+
+        if isinstance(data, dict):
+            return data
+        raise ValueError(f"{label} JSON content must deserialize to an object/dict")
+
+    raise TypeError(f"{label} must be provided as a dict, JSON string, or file path")
+
+
+def _strip_code_fences(text: str) -> str:
+    """Remove leading/trailing Markdown code fences to aid JSON parsing."""
+    if not text:
+        return ""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped[3:]
+        newline = stripped.find("\n")
+        if newline != -1:
+            stripped = stripped[newline + 1 :]
+    if stripped.endswith("```"):
+        stripped = stripped[:-3]
+    return stripped.strip()
+
+
+def _extract_json_object(text: str) -> Optional[str]:
+    """Attempt to locate the first balanced JSON object within the text."""
+    if not text:
+        return None
+    stack = 0
+    start_idx: Optional[int] = None
+    for idx, ch in enumerate(text):
+        if ch == "{":
+            if stack == 0:
+                start_idx = idx
+            stack += 1
+        elif ch == "}":
+            if stack:
+                stack -= 1
+                if stack == 0 and start_idx is not None:
+                    candidate = text[start_idx : idx + 1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except json.JSONDecodeError:
+                        continue
+    return None
+
+
+def ensure_json_dict(raw_text: str, label: str) -> Dict[str, Any]:
+    """Best-effort conversion of model output into a JSON object."""
+    cleaned = _strip_code_fences(raw_text)
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    candidate = _extract_json_object(cleaned)
+    if candidate:
+        return json.loads(candidate)
+
+    raise ValueError(f"{label} response was not valid JSON. Raw output: {raw_text[:1200]}")
+
+
 def call_llm(
     system_prompt: str, 
     user_prompt: str, 
@@ -233,7 +338,8 @@ def call_llm(
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
     google_api_key: Optional[str] = None,
-    deepseek_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None,
+    response_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Call LLM with automatic fallback: OpenRouter -> OpenAI -> Google -> Anthropic
@@ -255,13 +361,20 @@ def call_llm(
         model = "anthropic/claude-3-haiku"
 
     try:
-        response = openrouter_client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=60.0
-        )
+        create_kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "timeout": 60.0,
+        }
+        if response_format:
+            create_kwargs["response_format"] = response_format
+
+        response = openrouter_client.chat.completions.create(**create_kwargs)
         text = response.choices[0].message.content.strip()
 
         # Attempt to track usage if available
@@ -272,18 +385,7 @@ def call_llm(
         except Exception:
             prompt_t = completion_t = 0
 
-        # Estimate cost using OpenRouter pricing fields
-        if model == "meta-llama/llama-3.1-70b-instruct":
-            input_price = 0.0000004
-            output_price = 0.0000004
-        elif model == "mistralai/mistral-large":
-            input_price = 0.000002
-            output_price = 0.000006
-        else:
-            input_price = 0.00000025
-            output_price = 0.00000125
-
-        cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
+        cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
         RUN_METRICS["calls"].append({
             "provider": "openrouter",
             "model": model,
@@ -311,7 +413,8 @@ async def call_llm_async(
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
     google_api_key: Optional[str] = None,
-    deepseek_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None,
+    response_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Async version of call_llm: Call LLM with automatic fallback using async clients.
@@ -348,17 +451,34 @@ async def call_llm_async(
             
             try:
                 import inspect
-                maybe = openrouter_async_client.chat.completions.create(
-                    model=model,
-                    messages=[
+                create_kwargs = {
+                    "model": model,
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=60.0
-                )
-                response = await maybe if inspect.isawaitable(maybe) else maybe
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "timeout": 60.0,
+                }
+                if response_format:
+                    create_kwargs["response_format"] = response_format
+
+                maybe = openrouter_async_client.chat.completions.create(**create_kwargs)
+                # Some OpenRouter client versions return an awaitable coroutine, others
+                # return a ChatCompletion object directly. Handle both safely.
+                try:
+                    if inspect.isawaitable(maybe):
+                        response = await maybe
+                    else:
+                        response = maybe
+                except TypeError as te:
+                    # Protect against `TypeError: object ChatCompletion can't be used in 'await' expression`
+                    print(f"⚠️  OpenRouter returned non-awaitable object: {type(maybe).__name__} - {te}", flush=True)
+                    response = maybe
+
+                # Log the response type for easier debugging on Render if it changes
+                print(f"🔎 OpenRouter returned type: {type(response).__name__}", flush=True)
                 text = response.choices[0].message.content.strip()
                 # Usage and cost tracking
                 try:
@@ -370,21 +490,7 @@ async def call_llm_async(
                     prompt_t = completion_t = 0
                     total_t = 0
                 
-                # Calculate cost based on actual model used
-                if "qwen" in model:
-                    input_price = QWEN_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
-                    output_price = QWEN_PRICE_OUT_K / 1000.0
-                elif "deepseek" in model:
-                    input_price = DEEPSEEK_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
-                    output_price = DEEPSEEK_PRICE_OUT_K / 1000.0
-                elif "claude" in model:
-                    input_price = ANTHROPIC_PRICE_IN_K / 1000.0  # Convert from per 1K to per token
-                    output_price = ANTHROPIC_PRICE_OUT_K / 1000.0
-                else:  # fallback to OpenRouter default
-                    input_price = OPENROUTER_PRICE_IN_K / 1000.0
-                    output_price = OPENROUTER_PRICE_OUT_K / 1000.0
-                
-                cost = (prompt_t / 1000.0) * input_price + (completion_t / 1000.0) * output_price
+                cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
                 RUN_METRICS["calls"].append({
                     "provider": "openrouter",
                     "model": model,
@@ -1163,31 +1269,29 @@ def _old_fallback_removed():
     # This fallback code is no longer used - kept as reference only
 
 
-async def run_analysis_async(resume_text: str, job_ad: str, extracted_skills_json: str = None, domain_insights_json: str = None, confidence_threshold: float = 0.7) -> Dict:
+async def run_analysis_async(
+    resume_text: str,
+    job_ad: str,
+    extracted_skills_json: Union[str, Dict[str, Any], None] = None,
+    domain_insights_json: Union[str, Dict[str, Any], None] = None,
+    confidence_threshold: float = 0.7,
+) -> Dict:
     """
     Async version of run_analysis: Run the analysis phase of the generative resume co-writer.
 
     Args:
         resume_text: Raw resume text
         job_ad: Target job description text
-        extracted_skills_json: Path to JSON file with extracted skills (optional)
-        domain_insights_json: Path to JSON file with domain insights (optional)
+        extracted_skills_json: Dict, JSON string, or file path with extracted skills (optional)
+        domain_insights_json: Dict, JSON string, or file path with domain insights (optional)
         confidence_threshold: Minimum confidence threshold for skills
 
     Returns:
         Dict containing: experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis
     """
     # Load structured skills data
-    skills_data = {}
-    domain_insights = {}
-
-    if extracted_skills_json:
-        with open(extracted_skills_json, encoding="utf-8") as f:
-            skills_data = json.load(f)
-
-    if domain_insights_json:
-        with open(domain_insights_json, encoding="utf-8") as f:
-            domain_insights = json.load(f)
+    skills_data = _load_json_payload(extracted_skills_json, "extracted_skills_json")
+    domain_insights = _load_json_payload(domain_insights_json, "domain_insights_json")
 
     # Process skills with confidence filtering
     processed_skills = {}
@@ -1360,73 +1464,21 @@ Return JSON format:
 }}"""
 
     try:
-        response = await call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500)
+        response = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            temperature=0.9,
+            max_tokens=1500,
+            response_format={"type": "json_object"}
+        )
     except Exception as e:
-        print(f"⚠️  Generation LLM call failed: {str(e)}", flush=True)
-        print("🔄 Using fallback generation structure...", flush=True)
-        # Fallback structure
-        return {
-            "gap_bridging": [
-                {
-                    "skill_focus": critical_gaps[0] if critical_gaps else "leadership",
-                    "suggestions": [
-                        "Demonstrated strong problem-solving skills in high-pressure environments",
-                        "Led cross-functional teams to deliver complex projects on time"
-                    ]
-                }
-            ],
-            "metric_improvements": [
-                {
-                    "skill_focus": aggregate_skills[0] if aggregate_skills else "python",
-                    "suggestions": [
-                        "Developed solutions that improved efficiency by 50%",
-                        "Created tools used by hundreds of users"
-                    ]
-                }
-            ]
-        }
+        raise RuntimeError(f"Generation LLM call failed: {e}") from e
 
-    try:
-        return json.loads(response)
-    except json.JSONDecodeError:
-        # Explicitly report fallback due to decode failure
-        import sys as _sys
-        print("⚠️  Generation JSON decode failed; using fallback structure.", file=_sys.stderr, flush=True)
-        # Fallback structure
-        return {
-            "gap_bridging": [
-                {
-                    "skill_focus": critical_gaps[0] if critical_gaps else "leadership",
-                    "suggestions": [
-                        "Demonstrated strong problem-solving skills in high-pressure environments",
-                        "Led cross-functional teams to deliver complex projects on time"
-                    ]
-                }
-            ],
-            "metric_improvements": [
-                {
-                    "skill_focus": aggregate_skills[0] if aggregate_skills else "python",
-                    "suggestions": [
-                        "Developed solutions that improved efficiency by 50%",
-                        "Created tools used by hundreds of users"
-                    ]
-                }
-            ]
-        }
+    return ensure_json_dict(response, "Generation")
 
 
-def run_criticism(generated_suggestions: Dict, job_ad: str) -> Dict:
-    """
-    Run the criticism phase of the generative resume co-writer.
-    Acts as a skeptical hiring manager to polish and improve generated suggestions.
-    
-    Args:
-        generated_suggestions: Output from run_generation
-        job_ad: Target job description text
-        
-    Returns:
-        Dict containing suggested_experiences with refined suggestions
-    """
+async def run_criticism_async(generated_suggestions: Dict, job_ad: str) -> Dict:
+    """Asynchronously refine generated suggestions via an adversarial review."""
     system_prompt = """You are a cynical, experienced hiring manager with 15+ years in tech recruiting. You've seen thousands of resumes and can spot bullshit from a mile away.
 
 Your job is to review resume bullet points and:
@@ -1477,50 +1529,17 @@ Return JSON format:
 }}"""
 
     try:
-        response = call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=1500)
+        response = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            temperature=0.3,
+            max_tokens=1500,
+            response_format={"type": "json_object"}
+        )
     except Exception as e:
-        print(f"⚠️  Criticism LLM call failed: {str(e)}", flush=True)
-        print("🔄 Using fallback criticism structure...", flush=True)
-        # Fallback structure - transform suggestions to refined_suggestions
-        def transform_suggestions(items):
-            return [
-                {
-                    "skill_focus": item.get("skill_focus", ""),
-                    "refined_suggestions": item.get("suggestions", [])
-                }
-                for item in items
-            ]
-        
-        return {
-            "suggested_experiences": {
-                "bridging_gaps": transform_suggestions(generated_suggestions.get("gap_bridging", [])),
-                "metric_improvements": transform_suggestions(generated_suggestions.get("metric_improvements", []))
-            }
-        }
+        raise RuntimeError(f"Criticism LLM call failed: {e}") from e
     
-    try:
-        result = json.loads(response)
-        return result
-    except json.JSONDecodeError:
-        # Explicitly report fallback due to decode failure
-        import sys as _sys
-        print("⚠️  Criticism JSON decode failed; transforming suggestions to refined_suggestions.", file=_sys.stderr, flush=True)
-        # Fallback structure - transform suggestions to refined_suggestions
-        def transform_suggestions(items):
-            return [
-                {
-                    "skill_focus": item.get("skill_focus", ""),
-                    "refined_suggestions": item.get("suggestions", [])
-                }
-                for item in items
-            ]
-        
-        return {
-            "suggested_experiences": {
-                "bridging_gaps": transform_suggestions(generated_suggestions.get("gap_bridging", [])),
-                "metric_improvements": transform_suggestions(generated_suggestions.get("metric_improvements", []))
-            }
-        }
+    return ensure_json_dict(response, "Criticism")
 
 
 # JSON Schema for the output
@@ -1702,9 +1721,10 @@ def run_generation(analysis_json: Dict, job_ad: str) -> Dict:
     return asyncio.run(run_generation_async(analysis_json, job_ad))
 
 
-def run_criticism_sync(generated_suggestions: Dict, job_ad: str) -> Dict:
-    """Sync wrapper for run_criticism for CLI compatibility"""
-    return run_criticism(generated_suggestions, job_ad)
+def run_criticism(generated_suggestions: Dict, job_ad: str) -> Dict:
+    """Sync wrapper for run_criticism_async for CLI compatibility"""
+    import asyncio
+    return asyncio.run(run_criticism_async(generated_suggestions, job_ad))
 
 
 if __name__ == "__main__":

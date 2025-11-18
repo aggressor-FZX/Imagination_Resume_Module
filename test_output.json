@@ -2,11 +2,15 @@
   "experiences": [
     {
       "title_line": "Jeff Calderon",
+      "duration": "",
+      "description": "Jeff Calderon Data Scientist and IT Specialist \u2642\u00b6obile+1 916.712.8396 /envel\u2322pejeff.d.calderon@gmail.com /h\u2322meMarysville, WA /linkedinjeffdcalderon /githubaggressor-FZX SUMMARY Skilled and innovative computing professional with extensive",
       "skills": [],
       "snippet": "Jeff Calderon\nData Scientist and IT Specialist\n\u2642\u00b6obile+1 916.712.8396 /envel\u2322pejeff.d.calderon@gmail.com /h\u2322meMarysville, WA\n/linkedinjeffdcalderon /githubaggressor-FZX\nSUMMARY\nSkilled and innovative "
     },
     {
       "title_line": "in scripting and validating software solutions. Also skilled",
+      "duration": "",
+      "description": "in scripting and validating software solutions. Also skilled in software development, mustache templates, and automating workflow optimizing initiatives to realize operational efficiencies. Detail-oriented and self-motivated professional adept at translating complex technical requirements into robust solutions. Demonstrates a strong propensity for quick learning, with a track record of applying technical skills to solve complex problems. Seeking challenging data analysis role to leverage my knowledge of scripting, APIs, SQL, and UI/UX design to enhance team productivity. SKILLS AND TECHNOLOGIES Strong knowledge of computing, spreadsheets, automation, Project Management, C++, Python, cloud computing, Windows, databases and SQL.",
       "skills": [
         "api",
         "cloud",
@@ -18,6 +22,8 @@
     },
     {
       "title_line": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid",
+      "duration": "",
+      "description": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid understanding of Power BI, Excel macros, google suite and Windows/Linux/PowerShell scripting. Excellent communication and collaboration skills. Ability to learn quickly and adapt to new technologies. PROFESSIONAL",
       "skills": [
         "communication",
         "data-analysis",
@@ -27,6 +33,8 @@
     },
     {
       "title_line": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023",
+      "duration": "06/2016 - 05/2023",
+      "description": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023 \u2022Served as Operations Manager of a Marine Operation Center; Managed military ID administration database, security and infrastructure management software, project management software, dashboard creation and metric tracking. \u2022Created monitored Official Travel data base and tracking UI/database. \u2022Designed implemented UI Sea Service letter generator and spearheaded work flow initiatives using automation. \u2022Led daily status meetings with regional leadership, produced dashboards, visualization and realtime metric reporting for 13 Ships. Research Physicist (Naval Research Laboratory) Washington, DC 01/2014 - 06/2016 \u2022Supported software development to predict active interrogation procedures and passive detection of WMD/radiological devices. \u2022Conducted unit and integration testing of UI java software and C++ code. \u2022Developed Python based graphic user interface for fast implementation of scenario-based radiation simulation software running on Linux. Faculty Assistant Researcher (University of Maryland College Park) College Park, MD 01/2013 - 04/2015 \u2022Designed software for data analysis and publication quality plots in particle physics experiments using. \u2022Co-authored publications on experiments conducted at the Large Hadron Collider. Weapon System Controller (United States Air Force) World Wide 05/2002 - 01/2010 \u2022Administered equipment databases, supervised maintenance operations, and ensured aircraft data availability. \u2022Maintained aircraft maintenance records supporting F-16 fighter jets and presented readiness statistics to base leadership. \u2022Excelled in interpreting technical schematics and delivering precise information. CERTIFICATIONS \u2022Washington State University Everett 2024 - Data Analytics \u2022Everett Community College (2024) - Cybersecurity Analyst \u2022CompTIA (2024) - Security+ EDUCATION BS Professional Physics University of Maryland College Park, MD 2011-2015 Relevant Course Work: MATLAB and Computational Physics, Data Visualization AAS Computer Science Everett Community College Everett, WA 2023-2024 Relevant Course Work: Networking, C++, Cybersecurity, Cloud Computing BS Social Science University of Maryland Adelphi, MD 2005-2010",
       "skills": [
         "api",
         "cloud",
@@ -52,7 +60,7 @@
   ],
   "processed_skills": {},
   "domain_insights": {},
-  "gap_analysis": "{\"skill_gaps\": [], \"experience_gaps\": [], \"recommendations\": [\"Unable to perform detailed gap analysis due to API issues\"]}",
+  "gap_analysis": "",
   "role_suggestions": [
     {
       "role": "product-manager",
@@ -97,5 +105,21 @@
         "python"
       ]
     }
-  ]
+  ],
+  "seniority_analysis": {
+    "level": "junior",
+    "confidence": 0.8666666666666667,
+    "total_years_experience": 7.0,
+    "experience_quality_score": 0.36624999999999996,
+    "leadership_score": 0.03,
+    "skill_depth_score": 0.4625,
+    "achievement_complexity_score": 0.25,
+    "reasoning": "7.0 years of experience demonstrates significant expertise Solid technical foundation with intermediate to advanced skills",
+    "recommendations": [
+      "Focus on building technical depth in core skills",
+      "Seek opportunities for mentorship and code reviews",
+      "Work on small to medium-sized features independently",
+      "Develop understanding of system architecture"
+    ]
+  }
 }

@@ -35,7 +35,7 @@ def sample_analysis_json():
 
 
 def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
-    def mock_call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3):
+    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None):
         # Return generator JSON
         return json.dumps(
             {
@@ -48,7 +48,7 @@ def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
             }
         )
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
 
     out = mod.run_generation(sample_analysis_json, "Senior Engineer")
     assert "gap_bridging" in out and isinstance(out["gap_bridging"], list)
@@ -58,13 +58,12 @@ def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
 
 def test_run_generation_fallback_on_decode(monkeypatch, sample_analysis_json):
     # Return non-JSON to trigger fallback
-    def mock_call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3):
+    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None):
         return "NOT JSON"
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
-    out = mod.run_generation(sample_analysis_json, "Senior Engineer")
-    assert "gap_bridging" in out
-    assert "metric_improvements" in out
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
+    with pytest.raises(ValueError):
+        mod.run_generation(sample_analysis_json, "Senior Engineer")
 
 
 def test_run_criticism_with_mock_llm(monkeypatch):
@@ -73,7 +72,7 @@ def test_run_criticism_with_mock_llm(monkeypatch):
         "metric_improvements": [{"skill_focus": "aws", "suggestions": ["C", "D"]}],
     }
 
-    def mock_call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3):
+    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3, response_format=None):
         return json.dumps(
             {
                 "suggested_experiences": {
@@ -87,7 +86,7 @@ def test_run_criticism_with_mock_llm(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
     out = mod.run_criticism(generated, "Senior Engineer")
     assert "suggested_experiences" in out
     se = out["suggested_experiences"]
@@ -96,20 +95,18 @@ def test_run_criticism_with_mock_llm(monkeypatch):
 
 def test_run_criticism_fallback_transform(monkeypatch):
     # Force exception in call_llm to hit fallback transform path
-    def mock_call_llm(*args, **kwargs):
+    async def mock_call_llm_async(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
 
     generated = {
         "gap_bridging": [{"skill_focus": "react", "suggestions": ["A", "B"]}],
         "metric_improvements": [{"skill_focus": "aws", "suggestions": ["C", "D"]}],
     }
-    out = mod.run_criticism(generated, "Senior Engineer")
-    se = out["suggested_experiences"]
-    # Ensure suggestions got transformed to refined_suggestions
-    assert se["bridging_gaps"][0]["refined_suggestions"] == ["A", "B"]
-    assert se["metric_improvements"][0]["refined_suggestions"] == ["C", "D"]
+
+    with pytest.raises(RuntimeError):
+        mod.run_criticism(generated, "Senior Engineer")
 
 
 def test_validate_output_schema_with_fallbacks(monkeypatch):

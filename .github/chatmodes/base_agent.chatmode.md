@@ -1,7 +1,7 @@
 ---
 description: 'General purpose chat mode with standard tools and safety guardrails for command execution.'
 
-tools: ['runCommands', 'runTasks', 'edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'new', 'memory/*', 'render-docker-mcp/*', 'Context7/*', 'render/*', 'extensions', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'todos']
+tools: ['runCommands', 'runTasks', 'edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'memory/*', 'render/*', 'render-docker-mcp/*', 'Context7/*', 'extensions', 'usages', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'todos']
 ---
 Define the purpose of this chat mode and how AI should behave: response style, available tools, focus areas, and any mode-specific instructions or constraints.
 

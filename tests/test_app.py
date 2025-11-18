@@ -53,7 +53,7 @@ class TestAnalysisEndpoint:
 
     @patch('app.run_analysis_async')
     @patch('app.run_generation_async')
-    @patch('app.run_criticism')
+    @patch('app.run_criticism_async')
     @patch('app.validate_output_schema')
     def test_successful_analysis(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
         """Test successful resume analysis"""
@@ -141,7 +141,7 @@ class TestAnalysisEndpoint:
 
     @patch('app.run_analysis_async')
     @patch('app.run_generation_async')
-    @patch('app.run_criticism')
+    @patch('app.run_criticism_async')
     @patch('app.validate_output_schema')
     def test_analysis_failure(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
         """Test graceful handling of analysis failure"""
@@ -163,6 +163,45 @@ class TestAnalysisEndpoint:
         assert "error" in data
         assert "ANALYSIS_FAILED" in data["error_code"]
 
+    @patch('app.run_analysis_async')
+    @patch('app.run_generation_async')
+    @patch('app.run_criticism_async')
+    @patch('app.validate_output_schema')
+    def test_generation_failure_returns_error(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
+        """Ensure generation failures do not return fabricated fallback data"""
+        mock_analysis.return_value = {
+            "experiences": [],
+            "aggregate_skills": ["Python"],
+            "processed_skills": {"high_confidence": ["Python"], "medium_confidence": [], "low_confidence": [], "inferred_skills": []},
+            "domain_insights": {"domain": "tech", "market_demand": "high", "skill_gap_priority": "low"},
+            "gap_analysis": "Test",
+            "seniority_analysis": {
+                "level": "mid-level",
+                "confidence": 0.83,
+                "total_years_experience": 5.0,
+                "experience_quality_score": 0.7,
+                "leadership_score": 0.6,
+                "skill_depth_score": 0.8,
+                "achievement_complexity_score": 0.5,
+                "reasoning": "5.0 years of experience demonstrates significant expertise",
+                "recommendations": ["Focus on building technical depth"]
+            }
+        }
+        mock_generation.side_effect = RuntimeError("Generation failure")
+        mock_validate.return_value = None
+
+        request_body = {
+            "resume_text": "John Doe\nSoftware Engineer\nPython experience",
+            "job_ad": "Senior Developer position requiring Python",
+            "confidence_threshold": 0.8
+        }
+
+        response = client.post("/analyze", json=request_body)
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["error_code"] == "ANALYSIS_FAILED"
+        assert "Generation failure" in payload["error"]
+
 
 @pytest.mark.unit
 class TestJSONIntegration:
@@ -170,7 +209,7 @@ class TestJSONIntegration:
 
     @patch('app.run_analysis_async')
     @patch('app.run_generation_async')
-    @patch('app.run_criticism')
+    @patch('app.run_criticism_async')
     @patch('app.validate_output_schema')
     def test_json_analysis(self, mock_validate, mock_criticism, mock_generation, mock_analysis):
         """Test resume analysis via JSON payload (FrontEnd integration)"""
