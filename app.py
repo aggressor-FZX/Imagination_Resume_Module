@@ -162,6 +162,10 @@ async def analyze_resume(
             job_ad=request.job_ad
         )
 
+        # Ensure criticism_result has the correct structure
+        if "suggested_experiences" not in criticism_result:
+            criticism_result = {"suggested_experiences": criticism_result}
+
         # Assemble final output
         output = {
             **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis, seniority_analysis
