@@ -1,9 +1,9 @@
 """
-import os
 Configuration management using pydantic_settings
 Based on Context7 research findings for latest pydantic_settings API
 """
 
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
