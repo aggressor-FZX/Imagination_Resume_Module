@@ -62,8 +62,8 @@ def test_run_generation_fallback_on_decode(monkeypatch, sample_analysis_json):
         return "NOT JSON"
 
     monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
-    with pytest.raises(ValueError):
-        mod.run_generation(sample_analysis_json, "Senior Engineer")
+    out = mod.run_generation(sample_analysis_json, "Senior Engineer")
+    assert out == {"gap_bridging": [], "metric_improvements": []}
 
 
 def test_run_criticism_with_mock_llm(monkeypatch):
@@ -149,3 +149,70 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
     }
 
     assert mod.validate_output_schema(output) is True
+
+
+def test_call_llm_switches_models_on_failure(monkeypatch):
+    class DummyCompletions:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError('model_not_found: missing')
+            return types.SimpleNamespace(
+                choices=[types.SimpleNamespace(message=types.SimpleNamespace(content='SAFE OUTPUT'))],
+                usage=types.SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+            )
+
+    dummy_registry = types.SimpleNamespace(
+        marked=[],
+        get_candidates=lambda pref: ['qwen/qwen3-30b-a3b', 'anthropic/claude-3-haiku'],
+        mark_unhealthy=lambda model: dummy_registry.marked.append(model),
+    )
+
+    dummy_client = types.SimpleNamespace(chat=types.SimpleNamespace(completions=DummyCompletions()))
+    monkeypatch.setattr(mod, 'openrouter_client', dummy_client)
+    monkeypatch.setattr(mod, 'openrouter_model_registry', dummy_registry)
+
+    result = mod.call_llm('Creative system prompt', 'Please generate something imaginative')
+    assert result == 'SAFE OUTPUT'
+    assert dummy_registry.marked == ['qwen/qwen3-30b-a3b']
+
+
+@pytest.mark.asyncio
+async def test_call_llm_async_retries_gemini(monkeypatch):
+    class DummyGeminiResponse:
+        def __init__(self, text=None, parts=None):
+            self._text = text
+            self.usage = types.SimpleNamespace(input_tokens=0, output_tokens=0)
+            self.candidates = []
+            if parts:
+                part_objs = [types.SimpleNamespace(text=part) for part in parts]
+                content = types.SimpleNamespace(parts=part_objs)
+                self.candidates = [types.SimpleNamespace(content=content)]
+
+        @property
+        def text(self):
+            if self._text is None:
+                raise ValueError('no direct text')
+            return self._text
+
+    class DummyGeminiClient:
+        def __init__(self, response):
+            self._response = response
+
+        async def generate_content_async(self, *args, **kwargs):
+            return self._response
+
+    monkeypatch.setattr(mod, 'openrouter_async_client', None)
+    empty_response = DummyGeminiResponse(text='')
+    rich_response = DummyGeminiResponse(text=None, parts=['final output'])
+    clients = [
+        ('gemini-2.5-flash', DummyGeminiClient(empty_response)),
+        ('gemini-2.5-pro', DummyGeminiClient(rich_response)),
+    ]
+    monkeypatch.setattr(mod, '_build_google_clients', lambda api_key=None: list(clients))
+
+    result = await mod.call_llm_async('System prompt', 'User prompt')
+    assert result == 'final output'

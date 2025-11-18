@@ -9,7 +9,7 @@ sys.path.append('.')
 
 from imaginator_flow import call_llm_async, call_llm
 
-async def test_model_selection():
+def test_model_selection():
     """Test that the correct models are selected for different task types"""
     
     print("🧪 Testing OpenRouter Model Selection Strategy")

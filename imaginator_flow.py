@@ -4,21 +4,22 @@ Imaginator Local Agentic Flow
 
 Parses a resume, extrapolates skills, suggests roles, and performs a gap analysis via OpenAI API.
 """
-import re
-import json
-import re
-import json
 import argparse
-import os
-from typing import Any, Dict, List, Optional, Set, Union
 import asyncio
+import json
+import os
+import re
+import time
+from threading import Lock
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
 import google.generativeai as genai
 # from deepseek import DeepSeekAPI  # Commented out - module not available
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from anthropic import Anthropic
 import jsonschema
+import requests
 
 # Seniority detection integration
 from seniority_detector import SeniorityDetector
@@ -29,6 +30,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_APP_REFERER = "https://imaginator-resume-cowriter.onrender.com"
+OPENROUTER_APP_TITLE = "Imaginator Resume Co-Writer"
 
 # Pricing (USD) per 1K tokens; can be overridden via env vars
 OPENAI_PRICE_IN_K = float(os.getenv("OPENAI_PRICE_INPUT_PER_1K", "0.0005"))
@@ -72,33 +77,233 @@ RUN_METRICS: Dict[str, Any] = {
     "failures": []          # list of failure dicts with provider/attempt/error
 }
 
-# Initialize clients (1.0+ APIs)
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+class OpenRouterModelRegistry:
+    """Cache OpenRouter's model catalog and track unhealthy models."""
+
+    CACHE_TTL_SECONDS = 600
+    ERROR_TTL_SECONDS = 120
+    UNHEALTHY_TTL_SECONDS = 900
+    SAFE_MODELS = [
+        "anthropic/claude-3-haiku",
+        "deepseek/deepseek-chat-v3.1",
+        "qwen/qwen3-30b-a3b",
+    ]
+
+    def __init__(self, api_key: Optional[str], referer: Optional[str] = None) -> None:
+        self.api_key = api_key
+        self.referer = referer
+        self._lock = Lock()
+        self._catalog: Set[str] = set()
+        self._expires_at = 0.0
+        self._unhealthy: Dict[str, float] = {}
+
+    def _refresh_catalog_locked(self) -> None:
+        now = time.time()
+        if not self.api_key:
+            self._expires_at = now + self.ERROR_TTL_SECONDS
+            return
+        try:
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            if self.referer:
+                headers["HTTP-Referer"] = self.referer
+            response = requests.get(
+                "https://openrouter.ai/api/v1/models",
+                headers=headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            models = {
+                entry.get("id")
+                for entry in data.get("data", [])
+                if entry.get("id")
+            }
+            if models:
+                self._catalog = models
+            self._expires_at = now + self.CACHE_TTL_SECONDS
+        except Exception as exc:  # pragma: no cover - network failures
+            print(
+                f"⚠️  Unable to refresh OpenRouter model catalog: {exc}",
+                flush=True,
+            )
+            self._expires_at = now + self.ERROR_TTL_SECONDS
+
+    def _purge_unhealthy_locked(self) -> None:
+        now = time.time()
+        expired = [model for model, until in self._unhealthy.items() if until <= now]
+        for model in expired:
+            self._unhealthy.pop(model, None)
+
+    def _get_catalog_locked(self) -> Set[str]:
+        now = time.time()
+        if now >= self._expires_at:
+            self._refresh_catalog_locked()
+        return set(self._catalog)
+
+    def get_candidates(self, preferred: List[str]) -> List[str]:
+        deduped: List[str] = []
+        for model in preferred + [
+            model for model in self.SAFE_MODELS if model not in preferred
+        ]:
+            if model and model not in deduped:
+                deduped.append(model)
+
+        with self._lock:
+            self._purge_unhealthy_locked()
+            catalog = self._get_catalog_locked()
+            unhealthy = {model for model in self._unhealthy}
+
+        if catalog:
+            candidates = [
+                model for model in deduped if model in catalog and model not in unhealthy
+            ]
+        else:
+            candidates = [model for model in deduped if model not in unhealthy]
+        return candidates
+
+    def mark_unhealthy(self, model: str) -> None:
+        if not model:
+            return
+        with self._lock:
+            self._unhealthy[model] = time.time() + self.UNHEALTHY_TTL_SECONDS
+
+
+def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[str]:
+    sys_lower = system_prompt.lower()
+    user_lower = user_prompt.lower()
+    preferences: List[str] = []
+    if "creative" in sys_lower or "generation" in user_lower:
+        preferences.append("qwen/qwen3-30b-a3b")
+    elif "critic" in sys_lower or "review" in user_lower:
+        preferences.append("deepseek/deepseek-chat-v3.1")
+    else:
+        preferences.append("anthropic/claude-3-haiku")
+
+    for model in OpenRouterModelRegistry.SAFE_MODELS:
+        if model not in preferences:
+            preferences.append(model)
+    return preferences
+
+
+def _should_blacklist_openrouter_model(error: Exception) -> bool:
+    message = str(error).lower()
+    status_code = getattr(error, "status_code", None)
+    if status_code in {400, 404, 410, 422} and "model" in message:
+        return True
+    keywords = (
+        "model_not_found",
+        "does not exist",
+        "unknown model",
+        "invalid model",
+        "not found",
+    )
+    return any(keyword in message for keyword in keywords)
+
+
+def _extract_gemini_text(response: Any) -> str:
+    try:
+        text_value = getattr(response, "text", None)
+        if isinstance(text_value, str) and text_value.strip():
+            return text_value.strip()
+    except Exception:
+        pass
+
+    candidates = getattr(response, "candidates", None) or []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) if content else None
+        if not parts:
+            continue
+        fragments = []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if isinstance(part_text, str) and part_text.strip():
+                fragments.append(part_text.strip())
+        if fragments:
+            return "\n".join(fragments)
+    return ""
+
+
+# Configure Google client library if credentials exist
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
-deepseek_client = None  # DeepSeekAPI module not available
+
+# Map old or misspelled Gemini model names to the current recommended ones.
+GEMINI_MODEL_ALIAS_MAP = {
+    "gemini-1.5-flash": "gemini-2.5-flash",
+    "gemini-1.5-flash-001": "gemini-2.5-flash",
+    "gemini-1.5-pro": "gemini-2.5-pro",
+    "gemini-1.5-pro-001": "gemini-2.5-pro",
+    "gemino-2.5-flash": "gemini-2.5-flash",  # common typo support
+    "gemino-2.5-pro": "gemini-2.5-pro",
+}
+
+def _normalize_gemini_model_name(model_name: Optional[str]) -> str:
+    """Ensure Gemini model names stay up to date even if configs lag."""
+    if not model_name:
+        return ""
+    cleaned = model_name.strip()
+    canonical = GEMINI_MODEL_ALIAS_MAP.get(cleaned.lower())
+    if canonical and canonical != cleaned:
+        print(f"♻️  Updating Gemini model '{cleaned}' -> '{canonical}'", flush=True)
+        return canonical
+    return canonical or cleaned
+
+DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_PRO_MODEL = "gemini-2.5-pro"
+
+# Google Gemini fallback order (Flash first, then Pro)
+GOOGLE_GEMINI_FLASH_MODEL = _normalize_gemini_model_name(
+    os.getenv("GOOGLE_GEMINI_FLASH_MODEL", DEFAULT_GEMINI_FLASH_MODEL)
+)
+GOOGLE_GEMINI_PRO_MODEL = _normalize_gemini_model_name(
+    os.getenv("GOOGLE_GEMINI_PRO_MODEL", DEFAULT_GEMINI_PRO_MODEL)
+)
+
+GOOGLE_FALLBACK_MODELS: List[str] = []
+for model in (GOOGLE_GEMINI_FLASH_MODEL, GOOGLE_GEMINI_PRO_MODEL):
+    normalized = _normalize_gemini_model_name(model)
+    if normalized and normalized not in GOOGLE_FALLBACK_MODELS:
+        GOOGLE_FALLBACK_MODELS.append(normalized)
+
+def _build_google_clients(api_key_override: Optional[str] = None) -> List[Tuple[str, Any]]:
+    """Create Gemini clients in the preferred fallback order."""
+    api_key = api_key_override or GOOGLE_API_KEY
+    if not api_key or not GOOGLE_FALLBACK_MODELS:
+        return []
+    genai.configure(api_key=api_key)
+    clients: List[Tuple[str, Any]] = []
+    for model in GOOGLE_FALLBACK_MODELS:
+        normalized = _normalize_gemini_model_name(model)
+        try:
+            genai.models.get(normalized)
+        except Exception as exc:  # pragma: no cover - SDK runtime failures
+            print(f"⚠️  Gemini model '{normalized}' unavailable: {exc}", flush=True)
+            continue
+        try:
+            clients.append((normalized, genai.GenerativeModel(normalized)))
+        except Exception as exc:  # pragma: no cover - SDK runtime failures
+            print(f"⚠️  Failed to initialize Gemini model '{normalized}': {exc}", flush=True)
+    return clients
 
 # Initialize OpenRouter client (unified API)
 openrouter_client = None
 openrouter_async_client = None
-if os.getenv("OPENROUTER_API_KEY"):
+openrouter_model_registry = OpenRouterModelRegistry(OPENROUTER_API_KEY, OPENROUTER_APP_REFERER)
+if OPENROUTER_API_KEY:
     openrouter_client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=OPENROUTER_API_KEY,
         default_headers={
-            "HTTP-Referer": "https://imaginator-resume-cowriter.onrender.com",
-            "X-Title": "Imaginator Resume Co-Writer"
+            "HTTP-Referer": OPENROUTER_APP_REFERER,
+            "X-Title": OPENROUTER_APP_TITLE
         }
     )
     # For async operations, we use the same client (OpenAI client is async-compatible)
     openrouter_async_client = openrouter_client
 
-# Initialize async clients
-openai_async_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None  # OpenAI client is async-compatible
-anthropic_async_client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None  # Anthropic client is async-compatible
-google_async_client = genai.GenerativeModel('gemini-pro') if GOOGLE_API_KEY else None  # Google Gemini client
-deepseek_async_client = None  # DeepSeekAPI module not available
+# Async OpenRouter client reuses the synchronous client when configured
 
 # Keyword-based skill mapping
 _SKILL_KEYWORDS = {
@@ -330,11 +535,12 @@ def ensure_json_dict(raw_text: str, label: str) -> Dict[str, Any]:
     raise ValueError(f"{label} response was not valid JSON. Raw output: {raw_text[:1200]}")
 
 
+
 def call_llm(
-    system_prompt: str, 
-    user_prompt: str, 
-    temperature: float = 0.9, 
-    max_tokens: int = 1500, 
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.9,
+    max_tokens: int = 1500,
     max_retries: int = 3,
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
@@ -343,73 +549,122 @@ def call_llm(
     response_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Call LLM with automatic fallback: OpenRouter -> OpenAI -> Google -> Anthropic
-    Includes retry logic with exponential backoff and timeout handling.
-    Returns the response text or raises an exception if all fail
+    Call LLM with automatic fallback: OpenRouter primary, Google Gemini fallback (Flash -> Pro).
+    Includes retry logic with simple fallback ordering and usage tracking.
+    Returns the response text or raises an exception if all fail.
     """
-    import time
-    
-    # Simplified: Use OpenRouter as the sole LLM provider. If not configured, raise.
+    errors: List[str] = []
+
+    model_preferences = _get_openrouter_preferences(system_prompt, user_prompt)
+    model_candidates: List[str] = []
+
     if openrouter_client is None:
-        raise RuntimeError("OpenRouter client is not configured. Set OPENROUTER_API_KEY in environment.")
-
-    # Choose model based on prompt intent
-    if "creative" in system_prompt.lower() or "generation" in user_prompt.lower():
-        model = "qwen/qwen3-30b-a3b"
-    elif "critic" in system_prompt.lower() or "review" in user_prompt.lower():
-        model = "deepseek/deepseek-chat-v3.1"
+        errors.append('OpenRouter client is not configured. Set OPENROUTER_API_KEY in environment.')
     else:
-        model = "anthropic/claude-3-haiku"
+        if 'openrouter_model_registry' in globals() and openrouter_model_registry:
+            model_candidates = openrouter_model_registry.get_candidates(model_preferences)
+        else:
+            model_candidates = model_preferences
 
-    try:
-        create_kwargs = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "timeout": 60.0,
-        }
-        if response_format:
-            create_kwargs["response_format"] = response_format
+        if not model_candidates:
+            errors.append('No OpenRouter models passed availability checks.')
+        for model in model_candidates:
+            try:
+                create_kwargs = {
+                    'model': model,
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_prompt}
+                    ],
+                    'temperature': temperature,
+                    'max_tokens': max_tokens,
+                    'timeout': 60.0,
+                }
+                if response_format:
+                    create_kwargs['response_format'] = response_format
+                response = openrouter_client.chat.completions.create(**create_kwargs)
+                text_out = response.choices[0].message.content.strip()
+                try:
+                    usage = getattr(response, 'usage', None)
+                    prompt_t = int(getattr(usage, 'prompt_tokens', 0) or 0)
+                    completion_t = int(getattr(usage, 'completion_tokens', 0) or 0)
+                except Exception:
+                    prompt_t = completion_t = 0
 
-        response = openrouter_client.chat.completions.create(**create_kwargs)
-        text = response.choices[0].message.content.strip()
+                cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
+                RUN_METRICS['calls'].append({
+                    'provider': 'openrouter',
+                    'model': model,
+                    'prompt_tokens': prompt_t,
+                    'completion_tokens': completion_t,
+                    'total_tokens': prompt_t + completion_t,
+                    'estimated_cost_usd': round(cost, 6)
+                })
+                RUN_METRICS['total_prompt_tokens'] += prompt_t
+                RUN_METRICS['total_completion_tokens'] += completion_t
+                RUN_METRICS['total_tokens'] += (prompt_t + completion_t)
+                RUN_METRICS['estimated_cost_usd'] = round(RUN_METRICS['estimated_cost_usd'] + cost, 6)
+                return text_out
+            except Exception as e:  # pragma: no cover - network failure path
+                error_msg = f"OpenRouter ({model}) Error: {type(e).__name__}: {e}"
+                errors.append(error_msg)
+                RUN_METRICS['failures'].append({'provider': 'openrouter', 'model': model, 'error': str(e)})
+                if 'openrouter_model_registry' in globals() and openrouter_model_registry and _should_blacklist_openrouter_model(e):
+                    openrouter_model_registry.mark_unhealthy(model)
 
-        # Attempt to track usage if available
-        try:
-            u = getattr(response, "usage", None)
-            prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-            completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-        except Exception:
-            prompt_t = completion_t = 0
+    google_clients = _build_google_clients(google_api_key)
+    if google_clients:
+        combined_prompt = f"{system_prompt}\n\n{user_prompt}"
 
-        cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
-        RUN_METRICS["calls"].append({
-            "provider": "openrouter",
-            "model": model,
-            "prompt_tokens": prompt_t,
-            "completion_tokens": completion_t,
-            "total_tokens": prompt_t + completion_t,
-            "estimated_cost_usd": round(cost, 6)
-        })
-        RUN_METRICS["total_prompt_tokens"] += prompt_t
-        RUN_METRICS["total_completion_tokens"] += completion_t
-        RUN_METRICS["total_tokens"] += (prompt_t + completion_t)
-        RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
 
-        return text
-    except Exception as e:
-        raise RuntimeError(f"OpenRouter call failed: {type(e).__name__}: {e}")
+        for google_model, google_client in google_clients:
+            try:
+                response = google_client.generate_content(
+                    combined_prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens,
+                    )
+                )
+                text_out = _extract_gemini_text(response)
+                if not text_out:
+                    raise ValueError('Google Gemini returned empty response')
+                try:
+                    usage = getattr(response, 'usage', None)
+                    input_t = int(getattr(usage, 'input_tokens', 0) or 0)
+                    output_t = int(getattr(usage, 'output_tokens', 0) or 0)
+                except Exception:
+                    input_t = output_t = 0
+                total_t = input_t + output_t
+                cost = (input_t / 1000.0) * GOOGLE_PRICE_IN_K + (output_t / 1000.0) * GOOGLE_PRICE_OUT_K
+                RUN_METRICS['calls'].append({
+                    'provider': 'google',
+                    'model': google_model,
+                    'prompt_tokens': input_t,
+                    'completion_tokens': output_t,
+                    'total_tokens': total_t,
+                    'estimated_cost_usd': round(cost, 6)
+                })
+                RUN_METRICS['total_prompt_tokens'] += input_t
+                RUN_METRICS['total_completion_tokens'] += output_t
+                RUN_METRICS['total_tokens'] += total_t
+                RUN_METRICS['estimated_cost_usd'] = round(RUN_METRICS['estimated_cost_usd'] + cost, 6)
+                return text_out
+            except Exception as e:  # pragma: no cover - network failure path
+                error_msg = f"Google Gemini ({google_model}) Error: {type(e).__name__}: {e}"
+                errors.append(error_msg)
+                RUN_METRICS['failures'].append({'provider': f'google:{google_model}', 'error': str(e)})
+    else:
+        errors.append('Google Gemini fallback unavailable - configure GOOGLE_API_KEY.')
+
+    raise RuntimeError('All LLM providers failed: ' + ' | '.join(errors))
 
 
 async def call_llm_async(
-    system_prompt: str, 
-    user_prompt: str, 
-    temperature: float = 0.9, 
-    max_tokens: int = 1500, 
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float = 0.9,
+    max_tokens: int = 1500,
     max_retries: int = 3,
     openai_api_key: Optional[str] = None,
     anthropic_api_key: Optional[str] = None,
@@ -418,277 +673,146 @@ async def call_llm_async(
     response_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Async version of call_llm: Call LLM with automatic fallback using async clients.
-    Includes retry logic with exponential backoff and timeout handling.
-    Returns the response text or raises an exception if all fail
+    Async version of call_llm: OpenRouter primary with Google Gemini fallback (Flash -> Pro).
+    Includes retry logic with exponential backoff and usage tracking.
+    Returns the response text or raises an exception if all fail.
     """
-    errors = []
+    errors: List[str] = []
+    model_preferences = _get_openrouter_preferences(system_prompt, user_prompt)
 
     for attempt in range(max_retries):
-        # Use temporary clients if API keys are provided
-        temp_openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else openai_async_client
-        temp_anthropic_client = Anthropic(api_key=anthropic_api_key) if anthropic_api_key else anthropic_async_client
-        
-        if google_api_key:
-            genai.configure(api_key=google_api_key)
-            temp_google_client = genai.GenerativeModel('gemini-pro')
-        else:
-            temp_google_client = google_async_client
+        attempt_errors: List[str] = []
+        model_candidates: List[str] = []
 
-        temp_deepseek_client = deepseek_async_client  # DeepSeekAPI module not available
-
-        # Try OpenRouter first (primary provider)
         if openrouter_async_client:
-            # Determine best model for the task
-            if "creative" in system_prompt.lower() or "generation" in user_prompt.lower():
-                model = "qwen/qwen3-30b-a3b"  # Creative writing specialist
-                print("🎨 Using OpenRouter (Qwen3-30B-A3B for creative generation)", flush=True)
-            elif "critic" in system_prompt.lower() or "review" in user_prompt.lower():
-                model = "deepseek/deepseek-chat-v3.1"  # Critical analysis specialist  
-                print("🎯 Using OpenRouter (DeepSeek Chat v3.1 for critical analysis)", flush=True)
+            if 'openrouter_model_registry' in globals() and openrouter_model_registry:
+                model_candidates = openrouter_model_registry.get_candidates(model_preferences)
             else:
-                model = "anthropic/claude-3-haiku"  # General purpose analysis
-                print("🔍 Using OpenRouter (Claude-3-Haiku for analysis)", flush=True)
-            
-            try:
-                import inspect
-                create_kwargs = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "timeout": 60.0,
-                }
-                if response_format:
-                    create_kwargs["response_format"] = response_format
+                model_candidates = model_preferences
 
-                maybe = openrouter_async_client.chat.completions.create(**create_kwargs)
-                # Some OpenRouter client versions return an awaitable coroutine, others
-                # return a ChatCompletion object directly. Handle both safely.
+            if not model_candidates:
+                attempt_errors.append('No OpenRouter models passed availability checks.')
+            else:
+                for model in model_candidates:
+                    try:
+                        create_kwargs = {
+                            'model': model,
+                            'messages': [
+                                {'role': 'system', 'content': system_prompt},
+                                {'role': 'user', 'content': user_prompt},
+                            ],
+                            'temperature': temperature,
+                            'max_tokens': max_tokens,
+                            'timeout': 60.0,
+                        }
+                        if response_format:
+                            create_kwargs['response_format'] = response_format
+                        maybe = openrouter_async_client.chat.completions.create(**create_kwargs)
+                        try:
+                            import inspect
+                            if inspect.isawaitable(maybe):
+                                response = await maybe
+                            else:
+                                response = maybe
+                        except TypeError as te:
+                            print(f"⚠️  OpenRouter returned non-awaitable object: {type(maybe).__name__} - {te}", flush=True)
+                            response = maybe
+
+                        text_out = response.choices[0].message.content.strip()
+                        try:
+                            usage = getattr(response, 'usage', None)
+                            prompt_t = int(getattr(usage, 'prompt_tokens', 0) or 0)
+                            completion_t = int(getattr(usage, 'completion_tokens', 0) or 0)
+                            total_t = int(getattr(usage, 'total_tokens', prompt_t + completion_t))
+                        except Exception:
+                            prompt_t = completion_t = total_t = 0
+
+                        cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
+                        RUN_METRICS['calls'].append(
+                            {
+                                'provider': 'openrouter',
+                                'model': model,
+                                'prompt_tokens': prompt_t,
+                                'completion_tokens': completion_t,
+                                'total_tokens': total_t,
+                                'estimated_cost_usd': round(cost, 6),
+                            }
+                        )
+                        RUN_METRICS['total_prompt_tokens'] += prompt_t
+                        RUN_METRICS['total_completion_tokens'] += completion_t
+                        RUN_METRICS['total_tokens'] += total_t
+                        RUN_METRICS['estimated_cost_usd'] = round(RUN_METRICS['estimated_cost_usd'] + cost, 6)
+                        return text_out
+                    except Exception as e:
+                        error_msg = f"OpenRouter ({model}) Error: {type(e).__name__}: {e}"
+                        attempt_errors.append(error_msg)
+                        RUN_METRICS['failures'].append({'attempt': attempt + 1, 'provider': 'openrouter', 'model': model, 'error': str(e)})
+                        if 'openrouter_model_registry' in globals() and openrouter_model_registry and _should_blacklist_openrouter_model(e):
+                            openrouter_model_registry.mark_unhealthy(model)
+        else:
+            attempt_errors.append('OpenRouter client is not configured. Set OPENROUTER_API_KEY in environment.')
+
+        google_clients = _build_google_clients(google_api_key)
+        if google_clients:
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+
+
+            for google_model, google_client in google_clients:
                 try:
-                    if inspect.isawaitable(maybe):
-                        response = await maybe
-                    else:
-                        response = maybe
-                except TypeError as te:
-                    # Protect against `TypeError: object ChatCompletion can't be used in 'await' expression`
-                    print(f"⚠️  OpenRouter returned non-awaitable object: {type(maybe).__name__} - {te}", flush=True)
-                    response = maybe
-
-                # Log the response type for easier debugging on Render if it changes
-                print(f"🔎 OpenRouter returned type: {type(response).__name__}", flush=True)
-                text = response.choices[0].message.content.strip()
-                # Usage and cost tracking
-                try:
-                    u = getattr(response, "usage", None)
-                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
-                except Exception:
-                    prompt_t = completion_t = 0
-                    total_t = 0
-                
-                cost = _estimate_openrouter_cost(model, prompt_t, completion_t)
-                RUN_METRICS["calls"].append({
-                    "provider": "openrouter",
-                    "model": model,
-                    "prompt_tokens": prompt_t,
-                    "completion_tokens": completion_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += prompt_t
-                RUN_METRICS["total_completion_tokens"] += completion_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"OpenRouter Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openrouter", "error": str(e)})
-                print(f"⚠️  OpenRouter failed: {type(e).__name__}. Trying OpenAI...", flush=True)
-
-        # Try OpenAI next
-        if temp_openai_client:
-            try:
-                response = await temp_openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=60.0  # 60 second timeout
-                )
-                print("✅ Using OpenAI GPT-3.5-turbo", flush=True)
-                text = response.choices[0].message.content.strip()
-                # Usage and cost
-                try:
-                    u = getattr(response, "usage", None)
-                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
-                except Exception:
-                    prompt_t = completion_t = 0
-                    total_t = 0
-                cost = (prompt_t / 1000.0) * OPENAI_PRICE_IN_K + (completion_t / 1000.0) * OPENAI_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "openai",
-                    "model": "gpt-3.5-turbo",
-                    "prompt_tokens": prompt_t,
-                    "completion_tokens": completion_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += prompt_t
-                RUN_METRICS["total_completion_tokens"] += completion_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"OpenAI Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "openai", "error": str(e)})
-                print(f"⚠️  OpenAI failed: {type(e).__name__}. Trying Anthropic...", flush=True)
-
-        # Try Google next
-        if temp_google_client:
-            try:
-                response = await temp_google_client.generate_content_async(
-                    f"{system_prompt}\n\n{user_prompt}",
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=temperature,
-                        max_output_tokens=max_tokens
+                    response = await google_client.generate_content_async(
+                        combined_prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            temperature=temperature,
+                            max_output_tokens=max_tokens,
+                        ),
                     )
-                )
-                print("✅ Using Google Gemini", flush=True)
-                # Extract text and usage
-                text = response.text
-                try:
-                    u = getattr(response, "usage", None)
-                    input_t = int(getattr(u, "input_tokens", 0) or 0)
-                    output_t = int(getattr(u, "output_tokens", 0) or 0)
+                    print(f"✅ Using Google Gemini ({google_model})", flush=True)
+                    text_out = _extract_gemini_text(response)
+                    if not text_out:
+                        raise ValueError('Google Gemini returned empty response')
+                    try:
+                        usage = getattr(response, 'usage', None)
+                        input_t = int(getattr(usage, 'input_tokens', 0) or 0)
+                        output_t = int(getattr(usage, 'output_tokens', 0) or 0)
+                    except Exception:
+                        input_t = output_t = 0
                     total_t = input_t + output_t
-                except Exception:
-                    input_t = output_t = total_t = 0
-                cost = (input_t / 1000.0) * GOOGLE_PRICE_IN_K + (output_t / 1000.0) * GOOGLE_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "google",
-                    "model": "gemini-pro",
-                    "prompt_tokens": input_t,
-                    "completion_tokens": output_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += input_t
-                RUN_METRICS["total_completion_tokens"] += output_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"Google Gemini Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "google", "error": str(e)})
-                print(f"⚠️  Google Gemini failed: {type(e).__name__}. Trying Anthropic...", flush=True)
+                    cost = (input_t / 1000.0) * GOOGLE_PRICE_IN_K + (output_t / 1000.0) * GOOGLE_PRICE_OUT_K
+                    RUN_METRICS['calls'].append(
+                        {
+                            'provider': 'google',
+                            'model': google_model,
+                            'prompt_tokens': input_t,
+                            'completion_tokens': output_t,
+                            'total_tokens': total_t,
+                            'estimated_cost_usd': round(cost, 6),
+                        }
+                    )
+                    RUN_METRICS['total_prompt_tokens'] += input_t
+                    RUN_METRICS['total_completion_tokens'] += output_t
+                    RUN_METRICS['total_tokens'] += total_t
+                    RUN_METRICS['estimated_cost_usd'] = round(RUN_METRICS['estimated_cost_usd'] + cost, 6)
+                    return text_out
+                except Exception as e:
+                    error_msg = f"Google Gemini ({google_model}) Error: {type(e).__name__}: {e}"
+                    attempt_errors.append(error_msg)
+                    RUN_METRICS['failures'].append({'attempt': attempt + 1, 'provider': f'google:{google_model}', 'error': str(e)})
+                    print(f"⚠️  Google Gemini ({google_model}) failed: {type(e).__name__}", flush=True)
+        else:
+            attempt_errors.append('Google Gemini fallback unavailable - configure GOOGLE_API_KEY.')
 
-        # Fallback to Anthropic
-        if temp_anthropic_client:
-            try:
-                response = await temp_anthropic_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",  # Latest Sonnet model
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    system=system_prompt,
-                    messages=[
-                        {"role": "user", "content": user_prompt}
-                    ]
-                )
-                print("✅ Using Anthropic Claude 3.5 Sonnet", flush=True)
-                # Extract text and usage
-                text = response.content[0].text
-                try:
-                    u = getattr(response, "usage", None)
-                    input_t = int(getattr(u, "input_tokens", 0) or 0)
-                    output_t = int(getattr(u, "output_tokens", 0) or 0)
-                    total_t = input_t + output_t
-                except Exception:
-                    input_t = output_t = total_t = 0
-                cost = (input_t / 1000.0) * ANTHROPIC_PRICE_IN_K + (output_t / 1000.0) * ANTHROPIC_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "anthropic",
-                    "model": "claude-3-5-sonnet-20241022",
-                    "prompt_tokens": input_t,
-                    "completion_tokens": output_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += input_t
-                RUN_METRICS["total_completion_tokens"] += output_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"Anthropic Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "anthropic", "error": str(e)})
-                print(f"❌ Anthropic also failed: {type(e).__name__}", flush=True)
-
-        # Fall-back to DeepSeek
-        if deepseek_async_client:
-            try:
-                response = await deepseek_async_client.chat.completions.create(
-                    model="deepseek/deepseek-chat-v3.1",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=temperature,
-                    max_tokens=max_tokens
-                )
-                print("✅ Using DeepSeek", flush=True)
-                text = response.choices[0].message.content.strip()
-                # Usage and cost
-                try:
-                    u = getattr(response, "usage", None)
-                    prompt_t = int(getattr(u, "prompt_tokens", 0) or 0)
-                    completion_t = int(getattr(u, "completion_tokens", 0) or 0)
-                    total_t = int(getattr(u, "total_tokens", prompt_t + completion_t))
-                except Exception:
-                    prompt_t = completion_t = 0
-                    total_t = 0
-                cost = (prompt_t / 1000.0) * DEEPSEEK_PRICE_IN_K + (completion_t / 1000.0) * DEEPSEEK_PRICE_OUT_K
-                RUN_METRICS["calls"].append({
-                    "provider": "deepseek",
-                    "model": "gemini-pro",
-                    "prompt_tokens": prompt_t,
-                    "completion_tokens": completion_t,
-                    "total_tokens": total_t,
-                    "estimated_cost_usd": round(cost, 6)
-                })
-                RUN_METRICS["total_prompt_tokens"] += prompt_t
-                RUN_METRICS["total_completion_tokens"] += completion_t
-                RUN_METRICS["total_tokens"] += total_t
-                RUN_METRICS["estimated_cost_usd"] = round(RUN_METRICS["estimated_cost_usd"] + cost, 6)
-                return text
-            except Exception as e:
-                error_msg = f"DeepSeek Error: {type(e).__name__}: {str(e)}"
-                errors.append(error_msg)
-                RUN_METRICS["failures"].append({"attempt": attempt + 1, "provider": "deepseek", "error": str(e)})
-                print(f"❌ DeepSeek also failed: {error_msg}", flush=True)
-        
-        # If we get here, all providers failed on this attempt
+        errors.extend(attempt_errors)
         if attempt < max_retries - 1:
             wait_time = min(2 ** attempt, 30)
             print(f"🔄 All providers failed, retrying in {wait_time}s...", flush=True)
             await asyncio.sleep(wait_time)
 
-    # All retries exhausted
-    error_msg = f"All LLM providers failed after {max_retries} attempts:\n" + "\n".join(errors)
+    error_msg = f"All LLM providers failed after {max_retries} attempts: " + " | ".join(errors)
+
+
     raise RuntimeError(error_msg)
+
+
 def suggest_roles(skills: Set[str]) -> List[Dict]:
     suggestions = []
     for role, reqs in _ROLE_MAP.items():
@@ -934,7 +1058,7 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
     
     prompt = "\n".join(prompt_parts)
     
-    # Call LLM with automatic fallback (OpenAI → Anthropic)
+    # Call LLM with automatic fallback (OpenRouter → Google)
     system_prompt = "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."
     return call_llm(system_prompt, prompt, temperature=0.9, max_tokens=1500)
 
@@ -1108,7 +1232,7 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
     
     prompt = "\n".join(prompt_parts)
     
-    # Call LLM with automatic fallback (OpenAI → Anthropic)
+    # Call LLM with automatic fallback (OpenRouter → Google)
     system_prompt = "You are a creative career strategist synthesizing hiring manager, architect, and coach perspectives. Respond ONLY with valid JSON matching the requested structure."
     return await call_llm_async(system_prompt, prompt, temperature=0.9, max_tokens=1500)
 
@@ -1140,7 +1264,7 @@ Provide a creative gap analysis with:
 
 Use emojis and bullet points for readability."""
     
-    # Call LLM with automatic fallback (OpenAI → Anthropic)
+    # Call LLM with automatic fallback (OpenRouter → Google)
     system_prompt = "You are a helpful career coach. Provide creative, actionable advice."
     return call_llm(system_prompt, prompt, temperature=0.8, max_tokens=800)
 
