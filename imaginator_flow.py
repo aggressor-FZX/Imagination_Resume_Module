@@ -1476,7 +1476,7 @@ Return JSON format:
 
     try:
         return ensure_json_dict(response, "Generation")
-    except ValueError as e:
+    except Exception as e:
         print(f"⚠️  Generation response was not valid JSON: {e}", flush=True)
         print("🔄 Using fallback empty suggestions...", flush=True)
         return {
