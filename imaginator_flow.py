@@ -1474,7 +1474,15 @@ Return JSON format:
     except Exception as e:
         raise RuntimeError(f"Generation LLM call failed: {e}") from e
 
-    return ensure_json_dict(response, "Generation")
+    try:
+        return ensure_json_dict(response, "Generation")
+    except ValueError as e:
+        print(f"⚠️  Generation response was not valid JSON: {e}", flush=True)
+        print("🔄 Using fallback empty suggestions...", flush=True)
+        return {
+            "gap_bridging": [],
+            "metric_improvements": []
+        }
 
 
 async def run_criticism_async(generated_suggestions: Dict, job_ad: str) -> Dict:
