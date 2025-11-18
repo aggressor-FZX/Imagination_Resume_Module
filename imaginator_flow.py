@@ -192,11 +192,12 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
         Processed skills with filtering and prioritization
     """
     processed = {
-        "high_confidence_skills": [],
-        "medium_confidence_skills": [],
-        "low_confidence_skills": [],
+        "high_confidence": [],
+        "medium_confidence": [],
+        "low_confidence": [],
         "skill_confidences": {},
         "categories": {},
+        "inferred_skills": [],
         "filtered_count": 0,
         "total_count": 0
     }
@@ -220,7 +221,7 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
         
         # Categorize by confidence
         if confidence >= confidence_threshold:
-            processed["high_confidence_skills"].append(skill_name)
+            processed["high_confidence"].append(skill_name)
             processed["filtered_count"] += 1
         elif confidence >= 0.5:
             processed["medium_confidence_skills"].append(skill_name)
@@ -780,7 +781,7 @@ def generate_gap_analysis(resume_text: str, processed_skills: Dict, roles: List[
     skill_adjacency, verb_competency = load_knowledge_bases()
     
     # Extract skill information
-    high_conf_skills = processed_skills.get("high_confidence_skills", [])
+    high_conf_skills = processed_skills.get("high_confidence", [])
     skill_confidences = processed_skills.get("skill_confidences", {})
     skill_categories = processed_skills.get("categories", {})
     
@@ -954,7 +955,7 @@ async def generate_gap_analysis_async(resume_text: str, processed_skills: Dict, 
     skill_adjacency, verb_competency = load_knowledge_bases()
 
     # Extract skill information
-    high_conf_skills = processed_skills.get("high_confidence_skills", [])
+    high_conf_skills = processed_skills.get("high_confidence", [])
     skill_confidences = processed_skills.get("skill_confidences", {})
     skill_categories = processed_skills.get("categories", {})
 
@@ -1115,7 +1116,7 @@ Be creative, specific, and actionable. Use the implied skills, competency domain
 def generate_gap_analysis_baseline(resume_text: str, processed_skills: Dict, roles: List[Dict], target_job_ad: str, domain_insights: Dict = None) -> str:
     """Original baseline prompt for comparison testing - simpler single-perspective approach"""
     
-    high_conf_skills = processed_skills.get("high_confidence_skills", [])
+    high_conf_skills = processed_skills.get("high_confidence", [])
     skill_confidences = processed_skills.get("skill_confidences", {})
     
     prompt = f"""You are a career coach analyzing a candidate's profile.
@@ -1292,15 +1293,30 @@ async def run_analysis_async(
     # Load structured skills data
     skills_data = _load_json_payload(extracted_skills_json, "extracted_skills_json")
     domain_insights = _load_json_payload(domain_insights_json, "domain_insights_json")
+    # Ensure domain_insights has required fields
+    if not domain_insights:
+        domain_insights = {
+            "domain": "Technology",
+            "skill_gap_priority": "medium"
+        }
 
     # Process skills with confidence filtering
-    processed_skills = {}
+    processed_skills = {
+        "high_confidence": [],
+        "medium_confidence": [],
+        "low_confidence": [],
+        "skill_confidences": {},
+        "categories": {},
+        "inferred_skills": [],
+        "filtered_count": 0,
+        "total_count": 0
+    }
     domain = domain_insights.get("domain") if domain_insights else None
 
     if skills_data:
         # Use structured skill processing
         processed_skills = process_structured_skills(skills_data, confidence_threshold, domain)
-        all_skills = set(processed_skills["high_confidence_skills"])
+        all_skills = set(processed_skills["high_confidence"])
 
         # Build experience results from structured data
         raw_exp_results = skills_data.get("experiences", [])
