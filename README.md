@@ -15,10 +15,11 @@ AI-powered resume analysis tool that provides personalized career development re
 
 ## 🚀 Features
 
-### Three-Stage AI Pipeline
-- **Analysis**: Extracts skills, experiences, and identifies gaps using structured data processing
-- **Generation**: Creates targeted resume improvement suggestions based on job requirements
-- **Criticism**: Refines suggestions through adversarial review for maximum impact
+### Workflow Overview
+- **Analysis**: Parses experiences, aggregates skills, infers adjacency, and detects seniority
+- **ATS Enrichment (feature-flagged)**: Calls Job_searcher with resume + job ad for a match score and requirement coverage; appends a concise summary to domain insights
+- **Generation**: Produces targeted resume improvements aligned to the job ad
+- **Criticism**: Refines and polishes suggestions with adversarial review
 
 ### Advanced Skill Processing
 - **Structured Skill Analysis**: Processes skills with confidence scores and categorization
@@ -33,9 +34,10 @@ AI-powered resume analysis tool that provides personalized career development re
 - **CORS Support**: Cross-origin resource sharing for web applications
 
 ### Repository Integration
-- **FastSVM_Skill_Title_Extraction**: High-confidence skill extraction with SVM models
-- **Hermes**: Domain insights, market alignment, and strategic recommendations
+- **FastSVM_Skill_Title_Extraction**: High-confidence skill extraction
+- **Hermes**: Domain insights and market alignment
 - **Resume_Document_Loader**: Structured text extraction and preprocessing
+- **Job_searcher**: ATS matching service providing match score and requirement coverage (consumed via HTTP)
 
 ### Robust Architecture
 - **Graceful Degradation**: Continues functioning even with API failures or partial data
@@ -73,10 +75,9 @@ AI-powered resume analysis tool that provides personalized career development re
 
 ### Documentation
 - 📖 **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
-- 📖 **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API documentation
+- 📖 **[API_REFERENCE.md](API_REFERENCE.md)** - Complete API documentation (now includes ATS integration notes)
 - 📖 **[SYSTEM_IO_SPECIFICATION.md](SYSTEM_IO_SPECIFICATION.md)** - Input/output specification
 - 📖 **[DEPLOYMENT_SUMMARY.md](DEPLOYMENT_SUMMARY.md)** - Deployment details and status
-- 📖 **[deployment_readiness_log.md](deployment_readiness_log.md)** - Deployment history
 
 ## 🛠 Setup
 
@@ -105,7 +106,10 @@ AI-powered resume analysis tool that provides personalized career development re
   OPENROUTER_API_KEY=your_openrouter_key_here
   API_KEY=your_service_api_key_here
   CONTEXT7_API_KEY=your_context7_key_here  # Optional, for documentation features
-
+  ENABLE_JOB_SEARCH=true                    # Optional: enable ATS enrichment
+  JOB_SEARCH_BASE_URL=https://job-searcher.example.com/api/v1/match
+  JOB_SEARCH_API_TOKEN=your_job_search_bearer_token
+  
   # Optional: Custom pricing (defaults provided) for OpenRouter models
   OPENROUTER_PRICE_INPUT_PER_1K=0.0005
   OPENROUTER_PRICE_OUTPUT_PER_1K=0.0015
@@ -765,3 +769,35 @@ This project is open source. See individual files for license information.
 **Key Management**
 
 Provider keys are managed server-side. BYOK headers are deprecated and not supported.
+## 🧭 Data Flow Diagram
+
+```
+Client
+  |
+  v
+FastAPI (/analyze)
+  |
+  v
+Analysis (imaginator_flow.py)
+  - Loader (normalize resume text)
+  - FastSVM + Hermes (skills, insights)
+  - parse_experiences, process_structured_skills, SeniorityDetector
+  |
+  +--> [feature-flag: ENABLE_JOB_SEARCH]
+        Job_searcher (ATS match)
+        -> returns { match_score, matched_requirements, unmet_requirements }
+        -> append summary to domain_insights.insights
+  |
+  v
+Generation (resume improvements)
+  |
+  v
+Criticism (refine suggestions)
+  |
+  v
+Response (AnalysisResponse JSON)
+```
+
+Notes:
+- Job_searcher is only invoked when `ENABLE_JOB_SEARCH=true` and `JOB_SEARCH_BASE_URL` is configured.
+- ATS results are summarized in `domain_insights.insights` to avoid schema changes.

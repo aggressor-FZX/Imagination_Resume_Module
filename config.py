@@ -5,6 +5,7 @@ Based on Context7 research findings for latest pydantic_settings API
 
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from typing import Optional
 
 
@@ -70,6 +71,9 @@ class Settings(BaseSettings):
     API_KEY: Optional[str] = None
     HERMES_AUTH_TOKEN: Optional[str] = None
     FASTSVM_AUTH_TOKEN: Optional[str] = None
+    JOB_SEARCH_AUTH_TOKEN: Optional[str] = Field(
+        default=None, alias="JOB_SEARCH_API_TOKEN"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

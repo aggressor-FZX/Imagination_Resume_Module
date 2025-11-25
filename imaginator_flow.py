@@ -652,7 +652,8 @@ async def call_job_search_api(query: Dict[str, Any]) -> Dict[str, Any]:
     if not settings.ENABLE_JOB_SEARCH or not settings.JOB_SEARCH_BASE_URL:
         return {"jobs": []}
     url = settings.JOB_SEARCH_BASE_URL
-    return await _post_json(url, query)
+    token = getattr(settings, "JOB_SEARCH_AUTH_TOKEN", None)
+    return await _post_json(url, query, bearer_token=token)
 
 
 def _load_json_payload(source: Union[str, Dict[str, Any], None], label: str) -> Dict[str, Any]:
@@ -1183,6 +1184,31 @@ async def run_analysis_async(
         domain_insights.setdefault("emerging_trends", [])
         domain_insights.setdefault("insights", [])
 
+    ats_summary: Optional[str] = None
+    try:
+        if settings.ENABLE_JOB_SEARCH and settings.JOB_SEARCH_BASE_URL:
+            ats_query = {
+                "resume_text": processed_text,
+                "job_ad": job_ad or "",
+                "skills": aggregate_skills,
+                "experiences": [
+                    {
+                        "title": e.get("title_line", ""),
+                        "skills": list(extrapolate_skills_from_text(e.get("raw", "")))
+                    }
+                    for e in experiences
+                ],
+            }
+            ats_result = await call_job_search_api(ats_query)
+            score = ats_result.get("match_score")
+            matched = ats_result.get("matched_requirements") or []
+            unmet = ats_result.get("unmet_requirements") or []
+            if isinstance(score, (int, float)):
+                ats_summary = f"ATS match score: {score:.2f}. Matched: {', '.join(matched[:5])}. Unmet: {', '.join(unmet[:5])}."
+                RUN_METRICS["calls"].append({"provider": "JobSearcher", "stage": "analysis", "ats_score": score})
+    except Exception:
+        pass
+
     gap_analysis = json.dumps({
         "skill_gaps": [],
         "experience_gaps": [],
@@ -1210,6 +1236,11 @@ async def run_analysis_async(
         "seniority_analysis": seniority,
         "final_written_section": "",
     }
+    if ats_summary:
+        try:
+            output["domain_insights"].setdefault("insights", []).append(ats_summary)
+        except Exception:
+            pass
     _analysis_cache_set(cache_key, output)
     # Redis cache disabled per project decision
     try:

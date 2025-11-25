@@ -76,6 +76,3 @@ uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
 yarl==1.22.0
-pytest-mock==3.14.0
-sentence-transformers==2.2.2
-huggingface-hub==0.20.3

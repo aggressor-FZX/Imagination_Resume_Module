@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../res_data"
+		},
+		{
+			"path": "../Loader"
+		},
+		{
+			"path": "../Job_searcher"
+		}
+	],
+	"settings": {
+		"remote.extensionKind": {
+			"GitHub.copilot": [
+				"ui"
+			],
+			"GitHub.copilot-chat": [
+				"ui"
+			]
+		}
+	}
+}

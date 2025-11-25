@@ -291,6 +291,12 @@ File uploads are not required for the current FrontEnd integration. Use `POST /a
 
 ---
 
+## ATS Integration Notes
+- When `ENABLE_JOB_SEARCH` is enabled and `JOB_SEARCH_BASE_URL` is configured, the analysis stage calls Job_searcher with `{resume_text, job_ad, skills, experiences}`.
+- The response `{match_score, matched_requirements, unmet_requirements}` is summarized into `domain_insights.insights`.
+- No schema changes: ATS results are appended as a human-readable summary.
+- Failures or disabled flag result in analysis proceeding without ATS enrichment.
+
 ## Rate Limits & Performance
 
 - **Processing Time**: 30-120 seconds per analysis (varies with resume/job complexity)

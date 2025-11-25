@@ -2,8 +2,121 @@ import asyncio
 import json
 import os
 import types
+import sys
 
 import pytest
+
+# Stub aiohttp to avoid dependency import errors during unit tests
+aiohttp_module = types.ModuleType("aiohttp")
+
+class _DummyResp:
+    def __init__(self, status=200, body="{}"):
+        self.status = status
+        self._body = body
+
+    async def text(self):
+        return self._body
+
+class ClientTimeout:
+    def __init__(self, total=None):
+        self.total = total
+
+class ClientSession:
+    def __init__(self, timeout=None):
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def post(self, url, json=None, headers=None):
+        return _DummyResp(status=200, body='{"content": "ok"}')
+
+aiohttp_module.ClientTimeout = ClientTimeout
+aiohttp_module.ClientSession = ClientSession
+sys.modules["aiohttp"] = aiohttp_module
+
+# Stub pydantic_settings to avoid dependency import errors
+pydantic_settings = types.ModuleType("pydantic_settings")
+class BaseSettings:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+SettingsConfigDict = dict
+pydantic_settings.BaseSettings = BaseSettings
+pydantic_settings.SettingsConfigDict = SettingsConfigDict
+sys.modules["pydantic_settings"] = pydantic_settings
+
+# Minimal env to satisfy config.Settings fields used at import
+os.environ.setdefault("IMAGINATOR_AUTH_TOKEN", "test-token")
+os.environ.setdefault("OPENROUTER_API_KEY_1", "key1")
+os.environ.setdefault("OPENROUTER_API_KEY_2", "key2")
+
+# Stub google.generativeai to avoid dependency import errors
+google_module = types.ModuleType("google")
+genai_module = types.ModuleType("google.generativeai")
+genai_module.configure = lambda api_key=None: None
+class _DummyModel:
+    def __init__(self, name):
+        self.name = name
+    def generate_content(self, *args, **kwargs):
+        return types.SimpleNamespace(text="ok", usage=types.SimpleNamespace(input_tokens=0, output_tokens=0))
+genai_module.models = types.SimpleNamespace(get=lambda name: None)
+genai_module.GenerativeModel = _DummyModel
+sys.modules["google"] = google_module
+sys.modules["google.generativeai"] = genai_module
+
+# Stub openai to avoid dependency import errors
+openai_module = types.ModuleType("openai")
+
+class _DummyCompletions:
+    def create(self, **kwargs):
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=types.SimpleNamespace(content='SAFE OUTPUT'))],
+            usage=types.SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+        )
+
+class _DummyChat:
+    def __init__(self):
+        self.completions = _DummyCompletions()
+
+class OpenAI:
+    def __init__(self, *args, **kwargs):
+        self.chat = _DummyChat()
+
+class AsyncOpenAI:
+    def __init__(self, *args, **kwargs):
+        self.chat = _DummyChat()
+
+openai_module.OpenAI = OpenAI
+openai_module.AsyncOpenAI = AsyncOpenAI
+sys.modules["openai"] = openai_module
+
+# Stub config.settings before importing imaginator_flow
+config_module = types.ModuleType("config")
+class _DummySettings:
+    def __init__(self):
+        self.openrouter_api_key_1 = "key1"
+        self.openrouter_api_key_2 = "key2"
+        self.IMAGINATOR_AUTH_TOKEN = "test-token"
+        self.environment = "test"
+        self.ENABLE_LOADER = False
+        self.ENABLE_FASTSVM = False
+        self.ENABLE_HERMES = False
+        self.ENABLE_JOB_SEARCH = False
+        self.LOADER_BASE_URL = None
+        self.FASTSVM_BASE_URL = None
+        self.HERMES_BASE_URL = None
+        self.JOB_SEARCH_BASE_URL = None
+        self.API_KEY = None
+        self.HERMES_AUTH_TOKEN = None
+        self.FASTSVM_AUTH_TOKEN = None
+
+settings = _DummySettings()
+config_module.settings = settings
+sys.modules["config"] = config_module
 
 import imaginator_flow as mod
 
@@ -93,6 +206,30 @@ def test_run_criticism_with_mock_llm(monkeypatch):
     assert "suggested_experiences" in out
     se = out["suggested_experiences"]
     assert se["bridging_gaps"][0]["refined_suggestions"]
+
+
+def test_ats_integration_appends_insights(monkeypatch):
+    import imaginator_flow as mod
+    mod.settings.ENABLE_JOB_SEARCH = True
+    mod.settings.JOB_SEARCH_BASE_URL = "http://job-searcher/match"
+
+    async def fake_job_search(query):
+        return {
+            "match_score": 0.82,
+            "matched_requirements": ["Python", "AWS"],
+            "unmet_requirements": ["Kubernetes"]
+        }
+
+    monkeypatch.setattr(mod, "call_job_search_api", fake_job_search)
+
+    resume = "Python developer with AWS experience. Led projects."
+    job = "Seeking engineer with Python, AWS, Kubernetes."
+
+    result = asyncio.run(mod.run_analysis_async(resume_text=resume, job_ad=job))
+
+    assert "domain_insights" in result
+    insights = result["domain_insights"].get("insights", [])
+    assert any("ATS match score" in s for s in insights)
 
 
 def test_run_criticism_fallback_transform(monkeypatch):
