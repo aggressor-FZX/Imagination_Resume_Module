@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
-from app.core.config import settings
+from config import settings
 import json
 import os
 
@@ -40,7 +40,12 @@ class SimpleATSResponse(BaseModel):
 
 
 def _auth_check(request: Request) -> None:
-    token = getattr(settings, "ATS_SERVICE_TOKEN", None) or os.environ.get("ATS_SERVICE_TOKEN")
+    token = (
+        getattr(settings, "ATS_SERVICE_TOKEN", None)
+        or getattr(settings, "JOB_SEARCH_AUTH_TOKEN", None)
+        or os.environ.get("ATS_SERVICE_TOKEN")
+        or os.environ.get("JOB_SEARCH_API_TOKEN")
+    )
     if not token:
         return
     auth = request.headers.get("Authorization", "")

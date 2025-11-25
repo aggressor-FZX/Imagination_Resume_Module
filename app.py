@@ -25,6 +25,23 @@ from models import (
 from imaginator_flow import (
     run_analysis_async, run_generation_async, run_criticism_async, run_synthesis_async, RUN_METRICS, validate_output_schema, configure_shared_http_session
 )
+import importlib.util
+import os as _os
+_ats_module = None
+try:
+    from Job_searcher.job_search_api.app.api.v1.endpoints.simple_ats import router as ats_router  # type: ignore
+except Exception:
+    _ats_path = _os.path.join(_os.path.dirname(__file__), "Job_searcher", "job_search_api", "app", "api", "v1", "endpoints", "simple_ats.py")
+    _spec = importlib.util.spec_from_file_location("job_search_simple_ats", _ats_path)
+    if _spec and _spec.loader:
+        _ats_module = importlib.util.module_from_spec(_spec)
+        try:
+            _spec.loader.exec_module(_ats_module)
+            ats_router = getattr(_ats_module, "router", None)
+        except Exception:
+            ats_router = None
+    else:
+        ats_router = None
 
 
 @asynccontextmanager
@@ -77,6 +94,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if ats_router is not None:
+    app.include_router(ats_router, prefix="/api/v1/match")
 
 # Security: API Key Authentication
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
