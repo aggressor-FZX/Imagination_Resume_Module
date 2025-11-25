@@ -13,7 +13,7 @@ from models import AnalysisRequest, ProcessingStatus
 from config import settings
 
 
-client = TestClient(app, headers={"X-API-Key": settings.API_KEY})
+client = TestClient(app, headers={"X-API-Key": settings.api_key})
 
 
 @pytest.mark.unit

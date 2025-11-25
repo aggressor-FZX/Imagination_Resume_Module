@@ -1,0 +1,110 @@
+{
+  "name": "Missing Key Skills Case",
+  "description": "Resume with significant skill gaps compared to job requirements",
+  "input": {
+    "resume_text": "Jane Smith\nJunior Developer\n\nExperience:\nJunior Developer at SmallCompany (2022-2024)\n- Maintained legacy PHP applications\n- Fixed bugs and performed minor updates\n- Worked with MySQL database\n\nEducation:\nBachelor's in Computer Science (2022)\n\nSkills:\nPHP, MySQL, HTML, CSS, JavaScript",
+    "job_ad": "Senior Machine Learning Engineer\n\nRequirements:\n- 5+ years of software development experience\n- Strong Python programming skills\n- Deep understanding of machine learning algorithms\n- Experience with TensorFlow, PyTorch, or similar frameworks\n- Knowledge of cloud platforms (AWS, GCP)\n- Experience with distributed systems\n- PhD or Master's in Computer Science, Statistics, or related field\n- Strong mathematical background in statistics and linear algebra\n- Experience with big data technologies (Spark, Hadoop)\n- Published research in ML conferences preferred",
+    "openai_api_key": "test-openai-key",
+    "anthropic_api_key": "test-anthropic-key",
+    "google_api_key": "test-google-key",
+    "deepseek_api_key": "test-deepseek-key",
+    "openrouter_api_key_1": "test-openrouter-key-1",
+    "openrouter_api_key_2": "test-openrouter-key-2"
+  },
+  "expected_output": {
+    "analysis": {
+      "extracted_skills": {
+        "technical_skills": [
+          "PHP",
+          "MySQL",
+          "HTML",
+          "CSS",
+          "JavaScript"
+        ],
+        "soft_skills": [],
+        "domain_knowledge": [
+          "Web Development",
+          "Database Management",
+          "Frontend Development"
+        ]
+      },
+      "gap_analysis": {
+        "missing_technical_skills": [
+          "Python",
+          "Machine Learning Algorithms",
+          "TensorFlow",
+          "PyTorch",
+          "AWS",
+          "GCP",
+          "Spark",
+          "Hadoop",
+          "Distributed Systems"
+        ],
+        "missing_soft_skills": [
+          "Advanced Problem Solving",
+          "Research Skills"
+        ],
+        "experience_gaps": [
+          "5+ years of experience (has 2 years)",
+          "Machine Learning project experience",
+          "Big data processing experience",
+          "Cloud platform experience",
+          "Distributed systems experience",
+          "Research publication experience"
+        ],
+        "skill_level_gaps": [
+          "Advanced Python programming",
+          "Statistical analysis",
+          "Linear algebra knowledge",
+          "Deep learning frameworks"
+        ]
+      },
+      "suggested_experiences": [
+        {
+          "suggestion": "Transition to Python development and build ML projects",
+          "relevance": "Critical",
+          "implementation": "Take online courses in Python and complete ML projects on Kaggle"
+        },
+        {
+          "suggestion": "Pursue Master's degree in Machine Learning or Data Science",
+          "relevance": "High",
+          "implementation": "Apply to graduate programs with ML focus"
+        },
+        {
+          "suggestion": "Gain cloud platform experience with AWS or GCP",
+          "relevance": "High",
+          "implementation": "Get certified in AWS or complete cloud-based projects"
+        },
+        {
+          "suggestion": "Learn TensorFlow or PyTorch through hands-on projects",
+          "relevance": "Critical",
+          "implementation": "Build and deploy ML models using these frameworks"
+        },
+        {
+          "suggestion": "Study statistics and linear algebra fundamentals",
+          "relevance": "High",
+          "implementation": "Take university courses or online specializations"
+        }
+      ],
+      "overall_match_score": 15,
+      "key_strengths": [
+        "Basic programming foundation",
+        "Database experience",
+        "Web development background"
+      ],
+      "improvement_areas": [
+        "Python programming skills",
+        "Machine learning algorithms knowledge",
+        "Deep learning frameworks",
+        "Cloud platforms",
+        "Big data technologies",
+        "Advanced degree requirement",
+        "Years of experience"
+      ]
+    },
+    "confidence_score": 0.75,
+    "processing_time": 3.2,
+    "model_used": "openrouter/anthropic/claude-3.5-sonnet",
+    "status": "success"
+  }
+}

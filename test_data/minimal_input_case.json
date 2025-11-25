@@ -1,0 +1,57 @@
+{
+  "name": "Minimal Input Case",
+  "description": "Test case with very brief resume and job ad to verify handling of minimal content",
+  "input": {
+    "resume_text": "Developer\nPython, JavaScript\n2 years experience",
+    "job_ad": "Developer\nPython required",
+    "openai_api_key": "test-openai-key",
+    "anthropic_api_key": "test-anthropic-key",
+    "google_api_key": "test-google-key",
+    "deepseek_api_key": "test-deepseek-key",
+    "openrouter_api_key_1": "test-openrouter-key-1",
+    "openrouter_api_key_2": "test-openrouter-key-2"
+  },
+  "expected_output": {
+    "analysis": {
+      "extracted_skills": {
+        "technical_skills": [
+          "Python",
+          "JavaScript"
+        ],
+        "soft_skills": [],
+        "domain_knowledge": [
+          "Software Development"
+        ]
+      },
+      "gap_analysis": {
+        "missing_technical_skills": [],
+        "missing_soft_skills": [],
+        "experience_gaps": [
+          "Detailed experience description"
+        ],
+        "skill_level_gaps": []
+      },
+      "suggested_experiences": [
+        {
+          "suggestion": "Provide more detailed description of past projects and responsibilities",
+          "relevance": "High",
+          "implementation": "Expand resume with specific projects, achievements, and technologies used"
+        }
+      ],
+      "overall_match_score": 70,
+      "key_strengths": [
+        "Python programming skills",
+        "Multiple programming languages"
+      ],
+      "improvement_areas": [
+        "Resume detail and specificity",
+        "Experience quantification"
+      ]
+    },
+    "confidence_score": 0.6,
+    "processing_time": 1.8,
+    "model_used": "openrouter/anthropic/claude-3.5-sonnet",
+    "status": "success",
+    "note": "Low confidence due to minimal input content"
+  }
+}

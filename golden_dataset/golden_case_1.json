@@ -1,0 +1,38 @@
+{
+    "name": "Golden Case 1: Senior Software Engineer",
+    "input": {
+        "resume_text": "Senior Software Engineer with 8 years of experience in full-stack development, specializing in Python, React, and cloud technologies. Led teams of 5-10 developers in agile environments. Expert in designing scalable web applications and mentoring junior developers. Proven track record of delivering high-quality software solutions on time and within budget.",
+        "job_ad": "We are looking for a Senior Software Engineer with 5+ years of experience in Python and React. Must have experience with cloud platforms (AWS/GCP), database design, and leading development teams. Strong communication skills and ability to mentor junior developers required."
+    },
+    "ideal_output": {
+        "aggregate_skills": ["Python", "React", "Cloud Technologies", "Agile", "Scalable Web Applications", "Mentoring", "Full-Stack Development", "Leadership"],
+        "gap_analysis": "The candidate's resume strongly aligns with the job description, showcasing extensive experience in Python, React, and cloud technologies. The leadership and mentoring experience is a significant asset. To further strengthen the application, the resume should explicitly mention experience with specific cloud platforms like AWS/GCP and provide more detail on database design expertise.",
+        "suggested_experiences": {
+            "bridging_gaps": [
+                {
+                    "skill_focus": "AWS/GCP",
+                    "refined_suggestions": [
+                        "Architected and deployed a highly available and scalable microservices-based application on AWS, leveraging services like EC2, S3, and RDS, resulting in a 40% improvement in application uptime.",
+                        "Led the migration of a legacy monolithic application to a containerized solution using Docker and Kubernetes on Google Cloud Platform (GCP), which reduced deployment time by 60%."
+                    ]
+                },
+                {
+                    "skill_focus": "Database Design",
+                    "refined_suggestions": [
+                        "Designed and implemented a normalized relational database schema for a high-volume e-commerce platform, which supported over 1 million transactions per day while maintaining data integrity and performance.",
+                        "Optimized complex SQL queries and implemented advanced indexing strategies, leading to a 50% reduction in query response time."
+                    ]
+                }
+            ],
+            "metric_improvements": [
+                {
+                    "skill_focus": "Leadership",
+                    "refined_suggestions": [
+                        "Led a team of 8 developers in an agile environment, delivering a new product feature two weeks ahead of schedule.",
+                        "Mentored 3 junior developers, resulting in their promotion to mid-level engineers within 18 months."
+                    ]
+                }
+            ]
+        }
+    }
+}

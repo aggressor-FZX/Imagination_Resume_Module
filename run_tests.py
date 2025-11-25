@@ -21,11 +21,11 @@ def run_tests(test_type="all", coverage=False, verbose=True):
     cmd = ["python", "-m", "pytest"]
 
     if test_type == "unit":
-        cmd.append("-m unit")
+        cmd.extend(["-m", "unit"])
     elif test_type == "integration":
-        cmd.append("-m integration")
+        cmd.extend(["-m", "integration"])
     elif test_type == "fast":
-        cmd.append("-m 'not slow'")
+        cmd.extend(["-m", "not slow"])
 
     if coverage:
         cmd.extend([
@@ -40,8 +40,8 @@ def run_tests(test_type="all", coverage=False, verbose=True):
     else:
         cmd.append("-q")
 
-    # Add test directory
-    cmd.append("tests/")
+    # Add test directories and files
+    cmd.extend(["tests/", "test_api.py"])
 
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=False)

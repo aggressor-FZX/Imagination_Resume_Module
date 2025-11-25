@@ -1,0 +1,33 @@
+{
+  "name": "API Key Failure Case",
+  "description": "Test case with invalid API keys to verify fallback behavior",
+  "input": {
+    "resume_text": "John Developer\nPython Developer with 3 years experience\n\nSkills: Python, Django, PostgreSQL",
+    "job_ad": "Python Developer position\n\nRequirements:\n- Python programming\n- Django framework\n- Database experience",
+    "openai_api_key": "invalid-key",
+    "anthropic_api_key": "invalid-key",
+    "google_api_key": "invalid-key",
+    "deepseek_api_key": "invalid-key",
+    "openrouter_api_key_1": "invalid-key-1",
+    "openrouter_api_key_2": "invalid-key-2"
+  },
+  "expected_output": {
+    "error": {
+      "type": "AuthenticationError",
+      "message": "All API keys failed authentication",
+      "details": {
+        "failed_providers": [
+          "openrouter",
+          "deepseek",
+          "openai",
+          "anthropic",
+          "google"
+        ],
+        "fallback_attempts": 5,
+        "final_error": "Unable to authenticate with any available service"
+      }
+    },
+    "status": "error",
+    "processing_time": 5.2
+  }
+}

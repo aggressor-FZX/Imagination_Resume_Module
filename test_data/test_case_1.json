@@ -1,0 +1,57 @@
+
+{
+  "name": "Test Case 1: Senior Software Engineer",
+  "description": "Test case for senior software engineer position with extensive experience",
+  "input": {
+    "resume_text": "Senior Software Engineer with 8 years of experience in full-stack development, specializing in Python, React, and cloud technologies. Led teams of 5-10 developers in agile environments. Expert in designing scalable web applications and mentoring junior developers. Proven track record of delivering high-quality software solutions on time and within budget.",
+    "job_ad": "We are looking for a Senior Software Engineer with 5+ years of experience in Python and React. Must have experience with cloud platforms (AWS/GCP), database design, and leading development teams. Strong communication skills and ability to mentor junior developers required."
+  },
+  "expected_output": {
+    "status": "success",
+    "analysis": {
+      "extracted_skills": {
+        "technical_skills": ["Python", "React", "Cloud Technologies", "Database Design", "Full-Stack Development"],
+        "soft_skills": ["Leadership", "Mentoring", "Team Management", "Communication"],
+        "domain_knowledge": ["Software Architecture", "Agile Methodologies", "Scalable Systems"]
+      },
+      "gap_analysis": {
+        "missing_technical_skills": ["AWS/GCP specific experience", "Database Design explicit mention"],
+        "missing_soft_skills": [],
+        "experience_gaps": ["Explicit cloud platform certification", "Database design project examples"],
+        "skill_level_gaps": []
+      },
+      "suggested_experiences": [
+        {
+          "suggestion": "Gain AWS or GCP certification and build projects on cloud platforms",
+          "relevance": "High",
+          "implementation": "Complete AWS Solutions Architect certification and deploy applications on AWS"
+        },
+        {
+          "suggestion": "Lead database design initiatives in current role",
+          "relevance": "Medium",
+          "implementation": "Take ownership of database schema design and optimization projects"
+        },
+        {
+          "suggestion": "Document specific examples of database design in portfolio",
+          "relevance": "Medium",
+          "implementation": "Create case studies showing database design decisions and performance improvements"
+        }
+      ],
+      "overall_match_score": 88,
+      "key_strengths": [
+        "8 years of relevant experience",
+        "Strong Python and React skills",
+        "Leadership and mentoring experience",
+        "Team management capabilities",
+        "Proven delivery track record"
+      ],
+      "improvement_areas": [
+        "Explicit cloud platform experience",
+        "Database design documentation"
+      ]
+    },
+    "confidence_score": 0.9,
+    "processing_time": 2.1,
+    "model_used": "openrouter/anthropic/claude-3.5-sonnet"
+  }
+}

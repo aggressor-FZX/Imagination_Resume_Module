@@ -83,8 +83,8 @@ class RunMetrics(BaseModel):
 
 class AnalysisRequest(BaseModel):
     """Request model for resume analysis"""
-    resume_text: str = Field(..., min_length=10, description="Raw resume text content")
-    job_ad: str = Field(..., min_length=10, description="Target job description text")
+    resume_text: str = Field(..., min_length=0, description="Raw resume text content")
+    job_ad: str = Field(..., min_length=1, description="Target job description text")
     confidence_threshold: float = Field(
         0.7, ge=0.0, le=1.0, description="Minimum confidence score for skills"
     )
@@ -143,6 +143,8 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service health status")
     version: str = Field(..., description="Application version")
     environment: str = Field(..., description="Deployment environment")
+    timestamp: str = Field(..., description="Timestamp of health check")
+    has_openrouter_key: bool = Field(..., description="Whether OpenRouter API key is configured")
 
 
 class Context7DocsRequest(BaseModel):

@@ -35,7 +35,7 @@ def sample_analysis_json():
 
 
 def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
-    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None):
+    def mock_call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None, **kwargs):
         # Return generator JSON
         return json.dumps(
             {
@@ -48,7 +48,7 @@ def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
             }
         )
 
-    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
+    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
 
     out = mod.run_generation(sample_analysis_json, "Senior Engineer")
     assert "gap_bridging" in out and isinstance(out["gap_bridging"], list)
@@ -58,10 +58,10 @@ def test_run_generation_with_mock_llm(monkeypatch, sample_analysis_json):
 
 def test_run_generation_fallback_on_decode(monkeypatch, sample_analysis_json):
     # Return non-JSON to trigger fallback
-    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None):
+    def mock_call_llm(system_prompt, user_prompt, temperature=0.9, max_tokens=1500, max_retries=3, response_format=None, **kwargs):
         return "NOT JSON"
 
-    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
+    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
     out = mod.run_generation(sample_analysis_json, "Senior Engineer")
     assert out == {"gap_bridging": [], "metric_improvements": []}
 
@@ -72,7 +72,7 @@ def test_run_criticism_with_mock_llm(monkeypatch):
         "metric_improvements": [{"skill_focus": "aws", "suggestions": ["C", "D"]}],
     }
 
-    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3, response_format=None):
+    def mock_call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3, response_format=None, **kwargs):
         return json.dumps(
             {
                 "suggested_experiences": {
@@ -86,7 +86,7 @@ def test_run_criticism_with_mock_llm(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
+    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
     out = mod.run_criticism(generated, "Senior Engineer")
     assert "suggested_experiences" in out
     se = out["suggested_experiences"]
@@ -95,10 +95,10 @@ def test_run_criticism_with_mock_llm(monkeypatch):
 
 def test_run_criticism_fallback_transform(monkeypatch):
     # Force exception in call_llm to hit fallback transform path
-    async def mock_call_llm_async(*args, **kwargs):
+    def mock_call_llm(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
+    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
 
     generated = {
         "gap_bridging": [{"skill_focus": "react", "suggestions": ["A", "B"]}],
@@ -115,15 +115,12 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
         "experiences": [],
         "aggregate_skills": ["python"],
         "processed_skills": {
-            "high_confidence_skills": ["python"],
-            "medium_confidence_skills": [],
-            "low_confidence_skills": [],
-            "skill_confidences": {"python": 0.9},
-            "categories": {"general": ["python"]},
-            "filtered_count": 1,
-            "total_count": 1,
+            "high_confidence": ["python"],
+            "medium_confidence": [],
+            "low_confidence": [],
+            "inferred_skills": [],
         },
-        "domain_insights": {"domain": "tech", "insights": {}},
+        "domain_insights": {"domain": "tech", "skill_gap_priority": "medium", "insights": []},
         "gap_analysis": json.dumps(
             {"skill_gaps": [], "experience_gaps": [], "recommendations": []}
         ),
@@ -146,6 +143,15 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
             "reasoning": "5.0 years of experience demonstrates significant expertise",
             "recommendations": ["Focus on building technical depth", "Seek mentorship opportunities"]
         },
+        "run_metrics": {
+            "calls": [],
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "failures": []
+        },
+        "processing_time_seconds": 1.5
     }
 
     assert mod.validate_output_schema(output) is True

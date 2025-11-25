@@ -335,7 +335,7 @@ def validate_api_keys(cls, v, field):
 # Add startup validation
 @app.on_event("startup")
 async def validate_configuration():
-    if not settings.openrouter_api_key and not settings.openai_api_key:
+    if not settings.openrouter_api_key_1 and not settings.openrouter_api_key_2 and not settings.openai_api_key:
         raise RuntimeError("No LLM API key configured")
     # Test API key validity
     await test_api_connection()

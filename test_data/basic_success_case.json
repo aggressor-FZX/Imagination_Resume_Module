@@ -1,0 +1,96 @@
+{
+  "name": "Basic Successful Analysis",
+  "description": "Standard resume and job ad with expected successful analysis output",
+  "input": {
+    "resume_text": "John Doe\nSoftware Engineer with 5 years experience\n\nExperience:\nSenior Software Engineer at TechCorp (2020-2024)\n- Led development of microservices architecture using Python and Docker\n- Implemented CI/CD pipelines reducing deployment time by 40%\n- Mentored junior developers and conducted code reviews\n\nSoftware Engineer at StartupXYZ (2018-2020)\n- Built RESTful APIs using Node.js and Express\n- Developed frontend components with React and TypeScript\n- Collaborated with product team to define requirements\n\nSkills:\nPython, JavaScript, React, Node.js, Docker, AWS, Git, Agile methodologies",
+    "job_ad": "Senior Full Stack Developer\n\nWe are looking for an experienced Full Stack Developer to join our growing team.\n\nRequirements:\n- 4+ years of software development experience\n- Strong proficiency in Python and JavaScript\n- Experience with React or similar frontend frameworks\n- Knowledge of cloud platforms (AWS, Azure, or GCP)\n- Experience with containerization technologies (Docker, Kubernetes)\n- Strong understanding of RESTful API design\n- Experience with version control systems (Git)\n- Excellent communication and teamwork skills\n\nNice to have:\n- Experience with microservices architecture\n- CI/CD pipeline experience\n- Mentoring or leadership experience\n- Agile/Scrum experience",
+    "openai_api_key": "test-openai-key",
+    "anthropic_api_key": "test-anthropic-key",
+    "google_api_key": "test-google-key",
+    "deepseek_api_key": "test-deepseek-key",
+    "openrouter_api_key_1": "test-openrouter-key-1",
+    "openrouter_api_key_2": "test-openrouter-key-2"
+  },
+  "expected_output": {
+    "analysis": {
+      "extracted_skills": {
+        "technical_skills": [
+          "Python",
+          "JavaScript",
+          "React",
+          "Node.js",
+          "Docker",
+          "AWS",
+          "Git",
+          "RESTful APIs",
+          "TypeScript",
+          "Express.js",
+          "Microservices"
+        ],
+        "soft_skills": [
+          "Leadership",
+          "Mentoring",
+          "Code Review",
+          "Team Collaboration",
+          "Agile Methodologies",
+          "Communication"
+        ],
+        "domain_knowledge": [
+          "Software Architecture",
+          "CI/CD Pipelines",
+          "Cloud Computing",
+          "Frontend Development",
+          "Backend Development"
+        ]
+      },
+      "gap_analysis": {
+        "missing_technical_skills": [
+          "Kubernetes",
+          "Azure or GCP",
+          "Scrum methodology explicitly"
+        ],
+        "missing_soft_skills": [],
+        "experience_gaps": [
+          "Kubernetes experience",
+          "Multi-cloud platform experience"
+        ],
+        "skill_level_gaps": []
+      },
+      "suggested_experiences": [
+        {
+          "suggestion": "Gain hands-on experience with Kubernetes for container orchestration",
+          "relevance": "High",
+          "implementation": "Set up a local Kubernetes cluster and deploy microservices"
+        },
+        {
+          "suggestion": "Explore Google Cloud Platform or Azure services",
+          "relevance": "Medium",
+          "implementation": "Complete cloud certification or build projects on alternative platforms"
+        },
+        {
+          "suggestion": "Lead a Scrum team or obtain Scrum Master certification",
+          "relevance": "Medium",
+          "implementation": "Take on Scrum Master responsibilities in current role"
+        }
+      ],
+      "overall_match_score": 85,
+      "key_strengths": [
+        "Strong Python and JavaScript proficiency",
+        "React frontend experience",
+        "AWS cloud platform knowledge",
+        "Docker containerization experience",
+        "Leadership and mentoring skills",
+        "Microservices architecture experience"
+      ],
+      "improvement_areas": [
+        "Kubernetes orchestration",
+        "Multi-cloud platform exposure",
+        "Formal Scrum methodology"
+      ]
+    },
+    "confidence_score": 0.85,
+    "processing_time": 2.5,
+    "model_used": "openrouter/anthropic/claude-3.5-sonnet",
+    "status": "success"
+  }
+}

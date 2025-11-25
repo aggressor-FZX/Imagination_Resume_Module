@@ -7,7 +7,7 @@ import requests
 import json
 from datetime import datetime
 
-def test_service_with_details(url: str, service_name: str) -> dict:
+def check_service_with_details(url: str, service_name: str) -> dict:
     """Test a service and return detailed results"""
     result = {
         'service': service_name,
@@ -80,7 +80,7 @@ def main():
         print(f'   URL: {service_info["url"]}')
         print(f'   Purpose: {service_info["description"]}')
         
-        result = test_service_with_details(service_info['url'], service_info['name'])
+        result = check_service_with_details(service_info['url'], service_info['name'])
         results.append(result)
         
         if result['accessible']:
