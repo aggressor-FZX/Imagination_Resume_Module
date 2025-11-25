@@ -1,0 +1,55 @@
+{
+    "name": "Test Case 2: Entry-Level Software Engineer",
+    "description": "Test case for entry-level software engineer position with recent graduate background",
+    "input": {
+        "resume_text": "Recent computer science graduate with a passion for coding. Completed several projects using Python and JavaScript. Eager to learn and contribute to a fast-paced development team.",
+        "job_ad": "We are looking for a motivated entry-level software engineer to join our team. The ideal candidate will have a strong foundation in computer science and a desire to learn new technologies. Experience with Python or JavaScript is a plus."
+    },
+    "expected_output": {
+        "status": "success",
+        "analysis": {
+            "extracted_skills": {
+                "technical_skills": ["Python", "JavaScript"],
+                "soft_skills": ["Eagerness to learn", "Team collaboration"],
+                "domain_knowledge": ["Computer Science", "Software Development"]
+            },
+            "gap_analysis": {
+                "missing_technical_skills": ["Professional development experience", "Framework-specific knowledge"],
+                "missing_soft_skills": [],
+                "experience_gaps": ["Professional work experience", "Real-world project deployment"],
+                "skill_level_gaps": ["Advanced Python/JavaScript concepts"]
+            },
+            "suggested_experiences": [
+                {
+                    "suggestion": "Develop a full-stack web application using Python and Django with user authentication",
+                    "relevance": "High",
+                    "implementation": "Create a portfolio website with blog functionality and user management"
+                },
+                {
+                    "suggestion": "Contribute to open-source projects on GitHub",
+                    "relevance": "High",
+                    "implementation": "Find beginner-friendly issues in popular Python/JavaScript projects"
+                },
+                {
+                    "suggestion": "Build projects that demonstrate full development lifecycle",
+                    "relevance": "Medium",
+                    "implementation": "Create applications with proper documentation, testing, and deployment"
+                }
+            ],
+            "overall_match_score": 65,
+            "key_strengths": [
+                "Foundation in computer science",
+                "Basic Python and JavaScript knowledge",
+                "Strong motivation and eagerness to learn"
+            ],
+            "improvement_areas": [
+                "Professional development experience",
+                "Advanced technical skills",
+                "Real-world project experience"
+            ]
+        },
+        "confidence_score": 0.7,
+        "processing_time": 1.8,
+        "model_used": "openrouter/anthropic/claude-3.5-sonnet"
+    }
+}

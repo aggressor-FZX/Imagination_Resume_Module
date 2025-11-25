@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     """
 
     # Required API Keys - using OpenRouter only
-    openrouter_api_key: str
+    openrouter_api_key_1: str
+    openrouter_api_key_2: str
 
     # Optional Context7 API Key for documentation
     context7_api_key: Optional[str] = None
@@ -51,7 +52,24 @@ class Settings(BaseSettings):
     cors_allow_headers: list[str] = ["*"]
 
     # Security
-    API_KEY: str
+    IMAGINATOR_AUTH_TOKEN: str
+
+    # Feature Flags
+    ENABLE_LOADER: bool = False
+    ENABLE_FASTSVM: bool = False
+    ENABLE_HERMES: bool = False
+    ENABLE_JOB_SEARCH: bool = False
+
+    # External Service Configuration
+    LOADER_BASE_URL: Optional[str] = None
+    HERMES_BASE_URL: Optional[str] = None
+    FASTSVM_BASE_URL: Optional[str] = None
+    JOB_SEARCH_BASE_URL: Optional[str] = None
+
+    # External Service Auth Tokens
+    API_KEY: Optional[str] = None
+    HERMES_AUTH_TOKEN: Optional[str] = None
+    FASTSVM_AUTH_TOKEN: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -73,8 +91,10 @@ class Settings(BaseSettings):
     @property
     def api_key(self) -> str:
         """Get the API key for authentication"""
-        return self.API_KEY
+        return self.IMAGINATOR_AUTH_TOKEN
 
 
 # Global settings instance
 settings = Settings()
+print(f"OpenRouter API Key 1 Loaded: {settings.openrouter_api_key_1 is not None}")
+print(f"OpenRouter API Key 2 Loaded: {settings.openrouter_api_key_2 is not None}")

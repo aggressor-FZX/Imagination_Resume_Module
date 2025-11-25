@@ -226,22 +226,9 @@ result = requests.post(
 
 > Note: The preferred integration method is for the FrontEnd to POST structured JSON to the `/analyze` endpoint. File uploads are not required.
 
-### 4. Using Your Own LLM Keys (BYOK)
+### 4. Key Management
 
-```python
-# Use your own API keys for this request
-response = requests.post(
-    f"{API_URL}/analyze",
-    headers={
-        "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
-        "X-OpenAI-API-Key": "your-openai-key",
-        "X-Anthropic-API-Key": "your-anthropic-key"
-    },
-    json={"resume_text": resume_text, "job_ad": job_ad},
-    timeout=120
-)
-```
+The service uses server-configured provider keys. Custom BYOK headers are deprecated and no longer supported.
 
 ---
 

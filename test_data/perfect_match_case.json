@@ -1,0 +1,92 @@
+{
+  "name": "Perfect Match Case",
+  "description": "Resume that perfectly matches job requirements",
+  "input": {
+    "resume_text": "Alex Johnson\nSenior DevOps Engineer\n\nExperience:\nSenior DevOps Engineer at CloudTech (2020-2024)\n- Architected and maintained AWS infrastructure for 50+ microservices\n- Implemented Kubernetes clusters managing 200+ containers\n- Built CI/CD pipelines using Jenkins, GitLab CI, and GitHub Actions\n- Automated infrastructure deployment with Terraform and CloudFormation\n- Led migration from monolithic to microservices architecture\n- Managed production incidents and implemented monitoring solutions\n\nDevOps Engineer at DataCorp (2018-2020)\n- Developed Python automation scripts for infrastructure management\n- Implemented Docker containerization for legacy applications\n- Set up monitoring and alerting with Prometheus and Grafana\n- Managed PostgreSQL and MongoDB databases in production\n\nEducation:\nBachelor's in Computer Science (2018)\nAWS Certified Solutions Architect - Professional\n\nSkills:\nAWS, Kubernetes, Docker, Terraform, Jenkins, Python, Bash, Linux, Git, Microservices, CI/CD, Prometheus, Grafana, PostgreSQL, MongoDB, CloudFormation, GitLab CI, GitHub Actions",
+    "job_ad": "Senior DevOps Engineer\n\nWe are seeking an experienced Senior DevOps Engineer to lead our infrastructure initiatives.\n\nRequirements:\n- 5+ years of DevOps or infrastructure experience\n- Strong AWS cloud platform expertise\n- Kubernetes and Docker containerization experience\n- Infrastructure as Code (Terraform or CloudFormation)\n- CI/CD pipeline development (Jenkins, GitLab CI, or GitHub Actions)\n- Python or Bash scripting skills\n- Linux system administration\n- Git version control\n- Microservices architecture experience\n- Database management (PostgreSQL or MongoDB)\n- Monitoring and alerting systems\n- Production incident management\n\nPreferred:\n- AWS certifications\n- Experience with 50+ microservices\n- Migration from monolithic to microservices",
+    "openai_api_key": "test-openai-key",
+    "anthropic_api_key": "test-anthropic-key",
+    "google_api_key": "test-google-key",
+    "deepseek_api_key": "test-deepseek-key",
+    "openrouter_api_key_1": "test-openrouter-key-1",
+    "openrouter_api_key_2": "test-openrouter-key-2"
+  },
+  "expected_output": {
+    "analysis": {
+      "extracted_skills": {
+        "technical_skills": [
+          "AWS",
+          "Kubernetes",
+          "Docker",
+          "Terraform",
+          "Jenkins",
+          "Python",
+          "Bash",
+          "Linux",
+          "Git",
+          "Microservices",
+          "CI/CD",
+          "Prometheus",
+          "Grafana",
+          "PostgreSQL",
+          "MongoDB",
+          "CloudFormation",
+          "GitLab CI",
+          "GitHub Actions"
+        ],
+        "soft_skills": [
+          "Leadership",
+          "Incident Management",
+          "Team Collaboration",
+          "Architecture Design"
+        ],
+        "domain_knowledge": [
+          "Cloud Infrastructure",
+          "Container Orchestration",
+          "Infrastructure Automation",
+          "Database Administration",
+          "System Monitoring",
+          "Production Operations"
+        ]
+      },
+      "gap_analysis": {
+        "missing_technical_skills": [],
+        "missing_soft_skills": [],
+        "experience_gaps": [],
+        "skill_level_gaps": []
+      },
+      "suggested_experiences": [
+        {
+          "suggestion": "Continue leading large-scale infrastructure projects",
+          "relevance": "High",
+          "implementation": "Take on additional microservices migration initiatives"
+        },
+        {
+          "suggestion": "Mentor junior DevOps engineers",
+          "relevance": "Medium",
+          "implementation": "Establish knowledge sharing sessions and best practices documentation"
+        }
+      ],
+      "overall_match_score": 98,
+      "key_strengths": [
+        "Comprehensive AWS expertise",
+        "Kubernetes and Docker proficiency",
+        "Infrastructure as Code experience",
+        "CI/CD pipeline development",
+        "Database management skills",
+        "Monitoring and alerting systems",
+        "Production incident management",
+        "Microservices architecture experience",
+        "AWS Professional certification",
+        "Large-scale infrastructure experience"
+      ],
+      "improvement_areas": [
+        "Could benefit from mentoring experience"
+      ]
+    },
+    "confidence_score": 0.95,
+    "processing_time": 2.8,
+    "model_used": "openrouter/anthropic/claude-3.5-sonnet",
+    "status": "success"
+  }
+}

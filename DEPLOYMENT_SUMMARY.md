@@ -195,7 +195,7 @@ python test_live_api.py
 ### API Costs
 - Simple analysis: $0.02 - $0.05 per request
 - Complex analysis: $0.05 - $0.15 per request
-- BYOK option: Use your own LLM API keys
+
 
 ---
 
@@ -231,11 +231,8 @@ Current plan supports:
 - ✅ SSL/TLS encryption (HTTPS)
 - ✅ Environment variables stored securely in Render
 
-### BYOK (Bring Your Own Key)
-Users can provide their own LLM API keys:
-- `X-OpenAI-API-Key`
-- `X-Google-API-Key`
-- `X-Anthropic-API-Key`
+### Key Management
+Provider keys are managed server-side. BYOK headers are deprecated and not supported.
 
 ---
 

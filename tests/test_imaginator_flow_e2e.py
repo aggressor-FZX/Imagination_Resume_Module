@@ -1,8 +1,8 @@
 import json
 import os
+import pathlib
 import subprocess
 import sys
-import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "imaginator_flow.py"

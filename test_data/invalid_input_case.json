@@ -1,0 +1,21 @@
+{
+  "name": "Invalid Input Case",
+  "description": "Test case with missing required fields to verify error handling",
+  "input": {
+    "resume_text": "",
+    "job_ad": "Software Engineer position",
+    "openai_api_key": "test-openai-key"
+  },
+  "expected_output": {
+    "error": {
+      "type": "ValidationError",
+      "message": "Resume text cannot be empty",
+      "details": {
+        "field": "resume_text",
+        "reason": "Empty or insufficient content"
+      }
+    },
+    "status": "error",
+    "processing_time": 0.1
+  }
+}

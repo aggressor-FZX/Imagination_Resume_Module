@@ -7,52 +7,21 @@ import sys
 import json
 import requests
 from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configuration
-API_URL = "https://imaginator-resume-cowriter.onrender.com"
-API_KEY = os.environ.get("API_KEY", "")
+API_URL = "http://127.0.0.1:8000"
+IMAGINATOR_AUTH_TOKEN = os.getenv("IMAGINATOR_AUTH_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Sample data for testing
-SAMPLE_RESUME = """
-John Doe
-Software Engineer
-
-EXPERIENCE:
-Senior Developer at Tech Corp (2020-2025)
-- Led team of 5 developers building microservices
-- Implemented CI/CD pipelines using Docker and Kubernetes
-- Developed REST APIs using Python, Django, and Flask
-- Worked with PostgreSQL and Redis for data storage
-- Mentored junior developers
-
-SKILLS:
-- Languages: Python, JavaScript, SQL
-- Frameworks: Django, Flask, FastAPI
-- Tools: Docker, Git, Jenkins
-- Databases: PostgreSQL, MongoDB, Redis
-- Cloud: Basic AWS knowledge
-"""
-
-SAMPLE_JOB = """
-Senior Full Stack Engineer
-
-We're looking for an experienced engineer to join our team.
-
-REQUIREMENTS:
-- 5+ years of software development experience
-- Strong Python and JavaScript skills
-- Experience with React.js and modern frontend frameworks
-- Microservices architecture experience
-- AWS or GCP cloud platform expertise
-- Strong communication and leadership skills
-- Experience with GraphQL is a plus
-
-RESPONSIBILITIES:
-- Design and build scalable web applications
-- Lead technical discussions and architecture decisions
-- Mentor junior team members
-- Work closely with product team
-"""
+with open("test_data/test_case_1.json", "r") as f:
+    test_case = json.load(f)
+SAMPLE_RESUME = test_case["input"]["resume_text"]
+SAMPLE_JOB = test_case["input"]["job_ad"]
 
 def test_health():
     """Test the health endpoint"""
@@ -108,11 +77,9 @@ def test_full_analysis():
     print("TEST 3: Full Analysis with Authentication")
     print("=" * 60)
     
-    if not API_KEY or API_KEY == "your-api-key-here":
-        print("⚠️  SKIPPED: API_KEY not set")
-        print("To run this test:")
-        print("  export API_KEY='your-actual-api-key'")
-        print("  python test_live_api.py")
+    if not IMAGINATOR_AUTH_TOKEN or not OPENROUTER_API_KEY:
+        print("⚠️  SKIPPED: IMAGINATOR_AUTH_TOKEN or OPENROUTER_API_KEY not set")
+        print("To run this test, make sure your .env file is configured correctly.")
         return None
     
     try:
@@ -124,7 +91,7 @@ def test_full_analysis():
             f"{API_URL}/analyze",
             headers={
                 "Content-Type": "application/json",
-                "X-API-Key": API_KEY
+                "X-API-Key": IMAGINATOR_AUTH_TOKEN,
             },
             json={
                 "resume_text": SAMPLE_RESUME,

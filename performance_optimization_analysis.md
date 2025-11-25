@@ -438,7 +438,7 @@ def create_openrouter_client():
     """Create OpenRouter client with fallback support."""
     return openai.OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key=settings.openrouter_api_key,
+        api_key=settings.openrouter_api_key_1 or settings.openrouter_api_key_2,
         default_headers={
             "HTTP-Referer": "https://imaginator-resume-cowriter.onrender.com",
             "X-Title": "Imaginator Resume Co-Writer"

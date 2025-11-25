@@ -1,11 +1,12 @@
 """
-Pydantic models for FastAPI request/response validation
+Models for request/response schemas
 Based on SYSTEM_IO_SPECIFICATION.md and Context7 research on Pydantic
 """
 
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProcessingStatus(str, Enum):
@@ -83,8 +84,8 @@ class RunMetrics(BaseModel):
 
 class AnalysisRequest(BaseModel):
     """Request model for resume analysis"""
-    resume_text: str = Field(..., min_length=10, description="Raw resume text content")
-    job_ad: str = Field(..., min_length=10, description="Target job description text")
+    resume_text: str = Field(..., min_length=0, description="Raw resume text content")
+    job_ad: str = Field(..., min_length=1, description="Target job description text")
     confidence_threshold: float = Field(
         0.7, ge=0.0, le=1.0, description="Minimum confidence score for skills"
     )
@@ -131,6 +132,7 @@ class AnalysisResponse(BaseModel):
         ..., description="Refined improvement suggestions"
     )
     seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
+    final_written_section: Optional[str] = Field(None, description="Generated resume section text")
     run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
@@ -143,6 +145,8 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service health status")
     version: str = Field(..., description="Application version")
     environment: str = Field(..., description="Deployment environment")
+    timestamp: str = Field(..., description="Timestamp of health check")
+    has_openrouter_key: bool = Field(..., description="Whether OpenRouter API key is configured")
 
 
 class Context7DocsRequest(BaseModel):

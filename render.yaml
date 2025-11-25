@@ -5,7 +5,7 @@ services:
   - type: web
     name: imaginator-resume-cowriter
     runtime: docker
-    plan: starter  # $7/month - 1GB RAM, 1 CPU, 750 hours
+    plan: starter # $7/month - 1GB RAM, 1 CPU, 750 hours
 
     # Build configuration
     buildCommand: "docker build -t imaginator ."
@@ -16,10 +16,10 @@ services:
     # Environment variables (set in Render dashboard, not in code)
     envVars:
       - key: OPENROUTER_API_KEY
-        sync: false  # Manual entry in dashboard
+        sync: false # Manual entry in dashboard
       # Note: This service is configured to use OpenRouter as the single LLM provider.
       - key: CONTEXT7_API_KEY
-        sync: false  # Optional - for documentation features
+        sync: false # Optional - for documentation features
 
       # Application configuration
       - key: ENVIRONMENT
@@ -39,18 +39,17 @@ services:
       - key: WORKERS
         value: 1
 
-      - key: API_KEY
-        generateValue: true  # Auto-generate a secure key on Render
+      - key: IMAGINATOR_AUTH_TOKEN
+        generateValue: true # Auto-generate a secure key on Render
       # CORS (restrictive for production)
       - key: CORS_ORIGINS
-        value: "https://www.cogitometric.org"  # Replace with your actual website domain
+        value: "https://www.cogitometric.org" # Replace with your actual website domain
 
     # Optional: Add persistent disk for data/cache
     disk:
       name: app-data
       mountPath: /app/data
       sizeGB: 1
-
 # Optional: Add a Redis service for caching (if needed later)
 # databases:
 #   - name: redis-cache

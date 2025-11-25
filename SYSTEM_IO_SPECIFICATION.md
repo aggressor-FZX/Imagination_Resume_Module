@@ -8,9 +8,10 @@ The Generative Resume Co-Writer is a standalone Python application that analyzes
 
 The application consists of three main processing stages:
 
-1. **Analysis Stage** (`run_analysis`): Extracts skills, experiences, and performs gap analysis
-2. **Generation Stage** (`run_generation`): Creates targeted resume improvement suggestions
-3. **Criticism Stage** (`run_criticism`): Refines suggestions through adversarial review
+1. **Analysis Stage** (`run_analysis_async`): Extracts skills, experiences, and performs gap analysis
+2. **Generation Stage** (`run_generation_async`): Creates targeted resume improvement suggestions
+3. **Criticism Stage** (`run_criticism_async`): Refines suggestions through adversarial review
+4. **Synthesis Stage** (`run_synthesis_async`): Incorporates critique into final written section
 
 ## Input Specifications
 
@@ -25,8 +26,8 @@ The application consists of three main processing stages:
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
-| `extracted_skills_json` | File Path | None | JSON file with structured skills data (confidence scores) |
-| `domain_insights_json` | File Path | None | JSON file with domain-specific insights |
+| `extracted_skills_json` | File Path or JSON | None | JSON file/object with structured skills data (confidence scores) |
+| `domain_insights_json` | File Path or JSON | None | JSON file/object with domain-specific insights |
 | `confidence_threshold` | Float | 0.7 | Minimum confidence score for skill filtering (0.0-1.0) |
 
 ### Command Line Interface
@@ -102,11 +103,25 @@ The system produces a validated JSON output conforming to this schema:
     },
     "processed_skills": {
       "type": "object",
-      "description": "Structured skill analysis with confidence scores and categories"
+      "description": "Structured skill analysis with confidence scores and categories",
+      "properties": {
+        "high_confidence": {"type": "array", "items": {"type": "string"}},
+        "medium_confidence": {"type": "array", "items": {"type": "string"}},
+        "low_confidence": {"type": "array", "items": {"type": "string"}},
+        "inferred_skills": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["high_confidence", "medium_confidence", "low_confidence", "inferred_skills"]
     },
     "domain_insights": {
       "type": "object",
-      "description": "Industry-specific insights and market context"
+      "description": "Industry-specific insights and market context",
+      "properties": {
+        "domain": {"type": "string"},
+        "market_demand": {"type": "string"},
+        "skill_gap_priority": {"type": "string"},
+        "emerging_trends": {"type": "array", "items": {"type": "string"}},
+        "insights": {"type": "array", "items": {"type": "string"}}
+      }
     },
     "gap_analysis": {
       "type": "string",
@@ -198,10 +213,11 @@ Structured skill analysis with confidence scores and categorization:
 Industry context and market intelligence:
 ```json
 {
-  "primary_domain": "Software Development",
-  "market_demand": ["Cloud Computing", "AI/ML"],
-  "emerging_skills": ["Kubernetes", "MLOps"],
-  "skill_gap_priority": "high"
+  "domain": "Software Development",
+  "market_demand": "High",
+  "skill_gap_priority": "Medium",
+  "emerging_trends": ["AI/ML", "Cloud Computing"],
+  "insights": ["Strong demand for full-stack developers"]
 }
 ```
 
@@ -364,23 +380,17 @@ The system will respond with a JSON object containing the analysis, generation, 
 **Success Response (200 OK)**:
 ```json
 {
-  "analysis": {
-    "experiences": [...],
-    "aggregate_skills": [...],
-    "processed_skills": {...},
-    "domain_insights": {...},
-    "gap_analysis": "..."
-  },
-  "generation": {
-    "gap_bridging": [...],
+  "experiences": [...],
+  "aggregate_skills": [...],
+  "processed_skills": {...},
+  "domain_insights": {...},
+  "gap_analysis": "...",
+  "suggested_experiences": {
+    "bridging_gaps": [...],
     "metric_improvements": [...]
   },
-  "criticism": {
-    "suggested_experiences": {
-      "bridging_gaps": [...],
-      "metric_improvements": [...]
-    }
-  },
+  "seniority_analysis": {...},
+  "final_written_section": "...",
   "run_metrics": {
     "total_tokens": 1234,
     "estimated_cost_usd": 0.0123,
@@ -433,10 +443,53 @@ curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
   -d '{"resume_text": "...", "job_ad": "..."}'
 ```
 
-**Bring Your Own Key (BYOK):**
-You can also provide your own LLM API keys via request headers:
-- `X-OpenAI-API-Key`: Your OpenAI API key
-- `X-Google-API-Key`: Your Google API key  
-- `X-Anthropic-API-Key`: Your Anthropic API key
+**Key Management**
+Provider keys are configured server-side. BYOK headers are deprecated and not supported.
 
-If provided, these keys will be used for the request instead of the server's configured keys.
+### Caching Behavior
+The analysis stage uses an in-memory cache keyed by input content to improve performance.
+
+- TTL configured via `ANALYSIS_CACHE_TTL_SECONDS` (default: `600` seconds)
+- Cache key includes `resume_text`, `job_ad`, `extracted_skills_json`, `domain_insights_json`, and `confidence_threshold`
+- Observe cache usage via `run_metrics.stages.analysis.cache_hit`
+    "seniority_analysis": {
+      "type": "object",
+      "description": "Seniority level analysis",
+      "properties": {
+        "level": {"type": "string"},
+        "confidence": {"type": "number"},
+        "total_years_experience": {"type": "number"},
+        "experience_quality_score": {"type": "number"},
+        "leadership_score": {"type": "number"},
+        "skill_depth_score": {"type": "number"},
+        "achievement_complexity_score": {"type": "number"},
+        "reasoning": {"type": "string"},
+        "recommendations": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["level", "confidence", "total_years_experience", "experience_quality_score", "leadership_score", "skill_depth_score", "achievement_complexity_score", "reasoning", "recommendations"]
+    },
+    "final_written_section": {
+      "type": "string",
+      "description": "Generated resume experience section text"
+    },
+#### 7. Seniority Analysis
+Detected seniority level and supporting signals:
+```json
+{
+  "level": "mid-level",
+  "confidence": 0.83,
+  "total_years_experience": 5.0,
+  "experience_quality_score": 0.7,
+  "leadership_score": 0.3,
+  "skill_depth_score": 0.6,
+  "achievement_complexity_score": 0.5,
+  "reasoning": "5.0 years of experience demonstrates significant expertise",
+  "recommendations": ["Focus on building technical depth", "Seek mentorship opportunities"]
+}
+```
+
+#### 8. Final Written Section
+Generated resume experience section text:
+```json
+"Led migration of legacy monolith to microservices on AWS ECS, improving deployment frequency by 3x and reducing rollback incidents by 40%."
+```
