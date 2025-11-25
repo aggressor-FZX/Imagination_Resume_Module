@@ -732,11 +732,6 @@ The system tracks comprehensive usage metrics:
 
 This project is open source. See individual files for license information.
 
-**"Bring Your Own Key" (BYOK) Headers:**
+**Key Management**
 
-You can provide your own API keys by including the following headers in your request:
-- `X-OpenAI-API-Key`: Your OpenAI API key
-- `X-Google-API-Key`: Your Google API key
-- `X-Anthropic-API-Key`: Your Anthropic API key
-
-If these headers are provided, the application will use your keys for the request. Otherwise, it will use the keys configured on the server.
+Provider keys are managed server-side. BYOK headers are deprecated and not supported.

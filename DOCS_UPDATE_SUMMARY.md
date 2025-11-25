@@ -60,12 +60,12 @@
 - Added authentication header requirement (X-API-Key)
 - Expanded error response documentation
 - Added authentication section with examples
-- Added BYOK (Bring Your Own Key) documentation
+ - Removed BYOK (Bring Your Own Key) documentation; server-managed keys only
 
 **New Sections**:
 - Authentication
 - Detailed error responses (403, 422, 500)
-- BYOK examples
+ - Removed BYOK examples (deprecated)
 
 **Key Updates**:
 - Production endpoint: https://imaginator-resume-cowriter.onrender.com/analyze

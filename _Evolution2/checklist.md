@@ -2,7 +2,7 @@
 
 - [ ] Implement startup provider key validation
 - [ ] Add `/keys/health` endpoint with provider readiness
-- [ ] Audit BYOK headers and add tests
+- [ ] Remove BYOK headers and update tests
 - [ ] Define FastSVM/Hermes interfaces (feature-flagged)
 - [ ] Implement confidence scoring mapped to `ProcessedSkills`
 - [ ] Validate output via `AnalysisResponse` in assembly path

@@ -87,7 +87,6 @@ async def health_check():
 async def analyze_resume(
     request: AnalysisRequest,
     api_key: str = Depends(get_api_key),
-    openrouter_api_key: Optional[str] = Header(None, alias="X-OpenRouter-API-Key")
 ):
     """
     Analyze a resume against a job description and provide career development recommendations.

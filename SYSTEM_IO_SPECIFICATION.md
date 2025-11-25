@@ -433,10 +433,5 @@ curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
   -d '{"resume_text": "...", "job_ad": "..."}'
 ```
 
-**Bring Your Own Key (BYOK):**
-You can also provide your own LLM API keys via request headers:
-- `X-OpenAI-API-Key`: Your OpenAI API key
-- `X-Google-API-Key`: Your Google API key  
-- `X-Anthropic-API-Key`: Your Anthropic API key
-
-If provided, these keys will be used for the request instead of the server's configured keys.
+**Key Management**
+Provider keys are configured server-side. BYOK headers are deprecated and not supported.

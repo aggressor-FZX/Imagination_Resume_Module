@@ -15,13 +15,9 @@ All `/analyze` endpoints require authentication via the `X-API-Key` header:
 X-API-Key: your-api-key-here
 ```
 
-### Bring Your Own Key (BYOK)
+### Key Management
 
-Optionally provide your own OpenRouter API key to use your own credits:
-
-```bash
-X-OpenRouter-API-Key: your-openrouter-key
-```
+Provider keys are configured server-side. Custom BYOK headers are deprecated and not supported.
 
 ---
 

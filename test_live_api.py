@@ -92,7 +92,6 @@ def test_full_analysis():
             headers={
                 "Content-Type": "application/json",
                 "X-API-Key": IMAGINATOR_AUTH_TOKEN,
-                "X-OpenRouter-API-Key": OPENROUTER_API_KEY
             },
             json={
                 "resume_text": SAMPLE_RESUME,

@@ -10,7 +10,7 @@
 ## Workstreams
 - Authentication & Keys
   - Startup provider key validation; add key health reporting.
-  - BYOK header handling audit and test coverage.
+  - Remove BYOK header support and references (deprecated).
   - Plan for key rotation and failure fallback.
 - Structured Skill Processing
   - Define interface contracts for FastSVM/Hermes integration.
@@ -27,7 +27,7 @@
   - Track `RUN_METRICS` with latency and cost; expose simple metrics.
 
 ## Milestones
-- Week 1: Auth validation + BYOK audit; test harnesses updated; baseline metrics.
+- Week 1: Auth validation; remove BYOK; test harnesses updated; baseline metrics.
 - Week 2: FastSVM/Hermes interface shims and feature flags; confidence scoring.
 - Week 3: Performance passes; CI lint/typecheck; documentation updates.
 
@@ -43,4 +43,3 @@
 - `app.py:86–173` `/analyze` endpoint assembly and error handling.
 - `imaginator_flow.py:889–917, 960–978, 1020–1036` async flow stages.
 - `models.py:123–139` response schema validation target.
-
