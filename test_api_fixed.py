@@ -91,11 +91,7 @@ class TestImaginatorAPIFixed:
                 "job_ad": test_case["input"]["job_ad"]
             }
             
-            # Add API keys if present
-            for key in ["openai_api_key", "anthropic_api_key", "google_api_key", 
-                       "deepseek_api_key", "openrouter_api_key_1", "openrouter_api_key_2"]:
-                if key in test_case["input"]:
-                    payload[key] = test_case["input"][key]
+            # No BYOK support; use server keys
             
             # Make the API call
             response = client.post("/analyze", json=payload)

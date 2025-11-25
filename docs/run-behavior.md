@@ -60,7 +60,13 @@ This guide summarizes what API consumers should expect from the Imaginator servi
       "total_completion_tokens": 2465,
       "total_tokens": 5827,
       "estimated_cost_usd": 0.0012,
-      "failures": []
+      "failures": [],
+      "stages": {
+        "analysis": {"duration_ms": 1200, "cache_hit": false},
+        "generation": {"duration_ms": 980, "cache_hit": false},
+        "synthesis": {"duration_ms": 650, "cache_hit": false},
+        "criticism": {"duration_ms": 710, "cache_hit": false}
+      }
     }
   }
   ```
@@ -68,7 +74,9 @@ This guide summarizes what API consumers should expect from the Imaginator servi
   - `calls`: One entry per successful LLM invocation. Costs are estimated using model-specific OpenRouter pricing so the frontend can itemize spend.
   - `total_*_tokens`: Aggregated prompt, completion, and combined token counts for the entire request.
   - `estimated_cost_usd`: Sum of per-call estimates; this is the number to use for billing the user.
-  - `failures`: Non-empty only if a particular provider errored but was retried successfully in another call.
+- `failures`: Non-empty only if a particular provider errored but was retried successfully in another call.
+
+Additionally, use `stages.*.duration_ms` for per-stage latency tracking; when caching is added, `stages.*.cache_hit` will indicate cache usage for that stage.
 
 ## Client Checklist
 

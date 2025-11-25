@@ -1,6 +1,8 @@
+import asyncio
 import json
 import os
 import types
+
 import pytest
 
 import imaginator_flow as mod
@@ -157,6 +159,164 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
     assert mod.validate_output_schema(output) is True
 
 
+def test_inferred_skills_from_adjacency(tmp_path, monkeypatch):
+    adj = {
+        "python": ["django", "flask"],
+        "aws": ["lambda", "ecs"]
+    }
+    p = tmp_path / "skill_adjacency.json"
+    p.write_text(json.dumps(adj), encoding="utf-8")
+
+    # Force cwd to tmp_path so loader finds the file
+    monkeypatch.chdir(tmp_path)
+
+    result = asyncio.run(
+        mod.run_analysis_async(
+            resume_text="Python developer with AWS experience",
+            job_ad="Backend role requiring Python and AWS",
+            extracted_skills_json={"skills": ["python", "aws"]},
+            confidence_threshold=0.7
+        )
+    )
+
+    ps = result.get("processed_skills", {})
+    assert "inferred_skills" in ps
+    # Should include adjacency-derived items
+    assert any(s in ps["inferred_skills"] for s in ["django", "flask", "lambda", "ecs"])
+
+
+def test_process_structured_skills_confidence_mapping_and_categories():
+    skills = {
+        "skills": [
+            {"skill": "python", "confidence": 0.95, "category": "general"},
+            {"skill": "aws", "confidence": 0.65, "category": "general"},
+            {"skill": "docker", "confidence": 0.9, "category": "backend"},
+            {"skill": "machine learning", "confidence": 0.4, "category": "backend"},
+        ]
+    }
+
+    processed = mod.process_structured_skills(skills, confidence_threshold=0.7)
+
+    assert processed["high_confidence"] == ["python", "docker"]
+    assert processed["medium_confidence"] == ["aws"]
+    assert processed["low_confidence"] == ["machine learning"]
+
+    cats = processed["categories"]
+    assert "general" in cats and "backend" in cats
+    assert cats["general"] == ["python", "aws"]
+    assert cats["backend"] == ["docker", "machine learning"]
+
+
+def test_run_analysis_uses_confidence_mapping(monkeypatch):
+    async def fake_loader(text):
+        return {"processed_text": text}
+
+    async def fake_fastsvm(resume_text, extract_pdf=False):
+        return {"skills": []}
+
+    async def fake_hermes(payload):
+        return {"insights": [], "skills": []}
+
+    monkeypatch.setattr(mod, "call_loader_process_text_only", fake_loader)
+    monkeypatch.setattr(mod, "call_fastsvm_process_resume", fake_fastsvm)
+    monkeypatch.setattr(mod, "call_hermes_extract", fake_hermes)
+
+    extracted = {
+        "skills": [
+            {"skill": "python", "confidence": 0.9, "category": "general"},
+            {"skill": "aws", "confidence": 0.6, "category": "general"},
+            {"skill": "docker", "confidence": 0.85, "category": "backend"},
+        ]
+    }
+
+    result = asyncio.run(
+        mod.run_analysis_async(
+            resume_text="Python and AWS developer",
+            job_ad="Backend role",
+            extracted_skills_json=extracted,
+            confidence_threshold=0.7,
+        )
+    )
+
+    ps = result.get("processed_skills", {})
+    assert ps["high_confidence"] == ["python", "docker"]
+    assert ps["medium_confidence"] == ["aws"]
+    assert ps["low_confidence"] == []
+
+
+def test_run_analysis_maps_fasts_svm_skill_confidences(monkeypatch):
+    async def fake_loader(text):
+        return {"processed_text": text}
+
+    async def fake_fastsvm(resume_text, extract_pdf=False):
+        return {
+            "skills": ["python", "aws", "docker", "ml"],
+            "skill_confidences": {
+                "python": 0.95,
+                "docker": 0.9,
+                "aws": 0.6,
+                "ml": 0.4
+            }
+        }
+
+    async def fake_hermes(payload):
+        return {"insights": [], "skills": []}
+
+    monkeypatch.setattr(mod, "call_loader_process_text_only", fake_loader)
+    monkeypatch.setattr(mod, "call_fastsvm_process_resume", fake_fastsvm)
+    monkeypatch.setattr(mod, "call_hermes_extract", fake_hermes)
+
+    result = asyncio.run(
+        mod.run_analysis_async(
+            resume_text="Python and AWS developer",
+            job_ad="Backend role",
+            extracted_skills_json=None,
+            confidence_threshold=0.7,
+        )
+    )
+
+    ps = result.get("processed_skills", {})
+    assert ps["high_confidence"] == ["docker", "python"] or ps["high_confidence"] == ["python", "docker"]
+    assert ps["medium_confidence"] == ["aws"]
+    assert ps["low_confidence"] == ["ml"]
+
+
+def test_run_analysis_maps_fasts_svm_dict_items(monkeypatch):
+    async def fake_loader(text):
+        return {"processed_text": text}
+
+    async def fake_fastsvm(resume_text, extract_pdf=False):
+        return {
+            "skills": [
+                {"skill": "python", "confidence": 0.95, "category": "general"},
+                {"skill": "aws", "confidence": 0.6, "category": "general"},
+                {"skill": "docker", "confidence": 0.85, "category": "backend"},
+                {"skill": "ml", "confidence": 0.4, "category": "backend"},
+            ]
+        }
+
+    async def fake_hermes(payload):
+        return {"insights": [], "skills": []}
+
+    monkeypatch.setattr(mod, "call_loader_process_text_only", fake_loader)
+    monkeypatch.setattr(mod, "call_fastsvm_process_resume", fake_fastsvm)
+    monkeypatch.setattr(mod, "call_hermes_extract", fake_hermes)
+
+    result = asyncio.run(
+        mod.run_analysis_async(
+            resume_text="Python and AWS developer",
+            job_ad="Backend role",
+            extracted_skills_json=None,
+            confidence_threshold=0.7,
+        )
+    )
+
+    ps = result.get("processed_skills", {})
+    assert ps["high_confidence"] == ["python", "docker"] or ps["high_confidence"] == ["docker", "python"]
+    assert ps["medium_confidence"] == ["aws"]
+    assert ps["low_confidence"] == ["ml"]
+
+
 def test_call_llm_switches_models_on_failure(monkeypatch):
     class DummyCompletions:
         def __init__(self):
@@ -222,3 +382,38 @@ async def test_call_llm_async_retries_gemini(monkeypatch):
 
     result = await mod.call_llm_async('System prompt', 'User prompt')
     assert result == 'final output'
+
+
+def test_analysis_cache_hit(monkeypatch):
+    async def fake_loader(text):
+        return {"processed_text": text}
+
+    async def fake_fastsvm(resume_text, extract_pdf=False):
+        return {"skills": ["python", "aws"], "skill_confidences": {"python": 0.9, "aws": 0.8}}
+
+    async def fake_hermes(payload):
+        return {"insights": [], "skills": ["docker"]}
+
+    monkeypatch.setattr(mod, "call_loader_process_text_only", fake_loader)
+    monkeypatch.setattr(mod, "call_fastsvm_process_resume", fake_fastsvm)
+    monkeypatch.setattr(mod, "call_hermes_extract", fake_hermes)
+
+    mod.ANALYSIS_CACHE.clear()
+    mod.RUN_METRICS["stages"]["analysis"].update({
+        "start": None, "end": None, "duration_ms": None, "cache_hit": False
+    })
+
+    args = dict(
+        resume_text="Python and AWS developer",
+        job_ad="Backend role",
+        extracted_skills_json=None,
+        confidence_threshold=0.7,
+    )
+
+    first = asyncio.run(mod.run_analysis_async(**args))
+    assert mod.RUN_METRICS["stages"]["analysis"]["cache_hit"] is False
+
+    second = asyncio.run(mod.run_analysis_async(**args))
+    assert mod.RUN_METRICS["stages"]["analysis"]["cache_hit"] is True
+    assert isinstance(mod.RUN_METRICS["stages"]["analysis"]["duration_ms"], int)
+    assert first == second

@@ -54,6 +54,23 @@ class Settings(BaseSettings):
     # Security
     IMAGINATOR_AUTH_TOKEN: str
 
+    # Feature Flags
+    ENABLE_LOADER: bool = False
+    ENABLE_FASTSVM: bool = False
+    ENABLE_HERMES: bool = False
+    ENABLE_JOB_SEARCH: bool = False
+
+    # External Service Configuration
+    LOADER_BASE_URL: Optional[str] = None
+    HERMES_BASE_URL: Optional[str] = None
+    FASTSVM_BASE_URL: Optional[str] = None
+    JOB_SEARCH_BASE_URL: Optional[str] = None
+
+    # External Service Auth Tokens
+    API_KEY: Optional[str] = None
+    HERMES_AUTH_TOKEN: Optional[str] = None
+    FASTSVM_AUTH_TOKEN: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,

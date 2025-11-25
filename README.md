@@ -228,6 +228,21 @@ curl -X POST https://imaginator-resume-cowriter.onrender.com/analyze \
 - No Auth: `{"detail":"X-API-Key header is required"}`
 - Success: Full analysis JSON with skills, gaps, and recommendations
 
+#### Transport Metrics
+
+Responses include `run_metrics.transport.http_pool` summarizing pooled HTTP transport for feature‑flagged external calls:
+- `requests_total`, `errors_total`, `timeouts_total`
+- `status_counts` per HTTP status
+- `latency_ms` with `last`, `p50`, `p95`
+
+#### Connection Pooling
+
+The service uses a shared `aiohttp` `ClientSession` with `TCPConnector` to reuse connections across requests.
+- Config:
+  - `MAX_CONCURRENT_REQUESTS` → `settings.max_concurrent_requests`
+  - `REQUEST_TIMEOUT` → `settings.request_timeout`
+- Lifecycle: initialized at startup and closed on shutdown; external calls in `imaginator_flow.py` reuse the shared session when available.
+
 ### Render MCP Server
 
 This project is configured to use the Render MCP server, which allows for direct interaction with your Render account from within the development environment. This enables automated deployments, environment management, and monitoring.
@@ -299,7 +314,7 @@ X-API-Key: your-api-key-here
     "high_confidence": ["Python"],
     "medium_confidence": ["SQL"],
     "low_confidence": [],
-    "inferred_skills": []
+    "inferred_skills": ["Django", "Flask"]
   },
   "domain_insights": {
     "domain": "software",
@@ -311,6 +326,21 @@ X-API-Key: your-api-key-here
     "bridging_gaps": ["Learn Docker"],
     "metric_improvements": ["Add metrics"]
   },
+  "seniority_analysis": {
+    "level": "mid-level",
+    "confidence": 0.83,
+    "total_years_experience": 5.0,
+    "experience_quality_score": 0.7,
+    "leadership_score": 0.3,
+    "skill_depth_score": 0.6,
+    "achievement_complexity_score": 0.5,
+    "reasoning": "5.0 years of experience demonstrates significant expertise",
+    "recommendations": [
+      "Focus on building technical depth",
+      "Seek mentorship opportunities"
+    ]
+  },
+  "final_written_section": "Generated resume experience section text",
   "run_metrics": {
     "total_tokens": 2300,
     "estimated_cost_usd": 0.045,

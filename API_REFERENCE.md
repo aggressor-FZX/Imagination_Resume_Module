@@ -35,7 +35,9 @@ Check if the service is running and healthy.
 {
   "status": "healthy",
   "version": "1.0.0",
-  "environment": "production"
+  "environment": "production",
+  "timestamp": "2025-11-24T12:34:56Z",
+  "has_openrouter_key": true
 }
 ```
 
@@ -88,9 +90,11 @@ X-API-Key: your-api-key-here
     "inferred_skills": ["Django", "Flask"]
   },
   "domain_insights": {
-    "primary_domain": "Software Development",
-    "market_demand": ["Cloud Computing", "AI/ML"],
-    "emerging_skills": ["Kubernetes"]
+    "domain": "Software Development",
+    "market_demand": "High",
+    "skill_gap_priority": "Medium",
+    "emerging_trends": ["AI/ML", "Cloud Computing"],
+    "insights": ["Strong demand for full-stack developers"]
   },
   "gap_analysis": "Detailed narrative analysis of skill gaps...",
   "suggested_experiences": {
@@ -113,6 +117,21 @@ X-API-Key: your-api-key-here
       }
     ]
   },
+  "seniority_analysis": {
+    "level": "mid-level",
+    "confidence": 0.83,
+    "total_years_experience": 5.0,
+    "experience_quality_score": 0.7,
+    "leadership_score": 0.3,
+    "skill_depth_score": 0.6,
+    "achievement_complexity_score": 0.5,
+    "reasoning": "5.0 years of experience demonstrates significant expertise",
+    "recommendations": [
+      "Focus on building technical depth",
+      "Seek mentorship opportunities"
+    ]
+  },
+  "final_written_section": "Generated resume experience section text",
   "run_metrics": {
     "calls": [
       {
@@ -278,6 +297,7 @@ File uploads are not required for the current FrontEnd integration. Use `POST /a
 - **Timeout**: Set client timeout to at least 120 seconds
 - **Concurrent Requests**: Service can handle multiple concurrent requests
 - **Rate Limits**: No hard limits currently, but recommended: max 10 requests/minute
+ - **Caching**: Identical `resume_text` + `job_ad` + inputs return from cache within TTL; see `run_metrics.stages.analysis.cache_hit`
 
 ---
 
@@ -353,11 +373,45 @@ If you need to access from a different origin, contact the service administrator
 
 ## Changelog
 
+### v1.1.0 (2025-11-24)
+- ✅ Added `/keys/health` endpoint for provider key readiness
+- ✅ In-memory analysis cache with TTL and cache-hit metrics
+- ✅ Schema alignment with `AnalysisResponse` updates
+
 ### v1.0.0 (2025-10-15)
 - ✅ Initial production deployment
 - ✅ Docker-based deployment on Render
 - ✅ API key authentication
 - ✅ Health check endpoint
 - ✅ Comprehensive error handling
-- ✅ BYOK support for LLM API keys
 - ✅ Auto-deploy from GitHub
+
+### 3. Keys Health
+
+Check readiness and availability of provider keys.
+
+**Endpoint**: `GET /keys/health`  
+**Authentication**: None required
+
+**Response** (200 OK):
+```json
+{
+  "ready": true,
+  "providers": {
+    "openrouter": true,
+    "openai": false,
+    "anthropic": false,
+    "google": false,
+    "deepseek": false
+  },
+  "environment": "production"
+}
+```
+
+### 4. Caching Behavior
+
+Analysis responses are cached in-memory using a deterministic key built from `resume_text`, `job_ad`, `extracted_skills_json`, `domain_insights_json`, and `confidence_threshold`.
+
+- **TTL**: Configurable via `ANALYSIS_CACHE_TTL_SECONDS` (default: `600` seconds)
+- **Observability**: `run_metrics.stages.analysis.cache_hit` indicates whether a cache was used
+- **Impact**: Reduced latency and cost for identical requests

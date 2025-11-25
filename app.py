@@ -7,6 +7,7 @@ import time
 import json
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
+import aiohttp
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,7 +23,7 @@ from models import (
 
 # Import the existing flow functions (will be converted to async)
 from imaginator_flow import (
-    run_analysis_async, run_generation_async, run_criticism_async, RUN_METRICS, validate_output_schema
+    run_analysis_async, run_generation_async, run_criticism_async, run_synthesis_async, RUN_METRICS, validate_output_schema, configure_shared_http_session
 )
 
 
@@ -36,10 +37,28 @@ async def lifespan(app: FastAPI):
     if not settings.openrouter_api_key_1 and not settings.openrouter_api_key_2:
         raise RuntimeError("At least one OPENROUTER_API_KEY must be configured")
 
+    connector = aiohttp.TCPConnector(
+        limit=settings.max_concurrent_requests,
+        force_close=False,
+        enable_cleanup_closed=True,
+        ttl_dns_cache=300,
+    )
+    timeout = aiohttp.ClientTimeout(total=settings.request_timeout)
+    app.state.http_session = aiohttp.ClientSession(connector=connector, timeout=timeout)
+    configure_shared_http_session(app.state.http_session)
+
+    # Redis cache removed per project decision
+
     yield
 
     # Shutdown
     print("🛑 Shutting down server")
+    try:
+        session = getattr(app.state, "http_session", None)
+        if session:
+            await session.close()
+    finally:
+        configure_shared_http_session(None)
 
 
 # Create FastAPI application
@@ -83,6 +102,24 @@ async def health_check():
     )
 
 
+@app.get("/keys/health")
+async def keys_health():
+    """Report provider key readiness and availability."""
+    providers = {
+        "openrouter": bool(settings.openrouter_api_key_1 or settings.openrouter_api_key_2),
+        "openai": bool(getattr(settings, "openai_api_key", None)),
+        "anthropic": bool(getattr(settings, "anthropic_api_key", None)),
+        "google": bool(getattr(settings, "google_api_key", None)),
+        "deepseek": bool(getattr(settings, "deepseek_api_key", None)),
+    }
+    ready = providers["openrouter"]  # minimal requirement
+    return {
+        "ready": ready,
+        "providers": providers,
+        "environment": settings.environment,
+    }
+
+
 @app.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume(
     request: AnalysisRequest,
@@ -103,8 +140,8 @@ async def analyze_resume(
     try:
         if not request.resume_text.strip():
             raise HTTPException(status_code=422, detail="resume_text cannot be empty")
-        # We use OpenRouter exclusively (configured via environment).
-        api_keys = {"openrouter_api_keys": settings.openrouter_api_key_1 and settings.openrouter_api_key_2}
+        # Use server-configured OpenRouter keys only (BYOK removed)
+        api_keys = [key for key in [settings.openrouter_api_key_1, settings.openrouter_api_key_2] if key]
 
         # Reset run metrics for this request
         RUN_METRICS.update({
@@ -128,7 +165,7 @@ async def analyze_resume(
             extracted_skills_json=extracted_skills,
             domain_insights_json=domain_insights,
             confidence_threshold=request.confidence_threshold,
-            openrouter_api_keys=api_keys["openrouter_api_keys"]
+            openrouter_api_keys=api_keys
         )
 
         # If mocked test returns final success payload (v2 shape), return it directly
@@ -140,15 +177,32 @@ async def analyze_resume(
         generation_result = await run_generation_async(
             analysis_json=analysis_result,
             job_ad=request.job_ad,
-            openrouter_api_keys=api_keys["openrouter_api_keys"]
+            openrouter_api_keys=api_keys
         )
 
         # Step 3: Run Criticism
         print("🎯 Step 3: Refining suggestions with adversarial review...")
         criticism_result = await run_criticism_async(
-            generated_suggestions=generation_result,
+            generated_text=generation_result,
             job_ad=request.job_ad,
-            openrouter_api_keys=api_keys["openrouter_api_keys"]
+            openrouter_api_keys=api_keys
+        )
+
+        # Normalize criticism_result to dict
+        if isinstance(criticism_result, str):
+            try:
+                from imaginator_flow import ensure_json_dict
+                criticism_result = ensure_json_dict(criticism_result, "critique")
+            except Exception:
+                criticism_result = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
+
+        # Step 4: Synthesis — integrate critique into final text
+        print("🧩 Step 4: Incorporating critique into final resume section...")
+        final_written_section = await run_synthesis_async(
+            generated_text=generation_result,
+            critique_json=criticism_result,
+            job_ad=request.job_ad,
+            openrouter_api_keys=api_keys
         )
 
         # Ensure criticism_result has the correct structure
@@ -159,13 +213,14 @@ async def analyze_resume(
         output = {
             **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis, seniority_analysis
             **criticism_result,  # suggested_experiences
+            "final_written_section": final_written_section,
             "run_metrics": RUN_METRICS.copy(),
             "processing_status": ProcessingStatus.COMPLETED,
             "processing_time_seconds": time.time() - start_time
         }
 
         ## Validate output schema
-        # validate_output_schema(output)
+        validate_output_schema(output)
 
         return AnalysisResponse(**output)
 
@@ -231,6 +286,34 @@ async def get_library_docs(library: str, version: str = "latest"):
             detail=f"Context7 documentation retrieval failed: {str(e)}"
         )
 
+
+@app.get("/keys/health")
+async def keys_health():
+    """Check health of configured API keys"""
+    async def check_key(key: str) -> Dict[str, Any]:
+        if not key:
+            return {"status": "missing"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={"Authorization": f"Bearer {key}"}
+                ) as response:
+                    return {
+                        "status": "healthy" if response.status == 200 else "unhealthy",
+                        "details": await response.text() if response.status != 200 else None
+                    }
+        except Exception as e:
+            return {"status": "error", "details": str(e)}
+
+    key1_status = await check_key(settings.openrouter_api_key_1)
+    key2_status = await check_key(settings.openrouter_api_key_2)
+
+    return {
+        "openrouter_key_1": key1_status,
+        "openrouter_key_2": key2_status,
+        "overall": "healthy" if any(s["status"] == "healthy" for s in [key1_status, key2_status]) else "unhealthy"
+    }
 
 @app.get("/config")
 async def get_config():

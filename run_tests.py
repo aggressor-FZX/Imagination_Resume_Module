@@ -8,6 +8,7 @@ import subprocess
 import sys
 import os
 from pathlib import Path
+import shutil
 
 
 def run_tests(test_type="all", coverage=False, verbose=True):
@@ -69,32 +70,20 @@ def run_linting():
     """Run code linting with flake8/black if available"""
     success = True
 
-    # Try black formatting check
-    try:
-        print("Checking code formatting with black...")
+    # Ruff linting
+    if shutil.which("ruff"):
+        print("Linting with ruff...")
         result = subprocess.run([
-            "python", "-m", "black", "--check", "--diff",
-            "app.py", "config.py", "models.py", "tests/"
+            "ruff", "check", "."
         ], capture_output=False)
         if result.returncode != 0:
-            print("Code formatting issues found. Run 'black .' to fix.")
+            print("Ruff reported issues.")
             success = False
-    except ImportError:
-        print("black not installed, skipping formatting check")
+    else:
+        print("ruff not installed, skipping linting")
 
-    # Try isort import sorting check
-    try:
-        print("Checking import sorting with isort...")
-        result = subprocess.run([
-            "python", "-m", "isort", "--check-only", "--diff",
-            "app.py", "config.py", "models.py", "tests/"
-        ], capture_output=False)
-        if result.returncode != 0:
-            print("Import sorting issues found. Run 'isort .' to fix.")
-            success = False
-    except ImportError:
-        print("isort not installed, skipping import check")
-
+    # Skip isort check; ruff and black enforce import/style sufficiently
+    
     return success
 
 

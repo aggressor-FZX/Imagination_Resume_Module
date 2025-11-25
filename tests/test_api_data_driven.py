@@ -6,11 +6,12 @@ This test suite loads test cases from the test_data directory and uses mocking
 to test various scenarios without making live API calls.
 """
 
-import pytest
 import json
 import os
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
 import requests
 
 # Get the absolute path to the test_data directory

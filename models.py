@@ -1,11 +1,12 @@
 """
-Pydantic models for FastAPI request/response validation
+Models for request/response schemas
 Based on SYSTEM_IO_SPECIFICATION.md and Context7 research on Pydantic
 """
 
-from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProcessingStatus(str, Enum):
@@ -131,6 +132,7 @@ class AnalysisResponse(BaseModel):
         ..., description="Refined improvement suggestions"
     )
     seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
+    final_written_section: Optional[str] = Field(None, description="Generated resume section text")
     run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"

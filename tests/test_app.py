@@ -3,14 +3,14 @@ Tests for FastAPI endpoints
 Based on Context7 research findings for pytest-asyncio and httpx
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 from app import app
-from models import AnalysisRequest, ProcessingStatus
 from config import settings
+from models import AnalysisRequest, ProcessingStatus
 
 
 client = TestClient(app, headers={"X-API-Key": settings.api_key})
@@ -304,3 +304,12 @@ class TestContext7Endpoint:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+def test_keys_health_endpoint():
+    response = client.get("/keys/health")
+    assert response.status_code == 200
+    payload = response.json()
+    assert "ready" in payload and isinstance(payload["ready"], bool)
+    assert "providers" in payload and isinstance(payload["providers"], dict)
+    assert "environment" in payload
+    # At minimum, openrouter presence drives readiness
+    assert isinstance(payload["providers"].get("openrouter"), bool)
