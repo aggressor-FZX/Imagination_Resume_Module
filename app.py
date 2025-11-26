@@ -5,11 +5,11 @@ Based on Context7 research findings for FastAPI best practices
 
 import time
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
@@ -101,6 +101,11 @@ async def health_check():
         timestamp=datetime.now(timezone.utc).isoformat(),
         has_openrouter_key=bool(settings.openrouter_api_key_1 or settings.openrouter_api_key_2)
     )
+
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "Generative Resume Co-Writer"}
 
 
 @app.get("/keys/health")
@@ -244,6 +249,91 @@ async def analyze_resume(
             ).model_dump()
         )
 
+
+@app.post("/api/analysis/multi-file", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
+async def analyze_multi_file(
+    files: List[UploadFile] = File(...),
+    job_ad: Optional[str] = Form(default=None),
+    api_key: str = Depends(get_api_key),
+):
+    start_time = time.time()
+    try:
+        contents: List[str] = []
+        for f in files:
+            data = await f.read()
+            if isinstance(data, bytes):
+                contents.append(data.decode("utf-8", errors="ignore"))
+            else:
+                contents.append(str(data))
+        resume_text = "\n\n".join([c for c in contents if c])
+        if not resume_text.strip():
+            raise HTTPException(status_code=422, detail="files cannot be empty")
+        api_keys = [key for key in [settings.openrouter_api_key_1, settings.openrouter_api_key_2] if key]
+        RUN_METRICS.update({
+            "calls": [],
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "failures": []
+        })
+        analysis_result = await run_analysis_async(
+            resume_text=resume_text,
+            job_ad=job_ad,
+            extracted_skills_json=None,
+            domain_insights_json=None,
+            confidence_threshold=settings.confidence_threshold,
+            openrouter_api_keys=api_keys
+        )
+        generation_result = await run_generation_async(
+            analysis_json=analysis_result,
+            job_ad=job_ad,
+            openrouter_api_keys=api_keys
+        )
+        criticism_result = await run_criticism_async(
+            generated_text=generation_result,
+            job_ad=job_ad,
+            openrouter_api_keys=api_keys
+        )
+        if isinstance(criticism_result, str):
+            try:
+                from imaginator_flow import ensure_json_dict
+                criticism_result = ensure_json_dict(criticism_result, "critique")
+            except Exception:
+                criticism_result = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
+        final_written_section = await run_synthesis_async(
+            generated_text=generation_result,
+            critique_json=criticism_result,
+            job_ad=job_ad,
+            openrouter_api_keys=api_keys
+        )
+        if "suggested_experiences" not in criticism_result:
+            criticism_result = {"suggested_experiences": criticism_result}
+        output = {
+            **analysis_result,
+            **criticism_result,
+            "final_written_section": final_written_section,
+            "run_metrics": RUN_METRICS.copy(),
+            "processing_status": ProcessingStatus.COMPLETED,
+            "processing_time_seconds": time.time() - start_time
+        }
+        validate_output_schema(output)
+        return AnalysisResponse(**output)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        processing_time = time.time() - start_time
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                error=f"Analysis failed: {str(e)}",
+                error_code="ANALYSIS_FAILED",
+                details={
+                    "processing_time_seconds": processing_time,
+                    "run_metrics": RUN_METRICS.copy() if RUN_METRICS.get("calls") else None
+                }
+            ).model_dump()
+        )
 
 # Note: File uploads are no longer required. FrontEnd sends structured JSON only.
 # The `/analyze` endpoint accepts the JSON payload and is the single supported entrypoint.
