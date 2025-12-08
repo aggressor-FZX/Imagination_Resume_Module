@@ -2,7 +2,7 @@
 
 ## Base URL
 
-**Production**: `https://imaginator-resume-cowriter.onrender.com`  
+**Production**: `https://imaginator-resume-cowriter.onrender.com`
 **Local Development**: `http://localhost:8000`
 
 ---
@@ -27,7 +27,7 @@ Provider keys are configured server-side. Custom BYOK headers are deprecated and
 
 Check if the service is running and healthy.
 
-**Endpoint**: `GET /health`  
+**Endpoint**: `GET /health`
 **Authentication**: None required
 
 **Response** (200 OK):
@@ -52,7 +52,7 @@ curl https://imaginator-resume-cowriter.onrender.com/health
 
 Analyze a resume against a job description to identify skills, gaps, and generate recommendations.
 
-**Endpoint**: `POST /analyze`  
+**Endpoint**: `POST /analyze`
 **Authentication**: Required (`X-API-Key` header)
 
 **Request Headers**:
@@ -251,11 +251,11 @@ async function analyzeResume(resumeText, jobAd) {
       },
       timeout: 120000  // 120 second timeout
     });
-    
+
     console.log('Skills:', response.data.aggregate_skills);
     console.log('Gap Analysis:', response.data.gap_analysis);
     console.log('Cost:', response.data.run_metrics.estimated_cost_usd);
-    
+
     return response.data;
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);
@@ -338,7 +338,7 @@ def analyze_with_retry(resume_text, job_ad, max_retries=3):
                 json={"resume_text": resume_text, "job_ad": job_ad},
                 timeout=120
             )
-            
+
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 403:
@@ -347,12 +347,12 @@ def analyze_with_retry(resume_text, job_ad, max_retries=3):
                 raise ValueError(f"Invalid input: {response.json()}")
             else:
                 print(f"Attempt {attempt + 1} failed: {response.status_code}")
-                
+
         except Timeout:
             print(f"Timeout on attempt {attempt + 1}")
         except RequestException as e:
             print(f"Request error: {e}")
-            
+
     raise Exception("Max retries exceeded")
 ```
 
@@ -396,7 +396,7 @@ If you need to access from a different origin, contact the service administrator
 
 Check readiness and availability of provider keys.
 
-**Endpoint**: `GET /keys/health`  
+**Endpoint**: `GET /keys/health`
 **Authentication**: None required
 
 **Response** (200 OK):
