@@ -192,7 +192,7 @@ def validate_output_schema(output: Dict[str, Any]) -> bool:
     try:
         # Import here to avoid circular imports
         from models import AnalysisResponse
-        
+
         # Validate using Pydantic model
         AnalysisResponse(**output)
         return True
@@ -475,13 +475,13 @@ def parse_experiences(text: str) -> List[Dict]:
         lines = [l.strip() for l in b.splitlines() if l.strip()]
         title_line = lines[0] if lines else ""
         body = " ".join(lines[1:]) if len(lines) > 1 else " ".join(lines)
-        
+
         # Extract duration information for seniority detection
         duration = extract_duration_from_text(b)
-        
+
         experiences.append({
-            "raw": b, 
-            "title_line": title_line, 
+            "raw": b,
+            "title_line": title_line,
             "body": body,
             "duration": duration,
             "description": f"{title_line} {body}"
@@ -498,12 +498,12 @@ def extract_duration_from_text(text: str) -> str:
         r'\d{4}\s*-\s*(?:\d{4}|present|current)',
         r'(?:\d+\s+years?|\d+\s+months?|\d+\s+yrs?)'
     ]
-    
+
     for pattern in date_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             return match.group()
-    
+
     return ""
 
 
@@ -523,12 +523,12 @@ def extrapolate_skills_from_text(text: str) -> Set[str]:
 def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0.7, domain: str = None) -> Dict:
     """
     Process structured skills data from repos with confidence filtering and domain awareness
-    
+
     Args:
         skills_data: Structured skills data from repos
         confidence_threshold: Minimum confidence score
         domain: Domain context for filtering (optional)
-    
+
     Returns:
         Processed skills with filtering and prioritization
     """
@@ -542,24 +542,24 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
         "filtered_count": 0,
         "total_count": 0
     }
-    
+
     if "skills" not in skills_data:
         return processed
-    
+
     for skill_info in skills_data["skills"]:
         if not isinstance(skill_info, dict):
             continue
-            
+
         skill_name = skill_info.get("skill", skill_info.get("name", ""))
         confidence = skill_info.get("confidence", 0)
         category = skill_info.get("category", "general")
-        
+
         if not skill_name:
             continue
-            
+
         processed["total_count"] += 1
         processed["skill_confidences"][skill_name] = confidence
-        
+
         # Categorize by confidence
         if confidence >= confidence_threshold:
             processed["high_confidence"].append(skill_name)
@@ -568,19 +568,19 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
             processed["medium_confidence"].append(skill_name)
         else:
             processed["low_confidence"].append(skill_name)
-        
+
         # Group by category
         if category not in processed["categories"]:
             processed["categories"][category] = []
         processed["categories"][category].append(skill_name)
-    
+
     # Sort skills by confidence (highest first)
     for category in processed["categories"]:
         processed["categories"][category].sort(
-            key=lambda s: processed["skill_confidences"].get(s, 0), 
+            key=lambda s: processed["skill_confidences"].get(s, 0),
             reverse=True
         )
-    
+
     return processed
 
 
@@ -793,8 +793,8 @@ def call_llm(
     Returns the response text or raises an exception if all fail.
     """
     errors: List[str] = []
-    
-    
+
+
     # Use the globally configured client if available
     or_client = openrouter_client
     if openrouter_api_key:
@@ -916,7 +916,7 @@ async def call_llm_async(
 
     # Determine which keys to use for rotation
     keys_to_try = openrouter_api_keys or OPENROUTER_API_KEYS
-    
+
     # Use the globally configured async client if available
     or_async_client = openrouter_async_client
     if openrouter_api_key:
@@ -1182,11 +1182,32 @@ async def run_analysis_async(
 
     ats_summary: Optional[str] = None
 
-    gap_analysis = json.dumps({
-        "skill_gaps": [],
-        "experience_gaps": [],
-        "recommendations": []
-    })
+    # Basic gap analysis heuristic (non-LLM) to avoid empty responses
+    job_text = (job_ad or "").lower()
+    agg_lower = {s.lower() for s in aggregate_skills}
+    # Common tech / role keywords to compare against job ad
+    required_keywords = [
+        "python", "java", "c++", "go", "javascript", "typescript",
+        "react", "node", "sql", "postgres", "mysql", "mongodb",
+        "aws", "gcp", "azure", "kubernetes", "docker", "devops",
+        "ml", "ai", "data", "analytics", "security", "leadership",
+        "communication", "testing", "ci/cd"
+    ]
+    missing_skills = [
+        kw for kw in required_keywords
+        if kw in job_text and kw not in agg_lower
+    ]
+
+    if missing_skills:
+        gap_analysis = (
+            f"The job description emphasizes {', '.join(missing_skills)}. "
+            f"Add concrete projects or accomplishments to demonstrate these skills."
+        )
+    else:
+        gap_analysis = (
+            "No critical gaps detected against the job ad keywords. "
+            "Ensure your most relevant achievements are highlighted."
+        )
 
     output = {
         "experiences": [
@@ -1208,6 +1229,21 @@ async def run_analysis_async(
         "gap_analysis": gap_analysis,
         "seniority_analysis": seniority,
         "final_written_section": "",
+    }
+    # Populate suggested_experiences from the heuristic gaps if none provided
+    existing_suggestions = output.get("suggested_experiences") or {}
+    bridging = existing_suggestions.get("bridging_gaps") or []
+    if missing_skills and not bridging:
+        bridging = [
+            {
+                "skill": kw,
+                "action": f"Create a project or bullet that proves your {kw} impact in a work setting."
+            }
+            for kw in missing_skills
+        ]
+    output["suggested_experiences"] = {
+        "bridging_gaps": bridging,
+        **{k: v for k, v in existing_suggestions.items() if k != "bridging_gaps"}
     }
     if ats_summary:
         try:
@@ -1268,7 +1304,7 @@ def run_generation(analysis_json: Union[str, Dict], job_ad: str, **kwargs) -> st
                 return parsed
         except (json.JSONDecodeError, TypeError):
             pass
-        
+
         # If not JSON or doesn't have expected structure, return fallback structure
         # This is for testing purposes - in production, this would be resume text
         return {
@@ -1386,7 +1422,7 @@ def run_criticism(generated_text: str, job_ad: str, **kwargs) -> str:
                 return parsed
         except (json.JSONDecodeError, TypeError):
             pass
-        
+
         # If not JSON or doesn't have expected structure, return fallback structure
         # This is for testing purposes - in production, this would be critique JSON
         return {
