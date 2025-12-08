@@ -83,9 +83,11 @@ app.add_middleware(
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def get_api_key(api_key: str = Security(api_key_header)):
+    """Validate API key against configured IMAGINATOR_AUTH_TOKEN"""
     if not api_key:
         raise HTTPException(status_code=403, detail="Invalid API key")
-    if api_key == "invalid-api-key":
+    # Validate against the configured auth token from environment
+    if api_key != settings.IMAGINATOR_AUTH_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return api_key
 
