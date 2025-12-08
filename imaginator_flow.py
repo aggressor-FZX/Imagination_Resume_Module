@@ -1199,15 +1199,19 @@ async def run_analysis_async(
     ]
 
     if missing_skills:
-        gap_analysis = (
-            f"The job description emphasizes {', '.join(missing_skills)}. "
-            f"Add concrete projects or accomplishments to demonstrate these skills."
-        )
+        gap_analysis = {
+            "critical_gaps": missing_skills,
+            "nice_to_have_gaps": [],
+            "gap_bridging_strategy": "Add concrete projects or accomplishments to demonstrate these skills.",
+            "summary": f"The job description emphasizes {', '.join(missing_skills)}. Add concrete projects or accomplishments to demonstrate these skills."
+        }
     else:
-        gap_analysis = (
-            "No critical gaps detected against the job ad keywords. "
-            "Ensure your most relevant achievements are highlighted."
-        )
+        gap_analysis = {
+            "critical_gaps": [],
+            "nice_to_have_gaps": [],
+            "gap_bridging_strategy": "Ensure your most relevant achievements are highlighted.",
+            "summary": "No critical gaps detected against the job ad keywords. Ensure your most relevant achievements are highlighted."
+        }
 
     output = {
         "experiences": [
