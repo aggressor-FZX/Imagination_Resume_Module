@@ -4,7 +4,7 @@ Based on SYSTEM_IO_SPECIFICATION.md and Context7 research on Pydantic
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -127,7 +127,7 @@ class AnalysisResponse(BaseModel):
     aggregate_skills: List[str] = Field(..., description="All unique skills found")
     processed_skills: ProcessedSkills = Field(..., description="Categorized skills")
     domain_insights: DomainInsights = Field(..., description="Domain intelligence")
-    gap_analysis: str = Field(..., description="Narrative gap analysis")
+    gap_analysis: Union[str, Dict[str, Any]] = Field(..., description="Gap analysis (string or structured object)")
     suggested_experiences: Dict[str, Any] = Field(
         ..., description="Refined improvement suggestions"
     )
