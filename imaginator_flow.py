@@ -1230,7 +1230,7 @@ async def run_analysis_async(
             "inferred_skills": inferred_skills or processed_skills.get("inferred_skills", []),
         },
         "domain_insights": domain_insights,
-        "gap_analysis": gap_analysis,
+        "gap_analysis": json.dumps(gap_analysis),  # Convert dict to JSON string for Pydantic
         "seniority_analysis": seniority,
         "final_written_section": "",
     }
