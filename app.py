@@ -511,6 +511,18 @@ async def get_config():
         "has_context7_key": bool(settings.context7_api_key)
     }
 
+@app.get("/debug/flags")
+async def debug_flags():
+    """Return non-sensitive feature flag values and presence of related service URLs."""
+    return {
+        "ENABLE_LOADER": bool(getattr(settings, "ENABLE_LOADER", False)),
+        "ENABLE_FASTSVM": bool(getattr(settings, "ENABLE_FASTSVM", False)),
+        "ENABLE_HERMES": bool(getattr(settings, "ENABLE_HERMES", False)),
+        "FINAL_WRITER_PROVIDER": getattr(settings, "FINAL_WRITER_PROVIDER", None),
+        "LOADER_BASE_URL_SET": bool(getattr(settings, "LOADER_BASE_URL", None)),
+        "FASTSVM_BASE_URL_SET": bool(getattr(settings, "FASTSVM_BASE_URL", None)),
+        "HERMES_BASE_URL_SET": bool(getattr(settings, "HERMES_BASE_URL", None)),
+    }
 
 if __name__ == "__main__":
     import uvicorn
