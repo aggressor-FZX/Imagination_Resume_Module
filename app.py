@@ -212,7 +212,7 @@ async def analyze_resume(
             job_ad=request.job_ad,
             openrouter_api_keys=api_keys,
             analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
-            final_writer=settings.FINAL_WRITER_PROVIDER  # Use configured provider
+            final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
 
         # Extract structured fields from synthesis result
