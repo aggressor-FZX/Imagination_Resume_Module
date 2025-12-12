@@ -296,7 +296,7 @@ class OpenRouterSafeClient:
 # Example usage
 if __name__ == "__main__":
     # Test the client
-    api_key = "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"
+    api_key = os.getenv("OPENROUTER_API_KEY_1", "YOUR_OPENROUTER_API_KEY")
     client = OpenRouterSafeClient(api_key)
 
     messages = [
