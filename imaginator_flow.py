@@ -628,24 +628,45 @@ async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[s
 
 
 async def call_loader_process_text_only(text: str) -> Dict[str, Any]:
+    import logging
+    logger = logging.getLogger(__name__)
     if not settings.ENABLE_LOADER or not settings.LOADER_BASE_URL:
+        logger.info(f"[LOADER] Service DISABLED (ENABLE_LOADER={settings.ENABLE_LOADER}, has_url={bool(settings.LOADER_BASE_URL)}) - returning text as-is")
         return {"processed_text": text}
+    logger.info(f"[LOADER] Calling service at {settings.LOADER_BASE_URL}")
     url = f"{settings.LOADER_BASE_URL}/process-text-only"
-    return await _post_json(url, {"text": text}, bearer_token=settings.API_KEY)
+    result = await _post_json(url, {"text": text}, bearer_token=settings.API_KEY)
+    logger.info(f"[LOADER] Returned keys: {list(result.keys()) if result else 'none'}")
+    return result
 
 
 async def call_fastsvm_process_resume(resume_text: str, extract_pdf: bool = False) -> Dict[str, Any]:
+    import logging
+    logger = logging.getLogger(__name__)
     if not settings.ENABLE_FASTSVM or not settings.FASTSVM_BASE_URL:
+        logger.warning(f"[FASTSVM] Service DISABLED (ENABLE_FASTSVM={settings.ENABLE_FASTSVM}, has_url={bool(settings.FASTSVM_BASE_URL)}) - returning empty skills/titles")
         return {"skills": [], "titles": []}
+    logger.info(f"[FASTSVM] Calling service at {settings.FASTSVM_BASE_URL}")
     url = f"{settings.FASTSVM_BASE_URL}/api/v1/process-resume"
-    return await _post_json(url, {"resume_text": resume_text, "extract_pdf": extract_pdf}, bearer_token=settings.FASTSVM_AUTH_TOKEN)
+    result = await _post_json(url, {"resume_text": resume_text, "extract_pdf": extract_pdf}, bearer_token=settings.FASTSVM_AUTH_TOKEN)
+    skills_count = len(result.get('skills', [])) if result else 0
+    logger.info(f"[FASTSVM] Returned {skills_count} skills")
+    return result
 
 
 async def call_hermes_extract(raw_json_resume: Dict[str, Any]) -> Dict[str, Any]:
+    import logging
+    logger = logging.getLogger(__name__)
     if not settings.ENABLE_HERMES or not settings.HERMES_BASE_URL:
+        logger.warning(f"[HERMES] Service DISABLED (ENABLE_HERMES={settings.ENABLE_HERMES}, has_url={bool(settings.HERMES_BASE_URL)}) - returning empty insights/skills")
         return {"insights": [], "skills": []}
+    logger.info(f"[HERMES] Calling service at {settings.HERMES_BASE_URL}")
     url = f"{settings.HERMES_BASE_URL}/extract"
-    return await _post_json(url, raw_json_resume, bearer_token=settings.HERMES_AUTH_TOKEN)
+    result = await _post_json(url, raw_json_resume, bearer_token=settings.HERMES_AUTH_TOKEN)
+    skills_count = len(result.get('skills', [])) if result else 0
+    insights_count = len(result.get('insights', [])) if result else 0
+    logger.info(f"[HERMES] Returned {skills_count} skills, {insights_count} insights")
+    return result
 
 
 async def call_job_search_api(query: Dict[str, Any]) -> Dict[str, Any]:
@@ -695,22 +716,98 @@ def _load_json_file_if_exists(path: str) -> Dict[str, Any]:
     return {}
 
 
-def _infer_skills_from_adjacency(current_skills: List[str]) -> List[str]:
-    adjacency = _load_json_file_if_exists(os.path.join(os.getcwd(), "skill_adjacency.json"))
+def _infer_skills_from_adjacency(current_skills: List[str], base_confidences: Optional[Dict[str, float]] = None) -> Tuple[List[str], Dict[str, float]]:
+    """
+    Infer related skills from skill_adjacency.json with confidence decay.
+    Returns: (inferred_skills_list, skill_confidence_map)
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    adjacency_data = _load_json_file_if_exists(os.path.join(os.getcwd(), "skill_adjacency.json"))
+    # Load mappings key from JSON structure
+    adjacency = adjacency_data.get("mappings", adjacency_data) if isinstance(adjacency_data, dict) else {}
+
     inferred: List[str] = []
+    inferred_confidences: Dict[str, float] = {}
     seen: Set[str] = set(current_skills)
+    base_conf_map = base_confidences or {}
+
+    logger.info(f"[COMPLIANCE] adjacency-inference-v1: Loading skill_adjacency.json mappings")
+    logger.info(f"[COMPLIANCE] adjacency-inference-v1: Adjacency mappings loaded: {len(adjacency)} skills")
+
     for s in current_skills:
-        related = adjacency.get(s) if isinstance(adjacency, dict) else None
-        if isinstance(related, list):
-            for r in related:
-                if r and r not in seen:
-                    inferred.append(r)
-                    seen.add(r)
-                if len(inferred) >= 10:
+        related_dict = adjacency.get(s) if isinstance(adjacency, dict) else None
+        if isinstance(related_dict, dict):  # Expect dict of {skill: weight}
+            base_conf = base_conf_map.get(s, 0.7)
+            for related_skill, weight in related_dict.items():
+                if related_skill and related_skill not in seen:
+                    # Apply confidence decay: base_confidence * adjacency_weight
+                    inferred_conf = base_conf * float(weight)
+                    inferred.append(related_skill)
+                    inferred_confidences[related_skill] = inferred_conf
+                    seen.add(related_skill)
+                    logger.debug(f"[COMPLIANCE] Inferred {related_skill} from {s} with confidence {inferred_conf:.2f} (base {base_conf:.2f} * weight {weight})")
+                if len(inferred) >= 15:
                     break
-        if len(inferred) >= 10:
+        if len(inferred) >= 15:
             break
-    return inferred
+
+    logger.info(f"[COMPLIANCE] adjacency-inference-v1: Inferred {len(inferred)} skills with confidence decay")
+    return inferred, inferred_confidences
+
+
+def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) -> Dict[str, float]:
+    """
+    Extract competencies from action verbs in experience descriptions using verb_competency.json.
+    Returns: {competency: confidence} mapping
+    """
+    import logging
+    import re
+    logger = logging.getLogger(__name__)
+    
+    verb_data = _load_json_file_if_exists(os.path.join(os.getcwd(), "verb_competency.json"))
+    verb_mappings = verb_data.get("mappings", verb_data) if isinstance(verb_data, dict) else {}
+    
+    logger.info(f"[COMPLIANCE] verb-competency-v1: Loaded verb_competency.json with {len(verb_mappings)} verb mappings")
+    
+    if not verb_mappings:
+        logger.warning(f"[COMPLIANCE] verb-competency-v1: No verb mappings found in verb_competency.json")
+        return {}
+    
+    competencies: Dict[str, float] = {}
+    
+    for exp in experiences:
+        if not isinstance(exp, dict):
+            continue
+        
+        # Extract text from various experience fields
+        text_parts = []
+        for field in ['description', 'snippet', 'bullets', 'responsibilities', 'achievements']:
+            value = exp.get(field)
+            if isinstance(value, str):
+                text_parts.append(value)
+            elif isinstance(value, list):
+                text_parts.extend([str(v) for v in value if v])
+        
+        text = ' '.join(text_parts).lower()
+        
+        # Find action verbs in text and map to competencies
+        for verb, comp_map in verb_mappings.items():
+            if not isinstance(comp_map, dict):
+                continue
+            
+            # Use word boundary matching to find verbs
+            pattern = r'\b' + re.escape(verb.lower()) + r'\b'
+            if re.search(pattern, text):
+                for competency, confidence in comp_map.items():
+                    # Aggregate competencies, taking max confidence if seen multiple times
+                    current_conf = competencies.get(competency, 0.0)
+                    competencies[competency] = max(current_conf, float(confidence))
+                    logger.debug(f"[COMPLIANCE] Found verb '{verb}' → competency '{competency}' (confidence: {confidence})")
+    
+    logger.info(f"[COMPLIANCE] verb-competency-v1: Extracted {len(competencies)} unique competencies")
+    return competencies
 
 
 def _strip_code_fences(text: str) -> str:
@@ -1080,6 +1177,21 @@ async def run_analysis_async(
     Analyze resume and assemble structured analysis using feature-flagged services.
     Returns a dict matching the analysis portion of `AnalysisResponse`.
     """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("[ANALYZE_RESUME] === Starting resume analysis ===")
+    logger.info(f"[ANALYZE_RESUME] Feature Flags Status:")
+    logger.info(f"[ANALYZE_RESUME]   ENABLE_LOADER: {settings.ENABLE_LOADER}")
+    logger.info(f"[ANALYZE_RESUME]   ENABLE_FASTSVM: {settings.ENABLE_FASTSVM}")
+    logger.info(f"[ANALYZE_RESUME]   ENABLE_HERMES: {settings.ENABLE_HERMES}")
+    logger.info(f"[ANALYZE_RESUME] Confidence threshold: {confidence_threshold}")
+    logger.info(f"[ANALYZE_RESUME] Resume text length: {len(resume_text)}")
+    logger.info(f"[ANALYZE_RESUME] Job ad length: {len(job_ad) if job_ad else 0}")
+    logger.info(f"[ANALYZE_RESUME] Extracted skills JSON provided: {extracted_skills_json is not None}")
+    logger.info(f"[ANALYZE_RESUME] Domain insights JSON provided: {domain_insights_json is not None}")
+
     RUN_METRICS["stages"]["analysis"]["start"] = time.time()
     cache_key = _make_analysis_cache_key(
         resume_text,
@@ -1090,6 +1202,7 @@ async def run_analysis_async(
     )
     cached = _analysis_cache_get(cache_key)
     if cached is not None:
+        logger.info("[ANALYZE_RESUME] Returning cached result")
         RUN_METRICS["stages"]["analysis"]["cache_hit"] = True
         RUN_METRICS["stages"]["analysis"]["end"] = time.time()
         s = RUN_METRICS["stages"]["analysis"]
@@ -1097,6 +1210,7 @@ async def run_analysis_async(
         return cached
 
     loader_output = await call_loader_process_text_only(resume_text)
+    logger.info(f"[ANALYZE_RESUME] Loader output keys: {list(loader_output.keys()) if loader_output else 'none'}")
     processed_text = loader_output.get("processed_text", resume_text)
 
     fastsvm_task = asyncio.create_task(call_fastsvm_process_resume(processed_text, extract_pdf=False))
@@ -1105,10 +1219,13 @@ async def run_analysis_async(
 
     fastsvm_output, experiences, extrapolated = await asyncio.gather(fastsvm_task, experiences_task, extrapolate_task)
 
+    logger.info(f"[ANALYZE_RESUME] FastSVM output skills count: {len(fastsvm_output.get('skills', [])) if fastsvm_output else 0}")
+    logger.info(f"[ANALYZE_RESUME] Experiences parsed count: {len(experiences) if experiences else 0}")
+    logger.info(f"[ANALYZE_RESUME] Extrapolated skills count: {len(extrapolated) if extrapolated else 0}")
+
     hermes_payload = {"resume_text": processed_text, "loader": loader_output, "svm": fastsvm_output}
     hermes_output = await call_hermes_extract(hermes_payload)
-
-    aggregate_set: Set[str] = set()
+    logger.info(f"[ANALYZE_RESUME] Hermes output skills count: {len(hermes_output.get('skills', [])) if hermes_output else 0}")
     fastsvm_skills = fastsvm_output.get("skills", []) or []
     if isinstance(fastsvm_skills, list):
         for x in fastsvm_skills:
@@ -1157,16 +1274,60 @@ async def run_analysis_async(
     structured_input = None
     if extracted_skills_json and isinstance(extracted_skills_json, dict):
         structured_input = extracted_skills_json
+        logger.info(f"[ANALYZE_RESUME] Using extracted_skills_json from backend (count: {len(structured_input.get('skills', []))})")
     if not structured_input:
         structured_input = _structured_from_fasts_svm(fastsvm_output)
+        if structured_input:
+            logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
+    fallback_used = False
+    fallback_confidence = None
     if not structured_input:
-        structured_input = {"skills": [{"skill": s, "confidence": confidence_threshold} for s in aggregate_skills]}
+        fallback_used = True
+        fallback_confidence = min(0.5, confidence_threshold * 0.65)  # Lower fallback confidence
+        logger.warning(f"[ANALYZE_RESUME] FALLBACK TRIGGERED: Using aggregate_skills with REDUCED confidence {fallback_confidence:.2f}")
+        logger.warning(f"[ANALYZE_RESUME] FALLBACK: Original threshold {confidence_threshold} reduced to {fallback_confidence:.2f} for keyword matches")
+        logger.warning(f"[ANALYZE_RESUME] FALLBACK: Aggregate skills count: {len(aggregate_skills)}")
+        logger.info(f"[COMPLIANCE] fallback-confidence-reduction-v1: Lowering confidence from {confidence_threshold} to {fallback_confidence:.2f}")
+        structured_input = {"skills": [{"skill": s, "confidence": fallback_confidence, "source": "keyword-fallback"} for s in aggregate_skills]}
     processed_skills = process_structured_skills(structured_input, confidence_threshold)
+    logger.info(f"[ANALYZE_RESUME] Processed skills - High: {len(processed_skills.get('high_confidence', []))}, Medium: {len(processed_skills.get('medium_confidence', []))}, Low: {len(processed_skills.get('low_confidence', []))})")
 
-    inferred_skills = _infer_skills_from_adjacency(aggregate_skills)
+    # Build base confidence map from processed skills
+    base_confidences = {}
+    for skill in processed_skills.get('high_confidence', []):
+        base_confidences[skill] = 0.85
+    for skill in processed_skills.get('medium_confidence', []):
+        base_confidences[skill] = 0.65
+    for skill in processed_skills.get('low_confidence', []):
+        base_confidences[skill] = 0.45
+
+    logger.info(f"[ANALYZE_RESUME] Calling adjacency inference with {len(aggregate_skills)} aggregate skills")
+    inferred_skills, inferred_confidences = _infer_skills_from_adjacency(aggregate_skills, base_confidences)
+    logger.info(f"[ANALYZE_RESUME] Adjacency inference returned {len(inferred_skills)} inferred skills")
+    if len(inferred_skills) == 0:
+        logger.warning(f"[ANALYZE_RESUME] Adjacency inference returned ZERO skills - check skill_adjacency.json loading")
+    else:
+        logger.info(f"[ANALYZE_RESUME] Sample inferred confidences: {list(inferred_confidences.items())[:3]}")
+
+    # Extract competencies from action verbs in experiences (COMPLIANCE: verb-competency-v1)
+    extracted_competencies = _extract_competencies_from_experiences(experiences)
+    logger.info(f"[COMPLIANCE] verb-competency-v1: Extracted {len(extracted_competencies)} competencies from experience verbs")
+    if extracted_competencies:
+        logger.info(f"[COMPLIANCE] verb-competency-v1: Sample competencies: {list(extracted_competencies.keys())[:5]}")
 
     detector = SeniorityDetector()
     seniority = detector.detect_seniority(experiences, set(aggregate_skills))
+
+    # COMPLIANCE SUMMARY: Log what features were successfully used
+    logger.info("[COMPLIANCE SUMMARY] === Feature Compliance Report ===")
+    logger.info(f"[COMPLIANCE SUMMARY] 1. Structured Skills (v1): {'PASS - Received from backend' if extracted_skills_json and isinstance(extracted_skills_json, dict) else 'FAIL - Fallback used'}")
+    if fallback_used and fallback_confidence:
+        logger.info(f"[COMPLIANCE SUMMARY] 2. Fallback Confidence Reduction (v1): PASS - Reduced to {fallback_confidence:.2f} (was {confidence_threshold})")
+    else:
+        logger.info(f"[COMPLIANCE SUMMARY] 2. Fallback Confidence Reduction (v1): N/A - Fallback not triggered")
+    logger.info(f"[COMPLIANCE SUMMARY] 3. Adjacency Inference (v1): {'PASS - Inferred {} skills with confidence decay'.format(len(inferred_skills)) if len(inferred_skills) > 0 else 'FAIL - No skills inferred'}")
+    logger.info(f"[COMPLIANCE SUMMARY] 4. Verb Competency Extraction (v1): {'PASS - Extracted {} competencies'.format(len(extracted_competencies)) if len(extracted_competencies) > 0 else 'FAIL - No competencies extracted'}")
+    logger.info(f"[COMPLIANCE SUMMARY] Total skills in final analysis: {len(aggregate_skills) + len(inferred_skills)}")
 
     domain_insights = domain_insights_json if isinstance(domain_insights_json, dict) else {}
     if not domain_insights:

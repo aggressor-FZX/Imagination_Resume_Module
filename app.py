@@ -5,6 +5,7 @@ Based on Context7 research findings for FastAPI best practices
 
 import time
 import json
+import logging
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
@@ -15,6 +16,13 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
 from config import settings
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 from models import (
     AnalysisRequest, AnalysisResponse, HealthResponse,
     Context7DocsRequest, Context7DocsResponse, ErrorResponse,
@@ -142,6 +150,47 @@ async def analyze_resume(
     3. Criticism: Refine suggestions with adversarial review
     """
     start_time = time.time()
+
+    # Log incoming request and feature flags
+    import json
+    logger.info("[IMAGINATOR ENDPOINT] === Received analyze request ===")
+    logger.info(f"[IMAGINATOR ENDPOINT] Resume length: {len(request.resume_text)}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Job ad length: {len(request.job_ad) if request.job_ad else 0}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Confidence threshold: {request.confidence_threshold}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Feature Flags:")
+    logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_LOADER: {settings.ENABLE_LOADER}")
+    logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_FASTSVM: {settings.ENABLE_FASTSVM}")
+    logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_HERMES: {settings.ENABLE_HERMES}")
+
+    # Log what structured data we received from backend
+    if request.extracted_skills_json:
+        try:
+            skills_data = json.loads(request.extracted_skills_json) if isinstance(request.extracted_skills_json, str) else request.extracted_skills_json
+            skill_count = len(skills_data) if isinstance(skills_data, list) else len(skills_data.get('skills', []))
+            logger.info(f"[IMAGINATOR ENDPOINT] Received extracted_skills_json with {skill_count} skills")
+            logger.info(f"[IMAGINATOR ENDPOINT] Skills structure type: {type(skills_data).__name__}")
+            if isinstance(skills_data, list) and len(skills_data) > 0:
+                logger.info(f"[IMAGINATOR ENDPOINT] First skill sample: {skills_data[0]}")
+                # Check if backend sent structured skills with confidence (COMPLIANCE)
+                first_skill = skills_data[0]
+                if isinstance(first_skill, dict) and 'confidence' in first_skill and 'source' in first_skill:
+                    logger.info(f"[COMPLIANCE] structured-skills-v1: Backend sent STRUCTURED skills with confidence metadata")
+                    logger.info(f"[COMPLIANCE] structured-skills-v1: Sample confidence: {first_skill.get('confidence')}, source: {first_skill.get('source')}")
+                else:
+                    logger.warning(f"[COMPLIANCE] structured-skills-v1: Backend sent RAW skills (missing confidence/source) - will trigger fallback")
+        except Exception as e:
+            logger.warning(f"[IMAGINATOR ENDPOINT] Could not parse extracted_skills_json: {e}")
+    else:
+        logger.info(f"[IMAGINATOR ENDPOINT] No extracted_skills_json provided (will use fallback)")
+
+    if request.domain_insights_json:
+        try:
+            insights_data = json.loads(request.domain_insights_json) if isinstance(request.domain_insights_json, str) else request.domain_insights_json
+            logger.info(f"[IMAGINATOR ENDPOINT] Received domain_insights_json with keys: {list(insights_data.keys()) if isinstance(insights_data, dict) else 'not a dict'}")
+        except Exception as e:
+            logger.warning(f"[IMAGINATOR ENDPOINT] Could not parse domain_insights_json: {e}")
+    else:
+        logger.info(f"[IMAGINATOR ENDPOINT] No domain_insights_json provided")
 
     # Authentication already validated via dependency; no additional checks
 
