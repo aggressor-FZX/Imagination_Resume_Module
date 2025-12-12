@@ -32,6 +32,12 @@ services:
         value: 10
       - key: REQUEST_TIMEOUT
         value: 60
+      - key: ENABLE_FASTSVM
+        value: "true"
+      - key: ENABLE_HERMES
+        value: "true"
+      - key: ENABLE_LOADER
+        value: "true"
 
       # Server configuration
       - key: HOST
