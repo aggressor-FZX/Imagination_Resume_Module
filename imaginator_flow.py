@@ -1362,16 +1362,16 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
         generated_text = generated_text.get("generated_text")
     critique = _load_json_payload(critique_json, "critique_json")
     RUN_METRICS["stages"]["synthesis"]["start"] = time.time()
-    
+
     # Determine if we should use OpenAI for final writing
     use_openai_final = (
-        final_writer == "openai" or 
+        final_writer == "openai" or
         (final_writer is None and getattr(settings, "ENABLE_OPENAI_FINAL_WRITER", False))
     )
-    
+
     system_prompt = """
     You are a final resume writing agent. Your task is to produce a polished, factual resume entry.
-    
+
     CRITICAL RULES:
     1. Only use facts, skills, and metrics present in the provided analysis
     2. If metrics/numbers are not in the input, use conservative phrasing ("contributed to", "supported") instead of inventing numbers
@@ -1391,7 +1391,7 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
 
     Critique Feedback:
     {json.dumps(critique, indent=2)}
-    
+
     Analysis Context (for fact-checking):
     {json.dumps(analysis_for_provenance, indent=2) if analysis_for_provenance else 'Not provided'}
     """
@@ -1402,7 +1402,7 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
             if isinstance(content, str) and content:
                 RUN_METRICS["calls"].append({"provider": "Mock", "stage": "synthesis"})
                 return {"final_written_section": content}
-        
+
         # Use OpenAI final writer via OpenRouter if enabled
         if use_openai_final:
             try:
@@ -1421,7 +1421,7 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
             except Exception as e:
                 print(f"⚠️ OpenAI final writer failed: {e}, falling back to standard LLM")
                 use_openai_final = False
-        
+
         # Standard fallback flow if OpenAI not enabled or failed
         if not use_openai_final:
             result = await call_llm_async(
@@ -1433,7 +1433,7 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
                 temperature=0.35,
                 **kwargs
             )
-        
+
         # Parse structured response
         try:
             parsed = ensure_json_dict(result, "synthesis")
@@ -1447,7 +1447,7 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
                 return final_dict if convenience_mode else final_dict.get("final_written_section")
         except Exception:
             pass
-        
+
         # Fallback to raw text if parsing fails
         fallback_dict = {
             "final_written_section": result,
