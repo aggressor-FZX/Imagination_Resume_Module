@@ -29,19 +29,26 @@ class OpenRouterSafeClient:
     ]
 
     def __init__(self, api_key: str, referer: str = "https://imaginator-resume-cowriter.onrender.com"):
-        """
-        Initialize the safe OpenRouter client.
+    """
+    Initialize the safe OpenRouter client.
 
-        Args:
-            api_key: OpenRouter API key
-            referer: HTTP Referer header for OpenRouter tracking
-        """
-        self.api_key = api_key
-        self.referer = referer
-        self.base_url = "https://openrouter.ai/api/v1"
-        self._model_cache: Dict[str, bool] = {}  # Cache of available models
-        self._cache_expires_at = 0
-        self._cache_ttl_seconds = 600  # 10 minute cache
+    Args:
+        api_key: Primary OpenRouter API key (fallback if env vars not set)
+        referer: HTTP Referer header for OpenRouter tracking
+    """
+    import os
+    self.api_keys = [
+        os.getenv('OPENROUTER_API_KEY_1', api_key),
+        os.getenv('OPENROUTER_API_KEY_2')
+    ]
+    self.api_keys = [k for k in self.api_keys if k]  # Remove empty
+    if not self.api_keys:
+        raise ValueError("No OpenRouter API keys available")
+    self.referer = referer
+    self.base_url = "https://openrouter.ai/api/v1"
+    self._model_cache: Dict[str, bool] = {}  # Cache of available models
+    self._cache_expires_at = 0
+    self._cache_ttl_seconds = 600  # 10 minute cache
 
     def _get_available_models(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -296,6 +303,9 @@ if __name__ == "__main__":
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
     ]
+
+    result = client.call_model(messages, model="anthropic/claude-3-haiku")
+    print(f"\n\n🎯 Final Result: {json.dumps(result, indent=2)}")
 
     result = client.call_model(messages, model="anthropic/claude-3-haiku")
     print(f"\n\n🎯 Final Result: {json.dumps(result, indent=2)}")

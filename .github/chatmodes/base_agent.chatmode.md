@@ -1,14 +1,18 @@
 ---
-description: 'General purpose chat mode with standard tools and safety guardrails for command execution.'
+description: "General purpose chat mode with standard tools and safety guardrails for command execution."
 
-tools: ['runCommands', 'runTasks', 'edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'playwright-browser-automation/*', 'render/*', 'Context7/*', 'extensions', 'usages', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch']
+tools:
+  ['edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'runCommands', 'runTasks', 'chrome-devtools/*', 'playwright-browser-automation/*', 'render/*', 'usages', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'extensions']
 ---
+
 Define the purpose of this chat mode and how AI should behave: response style, available tools, focus areas, and any mode-specific instructions or constraints.
+
+Remember you are in a WSL environment unless otherwise specified.
 
 ## Command Safety Guardrails
 
 - Wrap any exploratory or diagnostic commands (for example `npx`, MCP server probes, or other external processes) in a short `timeout` (≤10s) **or** launch them in a background terminal to prevent the VS Code agent session from hanging.
-	- **Exception:** Long-running `task-master-ai` commands (installed locally via npm) should be launched directly in a background terminal without a timeout so they can complete their handshake.
+  - **Exception:** Long-running `task-master-ai` commands (installed locally via npm) should be launched directly in a background terminal without a timeout so they can complete their handshake.
 - If a command must run longer than the timeout, start it in a background terminal and monitor the output separately; never block the foreground agent thread waiting on unbounded work.
 - Prefer capturing outputs with `timeout <seconds> <command> || true` when quick verification is enough; escalate to background execution only when sustained processes are required.
 - Before executing any Python or pip command, explicitly activate the project virtual environment (`source .venv/bin/activate`) so that the `.venv` tooling is always used instead of the system Python runtime. Use UV pip for package installs where possible.
@@ -35,8 +39,8 @@ Sample Node initialization using the Draft-2020 Ajv entrypoint:
 
 ```js
 // require the 2020 build
-const Ajv2020 = require('ajv/dist/2020');
-const addFormats = require('ajv-formats');
+const Ajv2020 = require("ajv/dist/2020");
+const addFormats = require("ajv-formats");
 
 const ajv = new Ajv2020();
 addFormats(ajv);
@@ -48,6 +52,7 @@ addFormats(ajv);
 ```
 
 If you prefer not to upgrade the host, consider these alternatives:
+
 - change tool schemas to target Draft-07 or remove the `$schema` line
 - avoid draft-2020-only keywords like `$dynamicRef` or `unevaluatedProperties` in tool schemas
 
@@ -62,10 +67,11 @@ If you prefer not to upgrade the host, consider these alternatives:
 - **Purpose**: To maintain a persistent knowledge graph of the project, including key files, functions, architectural components, and user preferences. This helps in retaining context across sessions and making more informed decisions.
 
 - **When to Use**:
+
   - **On Project Start**: Create entities for core files and components to establish a baseline understanding.
   - **When Introducing New Concepts**: Add entities for new libraries, modules, or significant functions.
   - **To Remember User Preferences**: Add observations to relevant entities to record specific instructions (e.g., "DeepSeek should be the last resort in the fallback chain.").
-  - **To Understand Relationships**: Create relations between entities to map out dependencies and interactions (e.g., `function_A` *uses* `service_B`).
+  - **To Understand Relationships**: Create relations between entities to map out dependencies and interactions (e.g., `function_A` _uses_ `service_B`).
 
 - **Best Practices**:
   - **Be Specific**: Use clear and descriptive names for entities and relations.
