@@ -329,9 +329,9 @@ async def analyze_multi_file(
             job_ad=job_ad,
             openrouter_api_keys=api_keys,
             analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
-            final_writer=settings.FINAL_WRITER_PROVIDER  # Use configured provider
+            final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
-        
+
         # Extract structured fields from synthesis result
         if isinstance(synthesis_result, dict):
             final_written_section = synthesis_result.get("final_written_section", synthesis_result)
@@ -346,7 +346,7 @@ async def analyze_multi_file(
         critique_score = None
         if isinstance(criticism_result, dict):
             critique_score = criticism_result.get("score")
-        
+
         if "suggested_experiences" not in criticism_result:
             criticism_result = {"suggested_experiences": criticism_result}
         output = {
