@@ -206,12 +206,29 @@ async def analyze_resume(
 
         # Step 4: Synthesis — integrate critique into final text
         print("🧩 Step 4: Incorporating critique into final resume section...")
-        final_written_section = await run_synthesis_async(
+        synthesis_result = await run_synthesis_async(
             generated_text=generation_result,
             critique_json=criticism_result,
             job_ad=request.job_ad,
-            openrouter_api_keys=api_keys
+            openrouter_api_keys=api_keys,
+            analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
+            final_writer=settings.FINAL_WRITER_PROVIDER  # Use configured provider
         )
+
+        # Extract structured fields from synthesis result
+        if isinstance(synthesis_result, dict):
+            final_written_section = synthesis_result.get("final_written_section", synthesis_result)
+            final_markdown = synthesis_result.get("final_written_section_markdown")
+            final_provenance = synthesis_result.get("final_written_section_provenance", [])
+        else:
+            final_written_section = synthesis_result
+            final_markdown = None
+            final_provenance = []
+
+        # Extract critique score
+        critique_score = None
+        if isinstance(criticism_result, dict):
+            critique_score = criticism_result.get("score")
 
         # Ensure criticism_result has the correct structure
         if "suggested_experiences" not in criticism_result:
@@ -222,6 +239,9 @@ async def analyze_resume(
             **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis, seniority_analysis
             **criticism_result,  # suggested_experiences
             "final_written_section": final_written_section,
+            "final_written_section_markdown": final_markdown,
+            "final_written_section_provenance": final_provenance,
+            "critique_score": critique_score,
             "run_metrics": RUN_METRICS.copy(),
             "processing_status": ProcessingStatus.COMPLETED,
             "processing_time_seconds": time.time() - start_time
@@ -303,18 +323,39 @@ async def analyze_multi_file(
                 criticism_result = ensure_json_dict(criticism_result, "critique")
             except Exception:
                 criticism_result = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
-        final_written_section = await run_synthesis_async(
+        synthesis_result = await run_synthesis_async(
             generated_text=generation_result,
             critique_json=criticism_result,
             job_ad=job_ad,
-            openrouter_api_keys=api_keys
+            openrouter_api_keys=api_keys,
+            analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
+            final_writer=settings.FINAL_WRITER_PROVIDER  # Use configured provider
         )
+        
+        # Extract structured fields from synthesis result
+        if isinstance(synthesis_result, dict):
+            final_written_section = synthesis_result.get("final_written_section", synthesis_result)
+            final_markdown = synthesis_result.get("final_written_section_markdown")
+            final_provenance = synthesis_result.get("final_written_section_provenance", [])
+        else:
+            final_written_section = synthesis_result
+            final_markdown = None
+            final_provenance = []
+
+        # Extract critique score
+        critique_score = None
+        if isinstance(criticism_result, dict):
+            critique_score = criticism_result.get("score")
+        
         if "suggested_experiences" not in criticism_result:
             criticism_result = {"suggested_experiences": criticism_result}
         output = {
             **analysis_result,
             **criticism_result,
             "final_written_section": final_written_section,
+            "final_written_section_markdown": final_markdown,
+            "final_written_section_provenance": final_provenance,
+            "critique_score": critique_score,
             "run_metrics": RUN_METRICS.copy(),
             "processing_status": ProcessingStatus.COMPLETED,
             "processing_time_seconds": time.time() - start_time

@@ -121,6 +121,14 @@ class AnalysisRequest(BaseModel):
         return v
 
 
+class ProvenanceEntry(BaseModel):
+    """Provenance tracking for a claim in the final resume"""
+    claim: str = Field(..., description="The specific claim or sentence")
+    experience_index: Optional[int] = Field(None, description="Index in experiences array")
+    skill_references: List[str] = Field(default_factory=list, description="Skills cited in this claim")
+    is_synthetic: bool = Field(False, description="Whether this claim is inferred vs directly from resume")
+
+
 class AnalysisResponse(BaseModel):
     """Response model for resume analysis results"""
     experiences: List[ExperienceEntry] = Field(..., description="Parsed work experiences")
@@ -133,6 +141,11 @@ class AnalysisResponse(BaseModel):
     )
     seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
     final_written_section: Optional[str] = Field(None, description="Generated resume section text")
+    final_written_section_markdown: Optional[str] = Field(None, description="Markdown-formatted resume section")
+    final_written_section_provenance: Optional[List[ProvenanceEntry]] = Field(
+        None, description="Claim-to-source mapping for trust and verification"
+    )
+    critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
     run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
