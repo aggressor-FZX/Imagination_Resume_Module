@@ -659,7 +659,6 @@ async def call_fastsvm_process_resume(resume_text: str, extract_pdf: bool = Fals
     logger.info(f"[FASTSVM] Returned {skills_count} skills")
     return result
 
-@functools.lru_cache(maxsize=100)
 async def extract_job_skills(job_ad: str) -> List[str]:
     """Extract high-confidence skills from job ad using FastSVM service.
     
@@ -1281,7 +1280,7 @@ async def run_analysis_async(
         logger.info(f"[ANALYZE_RESUME] Extracting skills from job ad using extract_job_skills")
         job_high_confidence = await extract_job_skills(job_ad)
         logger.info(f"[ANALYZE_RESUME] Extracted {len(job_high_confidence)} high-confidence job skills")
-fastsvm_skills = fastsvm_output.get("skills", []) or []
+    fastsvm_skills = fastsvm_output.get("skills", []) or []
     if isinstance(fastsvm_skills, list):
         for x in fastsvm_skills:
             if isinstance(x, str):
