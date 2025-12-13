@@ -1352,6 +1352,40 @@ async def run_analysis_async(
     # Basic gap analysis heuristic (non-LLM) to avoid empty responses
     job_text = (job_ad or "").lower()
     agg_lower = {s.lower() for s in aggregate_skills}
+
+    # Build a normalized set of candidate skills including inferred skills
+    def _normalize(s: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+    candidate_skills = set()
+    for s in aggregate_skills:
+        candidate_skills.add(_normalize(s))
+    for s in inferred_skills:
+        candidate_skills.add(_normalize(s))
+    # also include processed skill categories
+    for arr in (processed_skills.get('high_confidence', []), processed_skills.get('medium_confidence', []), processed_skills.get('low_confidence', [])):
+        for s in arr:
+            candidate_skills.add(_normalize(s))
+
+    # Synonyms mapping to align job text keywords with candidate skill variants
+    synonyms_map = {
+        "go": ["go", "golang"],
+        "ai": ["ai", "machinelearning", "machine-learning", "ml"],
+        "data": ["data", "dataanalysis", "data-analysis", "data-analytics", "analytics"],
+        "analytics": ["analytics", "dataanalytics", "data-analytics"],
+        "javascript": ["javascript", "js"],
+        "typescript": ["typescript", "ts"],
+        "postgres": ["postgres", "postgresql"],
+        "mysql": ["mysql"],
+        "mongodb": ["mongodb", "mongo"],
+        "kubernetes": ["kubernetes", "k8s"],
+        "docker": ["docker"],
+        "devops": ["devops"],
+        "ml": ["ml", "machinelearning", "machine-learning"],
+        "security": ["security", "infosec", "cybersecurity"],
+        "leadership": ["leadership", "management"],
+    }
+
     # Common tech / role keywords to compare against job ad
     required_keywords = [
         "python", "java", "c++", "go", "javascript", "typescript",
@@ -1360,10 +1394,26 @@ async def run_analysis_async(
         "ml", "ai", "data", "analytics", "security", "leadership",
         "communication", "testing", "ci/cd"
     ]
-    missing_skills = [
-        kw for kw in required_keywords
-        if kw in job_text and kw not in agg_lower
-    ]
+
+    missing_skills = []
+    for kw in required_keywords:
+        # skip if the job ad doesn't mention the keyword at all
+        if kw not in job_text:
+            continue
+        kw_norm = _normalize(kw)
+        # check synonyms and substring matches in candidate skills
+        variants = synonyms_map.get(kw, [kw])
+        present = False
+        for v in variants:
+            v_norm = _normalize(v)
+            for s in candidate_skills:
+                if v_norm in s or s in v_norm:
+                    present = True
+                    break
+            if present:
+                break
+        if not present:
+            missing_skills.append(kw)
 
     if missing_skills:
         gap_analysis = {
