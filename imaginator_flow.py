@@ -765,22 +765,22 @@ def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) ->
     import logging
     import re
     logger = logging.getLogger(__name__)
-    
+
     verb_data = _load_json_file_if_exists(os.path.join(os.getcwd(), "verb_competency.json"))
     verb_mappings = verb_data.get("mappings", verb_data) if isinstance(verb_data, dict) else {}
-    
+
     logger.info(f"[COMPLIANCE] verb-competency-v1: Loaded verb_competency.json with {len(verb_mappings)} verb mappings")
-    
+
     if not verb_mappings:
         logger.warning(f"[COMPLIANCE] verb-competency-v1: No verb mappings found in verb_competency.json")
         return {}
-    
+
     competencies: Dict[str, float] = {}
-    
+
     for exp in experiences:
         if not isinstance(exp, dict):
             continue
-        
+
         # Extract text from various experience fields
         text_parts = []
         for field in ['description', 'snippet', 'bullets', 'responsibilities', 'achievements']:
@@ -789,14 +789,14 @@ def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) ->
                 text_parts.append(value)
             elif isinstance(value, list):
                 text_parts.extend([str(v) for v in value if v])
-        
+
         text = ' '.join(text_parts).lower()
-        
+
         # Find action verbs in text and map to competencies
         for verb, comp_map in verb_mappings.items():
             if not isinstance(comp_map, dict):
                 continue
-            
+
             # Use word boundary matching to find verbs
             pattern = r'\b' + re.escape(verb.lower()) + r'\b'
             if re.search(pattern, text):
@@ -805,7 +805,7 @@ def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) ->
                     current_conf = competencies.get(competency, 0.0)
                     competencies[competency] = max(current_conf, float(confidence))
                     logger.debug(f"[COMPLIANCE] Found verb '{verb}' → competency '{competency}' (confidence: {confidence})")
-    
+
     logger.info(f"[COMPLIANCE] verb-competency-v1: Extracted {len(competencies)} unique competencies")
     return competencies
 
@@ -1191,6 +1191,9 @@ async def run_analysis_async(
     logger.info(f"[ANALYZE_RESUME] Job ad length: {len(job_ad) if job_ad else 0}")
     logger.info(f"[ANALYZE_RESUME] Extracted skills JSON provided: {extracted_skills_json is not None}")
     logger.info(f"[ANALYZE_RESUME] Domain insights JSON provided: {domain_insights_json is not None}")
+
+    # Initialize aggregate_set to prevent UnboundLocalError
+    aggregate_set = set()
 
     RUN_METRICS["stages"]["analysis"]["start"] = time.time()
     cache_key = _make_analysis_cache_key(
