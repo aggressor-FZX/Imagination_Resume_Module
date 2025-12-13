@@ -1609,7 +1609,8 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
                 final_dict = {
                     "final_written_section": parsed.get("final_text", parsed.get("final_written_section", result)),
                     "final_written_section_markdown": parsed.get("final_markdown", parsed.get("final_text", result)),
-                    "final_written_section_provenance": parsed.get("provenance", [])
+                    "final_written_section_provenance": parsed.get("provenance", []),
+                    "generated_text": generated_text if convenience_mode else None  # Include original generated_text for fallback
                 }
                 return final_dict if convenience_mode else final_dict.get("final_written_section")
         except Exception:
@@ -1619,15 +1620,30 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
         fallback_dict = {
             "final_written_section": result,
             "final_written_section_markdown": result,
-            "final_written_section_provenance": []
+            "final_written_section_provenance": [],
+            "generated_text": generated_text if convenience_mode else None  # Include original generated_text for fallback
         }
         return fallback_dict if convenience_mode else result
     except Exception as exc:
         logger.exception("Synthesis step failed: %s", exc)
         if generated_text:
             logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
+            if convenience_mode:
+                return {
+                    "final_written_section": generated_text,
+                    "final_written_section_markdown": generated_text,
+                    "final_written_section_provenance": [],
+                    "generated_text": generated_text
+                }
             return generated_text
         logger.warning("Synthesis no fallback available")
+        if convenience_mode:
+            return {
+                "final_written_section": "Finalized resume text",
+                "final_written_section_markdown": "Finalized resume text",
+                "final_written_section_provenance": [],
+                "generated_text": None
+            }
         return "Finalized resume text"
     finally:
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
@@ -1748,6 +1764,7 @@ async def run_full_analysis_async(
         final_section = final_section + " Gap-bridging."
     result = dict(analysis)
     result["final_written_section"] = final_section
+    result["generated_text"] = gen  # Include generated_text for fallback when synthesis fails
     return result
 
 def main():
