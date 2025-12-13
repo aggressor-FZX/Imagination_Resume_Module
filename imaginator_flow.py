@@ -1135,7 +1135,7 @@ async def call_llm_async(
     raise Exception(f"All LLM providers failed: {' | '.join(errors)}")
 
 
-def run_analysis(
+async def run_analysis(
     resume_text: str,
     job_ad: Optional[str] = None,
     extracted_skills_json: Optional[Dict] = None,
@@ -1577,176 +1577,87 @@ async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, ope
         s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None
 
 
-async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, critique_json: Union[str, Dict, None] = None, openrouter_api_keys: Optional[List[str]] = None, analysis_for_provenance: Optional[Dict] = None, final_writer: Optional[str] = None, **kwargs) -> Union[str, Dict]:
-    convenience_mode = isinstance(generated_text, dict) and critique_json is None
-    if convenience_mode:
-        critique_json = generated_text.get("critique")
-        generated_text = generated_text.get("generated_text")
-    critique = _load_json_payload(critique_json, "critique_json")
+async def run_synthesis_async(
+    generated_text: Union[str, Dict],
+    analysis_result: Dict,
+    convenience_mode: bool = False
+) -> Union[str, Dict[str, Any]]:
+    """
+    Synthesize generated experiences into cohesive resume section.
+    """
+    logger.info("[SYNTHESIS] Starting synthesis with convenience_mode=%s", convenience_mode)
+    
     RUN_METRICS["stages"]["synthesis"]["start"] = time.time()
-
-    # Determine if we should use OpenAI for final writing
-    use_openai_final = (
-        final_writer == "openai" or
-        (final_writer is None and getattr(settings, "ENABLE_OPENAI_FINAL_WRITER", False))
-    )
-
-    system_prompt = """
-    You are a final resume writing agent. Your task is to produce a polished, factual resume entry.
-
-    CRITICAL RULES:
-    1. Only use facts, skills, and metrics present in the provided analysis
-    2. If metrics/numbers are not in the input, use conservative phrasing ("contributed to", "supported") instead of inventing numbers
-    3. Structure output as markdown with bullet points
-    4. Each bullet should follow CAR (Challenge-Action-Result) format when possible
-    5. Return a JSON object with:
-       - final_text: the resume section as a string
-       - final_markdown: markdown-formatted version with bullets
-       - provenance: array of {claim, experience_index, skill_references, is_synthetic}
-    """
-    user_prompt = f"""
-    Job Description:
-    {job_ad}
-
-    Generated Section:
-    {json.dumps(generated_text, indent=2) if isinstance(generated_text, dict) else generated_text}
-
-    Critique Feedback:
-    {json.dumps(critique, indent=2)}
-
-    Analysis Context (for fact-checking):
-    {json.dumps(analysis_for_provenance, indent=2) if analysis_for_provenance else 'Not provided'}
-    """
+    
     try:
-        if convenience_mode and (openrouter_api_keys is None):
-            resp = await _post_json("https://llm.internal/synthesis", {"messages": ["synthesis", system_prompt, user_prompt, generated_text]})
-            content = resp.get("content")
-            if isinstance(content, str) and content:
-                RUN_METRICS["calls"].append({"provider": "Mock", "stage": "synthesis"})
-                return {"final_written_section": content}
-
-        # Use OpenAI final writer via OpenRouter if enabled
-        if use_openai_final:
-            try:
-                # Route through OpenRouter to openai/gpt-5.2
-                result = await call_llm_async(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    openrouter_api_keys=openrouter_api_keys,
-                    preferred_model="openai/gpt-5.2",  # GPT-5.2 via OpenRouter
-                    temperature=0.2,  # Low temperature for factual accuracy
-                    use_json=True,
-                    task_label="synthesis_openai_final",
-                    **kwargs
-                )
-                print("✅ Used OpenAI final writer via OpenRouter (openai/gpt-5.2)")
-            except Exception as e:
-                print(f"⚠️ OpenAI final writer failed: {e}, falling back to standard LLM")
-                use_openai_final = False
-
-        # Standard fallback flow if OpenAI not enabled or failed
-        if not use_openai_final:
-            result = await call_llm_async(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                openrouter_api_keys=openrouter_api_keys,
-                use_json=True,
-                task_label="synthesis",
-                temperature=0.35,
-                **kwargs
-            )
-
-        # Parse structured response
-        try:
-            parsed = ensure_json_dict(result, "synthesis")
-            if isinstance(parsed, dict):
-                # Extract structured fields if present
-                final_dict = {
-                    "final_written_section": parsed.get("final_text", parsed.get("final_written_section", result)),
-                    "final_written_section_markdown": parsed.get("final_markdown", parsed.get("final_text", result)),
-                    "final_written_section_provenance": parsed.get("provenance", []),
-                    "generated_text": generated_text if convenience_mode else None  # Include original generated_text for fallback
-                }
-                return final_dict if convenience_mode else final_dict.get("final_written_section")
-        except Exception:
-            pass
-
-        # Fallback to raw text if parsing fails
-        fallback_dict = {
-            "final_written_section": result,
-            "final_written_section_markdown": result,
-            "final_written_section_provenance": [],
-            "generated_text": generated_text if convenience_mode else None  # Include original generated_text for fallback
-        }
-        return fallback_dict if convenience_mode else result
-    except Exception as exc:
-        logger.exception("Synthesis step failed: %s", exc)
-        if generated_text:
-            logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
-            if convenience_mode:
-                return {
-                    "final_written_section": generated_text,
-                    "final_written_section_markdown": generated_text,
-                    "final_written_section_provenance": [],
-                    "generated_text": generated_text
-                }
+        if convenience_mode and isinstance(generated_text, dict):
+            # Convenience mode: generated_text is already structured
+            logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
+            # Enhance with provenance from analysis
+            generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
             return generated_text
-        logger.warning("Synthesis no fallback available")
-        if convenience_mode:
-            return {
-                "final_written_section": "Finalized resume text",
-                "final_written_section_markdown": "Finalized resume text",
-                "final_written_section_provenance": [],
-                "generated_text": None
-            }
-        return "Finalized resume text"
-    finally:
-        RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
-        s = RUN_METRICS["stages"]["synthesis"]
-        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None
+        
+        # Build synthesis prompt
+        experiences_str = "\n\n".join([
+            f"• {exp.get('title_line', 'Untitled')}\n  Skills: {', '.join(exp.get('skills', []))}\n  Body: {exp.get('snippet', '')[:500]}..."
+            for exp in analysis_result.get("experiences", [])
+        ])
+        
+        prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
+GENERATED EXPERIENCES:
+{experiences_str}
 
-def run_criticism(generated_text: str, job_ad: str, **kwargs) -> str:
-    """
-    Critiques a generated resume section against a job ad for alignment and quality.
-    """
-    system_prompt = """
-    You are a meticulous editor. Review the generated "Work Experience"
-    section and provide a critique. Assess its alignment with the provided job
-    description, clarity, and impact. Provide your feedback in a JSON object
-    with two keys: "score" (0.0-1.0) and "feedback" (a string).
-    """
-    user_prompt = f"""
-    Job Description:
-    {job_ad}
+Output ONLY structured JSON:
+{{
+  "final_written_section": "Cohesive paragraph(s) weaving experiences together (300-800 words)",
+  "final_written_section_markdown": "Markdown version with bullets/headers",
+  "final_written_section_provenance": ["exp_title1", "exp_title2"]  // list of source experience titles used
+}}
 
-    Generated Work Experience:
-    {generated_text}
-    """
-    try:
-        result = call_llm(system_prompt, user_prompt, job_ad=job_ad, **kwargs)
-        # Try to parse as JSON first (for backward compatibility with tests)
+Make it flow naturally as one resume section. Use professional language."""
+        
+        result = await call_llm_async(
+            prompt,
+            max_tokens=1200,
+            temperature=0.3,
+            # Removed use_json=True - parse manually below
+        )
+        
+        # Manual JSON parsing with error handling
         try:
             parsed = json.loads(result)
-            if isinstance(parsed, dict) and "suggested_experiences" in parsed:
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        # If not JSON or doesn't have expected structure, return fallback structure
-        # This is for testing purposes - in production, this would be critique JSON
-        return {
-            "suggested_experiences": {
-                "bridging_gaps": [],
-                "metric_improvements": []
-            }
-        }
+            if not isinstance(parsed, dict):
+                raise ValueError("Not a JSON object")
+            
+            # Ensure required fields
+            parsed.setdefault("final_written_section_provenance", [])
+            
+            logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(parsed.get("final_written_section", "")))
+            return parsed
+            
+        except json.JSONDecodeError as e:
+            logger.warning("[SYNTHESIS] JSON parse failed: %s. Raw: %s", e, result[:200])
+            # Fallback to generated_text as-is
+            return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+            
     except Exception as e:
-        # Re-raise the exception for the fallback transform test
-        raise RuntimeError(f"LLM call failed: {e}")
+        logger.exception("[SYNTHESIS] FAILED: %s", e)
+        # Fallback to generated_text if available
+        if isinstance(generated_text, str) and len(generated_text) > 50:
+            logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
+            return {"final_written_section": generated_text[:2000], "final_written_section_provenance": []}
+        return {"final_written_section": "Finalized resume text", "final_written_section_provenance": []}
+    finally:
+        RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
 
 
-async def run_criticism_async(generated_text: str, job_ad: str, openrouter_api_keys: Optional[List[str]] = None, **kwargs) -> str:
+async def run_criticism(
+    generated_text: str,
+    job_ad: str,
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs
+) -> str:
     """
     Critiques a generated resume section against a job ad for alignment and quality.
     """
