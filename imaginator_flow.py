@@ -21,6 +21,9 @@ import requests
 from dotenv import load_dotenv
 from openai import AsyncOpenAI, OpenAI
 
+import logging
+logger = logging.getLogger(__name__)
+
 from config import settings
 # Seniority detection integration
 from seniority_detector import SeniorityDetector
@@ -1619,7 +1622,12 @@ async def run_synthesis_async(generated_text: Union[str, Dict], job_ad: str, cri
             "final_written_section_provenance": []
         }
         return fallback_dict if convenience_mode else result
-    except Exception:
+    except Exception as exc:
+        logger.exception("Synthesis step failed: %s", exc)
+        if generated_text:
+            logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
+            return generated_text
+        logger.warning("Synthesis no fallback available")
         return "Finalized resume text"
     finally:
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
