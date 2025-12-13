@@ -1399,6 +1399,7 @@ async def run_analysis_async(
 
     # Enhanced gap analysis heuristic using job_high_confidence (PRD FR1, FR2)
     logger.info(f"[GAP_ANALYSIS] job_high_confidence_sample={job_high_confidence[:10]}")
+candidate_skills = processed_skills.get('high_confidence', []) + processed_skills.get('medium_confidence', [])
     logger.info(f"[GAP_ANALYSIS] candidate_skills_sample={list(candidate_skills)[:20]}")
 
     def _normalize(s: str) -> str:
@@ -1714,7 +1715,7 @@ Make it flow naturally as one resume section. Use professional language."""
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
 
 
-async def run_criticism(
+async def run_criticism_async(
     generated_text: str,
     job_ad: str,
     openrouter_api_keys: Optional[List[str]] = None,
