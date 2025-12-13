@@ -1399,6 +1399,7 @@ async def run_analysis_async(
 
     # Enhanced gap analysis heuristic using job_high_confidence (PRD FR1, FR2)
     logger.info(f"[GAP_ANALYSIS] job_high_confidence_sample={job_high_confidence[:10]}")
+    candidate_skills = processed_skills.get('high_confidence', []) + processed_skills.get('medium_confidence', [])
 candidate_skills = processed_skills.get('high_confidence', []) + processed_skills.get('medium_confidence', [])
     logger.info(f"[GAP_ANALYSIS] candidate_skills_sample={list(candidate_skills)[:20]}")
 
