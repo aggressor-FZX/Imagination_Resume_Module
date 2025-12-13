@@ -1,0 +1,13 @@
+# Render deployment for Job Search API
+services:
+  - type: web
+    name: job-search-api
+    runtime: docker
+    plan: starter
+    buildCommand: docker build -t job-search-api .
+    healthCheckPath: /health
+    envVars:
+      - key: JOB_SEARCH_AUTH_TOKEN
+        generateValue: true
+      - key: ENVIRONMENT
+        value: production
