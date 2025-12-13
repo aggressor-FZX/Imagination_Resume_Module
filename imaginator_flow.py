@@ -1415,6 +1415,11 @@ async def run_analysis_async(
         if not present:
             missing_skills.append(kw)
 
+    # Emit diagnostic info to help debug why skills are considered missing
+    logger.info(f"[GAP_ANALYSIS] job_keywords_present={ [k for k in required_keywords if k in job_text] }")
+    logger.info(f"[GAP_ANALYSIS] candidate_normalized_sample={list(candidate_skills)[:20]}")
+    logger.info(f"[GAP_ANALYSIS] missing_skills={missing_skills}")
+
     if missing_skills:
         gap_analysis = {
             "critical_gaps": missing_skills,
