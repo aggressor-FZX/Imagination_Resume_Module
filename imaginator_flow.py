@@ -6,6 +6,7 @@ Parses a resume, extrapolates skills, suggests roles, and performs a gap analysi
 """
 import argparse
 import asyncio
+import functools
 import hashlib
 import json
 import os
@@ -63,6 +64,8 @@ QWEN_PRICE_IN_K = float(os.getenv("QWEN_PRICE_INPUT_PER_1K", "0.00006"))
 QWEN_PRICE_OUT_K = float(os.getenv("QWEN_PRICE_OUTPUT_PER_1K", "0.00022"))
 OPENROUTER_PRICE_IN_K = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", "0.0005"))
 OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.0015"))
+
+ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "true"
 
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -656,6 +659,45 @@ async def call_fastsvm_process_resume(resume_text: str, extract_pdf: bool = Fals
     logger.info(f"[FASTSVM] Returned {skills_count} skills")
     return result
 
+@functools.lru_cache(maxsize=100)
+async def extract_job_skills(job_ad: str) -> List[str]:
+    """Extract high-confidence skills from job ad using FastSVM service.
+    
+    Args:
+        job_ad: The job advertisement text to analyze
+        
+    Returns:
+        List of high-confidence skills (confidence > 0.7)
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not job_ad or not job_ad.strip():
+        logger.warning("[EXTRACT_JOB_SKILLS] Empty job ad provided")
+        return []
+    
+    try:
+        # Call FastSVM to extract skills from job ad
+        fastsvm_output = await call_fastsvm_process_resume(job_ad, extract_pdf=False)
+        logger.info(f"[EXTRACT_JOB_SKILLS] FastSVM returned {len(fastsvm_output.get('skills', []))} skills")
+        
+        # Process structured output
+        structured_input = _structured_from_fasts_svm(fastsvm_output)
+        if not structured_input:
+            logger.warning("[EXTRACT_JOB_SKILLS] No structured input from FastSVM")
+            return []
+        
+        # Process skills with confidence filtering
+        processed_skills = process_structured_skills(structured_input, confidence_threshold=0.7)
+        high_confidence_skills = processed_skills.get('high_confidence', [])
+        
+        logger.info(f"[EXTRACT_JOB_SKILLS] Extracted {len(high_confidence_skills)} high-confidence skills")
+        return high_confidence_skills
+        
+    except Exception as e:
+        logger.error(f"[EXTRACT_JOB_SKILLS] Failed to extract job skills: {e}")
+        return []
+
 
 async def call_hermes_extract(raw_json_resume: Dict[str, Any]) -> Dict[str, Any]:
     import logging
@@ -1232,7 +1274,14 @@ async def run_analysis_async(
     hermes_payload = {"resume_text": processed_text, "loader": loader_output, "svm": fastsvm_output}
     hermes_output = await call_hermes_extract(hermes_payload)
     logger.info(f"[ANALYZE_RESUME] Hermes output skills count: {len(hermes_output.get('skills', [])) if hermes_output else 0}")
-    fastsvm_skills = fastsvm_output.get("skills", []) or []
+
+    # Job ad skill extraction using extract_job_skills function (PRD FR1)
+    job_high_confidence = []
+    if job_ad:
+        logger.info(f"[ANALYZE_RESUME] Extracting skills from job ad using extract_job_skills")
+        job_high_confidence = await extract_job_skills(job_ad)
+        logger.info(f"[ANALYZE_RESUME] Extracted {len(job_high_confidence)} high-confidence job skills")
+fastsvm_skills = fastsvm_output.get("skills", []) or []
     if isinstance(fastsvm_skills, list):
         for x in fastsvm_skills:
             if isinstance(x, str):
@@ -1349,25 +1398,14 @@ async def run_analysis_async(
 
     ats_summary: Optional[str] = None
 
-    # Basic gap analysis heuristic (non-LLM) to avoid empty responses
-    job_text = (job_ad or "").lower()
-    agg_lower = {s.lower() for s in aggregate_skills}
+    # Enhanced gap analysis heuristic using job_high_confidence (PRD FR1, FR2)
+    logger.info(f"[GAP_ANALYSIS] job_high_confidence_sample={job_high_confidence[:10]}")
+    logger.info(f"[GAP_ANALYSIS] candidate_skills_sample={list(candidate_skills)[:20]}")
 
-    # Build a normalized set of candidate skills including inferred skills
     def _normalize(s: str) -> str:
         return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
-    candidate_skills = set()
-    for s in aggregate_skills:
-        candidate_skills.add(_normalize(s))
-    for s in inferred_skills:
-        candidate_skills.add(_normalize(s))
-    # also include processed skill categories
-    for arr in (processed_skills.get('high_confidence', []), processed_skills.get('medium_confidence', []), processed_skills.get('low_confidence', [])):
-        for s in arr:
-            candidate_skills.add(_normalize(s))
-
-    # Synonyms mapping to align job text keywords with candidate skill variants
+    # Synonyms for matching (keep for flexibility)
     synonyms_map = {
         "go": ["go", "golang"],
         "ai": ["ai", "machinelearning", "machine-learning", "ml"],
@@ -1386,38 +1424,19 @@ async def run_analysis_async(
         "leadership": ["leadership", "management"],
     }
 
-    # Common tech / role keywords to compare against job ad
-    required_keywords = [
-        "python", "java", "c++", "go", "javascript", "typescript",
-        "react", "node", "sql", "postgres", "mysql", "mongodb",
-        "aws", "gcp", "azure", "kubernetes", "docker", "devops",
-        "ml", "ai", "data", "analytics", "security", "leadership",
-        "communication", "testing", "ci/cd"
-    ]
-
     missing_skills = []
-    for kw in required_keywords:
-        # skip if the job ad doesn't mention the keyword at all
-        if kw not in job_text:
-            continue
-        kw_norm = _normalize(kw)
-        # check synonyms and substring matches in candidate skills
-        variants = synonyms_map.get(kw, [kw])
+    for skill in job_high_confidence:
+        skill_norm = _normalize(skill)
         present = False
+        variants = synonyms_map.get(skill.lower(), [skill])
         for v in variants:
             v_norm = _normalize(v)
-            for s in candidate_skills:
-                if v_norm in s or s in v_norm:
-                    present = True
-                    break
-            if present:
+            if any(v_norm in s or s in v_norm for s in candidate_skills):
+                present = True
                 break
         if not present:
-            missing_skills.append(kw)
+            missing_skills.append(skill)
 
-    # Emit diagnostic info to help debug why skills are considered missing
-    logger.info(f"[GAP_ANALYSIS] job_keywords_present={ [k for k in required_keywords if k in job_text] }")
-    logger.info(f"[GAP_ANALYSIS] candidate_normalized_sample={list(candidate_skills)[:20]}")
     logger.info(f"[GAP_ANALYSIS] missing_skills={missing_skills}")
 
     if missing_skills:
@@ -1434,6 +1453,50 @@ async def run_analysis_async(
             "gap_bridging_strategy": "Ensure your most relevant achievements are highlighted.",
             "summary": "No critical gaps detected against the job ad keywords. Ensure your most relevant achievements are highlighted."
         }
+
+    # LLM semantic refinement (PRD FR3)
+    if ENABLE_SEMANTIC_GAPS:
+        logger.info("[GAP_ANALYSIS] LLM semantic refinement")
+        system_prompt = """
+You are a gap analysis expert. Refine the heuristic gaps into structured, prioritized analysis using provided context.
+
+Respond with valid JSON matching this schema:
+{
+  \"critical_gaps\": [
+    {\"skill\": \"Kubernetes\", \"severity\": \"high\", \"evidence\": \"job mentions 3x, no resume match\", \"impact\": 0.9}
+  ],
+  \"medium_gaps\": [...],
+  \"nice_to_have_gaps\": [...],
+  \"bridging_strategies\": [
+    {\"gap\": \"Kubernetes\", \"suggestion\": \"Led AWS ECS deployment serving 10k users, equivalent K8s experience.\"}
+  ],
+  \"overall_summary\": \"Resume strong in Python/AWS but lacks container orchestration for senior roles.\"
+}
+        """
+        user_prompt = f"""
+Heuristic gaps: {json.dumps(gap_analysis, indent=2)}
+Job high confidence skills: {job_high_confidence}
+Resume aggregate skills: {aggregate_skills}
+Inferred skills: {inferred_skills}
+Processed skills high: {processed_skills.get('high_confidence', [])}
+Competencies: {extracted_competencies}
+Domain insights: {domain_insights}
+Seniority analysis: {seniority}
+        """
+        try:
+            llm_response = await call_llm_async(
+                system_prompt,
+                user_prompt,
+                temperature=0.2,
+                max_tokens=1200,
+                response_format={{ "type": "json_object" }}
+            )
+            structured_gaps = ensure_json_dict(llm_response, "gap_llm")
+            gap_analysis = structured_gaps
+            logger.info("[GAP_ANALYSIS] LLM success: %d gaps refined", len(structured_gaps.get('critical_gaps', [])))
+        except Exception as e:
+            logger.warning(f"[GAP_ANALYSIS] LLM failed: {e}, fallback to heuristic")
+            RUN_METRICS["failures"].append({"stage": "gap_llm", "error": str(e)})
 
     output = {
         "experiences": [
@@ -1586,9 +1649,9 @@ async def run_synthesis_async(
     Synthesize generated experiences into cohesive resume section.
     """
     logger.info("[SYNTHESIS] Starting synthesis with convenience_mode=%s", convenience_mode)
-    
+
     RUN_METRICS["stages"]["synthesis"]["start"] = time.time()
-    
+
     try:
         if convenience_mode and isinstance(generated_text, dict):
             # Convenience mode: generated_text is already structured
@@ -1596,13 +1659,13 @@ async def run_synthesis_async(
             # Enhance with provenance from analysis
             generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
             return generated_text
-        
+
         # Build synthesis prompt
         experiences_str = "\n\n".join([
             f"• {exp.get('title_line', 'Untitled')}\n  Skills: {', '.join(exp.get('skills', []))}\n  Body: {exp.get('snippet', '')[:500]}..."
             for exp in analysis_result.get("experiences", [])
         ])
-        
+
         prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
 GENERATED EXPERIENCES:
@@ -1616,31 +1679,31 @@ Output ONLY structured JSON:
 }}
 
 Make it flow naturally as one resume section. Use professional language."""
-        
+
         result = await call_llm_async(
             prompt,
             max_tokens=1200,
             temperature=0.3,
             # Removed use_json=True - parse manually below
         )
-        
+
         # Manual JSON parsing with error handling
         try:
             parsed = json.loads(result)
             if not isinstance(parsed, dict):
                 raise ValueError("Not a JSON object")
-            
+
             # Ensure required fields
             parsed.setdefault("final_written_section_provenance", [])
-            
+
             logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(parsed.get("final_written_section", "")))
             return parsed
-            
+
         except json.JSONDecodeError as e:
             logger.warning("[SYNTHESIS] JSON parse failed: %s. Raw: %s", e, result[:200])
             # Fallback to generated_text as-is
             return {"final_written_section": result[:2000], "final_written_section_provenance": []}
-            
+
     except Exception as e:
         logger.exception("[SYNTHESIS] FAILED: %s", e)
         # Fallback to generated_text if available
