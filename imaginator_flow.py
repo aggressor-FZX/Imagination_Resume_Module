@@ -1642,8 +1642,10 @@ async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, ope
 
 async def run_synthesis_async(
     generated_text: Union[str, Dict],
-    analysis_result: Dict,
-    convenience_mode: bool = False
+    analysis_result: Optional[Dict] = None,
+    convenience_mode: bool = False,
+    critique_json: Optional[Dict] = None,
+    **kwargs,
 ) -> Union[str, Dict[str, Any]]:
     """
     Synthesize generated experiences into cohesive resume section.
@@ -1781,7 +1783,7 @@ async def run_full_analysis_async(
         RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
     gen = await run_generation_async(analysis, job_ad, openrouter_api_keys=openrouter_api_keys, **kwargs)
     crit = await run_criticism_async(gen, job_ad, openrouter_api_keys=openrouter_api_keys, **kwargs)
-    syn = await run_synthesis_async(gen, job_ad, crit, openrouter_api_keys=openrouter_api_keys, **kwargs)
+    syn = await run_synthesis_async(gen, analysis, convenience_mode=False, critique_json=crit, openrouter_api_keys=openrouter_api_keys, **kwargs)
     final_section = syn
     try:
         parsed = ensure_json_dict(syn, "synthesis")
