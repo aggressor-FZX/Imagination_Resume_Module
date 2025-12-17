@@ -821,7 +821,7 @@ def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) ->
 
     competencies: Dict[str, float] = {}
 
-    for exp in experiences:
+    for exp in experiences if isinstance(exp, dict):
         if not isinstance(exp, dict):
             continue
 
@@ -1665,7 +1665,7 @@ async def run_synthesis_async(
         # Build synthesis prompt          experiences = analysis_result.get("experiences", []) if isinstance(analysis_result, dict) else []
           experiences_str = "\n\n".join([
               f"• {exp.get('title_line', 'Untitled')}\n  Skills: {', '.join(exp.get('skills', []))}\n  Body: {exp.get('snippet', '')[:500]}..."
-              for exp in experiences
+              for exp in experiences if isinstance(exp, dict)
           ])
 
         prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
