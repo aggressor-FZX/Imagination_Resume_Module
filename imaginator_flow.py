@@ -1662,11 +1662,11 @@ async def run_synthesis_async(
             generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
             return generated_text
 
-        # Build synthesis prompt
-        experiences_str = "\n\n".join([
-            f"• {exp.get('title_line', 'Untitled')}\n  Skills: {', '.join(exp.get('skills', []))}\n  Body: {exp.get('snippet', '')[:500]}..."
-            for exp in analysis_result.get("experiences", [])
-        ])
+        # Build synthesis prompt          experiences = analysis_result.get("experiences", []) if isinstance(analysis_result, dict) else []
+          experiences_str = "\n\n".join([
+              f"• {exp.get('title_line', 'Untitled')}\n  Skills: {', '.join(exp.get('skills', []))}\n  Body: {exp.get('snippet', '')[:500]}..."
+              for exp in experiences
+          ])
 
         prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
