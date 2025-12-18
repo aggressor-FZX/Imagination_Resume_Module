@@ -121,12 +121,12 @@ def _record_latency_ms(ms: float) -> None:
         hist.append(ms)
         _POOL_METRICS["http"]["latency_ms"]["last"] = int(ms)
         if len(hist) >= 5:
-            arr = sorted(hist)
-            n = len(arr)
-            _POOL_METRICS["http"]["latency_ms"]["p50"] = int(arr[n//2])
-            _POOL_METRICS["http"]["latency_ms"]["p95"] = int(arr[max(0, int(n*0.95) - 1)])
-            if n > 200:
-                del hist[:n-100]
+          arr = sorted(hist)
+          n = len(arr)
+          _POOL_METRICS["http"]["latency_ms"]["p50"] = int(arr[n//2])
+          _POOL_METRICS["http"]["latency_ms"]["p95"] = int(arr[max(0, int(n*0.95) - 1)])
+          if n > 200:
+              del hist[:n-100]
     except Exception:
         pass
 
@@ -156,11 +156,11 @@ def _analysis_cache_get(key: str) -> Optional[Dict[str, Any]]:
     with ANALYSIS_CACHE_LOCK:
         entry = ANALYSIS_CACHE.get(key)
         if not entry:
-            return None
+          return None
         expires_at, value = entry
         if now >= expires_at:
-            ANALYSIS_CACHE.pop(key, None)
-            return None
+          ANALYSIS_CACHE.pop(key, None)
+          return None
         return value
 
 def _analysis_cache_set(key: str, value: Dict[str, Any]) -> None:
@@ -230,72 +230,72 @@ class OpenRouterModelRegistry:
     def _refresh_catalog_locked(self) -> None:
         now = time.time()
         if not self.api_key:
-            self._expires_at = now + self.ERROR_TTL_SECONDS
-            return
+          self._expires_at = now + self.ERROR_TTL_SECONDS
+          return
         try:
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            if self.referer:
-                headers["HTTP-Referer"] = self.referer
-            response = requests.get(
-                "https://openrouter.ai/api/v1/models",
-                headers=headers,
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
-            models = {
-                entry.get("id")
-                for entry in data.get("data", [])
-                if entry.get("id")
-            }
-            if models:
-                self._catalog = models
-            self._expires_at = now + self.CACHE_TTL_SECONDS
+          headers = {"Authorization": f"Bearer {self.api_key}"}
+          if self.referer:
+              headers["HTTP-Referer"] = self.referer
+          response = requests.get(
+              "https://openrouter.ai/api/v1/models",
+              headers=headers,
+              timeout=10,
+          )
+          response.raise_for_status()
+          data = response.json()
+          models = {
+              entry.get("id")
+              for entry in data.get("data", [])
+              if entry.get("id")
+          }
+          if models:
+              self._catalog = models
+          self._expires_at = now + self.CACHE_TTL_SECONDS
         except Exception as exc:  # pragma: no cover - network failures
-            print(
-                f"⚠️  Unable to refresh OpenRouter model catalog: {exc}",
-                flush=True,
-            )
-            self._expires_at = now + self.ERROR_TTL_SECONDS
+          print(
+              f"⚠️  Unable to refresh OpenRouter model catalog: {exc}",
+              flush=True,
+          )
+          self._expires_at = now + self.ERROR_TTL_SECONDS
 
     def _purge_unhealthy_locked(self) -> None:
         now = time.time()
         expired = [model for model, until in self._unhealthy.items() if until <= now]
         for model in expired:
-            self._unhealthy.pop(model, None)
+          self._unhealthy.pop(model, None)
 
     def _get_catalog_locked(self) -> Set[str]:
         now = time.time()
         if now >= self._expires_at:
-            self._refresh_catalog_locked()
+          self._refresh_catalog_locked()
         return set(self._catalog)
 
     def get_candidates(self, preferred: List[str]) -> List[str]:
         deduped: List[str] = []
         for model in preferred + [
-            model for model in self.SAFE_MODELS if model not in preferred
+          model for model in self.SAFE_MODELS if model not in preferred
         ]:
-            if model and model not in deduped:
-                deduped.append(model)
+          if model and model not in deduped:
+              deduped.append(model)
 
         with self._lock:
-            self._purge_unhealthy_locked()
-            catalog = self._get_catalog_locked()
-            unhealthy = {model for model in self._unhealthy}
+          self._purge_unhealthy_locked()
+          catalog = self._get_catalog_locked()
+          unhealthy = {model for model in self._unhealthy}
 
         if catalog:
-            candidates = [
-                model for model in deduped if model in catalog and model not in unhealthy
-            ]
+          candidates = [
+              model for model in deduped if model in catalog and model not in unhealthy
+          ]
         else:
-            candidates = [model for model in deduped if model not in unhealthy]
+          candidates = [model for model in deduped if model not in unhealthy]
         return candidates
 
     def mark_unhealthy(self, model: str) -> None:
         if not model:
-            return
+          return
         with self._lock:
-            self._unhealthy[model] = time.time() + self.UNHEALTHY_TTL_SECONDS
+          self._unhealthy[model] = time.time() + self.UNHEALTHY_TTL_SECONDS
 
 
 def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[str]:
@@ -311,7 +311,7 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
 
     for model in OpenRouterModelRegistry.SAFE_MODELS:
         if model not in preferences:
-            preferences.append(model)
+          preferences.append(model)
     return preferences
 
 
@@ -334,7 +334,7 @@ def _extract_gemini_text(response: Any) -> str:
     try:
         text_value = getattr(response, "text", None)
         if isinstance(text_value, str) and text_value.strip():
-            return text_value.strip()
+          return text_value.strip()
     except Exception:
         pass
 
@@ -343,14 +343,14 @@ def _extract_gemini_text(response: Any) -> str:
         content = getattr(candidate, "content", None)
         parts = getattr(content, "parts", None) if content else None
         if not parts:
-            continue
+          continue
         fragments = []
         for part in parts:
-            part_text = getattr(part, "text", None)
-            if isinstance(part_text, str) and part_text.strip():
-                fragments.append(part_text.strip())
+          part_text = getattr(part, "text", None)
+          if isinstance(part_text, str) and part_text.strip():
+              fragments.append(part_text.strip())
         if fragments:
-            return "\n".join(fragments)
+          return "\n".join(fragments)
     return ""
 
 
@@ -408,14 +408,14 @@ def _build_google_clients(api_key_override: Optional[str] = None) -> List[Tuple[
     for model in GOOGLE_FALLBACK_MODELS:
         normalized = _normalize_gemini_model_name(model)
         try:
-            genai.models.get(normalized)
+          genai.models.get(normalized)
         except Exception as exc:  # pragma: no cover - SDK runtime failures
-            print(f"⚠️  Gemini model '{normalized}' unavailable: {exc}", flush=True)
-            continue
+          print(f"⚠️  Gemini model '{normalized}' unavailable: {exc}", flush=True)
+          continue
         try:
-            clients.append((normalized, genai.GenerativeModel(normalized)))
+          clients.append((normalized, genai.GenerativeModel(normalized)))
         except Exception as exc:  # pragma: no cover - SDK runtime failures
-            print(f"⚠️  Failed to initialize Gemini model '{normalized}': {exc}", flush=True)
+          print(f"⚠️  Failed to initialize Gemini model '{normalized}': {exc}", flush=True)
     return clients
 
 # Initialize OpenRouter client (unified API)
@@ -427,20 +427,20 @@ if any(OPENROUTER_API_KEYS):
     valid_key = next((key for key in OPENROUTER_API_KEYS if key), None)
     if valid_key:
         openrouter_client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=valid_key,
-            default_headers={
-                "HTTP-Referer": OPENROUTER_APP_REFERER,
-                "X-Title": OPENROUTER_APP_TITLE
-            }
+          base_url="https://openrouter.ai/api/v1",
+          api_key=valid_key,
+          default_headers={
+              "HTTP-Referer": OPENROUTER_APP_REFERER,
+              "X-Title": OPENROUTER_APP_TITLE
+          }
         )
         openrouter_async_client = AsyncOpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=valid_key,
-            default_headers={
-                "HTTP-Referer": OPENROUTER_APP_REFERER,
-                "X-Title": OPENROUTER_APP_TITLE
-            }
+          base_url="https://openrouter.ai/api/v1",
+          api_key=valid_key,
+          default_headers={
+              "HTTP-Referer": OPENROUTER_APP_REFERER,
+              "X-Title": OPENROUTER_APP_TITLE
+          }
         )
 
 
@@ -477,7 +477,7 @@ def parse_experiences(text: str) -> List[Dict]:
     for b in blocks:
         b = b.strip()
         if not b or len(b) < 40:
-            continue
+          continue
         lines = [l.strip() for l in b.splitlines() if l.strip()]
         title_line = lines[0] if lines else ""
         body = " ".join(lines[1:]) if len(lines) > 1 else " ".join(lines)
@@ -486,11 +486,11 @@ def parse_experiences(text: str) -> List[Dict]:
         duration = extract_duration_from_text(b)
 
         experiences.append({
-            "raw": b,
-            "title_line": title_line,
-            "body": body,
-            "duration": duration,
-            "description": f"{title_line} {body}"
+          "raw": b,
+          "title_line": title_line,
+          "body": body,
+          "duration": duration,
+          "description": f"{title_line} {body}"
         })
     return experiences
 
@@ -508,7 +508,7 @@ def extract_duration_from_text(text: str) -> str:
     for pattern in date_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            return match.group()
+          return match.group()
 
     return ""
 
@@ -518,9 +518,9 @@ def extrapolate_skills_from_text(text: str) -> Set[str]:
     found = set()
     for skill, keywords in _SKILL_KEYWORDS.items():
         for kw in keywords:
-            if kw in t:
-                found.add(skill)
-                break
+          if kw in t:
+              found.add(skill)
+              break
     if re.search(r'\b\d+%|\d+\s+users|\d+\s+clients|metrics\b', t):
         found.add("data-analysis")
     return found
@@ -554,37 +554,37 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
 
     for skill_info in skills_data["skills"]:
         if not isinstance(skill_info, dict):
-            continue
+          continue
 
         skill_name = skill_info.get("skill", skill_info.get("name", ""))
         confidence = skill_info.get("confidence", 0)
         category = skill_info.get("category", "general")
 
         if not skill_name:
-            continue
+          continue
 
         processed["total_count"] += 1
         processed["skill_confidences"][skill_name] = confidence
 
         # Categorize by confidence
         if confidence >= confidence_threshold:
-            processed["high_confidence"].append(skill_name)
-            processed["filtered_count"] += 1
+          processed["high_confidence"].append(skill_name)
+          processed["filtered_count"] += 1
         elif confidence >= 0.5:
-            processed["medium_confidence"].append(skill_name)
+          processed["medium_confidence"].append(skill_name)
         else:
-            processed["low_confidence"].append(skill_name)
+          processed["low_confidence"].append(skill_name)
 
         # Group by category
         if category not in processed["categories"]:
-            processed["categories"][category] = []
+          processed["categories"][category] = []
         processed["categories"][category].append(skill_name)
 
     # Sort skills by confidence (highest first)
     for category in processed["categories"]:
         processed["categories"][category].sort(
-            key=lambda s: processed["skill_confidences"].get(s, 0),
-            reverse=True
+          key=lambda s: processed["skill_confidences"].get(s, 0),
+          reverse=True
         )
 
     return processed
@@ -600,29 +600,29 @@ async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[s
     try:
         _POOL_METRICS["http"]["requests_total"] += 1
         if _SHARED_HTTP_SESSION:
-            async with _SHARED_HTTP_SESSION.post(url, json=payload, headers=headers) as resp:
-                text = await resp.text()
-                _POOL_METRICS["http"]["status_counts"][str(resp.status)] = (
-                    _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
-                )
-                _record_latency_ms((time.time() - start) * 1000)
-                try:
-                    return json.loads(text)
-                except Exception:
-                    return {"status": resp.status, "body": text}
+          async with _SHARED_HTTP_SESSION.post(url, json=payload, headers=headers) as resp:
+              text = await resp.text()
+              _POOL_METRICS["http"]["status_counts"][str(resp.status)] = (
+                  _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
+              )
+              _record_latency_ms((time.time() - start) * 1000)
+              try:
+                  return json.loads(text)
+              except Exception:
+                  return {"status": resp.status, "body": text}
         else:
-            t = aiohttp.ClientTimeout(total=timeout)
-            async with aiohttp.ClientSession(timeout=t) as session:
-                async with session.post(url, json=payload, headers=headers) as resp:
-                    text = await resp.text()
-                    _POOL_METRICS["http"]["status_counts"][str(resp.status)] = (
-                        _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
-                    )
-                    _record_latency_ms((time.time() - start) * 1000)
-                    try:
-                        return json.loads(text)
-                    except Exception:
-                        return {"status": resp.status, "body": text}
+          t = aiohttp.ClientTimeout(total=timeout)
+          async with aiohttp.ClientSession(timeout=t) as session:
+              async with session.post(url, json=payload, headers=headers) as resp:
+                  text = await resp.text()
+                  _POOL_METRICS["http"]["status_counts"][str(resp.status)] = (
+                      _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
+                  )
+                  _record_latency_ms((time.time() - start) * 1000)
+                  try:
+                      return json.loads(text)
+                  except Exception:
+                      return {"status": resp.status, "body": text}
     except asyncio.TimeoutError:
         _POOL_METRICS["http"]["timeouts_total"] += 1
         _record_latency_ms((time.time() - start) * 1000)
@@ -683,8 +683,8 @@ async def extract_job_skills(job_ad: str) -> List[str]:
         # Process structured output
         structured_input = _structured_from_fasts_svm(fastsvm_output)
         if not structured_input:
-            logger.warning("[EXTRACT_JOB_SKILLS] No structured input from FastSVM")
-            return []
+          logger.warning("[EXTRACT_JOB_SKILLS] No structured input from FastSVM")
+          return []
         
         # Process skills with confidence filtering
         processed_skills = process_structured_skills(structured_input, confidence_threshold=0.7)
@@ -728,21 +728,21 @@ def _load_json_payload(source: Union[str, Dict[str, Any], None], label: str) -> 
     if isinstance(source, str):
         candidate = source.strip()
         if not candidate:
-            return {}
+          return {}
 
         if os.path.exists(candidate):
-            with open(candidate, encoding="utf-8") as handle:
-                data = json.load(handle)
+          with open(candidate, encoding="utf-8") as handle:
+              data = json.load(handle)
         else:
-            try:
-                data = json.loads(candidate)
-            except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"{label} must be a dict, valid JSON string, or file path"
-                ) from exc
+          try:
+              data = json.loads(candidate)
+          except json.JSONDecodeError as exc:
+              raise ValueError(
+                  f"{label} must be a dict, valid JSON string, or file path"
+              ) from exc
 
         if isinstance(data, dict):
-            return data
+          return data
         raise ValueError(f"{label} JSON content must deserialize to an object/dict")
 
     raise TypeError(f"{label} must be provided as a dict, JSON string, or file path")
@@ -751,10 +751,10 @@ def _load_json_payload(source: Union[str, Dict[str, Any], None], label: str) -> 
 def _load_json_file_if_exists(path: str) -> Dict[str, Any]:
     try:
         if path and os.path.exists(path):
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+              if isinstance(data, dict):
+                  return data
     except Exception:
         pass
     return {}
@@ -783,19 +783,19 @@ def _infer_skills_from_adjacency(current_skills: List[str], base_confidences: Op
     for s in current_skills:
         related_dict = adjacency.get(s) if isinstance(adjacency, dict) else None
         if isinstance(related_dict, dict):  # Expect dict of {skill: weight}
-            base_conf = base_conf_map.get(s, 0.7)
-            for related_skill, weight in related_dict.items():
-                if related_skill and related_skill not in seen:
-                    # Apply confidence decay: base_confidence * adjacency_weight
-                    inferred_conf = base_conf * float(weight)
-                    inferred.append(related_skill)
-                    inferred_confidences[related_skill] = inferred_conf
-                    seen.add(related_skill)
-                    logger.debug(f"[COMPLIANCE] Inferred {related_skill} from {s} with confidence {inferred_conf:.2f} (base {base_conf:.2f} * weight {weight})")
-                if len(inferred) >= 15:
-                    break
+          base_conf = base_conf_map.get(s, 0.7)
+          for related_skill, weight in related_dict.items():
+              if related_skill and related_skill not in seen:
+                  # Apply confidence decay: base_confidence * adjacency_weight
+                  inferred_conf = base_conf * float(weight)
+                  inferred.append(related_skill)
+                  inferred_confidences[related_skill] = inferred_conf
+                  seen.add(related_skill)
+                  logger.debug(f"[COMPLIANCE] Inferred {related_skill} from {s} with confidence {inferred_conf:.2f} (base {base_conf:.2f} * weight {weight})")
+              if len(inferred) >= 15:
+                  break
         if len(inferred) >= 15:
-            break
+          break
 
     logger.info(f"[COMPLIANCE] adjacency-inference-v1: Inferred {len(inferred)} skills with confidence decay")
     return inferred, inferred_confidences
@@ -821,34 +821,34 @@ def _extract_competencies_from_experiences(experiences: List[Dict[str, Any]]) ->
 
     competencies: Dict[str, float] = {}
 
-    for exp in experiences if isinstance(exp, dict):
+    for exp in experiences:
         if not isinstance(exp, dict):
-            continue
+          continue
 
         # Extract text from various experience fields
         text_parts = []
         for field in ['description', 'snippet', 'bullets', 'responsibilities', 'achievements']:
-            value = exp.get(field)
-            if isinstance(value, str):
-                text_parts.append(value)
-            elif isinstance(value, list):
-                text_parts.extend([str(v) for v in value if v])
+          value = exp.get(field)
+          if isinstance(value, str):
+              text_parts.append(value)
+          elif isinstance(value, list):
+              text_parts.extend([str(v) for v in value if v])
 
         text = ' '.join(text_parts).lower()
 
         # Find action verbs in text and map to competencies
         for verb, comp_map in verb_mappings.items():
-            if not isinstance(comp_map, dict):
-                continue
+          if not isinstance(comp_map, dict):
+              continue
 
-            # Use word boundary matching to find verbs
-            pattern = r'\b' + re.escape(verb.lower()) + r'\b'
-            if re.search(pattern, text):
-                for competency, confidence in comp_map.items():
-                    # Aggregate competencies, taking max confidence if seen multiple times
-                    current_conf = competencies.get(competency, 0.0)
-                    competencies[competency] = max(current_conf, float(confidence))
-                    logger.debug(f"[COMPLIANCE] Found verb '{verb}' → competency '{competency}' (confidence: {confidence})")
+          # Use word boundary matching to find verbs
+          pattern = r'\b' + re.escape(verb.lower()) + r'\b'
+          if re.search(pattern, text):
+              for competency, confidence in comp_map.items():
+                  # Aggregate competencies, taking max confidence if seen multiple times
+                  current_conf = competencies.get(competency, 0.0)
+                  competencies[competency] = max(current_conf, float(confidence))
+                  logger.debug(f"[COMPLIANCE] Found verb '{verb}' → competency '{competency}' (confidence: {confidence})")
 
     logger.info(f"[COMPLIANCE] verb-competency-v1: Extracted {len(competencies)} unique competencies")
     return competencies
@@ -863,7 +863,7 @@ def _strip_code_fences(text: str) -> str:
         stripped = stripped[3:]
         newline = stripped.find("\n")
         if newline != -1:
-            stripped = stripped[newline + 1 :]
+          stripped = stripped[newline + 1 :]
     if stripped.endswith("```"):
         stripped = stripped[:-3]
     return stripped.strip()
@@ -877,19 +877,19 @@ def _extract_json_object(text: str) -> Optional[str]:
     start_idx: Optional[int] = None
     for idx, ch in enumerate(text):
         if ch == "{":
-            if stack == 0:
-                start_idx = idx
-            stack += 1
+          if stack == 0:
+              start_idx = idx
+          stack += 1
         elif ch == "}":
-            if stack:
-                stack -= 1
-                if stack == 0 and start_idx is not None:
-                    candidate = text[start_idx : idx + 1]
-                    try:
-                        json.loads(candidate)
-                        return candidate
-                    except json.JSONDecodeError:
-                        continue
+          if stack:
+              stack -= 1
+              if stack == 0 and start_idx is not None:
+                  candidate = text[start_idx : idx + 1]
+                  try:
+                      json.loads(candidate)
+                      return candidate
+                  except json.JSONDecodeError:
+                      continue
     return None
 
 
@@ -899,7 +899,7 @@ def ensure_json_dict(raw_text: str, label: str) -> Dict[str, Any]:
     try:
         parsed = json.loads(cleaned)
         if isinstance(parsed, dict):
-            return parsed
+          return parsed
     except json.JSONDecodeError:
         pass
 
@@ -942,92 +942,92 @@ def call_llm(
         # If a key is passed directly, create a new client for this call
         print("call_llm: Creating new OpenRouter client for this call")
         or_client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=openrouter_api_key,
-            default_headers={
-                "HTTP-Referer": OPENROUTER_APP_REFERER,
-                "X-Title": OPENROUTER_APP_TITLE
-            }
+          base_url="https://openrouter.ai/api/v1",
+          api_key=openrouter_api_key,
+          default_headers={
+              "HTTP-Referer": OPENROUTER_APP_REFERER,
+              "X-Title": OPENROUTER_APP_TITLE
+          }
         )
 
     if or_client:
         for key in OPENROUTER_API_KEYS:
-            if not key:
-                continue
-            or_client.api_key = key
-            candidates = openrouter_model_registry.get_candidates(
-                _get_openrouter_preferences(system_prompt, user_prompt)
-            )
-            for attempt, model in enumerate(candidates):
-                try:
-                    print(f"\nAttempting OpenRouter call with {model}...", flush=True)
-                    start_time = time.time()
-                    response = or_client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        stream=False,
-                        response_format=response_format,
-                    )
-                    duration = time.time() - start_time
-                    prompt_tokens = response.usage.prompt_tokens
-                    completion_tokens = response.usage.completion_tokens
-                    cost = _estimate_openrouter_cost(model, prompt_tokens, completion_tokens)
-                    RUN_METRICS["calls"].append({
-                        "provider": "OpenRouter",
-                        "model": model,
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "duration_ms": int(duration * 1000),
-                        "cost_usd": cost,
-                    })
-                    RUN_METRICS["total_prompt_tokens"] += prompt_tokens
-                    RUN_METRICS["total_completion_tokens"] += completion_tokens
-                    RUN_METRICS["total_tokens"] += prompt_tokens + completion_tokens
-                    RUN_METRICS["estimated_cost_usd"] += cost
-                    return response.choices[0].message.content
-                except Exception as e:
-                    errors.append(f"OpenRouter ({model}) Error: {e}")
-                    if _should_blacklist_openrouter_model(e):
-                        openrouter_model_registry.mark_unhealthy(model)
-                    RUN_METRICS["failures"].append({
-                        "provider": "OpenRouter",
-                        "model": model,
-                        "attempt": attempt + 1,
-                        "error": str(e),
-                    })
-            print(f"OpenRouter key {key[:5]}... failed, trying next key.")
+          if not key:
+              continue
+          or_client.api_key = key
+          candidates = openrouter_model_registry.get_candidates(
+              _get_openrouter_preferences(system_prompt, user_prompt)
+          )
+          for attempt, model in enumerate(candidates):
+              try:
+                  print(f"\nAttempting OpenRouter call with {model}...", flush=True)
+                  start_time = time.time()
+                  response = or_client.chat.completions.create(
+                      model=model,
+                      messages=[
+                          {"role": "system", "content": system_prompt},
+                          {"role": "user", "content": user_prompt},
+                      ],
+                      temperature=temperature,
+                      max_tokens=max_tokens,
+                      stream=False,
+                      response_format=response_format,
+                  )
+                  duration = time.time() - start_time
+                  prompt_tokens = response.usage.prompt_tokens
+                  completion_tokens = response.usage.completion_tokens
+                  cost = _estimate_openrouter_cost(model, prompt_tokens, completion_tokens)
+                  RUN_METRICS["calls"].append({
+                      "provider": "OpenRouter",
+                      "model": model,
+                      "prompt_tokens": prompt_tokens,
+                      "completion_tokens": completion_tokens,
+                      "duration_ms": int(duration * 1000),
+                      "cost_usd": cost,
+                  })
+                  RUN_METRICS["total_prompt_tokens"] += prompt_tokens
+                  RUN_METRICS["total_completion_tokens"] += completion_tokens
+                  RUN_METRICS["total_tokens"] += prompt_tokens + completion_tokens
+                  RUN_METRICS["estimated_cost_usd"] += cost
+                  return response.choices[0].message.content
+              except Exception as e:
+                  errors.append(f"OpenRouter ({model}) Error: {e}")
+                  if _should_blacklist_openrouter_model(e):
+                      openrouter_model_registry.mark_unhealthy(model)
+                  RUN_METRICS["failures"].append({
+                      "provider": "OpenRouter",
+                      "model": model,
+                      "attempt": attempt + 1,
+                      "error": str(e),
+                  })
+          print(f"OpenRouter key {key[:5]}... failed, trying next key.")
 
     # Fallback to Google Gemini
     google_clients = _build_google_clients(google_api_key)
     for attempt, (model, client) in enumerate(google_clients):
         try:
-            print(f"\nAttempting Google Gemini call with {model}...", flush=True)
-            start_time = time.time()
-            response = client.generate_content(
-                f"{system_prompt}\n\n{user_prompt}",
-                generation_config={"temperature": temperature, "max_output_tokens": max_tokens},
-            )
-            duration = time.time() - start_time
-            # Note: Gemini API does not provide token counts in the same way
-            RUN_METRICS["calls"].append({
-                "provider": "Google",
-                "model": model,
-                "duration_ms": int(duration * 1000),
-            })
-            return _extract_gemini_text(response)
+          print(f"\nAttempting Google Gemini call with {model}...", flush=True)
+          start_time = time.time()
+          response = client.generate_content(
+              f"{system_prompt}\n\n{user_prompt}",
+              generation_config={"temperature": temperature, "max_output_tokens": max_tokens},
+          )
+          duration = time.time() - start_time
+          # Note: Gemini API does not provide token counts in the same way
+          RUN_METRICS["calls"].append({
+              "provider": "Google",
+              "model": model,
+              "duration_ms": int(duration * 1000),
+          })
+          return _extract_gemini_text(response)
         except Exception as e:
-            errors.append(f"Google ({model}) Error: {e}")
-            RUN_METRICS["failures"].append({
-                "provider": "Google",
-                "model": model,
-                "attempt": attempt + 1,
-                "error": str(e),
-            })
+          errors.append(f"Google ({model}) Error: {e}")
+          RUN_METRICS["failures"].append({
+              "provider": "Google",
+              "model": model,
+              "attempt": attempt + 1,
+              "error": str(e),
+          })
 
     raise Exception(f"All LLM providers failed: {' | '.join(errors)}")
 
@@ -1063,115 +1063,115 @@ async def call_llm_async(
     if openrouter_api_key:
         # If a single key is passed directly, create a new client for this call
         or_async_client = AsyncOpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=openrouter_api_key,
-            default_headers={
-                "HTTP-Referer": OPENROUTER_APP_REFERER,
-                "X-Title": OPENROUTER_APP_TITLE
-            }
+          base_url="https://openrouter.ai/api/v1",
+          api_key=openrouter_api_key,
+          default_headers={
+              "HTTP-Referer": OPENROUTER_APP_REFERER,
+              "X-Title": OPENROUTER_APP_TITLE
+          }
         )
 
     async def _try_openrouter_model(model: str, client: Any) -> Optional[str]:
         try:
-            start_time = time.time()
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=False,
-                response_format=response_format,
-            )
-            duration = time.time() - start_time
-            prompt_tokens = response.usage.prompt_tokens
-            completion_tokens = response.usage.completion_tokens
-            cost = _estimate_openrouter_cost(model, prompt_tokens, completion_tokens)
-            RUN_METRICS["calls"].append({
-                "provider": "OpenRouter",
-                "model": model,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "duration_ms": int(duration * 1000),
-                "cost_usd": cost,
-            })
-            RUN_METRICS["total_prompt_tokens"] += prompt_tokens
-            RUN_METRICS["total_completion_tokens"] += completion_tokens
-            RUN_METRICS["total_tokens"] += prompt_tokens + completion_tokens
-            RUN_METRICS["estimated_cost_usd"] += cost
-            return response.choices[0].message.content
+          start_time = time.time()
+          response = await client.chat.completions.create(
+              model=model,
+              messages=[
+                  {"role": "system", "content": system_prompt},
+                  {"role": "user", "content": user_prompt},
+              ],
+              temperature=temperature,
+              max_tokens=max_tokens,
+              stream=False,
+              response_format=response_format,
+          )
+          duration = time.time() - start_time
+          prompt_tokens = response.usage.prompt_tokens
+          completion_tokens = response.usage.completion_tokens
+          cost = _estimate_openrouter_cost(model, prompt_tokens, completion_tokens)
+          RUN_METRICS["calls"].append({
+              "provider": "OpenRouter",
+              "model": model,
+              "prompt_tokens": prompt_tokens,
+              "completion_tokens": completion_tokens,
+              "duration_ms": int(duration * 1000),
+              "cost_usd": cost,
+          })
+          RUN_METRICS["total_prompt_tokens"] += prompt_tokens
+          RUN_METRICS["total_completion_tokens"] += completion_tokens
+          RUN_METRICS["total_tokens"] += prompt_tokens + completion_tokens
+          RUN_METRICS["estimated_cost_usd"] += cost
+          return response.choices[0].message.content
         except Exception as e:
-            if _should_blacklist_openrouter_model(e):
-                openrouter_model_registry.mark_unhealthy(model)
-            RUN_METRICS["failures"].append({
-                "provider": "OpenRouter",
-                "model": model,
-                "error": str(e),
-            })
-            return None
+          if _should_blacklist_openrouter_model(e):
+              openrouter_model_registry.mark_unhealthy(model)
+          RUN_METRICS["failures"].append({
+              "provider": "OpenRouter",
+              "model": model,
+              "error": str(e),
+          })
+          return None
 
     if or_async_client:
         tasks: List[asyncio.Task] = []
         for key in keys_to_try:
-            if not key:
-                continue
-            or_async_client.api_key = key
-            candidates = openrouter_model_registry.get_candidates(
-                _get_openrouter_preferences(system_prompt, user_prompt)
-            )
-            for model in candidates:
-                tasks.append(asyncio.create_task(_try_openrouter_model(model, or_async_client)))
+          if not key:
+              continue
+          or_async_client.api_key = key
+          candidates = openrouter_model_registry.get_candidates(
+              _get_openrouter_preferences(system_prompt, user_prompt)
+          )
+          for model in candidates:
+              tasks.append(asyncio.create_task(_try_openrouter_model(model, or_async_client)))
         if tasks:
-            done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for t in done:
-                result = t.result()
-                if isinstance(result, str) and result:
-                    return result
-            # If none succeeded, continue to fallbacks
+          done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+          for t in done:
+              result = t.result()
+              if isinstance(result, str) and result:
+                  return result
+          # If none succeeded, continue to fallbacks
 
     # Fallback to DeepSeek
     deepseek_keys_to_try = deepseek_api_key and [deepseek_api_key] or DEEPSEEK_API_KEYS
     for key in deepseek_keys_to_try:
         if not key:
-            continue
+          continue
         try:
-            # This is a placeholder for the actual DeepSeek API call
-            print(f"\nAttempting async DeepSeek call...", flush=True)
-            # response = await deepseek_client.chat.completions.create(...)
-            # return response.choices[0].message.content
+          # This is a placeholder for the actual DeepSeek API call
+          print(f"\nAttempting async DeepSeek call...", flush=True)
+          # response = await deepseek_client.chat.completions.create(...)
+          # return response.choices[0].message.content
         except Exception as e:
-            errors.append(f"DeepSeek Error: {e}")
+          errors.append(f"DeepSeek Error: {e}")
 
     # Async fallback to Google Gemini
     google_clients = _build_google_clients(google_api_key)
     for attempt, (model, client) in enumerate(google_clients):
         try:
-            print(f"\nAttempting async Google Gemini call with {model}...", flush=True)
-            start_time = time.time()
-            response = await client.generate_content_async(
-                f"{system_prompt}\n\n{user_prompt}",
-                generation_config={"temperature": temperature, "max_output_tokens": max_tokens},
-            )
-            duration = time.time() - start_time
-            RUN_METRICS["calls"].append({
-                "provider": "Google",
-                "model": model,
-                "duration_ms": int(duration * 1000),
-            })
-            text = _extract_gemini_text(response)
-            if text and text.strip():
-                return text.strip()
-            raise ValueError("Empty Gemini output")
+          print(f"\nAttempting async Google Gemini call with {model}...", flush=True)
+          start_time = time.time()
+          response = await client.generate_content_async(
+              f"{system_prompt}\n\n{user_prompt}",
+              generation_config={"temperature": temperature, "max_output_tokens": max_tokens},
+          )
+          duration = time.time() - start_time
+          RUN_METRICS["calls"].append({
+              "provider": "Google",
+              "model": model,
+              "duration_ms": int(duration * 1000),
+          })
+          text = _extract_gemini_text(response)
+          if text and text.strip():
+              return text.strip()
+          raise ValueError("Empty Gemini output")
         except Exception as e:
-            errors.append(f"Google ({model}) Error: {e}")
-            RUN_METRICS["failures"].append({
-                "provider": "Google",
-                "model": model,
-                "attempt": attempt + 1,
-                "error": str(e),
-            })
+          errors.append(f"Google ({model}) Error: {e}")
+          RUN_METRICS["failures"].append({
+              "provider": "Google",
+              "model": model,
+              "attempt": attempt + 1,
+              "error": str(e),
+          })
 
     raise Exception(f"All LLM providers failed: {' | '.join(errors)}")
 
@@ -1283,21 +1283,21 @@ async def run_analysis_async(
     fastsvm_skills = fastsvm_output.get("skills", []) or []
     if isinstance(fastsvm_skills, list):
         for x in fastsvm_skills:
-            if isinstance(x, str):
-                aggregate_set.add(x)
-            elif isinstance(x, dict):
-                n = x.get("skill") or x.get("name") or x.get("title")
-                if n:
-                    aggregate_set.add(n)
+          if isinstance(x, str):
+              aggregate_set.add(x)
+          elif isinstance(x, dict):
+              n = x.get("skill") or x.get("name") or x.get("title")
+              if n:
+                  aggregate_set.add(n)
     hermes_skills = hermes_output.get("skills", []) or []
     if isinstance(hermes_skills, list):
         for x in hermes_skills:
-            if isinstance(x, str):
-                aggregate_set.add(x)
-            elif isinstance(x, dict):
-                n = x.get("skill") or x.get("name") or x.get("title")
-                if n:
-                    aggregate_set.add(n)
+          if isinstance(x, str):
+              aggregate_set.add(x)
+          elif isinstance(x, dict):
+              n = x.get("skill") or x.get("name") or x.get("title")
+              if n:
+                  aggregate_set.add(n)
     if isinstance(extrapolated, set):
         aggregate_set |= extrapolated
     else:
@@ -1306,23 +1306,23 @@ async def run_analysis_async(
 
     def _structured_from_fasts_svm(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if not isinstance(data, dict):
-            return None
+          return None
         items: List[Dict[str, Any]] = []
         if isinstance(data.get("skills"), list) and data.get("skills"):
-            if all(isinstance(x, dict) for x in data["skills"]):
-                for x in data["skills"]:
-                    name = x.get("skill") or x.get("name") or x.get("title")
-                    conf = x.get("confidence") or x.get("score") or 0
-                    cat = x.get("category") or "general"
-                    if name:
-                        items.append({"skill": name, "confidence": conf, "category": cat})
-            elif all(isinstance(x, str) for x in data["skills"]):
-                conf_map = data.get("skill_confidences") or data.get("confidences") or {}
-                for name in data["skills"]:
-                    conf = conf_map.get(name, 0)
-                    items.append({"skill": name, "confidence": conf, "category": "general"})
+          if all(isinstance(x, dict) for x in data["skills"]):
+              for x in data["skills"]:
+                  name = x.get("skill") or x.get("name") or x.get("title")
+                  conf = x.get("confidence") or x.get("score") or 0
+                  cat = x.get("category") or "general"
+                  if name:
+                      items.append({"skill": name, "confidence": conf, "category": cat})
+          elif all(isinstance(x, str) for x in data["skills"]):
+              conf_map = data.get("skill_confidences") or data.get("confidences") or {}
+              for name in data["skills"]:
+                  conf = conf_map.get(name, 0)
+                  items.append({"skill": name, "confidence": conf, "category": "general"})
         if items:
-            return {"skills": items}
+          return {"skills": items}
         return None
 
     structured_input = None
@@ -1332,7 +1332,7 @@ async def run_analysis_async(
     if not structured_input:
         structured_input = _structured_from_fasts_svm(fastsvm_output)
         if structured_input:
-            logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
+          logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
     fallback_used = False
     fallback_confidence = None
     if not structured_input:
@@ -1387,7 +1387,7 @@ async def run_analysis_async(
     if not domain_insights:
         domain_insights = hermes_output if isinstance(hermes_output, dict) else {}
         if not isinstance(domain_insights, dict):
-            domain_insights = {}
+          domain_insights = {}
         # Defaults aligning to DomainInsights schema
         domain_insights.setdefault("domain", "unknown")
         domain_insights.setdefault("market_demand", "Unknown")
@@ -1430,28 +1430,28 @@ async def run_analysis_async(
         present = False
         variants = synonyms_map.get(skill.lower(), [skill])
         for v in variants:
-            v_norm = _normalize(v)
-            if any(v_norm in s or s in v_norm for s in candidate_skills):
-                present = True
-                break
+          v_norm = _normalize(v)
+          if any(v_norm in s or s in v_norm for s in candidate_skills):
+              present = True
+              break
         if not present:
-            missing_skills.append(skill)
+          missing_skills.append(skill)
 
     logger.info(f"[GAP_ANALYSIS] missing_skills={missing_skills}")
 
     if missing_skills:
         gap_analysis = {
-            "critical_gaps": missing_skills,
-            "nice_to_have_gaps": [],
-            "gap_bridging_strategy": "Add concrete projects or accomplishments to demonstrate these skills.",
-            "summary": f"The job description emphasizes {', '.join(missing_skills)}. Add concrete projects or accomplishments to demonstrate these skills."
+          "critical_gaps": missing_skills,
+          "nice_to_have_gaps": [],
+          "gap_bridging_strategy": "Add concrete projects or accomplishments to demonstrate these skills.",
+          "summary": f"The job description emphasizes {', '.join(missing_skills)}. Add concrete projects or accomplishments to demonstrate these skills."
         }
     else:
         gap_analysis = {
-            "critical_gaps": [],
-            "nice_to_have_gaps": [],
-            "gap_bridging_strategy": "Ensure your most relevant achievements are highlighted.",
-            "summary": "No critical gaps detected against the job ad keywords. Ensure your most relevant achievements are highlighted."
+          "critical_gaps": [],
+          "nice_to_have_gaps": [],
+          "gap_bridging_strategy": "Ensure your most relevant achievements are highlighted.",
+          "summary": "No critical gaps detected against the job ad keywords. Ensure your most relevant achievements are highlighted."
         }
 
     # LLM semantic refinement (PRD FR3)
@@ -1484,35 +1484,35 @@ Domain insights: {domain_insights}
 Seniority analysis: {seniority}
         """
         try:
-            llm_response = await call_llm_async(
-                system_prompt,
-                user_prompt,
-                temperature=0.2,
-                max_tokens=1200,
-                response_format={{ "type": "json_object" }}
-            )
-            structured_gaps = ensure_json_dict(llm_response, "gap_llm")
-            gap_analysis = structured_gaps
-            logger.info("[GAP_ANALYSIS] LLM success: %d gaps refined", len(structured_gaps.get('critical_gaps', [])))
+          llm_response = await call_llm_async(
+              system_prompt,
+              user_prompt,
+              temperature=0.2,
+              max_tokens=1200,
+              response_format={{ "type": "json_object" }}
+          )
+          structured_gaps = ensure_json_dict(llm_response, "gap_llm")
+          gap_analysis = structured_gaps
+          logger.info("[GAP_ANALYSIS] LLM success: %d gaps refined", len(structured_gaps.get('critical_gaps', [])))
         except Exception as e:
-            logger.warning(f"[GAP_ANALYSIS] LLM failed: {e}, fallback to heuristic")
-            RUN_METRICS["failures"].append({"stage": "gap_llm", "error": str(e)})
+          logger.warning(f"[GAP_ANALYSIS] LLM failed: {e}, fallback to heuristic")
+          RUN_METRICS["failures"].append({"stage": "gap_llm", "error": str(e)})
 
     output = {
         "experiences": [
-            {
-                "title_line": e.get("title_line", ""),
-                "skills": list(extrapolate_skills_from_text(e.get("raw", ""))),
-                "snippet": e.get("body", "")
-            }
-            for e in experiences
+          {
+              "title_line": e.get("title_line", ""),
+              "skills": list(extrapolate_skills_from_text(e.get("raw", ""))),
+              "snippet": e.get("body", "")
+          }
+          for e in experiences
         ],
         "aggregate_skills": aggregate_skills,
         "processed_skills": {
-            "high_confidence": processed_skills.get("high_confidence", []),
-            "medium_confidence": processed_skills.get("medium_confidence", []),
-            "low_confidence": processed_skills.get("low_confidence", []),
-            "inferred_skills": inferred_skills or processed_skills.get("inferred_skills", []),
+          "high_confidence": processed_skills.get("high_confidence", []),
+          "medium_confidence": processed_skills.get("medium_confidence", []),
+          "low_confidence": processed_skills.get("low_confidence", []),
+          "inferred_skills": inferred_skills or processed_skills.get("inferred_skills", []),
         },
         "domain_insights": domain_insights,
         "gap_analysis": json.dumps(gap_analysis),  # Convert dict to JSON string for Pydantic
@@ -1524,11 +1524,11 @@ Seniority analysis: {seniority}
     bridging = existing_suggestions.get("bridging_gaps") or []
     if missing_skills and not bridging:
         bridging = [
-            {
-                "skill": kw,
-                "action": f"Create a project or bullet that proves your {kw} impact in a work setting."
-            }
-            for kw in missing_skills
+          {
+              "skill": kw,
+              "action": f"Create a project or bullet that proves your {kw} impact in a work setting."
+          }
+          for kw in missing_skills
         ]
     output["suggested_experiences"] = {
         "bridging_gaps": bridging,
@@ -1536,17 +1536,17 @@ Seniority analysis: {seniority}
     }
     if ats_summary:
         try:
-            output["domain_insights"].setdefault("insights", []).append(ats_summary)
+          output["domain_insights"].setdefault("insights", []).append(ats_summary)
         except Exception:
-            pass
+          pass
     _analysis_cache_set(cache_key, output)
     # Redis cache disabled per project decision
     try:
         resp = await _post_json("https://llm.internal/analysis", {"messages": ["analysis", processed_text, job_ad or ""]})
         content = resp.get("content")
         if isinstance(content, str) and content:
-            output["final_written_section"] = content
-            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
+          output["final_written_section"] = content
+          RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
     except Exception:
         pass
     RUN_METRICS["stages"]["analysis"]["end"] = time.time()
@@ -1554,11 +1554,11 @@ Seniority analysis: {seniority}
     s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None
     try:
         RUN_METRICS.setdefault("transport", {})["http_pool"] = {
-            "requests_total": _POOL_METRICS["http"].get("requests_total"),
-            "errors_total": _POOL_METRICS["http"].get("errors_total"),
-            "timeouts_total": _POOL_METRICS["http"].get("timeouts_total"),
-            "status_counts": _POOL_METRICS["http"].get("status_counts", {}).copy(),
-            "latency_ms": _POOL_METRICS["http"].get("latency_ms", {}).copy(),
+          "requests_total": _POOL_METRICS["http"].get("requests_total"),
+          "errors_total": _POOL_METRICS["http"].get("errors_total"),
+          "timeouts_total": _POOL_METRICS["http"].get("timeouts_total"),
+          "status_counts": _POOL_METRICS["http"].get("status_counts", {}).copy(),
+          "latency_ms": _POOL_METRICS["http"].get("latency_ms", {}).copy(),
         }
     except Exception:
         pass
@@ -1588,17 +1588,17 @@ def run_generation(analysis_json: Union[str, Dict], job_ad: str, **kwargs) -> st
         result = call_llm(system_prompt, user_prompt, job_ad=job_ad, **kwargs)
         # Try to parse as JSON first (for backward compatibility with tests)
         try:
-            parsed = json.loads(result)
-            if isinstance(parsed, dict) and ("gap_bridging" in parsed or "metric_improvements" in parsed):
-                return parsed
+          parsed = json.loads(result)
+          if isinstance(parsed, dict) and ("gap_bridging" in parsed or "metric_improvements" in parsed):
+              return parsed
         except (json.JSONDecodeError, TypeError):
-            pass
+          pass
 
         # If not JSON or doesn't have expected structure, return fallback structure
         # This is for testing purposes - in production, this would be resume text
         return {
-            "gap_bridging": [],
-            "metric_improvements": []
+          "gap_bridging": [],
+          "metric_improvements": []
         }
     except Exception:
         # Fallback for when LLM fails
@@ -1625,11 +1625,11 @@ async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, ope
     """
     try:
         if getattr(settings, "environment", "") == "test":
-            resp = await _post_json("https://llm.internal/generate", {"messages": ["generate", system_prompt, user_prompt]})
-            content = resp.get("content")
-            if isinstance(content, str) and content:
-                RUN_METRICS["calls"].append({"provider": "Mock", "stage": "generation"})
-                return content
+          resp = await _post_json("https://llm.internal/generate", {"messages": ["generate", system_prompt, user_prompt]})
+          content = resp.get("content")
+          if isinstance(content, str) and content:
+              RUN_METRICS["calls"].append({"provider": "Mock", "stage": "generation"})
+              return content
         result = await call_llm_async(system_prompt, user_prompt, openrouter_api_keys=openrouter_api_keys, **kwargs)
         return result
     except Exception:
@@ -1656,13 +1656,14 @@ async def run_synthesis_async(
 
     try:
         if convenience_mode and isinstance(generated_text, dict):
-            # Convenience mode: generated_text is already structured
-            logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
-            # Enhance with provenance from analysis
-            generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
-            return generated_text
+          # Convenience mode: generated_text is already structured
+          logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
+          # Enhance with provenance from analysis
+          generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
+          return generated_text
 
-        # Build synthesis prompt          experiences = analysis_result.get("experiences", []) if isinstance(analysis_result, dict) else []
+        # Build synthesis prompt
+          experiences = analysis_result.get("experiences", []) if isinstance(analysis_result, dict) else []
           parts = []
           for exp in experiences:
               if not isinstance(exp, dict):
@@ -1671,13 +1672,9 @@ async def run_synthesis_async(
               skills_list = exp.get('skills') if isinstance(exp.get('skills'), list) else []
               skills_text = ', '.join(skills_list)
               snippet = (exp.get('snippet') or '')[:500]
-              parts.append(f"• {title}
-  Skills: {skills_text}
-  Body: {snippet}...")
+              parts.append(f"• {title}\n  Skills: {skills_text}\n  Body: {snippet}...")
           experiences_str = "\n\n".join(parts)
-
-
-        prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
+          prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
 GENERATED EXPERIENCES:
 {experiences_str}
@@ -1692,35 +1689,35 @@ Output ONLY structured JSON:
 Make it flow naturally as one resume section. Use professional language."""
 
         result = await call_llm_async(
-            prompt,
-            max_tokens=1200,
-            temperature=0.3,
-            # Removed use_json=True - parse manually below
+          prompt,
+          max_tokens=1200,
+          temperature=0.3,
+          # Removed use_json=True - parse manually below
         )
 
         # Manual JSON parsing with error handling
         try:
-            parsed = json.loads(result)
-            if not isinstance(parsed, dict):
-                raise ValueError("Not a JSON object")
+          parsed = json.loads(result)
+          if not isinstance(parsed, dict):
+              raise ValueError("Not a JSON object")
 
-            # Ensure required fields
-            parsed.setdefault("final_written_section_provenance", [])
+          # Ensure required fields
+          parsed.setdefault("final_written_section_provenance", [])
 
-            logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(parsed.get("final_written_section", "")))
-            return parsed
+          logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(parsed.get("final_written_section", "")))
+          return parsed
 
         except json.JSONDecodeError as e:
-            logger.warning("[SYNTHESIS] JSON parse failed: %s. Raw: %s", e, result[:200])
-            # Fallback to generated_text as-is
-            return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+          logger.warning("[SYNTHESIS] JSON parse failed: %s. Raw: %s", e, result[:200])
+          # Fallback to generated_text as-is
+          return {"final_written_section": result[:2000], "final_written_section_provenance": []}
 
     except Exception as e:
         logger.exception("[SYNTHESIS] FAILED: %s", e)
         # Fallback to generated_text if available
         if isinstance(generated_text, str) and len(generated_text) > 50:
-            logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
-            return {"final_written_section": generated_text[:2000], "final_written_section_provenance": []}
+          logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
+          return {"final_written_section": generated_text[:2000], "final_written_section_provenance": []}
         return {"final_written_section": "Finalized resume text", "final_written_section_provenance": []}
     finally:
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
@@ -1750,19 +1747,19 @@ async def run_criticism_async(
     """
     try:
         if getattr(settings, "environment", "") == "test":
-            resp = await _post_json("https://llm.internal/critique", {"messages": ["critique", system_prompt, user_prompt]})
-            content = resp.get("content")
-            if isinstance(content, str) and content:
-                RUN_METRICS["calls"].append({"provider": "Mock", "stage": "criticism"})
-                return content
+          resp = await _post_json("https://llm.internal/critique", {"messages": ["critique", system_prompt, user_prompt]})
+          content = resp.get("content")
+          if isinstance(content, str) and content:
+              RUN_METRICS["calls"].append({"provider": "Mock", "stage": "criticism"})
+              return content
         result = await call_llm_async(system_prompt, user_prompt, openrouter_api_keys=openrouter_api_keys, **kwargs)
         return result
     except Exception:
         return json.dumps({
-            "suggested_experiences": {
-                "bridging_gaps": [],
-                "metric_improvements": []
-            }
+          "suggested_experiences": {
+              "bridging_gaps": [],
+              "metric_improvements": []
+          }
         })
     finally:
         RUN_METRICS["stages"]["criticism"]["end"] = time.time()
@@ -1797,7 +1794,7 @@ async def run_full_analysis_async(
     try:
         parsed = ensure_json_dict(syn, "synthesis")
         if isinstance(parsed, dict) and parsed.get("final_written_section"):
-            final_section = parsed.get("final_written_section")
+          final_section = parsed.get("final_written_section")
     except Exception:
         pass
     if isinstance(final_section, str) and "gap-bridging" not in final_section.lower():
@@ -1822,70 +1819,70 @@ def main():
         largs = legacy.parse_args()
 
         with open(largs.resume, "r", encoding="utf-8") as f:
-            resume_text = f.read()
+          resume_text = f.read()
         job_ad = largs.target_job_ad or ""
         skills_json = _load_json_payload(largs.extracted_skills_json, "skills")
         insights_json = _load_json_payload(largs.domain_insights_json, "insights")
 
         try:
-            analysis_output = run_analysis(
-                resume_text=resume_text,
-                job_ad=job_ad,
-                extracted_skills_json=skills_json,
-                domain_insights_json=insights_json,
-                confidence_threshold=largs.confidence_threshold,
-            )
+          analysis_output = run_analysis(
+              resume_text=resume_text,
+              job_ad=job_ad,
+              extracted_skills_json=skills_json,
+              domain_insights_json=insights_json,
+              confidence_threshold=largs.confidence_threshold,
+          )
 
-            extracted = analysis_output
-            if isinstance(analysis_output, str):
-                candidate = _extract_json_object(analysis_output)
-                extracted = candidate and json.loads(candidate) or {}
-            elif isinstance(analysis_output, dict):
-                extracted = analysis_output
-            else:
-                extracted = {}
+          extracted = analysis_output
+          if isinstance(analysis_output, str):
+              candidate = _extract_json_object(analysis_output)
+              extracted = candidate and json.loads(candidate) or {}
+          elif isinstance(analysis_output, dict):
+              extracted = analysis_output
+          else:
+              extracted = {}
 
-            output = {
-                "experiences": extracted.get("experiences", []),
-                "aggregate_skills": extracted.get("aggregate_skills", []),
-                "processed_skills": extracted.get(
-                    "processed_skills",
-                    {
-                        "high_confidence": [],
-                        "medium_confidence": [],
-                        "low_confidence": [],
-                        "inferred_skills": [],
-                    },
-                ),
-                "domain_insights": extracted.get("domain_insights", {"domain": "unknown"}),
-                "gap_analysis": extracted.get("gap_analysis", ""),
-                "suggested_experiences": extracted.get(
-                    "suggested_experiences",
-                    {"bridging_gaps": [], "metric_improvements": []},
-                ),
-            }
+          output = {
+              "experiences": extracted.get("experiences", []),
+              "aggregate_skills": extracted.get("aggregate_skills", []),
+              "processed_skills": extracted.get(
+                  "processed_skills",
+                  {
+                      "high_confidence": [],
+                      "medium_confidence": [],
+                      "low_confidence": [],
+                      "inferred_skills": [],
+                  },
+              ),
+              "domain_insights": extracted.get("domain_insights", {"domain": "unknown"}),
+              "gap_analysis": extracted.get("gap_analysis", ""),
+              "suggested_experiences": extracted.get(
+                  "suggested_experiences",
+                  {"bridging_gaps": [], "metric_improvements": []},
+              ),
+          }
         except Exception:
-            experiences = parse_experiences(resume_text)
-            skills = list(extrapolate_skills_from_text(f"{resume_text}\n{job_ad}"))
-            output = {
-                "experiences": experiences,
-                "aggregate_skills": skills,
-                "processed_skills": {
-                    "high_confidence": skills[:max(0, min(len(skills), 3))],
-                    "medium_confidence": skills[3:6] if len(skills) > 3 else [],
-                    "low_confidence": skills[6:] if len(skills) > 6 else [],
-                    "inferred_skills": [],
-                },
-                "domain_insights": {"domain": "unknown", "skill_gap_priority": "medium"},
-                "gap_analysis": json.dumps({
-                    "gap_analysis": {
-                        "critical_gaps": [],
-                        "nice_to_have_gaps": [],
-                        "recommendations": [],
-                    }
-                }),
-                "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
-            }
+          experiences = parse_experiences(resume_text)
+          skills = list(extrapolate_skills_from_text(f"{resume_text}\n{job_ad}"))
+          output = {
+              "experiences": experiences,
+              "aggregate_skills": skills,
+              "processed_skills": {
+                  "high_confidence": skills[:max(0, min(len(skills), 3))],
+                  "medium_confidence": skills[3:6] if len(skills) > 3 else [],
+                  "low_confidence": skills[6:] if len(skills) > 6 else [],
+                  "inferred_skills": [],
+              },
+              "domain_insights": {"domain": "unknown", "skill_gap_priority": "medium"},
+              "gap_analysis": json.dumps({
+                  "gap_analysis": {
+                      "critical_gaps": [],
+                      "nice_to_have_gaps": [],
+                      "recommendations": [],
+                  }
+              }),
+              "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
+          }
 
         print(json.dumps(output))
         return
@@ -1911,25 +1908,25 @@ def main():
 
     if args.command == "analyze":
         with open(args.resume_path, "r", encoding="utf-8") as f:
-            resume_text = f.read()
+          resume_text = f.read()
         job_ad = ""
         if args.job_ad_path:
-            with open(args.job_ad_path, "r", encoding="utf-8") as f:
-                job_ad = f.read()
+          with open(args.job_ad_path, "r", encoding="utf-8") as f:
+              job_ad = f.read()
         skills_json = _load_json_payload(args.skills_path, "skills")
         insights_json = _load_json_payload(args.insights_path, "insights")
         result = run_analysis(resume_text, job_ad, extracted_skills_json=skills_json, domain_insights_json=insights_json)
         print(result)
     elif args.command == "generate":
         with open(args.job_ad_path, "r", encoding="utf-8") as f:
-            job_ad = f.read()
+          job_ad = f.read()
         result = run_generation(args.analysis_json, job_ad)
         print(result)
     elif args.command == "critique":
         with open(args.generated_text_path, "r", encoding="utf-8") as f:
-            generated_text = f.read()
+          generated_text = f.read()
         with open(args.job_ad_path, "r", encoding="utf-8") as f:
-            job_ad = f.read()
+          job_ad = f.read()
         result = run_criticism(generated_text, job_ad)
         print(result)
 
