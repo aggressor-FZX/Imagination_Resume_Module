@@ -1292,13 +1292,16 @@ async def run_analysis_async(
         extrapolate_task = asyncio.create_task(
             asyncio.to_thread(extrapolate_skills_from_text, f"{processed_text}\n{job_ad or ''}")
         )
+        fastsvm_output = await fastsvm_task
         hermes_payload = {"resume_text": processed_text, "loader": loader_output, "svm": fastsvm_output}
         hermes_output = await call_hermes_extract(hermes_payload)
+        experiences = await experiences_task
+        extrapolated = await extrapolate_task
     else:
         logger.info("[ANALYZE_RESUME] Using data provided by backend orchestration")
         processed_text = resume_text
         experiences = parse_experiences(resume_text)
-        extrapolated = extrapolate_skills_from_text(f"{resume_text}\n{job_ad or ""}")
+        extrapolated = extrapolate_skills_from_text(f"{resume_text}\n{job_ad or ''}")
         fastsvm_output = {"skills": []} # Will use extracted_skills_json instead
         hermes_output = domain_insights_json
 
