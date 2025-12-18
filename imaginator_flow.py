@@ -1281,23 +1281,29 @@ async def run_analysis_async(
         s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None
         return cached
 
-    loader_output = await call_loader_process_text_only(resume_text)
-    logger.info(f"[ANALYZE_RESUME] Loader output keys: {list(loader_output.keys()) if loader_output else 'none'}")
-    processed_text = loader_output.get("processed_text", resume_text)
-
-    fastsvm_task = asyncio.create_task(call_fastsvm_process_resume(processed_text, extract_pdf=False))
-    experiences_task = asyncio.create_task(asyncio.to_thread(parse_experiences, processed_text))
-    extrapolate_task = asyncio.create_task(asyncio.to_thread(extrapolate_skills_from_text, f"{processed_text}\n{job_ad or ''}"))
-
-    fastsvm_output, experiences, extrapolated = await asyncio.gather(fastsvm_task, experiences_task, extrapolate_task)
-
-    logger.info(f"[ANALYZE_RESUME] FastSVM output skills count: {len(fastsvm_output.get('skills', [])) if fastsvm_output else 0}")
-    logger.info(f"[ANALYZE_RESUME] Experiences parsed count: {len(experiences) if experiences else 0}")
-    logger.info(f"[ANALYZE_RESUME] Extrapolated skills count: {len(extrapolated) if extrapolated else 0}")
-
-    hermes_payload = {"resume_text": processed_text, "loader": loader_output, "svm": fastsvm_output}
-    hermes_output = await call_hermes_extract(hermes_payload)
-    logger.info(f"[ANALYZE_RESUME] Hermes output skills count: {len(hermes_output.get('skills', [])) if hermes_output else 0}")
+        # Orchestration check: Only call external modules if data is missing
+    if not extracted_skills_json or not domain_insights_json:
+        logger.info("[ANALYZE_RESUME] Missing data from backend, calling external modules...")
+        loader_output = await call_loader_process_text_only(resume_text)
+        processed_text = loader_output.get("processed_text", resume_text)
+        
+        fastsvm_task = asyncio.create_task(call_fastsvm_process_resume(processed_text, extract_pdf=False))
+        experiences_task = asyncio.create_task(asyncio.to_thread(parse_experiences, processed_text))
+        extrapolate_task = asyncio.create_task(asyncio.to_thread(extrapolate_skills_from_text, f"{processed_text}
+{job_ad or ''}"))
+        
+        fastsvm_output, experiences, extrapolated = await asyncio.gather(fastsvm_task, experiences_task, extrapolate_task)
+        
+        hermes_payload = {"resume_text": processed_text, "loader": loader_output, "svm": fastsvm_output}
+        hermes_output = await call_hermes_extract(hermes_payload)
+    else:
+        logger.info("[ANALYZE_RESUME] Using data provided by backend orchestration")
+        processed_text = resume_text
+        experiences = parse_experiences(resume_text)
+        extrapolated = extrapolate_skills_from_text(f"{resume_text}
+{job_ad or ''}")
+        fastsvm_output = {"skills": []} # Will use extracted_skills_json instead
+        hermes_output = domain_insights_json
 
     # Job ad skill extraction using extract_job_skills function (PRD FR1)
     job_high_confidence = []
