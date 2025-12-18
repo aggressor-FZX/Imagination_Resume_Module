@@ -1,0 +1,21 @@
+OpenRouter API Key 1 Loaded: True
+OpenRouter API Key 2 Loaded: True
+{
+  "critical_gaps": [],
+  "medium_gaps": [
+    {
+      "skill": "Kubernetes",
+      "severity": "medium",
+      "evidence": "Job mentions Kubernetes 3 times, no resume match",
+      "impact": 0.7
+    }
+  ],
+  "nice_to_have_gaps": [],
+  "bridging_strategies": [
+    {
+      "gap": "Kubernetes",
+      "suggestion": "Highlight experience with container orchestration tools like AWS ECS, which is equivalent to Kubernetes skills. Emphasize your ability to deploy and manage containerized applications at scale."
+    }
+  ],
+  "overall_summary": "The resume is strong in core Python and DevOps skills, but lacks specific experience with Kubernetes, a key requirement for the senior-level role. Bridging this gap by emphasizing transferable container orchestration skills will be important."
+}

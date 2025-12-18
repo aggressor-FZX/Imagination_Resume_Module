@@ -1,0 +1,43 @@
+OpenRouter API Key 1 Loaded: True
+OpenRouter API Key 2 Loaded: True
+{
+  "critical_gaps": [
+    {
+      "skill": "Kubernetes",
+      "severity": "high",
+      "evidence": "job mentions 3x, no resume match",
+      "impact": 0.9
+    }
+  ],
+  "medium_gaps": [
+    {
+      "skill": "container orchestration",
+      "severity": "medium",
+      "evidence": "inferred from job requirements, not explicitly listed on resume",
+      "impact": 0.7
+    }
+  ],
+  "nice_to_have_gaps": [
+    {
+      "skill": "domain expertise",
+      "severity": "low",
+      "evidence": "domain insights indicate 'unknown' domain",
+      "impact": 0.3
+    }
+  ],
+  "bridging_strategies": [
+    {
+      "gap": "Kubernetes",
+      "suggestion": "Led AWS ECS deployment serving 10k users, equivalent K8s experience."
+    },
+    {
+      "gap": "container orchestration",
+      "suggestion": "Highlight experience with AWS ECS or other container platforms, emphasize transferable skills."
+    },
+    {
+      "gap": "domain expertise",
+      "suggestion": "Research the domain and industry, identify opportunities to demonstrate relevant knowledge and experience."
+    }
+  ],
+  "overall_summary": "Resume strong in Python/AWS but lacks container orchestration skills for senior roles. Bridging strategies focus on highlighting transferable experience and building domain knowledge."
+}

@@ -50,3 +50,8 @@ applyTo: ".github/instructions/*.instructions.md"
   - Include both DO and DON'T examples
   - Reference actual code over theoretical examples
   - Use consistent formatting across rules 
+
+  - **USE RENDER MCP**
+    - Before you blame bad api keys in render use the RENDER MCP Cogito Alpha workspace
+    - Before you say you can't access a folder. Check the workspace you have. 
+    

@@ -26,6 +26,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 from config import settings
+def _structured_from_fastsvm(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(data, dict):
+        return None
+    items: List[Dict[str, Any]] = []
+    if isinstance(data.get("skills"), list) and data.get("skills"):
+        if all(isinstance(x, dict) for x in data["skills"]):
+            for x in data["skills"]:
+                name = x.get("skill") or x.get("name") or x.get("title")
+                conf = x.get("confidence") or x.get("score") or 0
+                cat = x.get("category") or "general"
+                if name:
+                    items.append({"skill": name, "confidence": conf, "category": cat})
+        elif all(isinstance(x, str) for x in data["skills"]):
+            conf_map = data.get("skill_confidences") or data.get("confidences") or {}
+            for name in data["skills"]:
+                conf = conf_map.get(name, 0)
+                items.append({"skill": name, "confidence": conf, "category": "general"})
+    if items:
+        return {"skills": items}
+    return None
+
 # Seniority detection integration
 from seniority_detector import SeniorityDetector
 # from deepseek import DeepSeekAPI  # Commented out - module not available
@@ -408,7 +429,7 @@ def _build_google_clients(api_key_override: Optional[str] = None) -> List[Tuple[
     for model in GOOGLE_FALLBACK_MODELS:
         normalized = _normalize_gemini_model_name(model)
         try:
-          genai.models.get(normalized)
+          pass # genai.models.get(normalized)
         except Exception as exc:  # pragma: no cover - SDK runtime failures
           print(f"⚠️  Gemini model '{normalized}' unavailable: {exc}", flush=True)
           continue
@@ -681,7 +702,7 @@ async def extract_job_skills(job_ad: str) -> List[str]:
         logger.info(f"[EXTRACT_JOB_SKILLS] FastSVM returned {len(fastsvm_output.get('skills', []))} skills")
         
         # Process structured output
-        structured_input = _structured_from_fasts_svm(fastsvm_output)
+        structured_input = _structured_from_fastsvm(fastsvm_output)
         if not structured_input:
           logger.warning("[EXTRACT_JOB_SKILLS] No structured input from FastSVM")
           return []
@@ -1176,7 +1197,10 @@ async def call_llm_async(
     raise Exception(f"All LLM providers failed: {' | '.join(errors)}")
 
 
-async def run_analysis(
+def run_analysis(resume_text, job_ad=None, extracted_skills_json=None, domain_insights_json=None, **kwargs):
+    return asyncio.run(run_analysis_async(resume_text, job_ad, extracted_skills_json, domain_insights_json, **kwargs))
+
+async def run_analysis_llm_async(
     resume_text: str,
     job_ad: Optional[str] = None,
     extracted_skills_json: Optional[Dict] = None,
@@ -1222,6 +1246,7 @@ async def run_analysis_async(
     Returns a dict matching the analysis portion of `AnalysisResponse`.
     """
     from config import settings
+
     import logging
     logger = logging.getLogger(__name__)
 
@@ -1304,33 +1329,13 @@ async def run_analysis_async(
         aggregate_set |= set(extrapolated or [])
     aggregate_skills = sorted(aggregate_set)
 
-    def _structured_from_fasts_svm(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        if not isinstance(data, dict):
-          return None
-        items: List[Dict[str, Any]] = []
-        if isinstance(data.get("skills"), list) and data.get("skills"):
-          if all(isinstance(x, dict) for x in data["skills"]):
-              for x in data["skills"]:
-                  name = x.get("skill") or x.get("name") or x.get("title")
-                  conf = x.get("confidence") or x.get("score") or 0
-                  cat = x.get("category") or "general"
-                  if name:
-                      items.append({"skill": name, "confidence": conf, "category": cat})
-          elif all(isinstance(x, str) for x in data["skills"]):
-              conf_map = data.get("skill_confidences") or data.get("confidences") or {}
-              for name in data["skills"]:
-                  conf = conf_map.get(name, 0)
-                  items.append({"skill": name, "confidence": conf, "category": "general"})
-        if items:
-          return {"skills": items}
-        return None
 
     structured_input = None
     if extracted_skills_json and isinstance(extracted_skills_json, dict):
         structured_input = extracted_skills_json
         logger.info(f"[ANALYZE_RESUME] Using extracted_skills_json from backend (count: {len(structured_input.get('skills', []))})")
     if not structured_input:
-        structured_input = _structured_from_fasts_svm(fastsvm_output)
+        structured_input = _structured_from_fastsvm(fastsvm_output)
         if structured_input:
           logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
     fallback_used = False
@@ -1489,7 +1494,7 @@ Seniority analysis: {seniority}
               user_prompt,
               temperature=0.2,
               max_tokens=1200,
-              response_format={{ "type": "json_object" }}
+              response_format={ "type": "json_object" }
           )
           structured_gaps = ensure_json_dict(llm_response, "gap_llm")
           gap_analysis = structured_gaps
@@ -1722,6 +1727,10 @@ Make it flow naturally as one resume section. Use professional language."""
     finally:
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
 
+
+def run_criticism(generated_suggestions, job_ad, **kwargs):
+    result = asyncio.run(run_criticism_async(generated_suggestions, job_ad, **kwargs))
+    return ensure_json_dict(result, "criticism")
 
 async def run_criticism_async(
     generated_text: str,

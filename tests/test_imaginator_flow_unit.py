@@ -63,6 +63,8 @@ class _DummyModel:
         self.name = name
     def generate_content(self, *args, **kwargs):
         return types.SimpleNamespace(text="ok", usage=types.SimpleNamespace(input_tokens=0, output_tokens=0))
+    async def generate_content_async(self, *args, **kwargs):
+        return types.SimpleNamespace(text="ok", usage=types.SimpleNamespace(input_tokens=0, output_tokens=0))
 genai_module.models = types.SimpleNamespace(get=lambda name: None)
 genai_module.GenerativeModel = _DummyModel
 sys.modules["google"] = google_module
@@ -113,6 +115,7 @@ class _DummySettings:
         self.API_KEY = None
         self.HERMES_AUTH_TOKEN = None
         self.FASTSVM_AUTH_TOKEN = None
+        self.CORS_ORIGINS = '*'
 
 settings = _DummySettings()
 config_module.settings = settings
