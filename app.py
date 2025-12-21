@@ -10,19 +10,17 @@ from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Depends, Security, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
 from config import settings
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configure structured logging
+from logging_setup import configure_logging, RequestIDMiddleware
+# Configure global logger for this service
+logger = configure_logging(service_name="imaginator")
 from models import (
     AnalysisRequest, AnalysisResponse, HealthResponse,
     Context7DocsRequest, Context7DocsResponse, ErrorResponse,
@@ -83,6 +81,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+# Request ID middleware for tracing
+app.add_middleware(RequestIDMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -145,7 +145,7 @@ async def keys_health():
 
 @app.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume(
-    request: AnalysisRequest,
+    request: Request,
     api_key: str = Depends(get_api_key),
 ):
     """
@@ -157,6 +157,11 @@ async def analyze_resume(
     3. Criticism: Refine suggestions with adversarial review
     """
     start_time = time.time()
+
+    # Parse incoming body and attach request_id
+    body = await request.json()
+    request_id = getattr(request.state, "request_id", None)
+    logger.info("analyze.request.incoming", extra={"request_id": request_id, "payload_size": len(json.dumps(body)) if body else 0})
 
     # Log incoming request and feature flags
     import json
@@ -233,7 +238,8 @@ async def analyze_resume(
         domain_insights = None
 
         # Step 1: Run Analysis
-        print("🔍 Step 1: Analyzing resume and job requirements...")
+        logger.info("run_analysis.start", extra={"request_id": request_id})
+        t0 = time.time()
         analysis_result = await run_analysis_async(
             resume_text=request.resume_text,
             job_ad=request.job_ad,
@@ -254,13 +260,17 @@ async def analyze_resume(
                     default=str,
                 )
             )
+        analysis_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_analysis.end", extra={"request_id": request_id, "duration_ms": analysis_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["analysis_ms"] = analysis_duration_ms
 
         # If mocked test returns final success payload (v2 shape), return it directly
         if isinstance(analysis_result, dict) and "status" in analysis_result and "analysis" in analysis_result:
             return JSONResponse(status_code=200, content=analysis_result)
 
         # Step 2: Run Generation
-        print("🎨 Step 2: Generating resume improvement suggestions...")
+        logger.info("run_generation.start", extra={"request_id": request_id})
+        t0 = time.time()
         generation_result = await run_generation_async(
             analysis_json=analysis_result,
             job_ad=request.job_ad,
@@ -278,14 +288,21 @@ async def analyze_resume(
                     default=str,
                 )
             )
+        generation_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_generation.end", extra={"request_id": request_id, "duration_ms": generation_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["generation_ms"] = generation_duration_ms
 
         # Step 3: Run Criticism
-        print("🎯 Step 3: Refining suggestions with adversarial review...")
+        logger.info("run_criticism.start", extra={"request_id": request_id})
+        t0 = time.time()
         criticism_result = await run_criticism_async(
             generated_text=generation_result,
             job_ad=request.job_ad,
             openrouter_api_keys=api_keys
         )
+        criticism_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_criticism.end", extra={"request_id": request_id, "duration_ms": criticism_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["criticism_ms"] = criticism_duration_ms
 
         # Normalize criticism_result to dict
         if isinstance(criticism_result, str):
@@ -296,7 +313,8 @@ async def analyze_resume(
                 criticism_result = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
 
         # Step 4: Synthesis — integrate critique into final text
-        print("🧩 Step 4: Incorporating critique into final resume section...")
+        logger.info("run_synthesis.start", extra={"request_id": request_id, "final_writer": getattr(settings, "FINAL_WRITER_PROVIDER", None)})
+        t0 = time.time()
         synthesis_result = await run_synthesis_async(
             generated_text=generation_result,
             critique_json=criticism_result,
@@ -305,6 +323,9 @@ async def analyze_resume(
             analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
             final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
+        synthesis_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_synthesis.end", extra={"request_id": request_id, "duration_ms": synthesis_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["synthesis_ms"] = synthesis_duration_ms
 
         # Extract structured fields from synthesis result
         if isinstance(synthesis_result, dict):
@@ -341,13 +362,15 @@ async def analyze_resume(
         ## Validate output schema
         validate_output_schema(output)
 
+        processing_time = time.time() - start_time
+        logger.info("analyze.request.completed", extra={"request_id": request_id, "processing_time_seconds": processing_time, "run_metrics": RUN_METRICS.copy()})
         return AnalysisResponse(**output)
 
     except HTTPException as e:
         raise e
     except Exception as e:
         processing_time = time.time() - start_time
-        print(f"❌ Analysis failed after {processing_time:.2f}s: {str(e)}")
+        logger.exception("analyze.request.failed", extra={"request_id": getattr(request.state, "request_id", None), "processing_time_seconds": processing_time})
 
         # Return error response with partial results if available
         return JSONResponse(
@@ -365,11 +388,17 @@ async def analyze_resume(
 
 @app.post("/api/analysis/multi-file", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_multi_file(
+    request: Request,
     files: List[UploadFile] = File(...),
     job_ad: Optional[str] = Form(default=None),
     api_key: str = Depends(get_api_key),
 ):
     start_time = time.time()
+    
+    # Parse incoming body and attach request_id
+    body = await request.json()
+    request_id = getattr(request.state, "request_id", None)
+    logger.info("analyze_multi_file.request.incoming", extra={"request_id": request_id, "file_count": len(files)})
     try:
         contents: List[str] = []
         for f in files:
@@ -390,6 +419,8 @@ async def analyze_multi_file(
             "estimated_cost_usd": 0.0,
             "failures": []
         })
+        logger.info("run_analysis.start", extra={"request_id": request_id})
+        t0 = time.time()
         analysis_result = await run_analysis_async(
             resume_text=resume_text,
             job_ad=job_ad,
@@ -398,22 +429,37 @@ async def analyze_multi_file(
             confidence_threshold=settings.confidence_threshold,
             openrouter_api_keys=api_keys
         )
+        analysis_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_analysis.end", extra={"request_id": request_id, "duration_ms": analysis_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["analysis_ms"] = analysis_duration_ms
+        logger.info("run_generation.start", extra={"request_id": request_id})
+        t0 = time.time()
         generation_result = await run_generation_async(
             analysis_json=analysis_result,
             job_ad=job_ad,
             openrouter_api_keys=api_keys
         )
+        generation_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_generation.end", extra={"request_id": request_id, "duration_ms": generation_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["generation_ms"] = generation_duration_ms
+        logger.info("run_criticism.start", extra={"request_id": request_id})
+        t0 = time.time()
         criticism_result = await run_criticism_async(
             generated_text=generation_result,
             job_ad=job_ad,
             openrouter_api_keys=api_keys
         )
+        criticism_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_criticism.end", extra={"request_id": request_id, "duration_ms": criticism_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["criticism_ms"] = criticism_duration_ms
         if isinstance(criticism_result, str):
             try:
                 from imaginator_flow import ensure_json_dict
                 criticism_result = ensure_json_dict(criticism_result, "critique")
             except Exception:
                 criticism_result = {"suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}}
+        logger.info("run_synthesis.start", extra={"request_id": request_id, "final_writer": getattr(settings, "FINAL_WRITER_PROVIDER", None)})
+        t0 = time.time()
         synthesis_result = await run_synthesis_async(
             generated_text=generation_result,
             critique_json=criticism_result,
@@ -422,6 +468,9 @@ async def analyze_multi_file(
             analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
             final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
+        synthesis_duration_ms = int((time.time() - t0) * 1000)
+        logger.info("run_synthesis.end", extra={"request_id": request_id, "duration_ms": synthesis_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["synthesis_ms"] = synthesis_duration_ms
 
         # Extract structured fields from synthesis result
         if isinstance(synthesis_result, dict):
@@ -452,11 +501,14 @@ async def analyze_multi_file(
             "processing_time_seconds": time.time() - start_time
         }
         validate_output_schema(output)
+        processing_time = time.time() - start_time
+        logger.info("analyze_multi_file.request.completed", extra={"request_id": request_id, "processing_time_seconds": processing_time, "run_metrics": RUN_METRICS.copy()})
         return AnalysisResponse(**output)
     except HTTPException as e:
         raise e
     except Exception as e:
         processing_time = time.time() - start_time
+        logger.exception("analyze_multi_file.request.failed", extra={"request_id": getattr(request.state, "request_id", None), "processing_time_seconds": processing_time})
         return JSONResponse(
             status_code=500,
             content=ErrorResponse(
