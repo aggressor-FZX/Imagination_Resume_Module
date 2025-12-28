@@ -1258,6 +1258,7 @@ async def call_llm_async(
     openrouter_api_key: Optional[str] = None,
     openrouter_api_keys: Optional[List[str]] = None,
     response_format: Optional[Dict[str, Any]] = None,
+    **_ignored: Any,
 ) -> str:
     """
     Async call to LLM with automatic fallback: OpenRouter primary, Google Gemini fallback.
@@ -1740,14 +1741,19 @@ Seniority analysis: {seniority}
           pass
     _analysis_cache_set(cache_key, output)
     # Redis cache disabled per project decision
-    try:
-        resp = await _post_json("https://llm.internal/analysis", {"messages": ["analysis", processed_text, job_ad or ""]})
-        content = resp.get("content")
-        if isinstance(content, str) and content:
-          output["final_written_section"] = content
-          RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
-    except Exception:
-        pass
+    if getattr(settings, "environment", "") == "test":
+        try:
+            resp = await _post_json(
+                "https://llm.internal/analysis",
+                {"messages": ["analysis", processed_text, job_ad or ""]},
+                context="MOCK.analysis",
+            )
+            content = resp.get("content")
+            if isinstance(content, str) and content:
+                output["final_written_section"] = content
+                RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
+        except Exception:
+            pass
     RUN_METRICS["stages"]["analysis"]["end"] = time.time()
     s = RUN_METRICS["stages"]["analysis"]
     s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None

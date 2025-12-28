@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     ENABLE_HERMES: bool = False
     ENABLE_JOB_SEARCH: bool = False
 
-    VERBOSE_PIPELINE_LOGS: bool = False
-    VERBOSE_MICROSERVICE_LOGS: bool = False
+    VERBOSE_PIPELINE_LOGS: bool = True
+    VERBOSE_MICROSERVICE_LOGS: bool = True
     LOG_INCLUDE_RAW_TEXT: bool = False
     LOG_MAX_TEXT_CHARS: int = 1200
 
