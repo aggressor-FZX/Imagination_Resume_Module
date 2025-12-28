@@ -658,7 +658,7 @@ async def call_loader_process_text_only(text: str) -> Dict[str, Any]:
     import logging
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_LOADER or not settings.LOADER_BASE_URL:
-        logger.info(f"[LOADER] Service DISABLED (ENABLE_LOADER={settings.ENABLE_LOADER}, has_url={bool(settings.LOADER_BASE_URL)}) - returning text as-is")
+        logger.info(f"[LOADER] Service DISABLED (ENABLE_LOADER={settings.ENABLE_LOADER}, has_base_url={bool(settings.LOADER_BASE_URL)}) - returning text as-is")
         return {"processed_text": text}
     logger.info(f"[LOADER] Calling service at {settings.LOADER_BASE_URL}")
     url = f"{settings.LOADER_BASE_URL}/process-text-only"
@@ -671,7 +671,7 @@ async def call_fastsvm_process_resume(resume_text: str, extract_pdf: bool = Fals
     import logging
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_FASTSVM or not settings.FASTSVM_BASE_URL:
-        logger.warning(f"[FASTSVM] Service DISABLED (ENABLE_FASTSVM={settings.ENABLE_FASTSVM}, has_url={bool(settings.FASTSVM_BASE_URL)}) - returning empty skills/titles")
+        logger.warning(f"[FASTSVM] Service DISABLED (ENABLE_FASTSVM={settings.ENABLE_FASTSVM}, has_base_url={bool(settings.FASTSVM_BASE_URL)}) - returning empty skills/titles")
         return {"skills": [], "titles": []}
     logger.info(f"[FASTSVM] Calling service at {settings.FASTSVM_BASE_URL}")
     url = f"{settings.FASTSVM_BASE_URL}/api/v1/process-resume"
@@ -723,7 +723,7 @@ async def call_hermes_extract(raw_json_resume: Dict[str, Any]) -> Dict[str, Any]
     import logging
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_HERMES or not settings.HERMES_BASE_URL:
-        logger.warning(f"[HERMES] Service DISABLED (ENABLE_HERMES={settings.ENABLE_HERMES}, has_url={bool(settings.HERMES_BASE_URL)}) - returning empty insights/skills")
+        logger.warning(f"[HERMES] Service DISABLED (ENABLE_HERMES={settings.ENABLE_HERMES}, has_base_url={bool(settings.HERMES_BASE_URL)}) - returning empty insights/skills")
         return {"insights": [], "skills": []}
     logger.info(f"[HERMES] Calling service at {settings.HERMES_BASE_URL}")
     url = f"{settings.HERMES_BASE_URL}/extract"

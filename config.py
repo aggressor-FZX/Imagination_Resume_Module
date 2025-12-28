@@ -62,10 +62,10 @@ class Settings(BaseSettings):
     ENABLE_JOB_SEARCH: bool = False
 
     # External Service Configuration
-    LOADER_BASE_URL: Optional[str] = None
-    HERMES_BASE_URL: Optional[str] = None
-    FASTSVM_BASE_URL: Optional[str] = None
-    JOB_SEARCH_BASE_URL: Optional[str] = None
+    LOADER_BASE_URL: Optional[str] = "https://document-reader-service.onrender.com"
+    HERMES_BASE_URL: Optional[str] = "https://hermes-resume-extractor.onrender.com"
+    FASTSVM_BASE_URL: Optional[str] = "https://fast-svm-ml-tools-for-skill-and-job.onrender.com"
+    JOB_SEARCH_BASE_URL: Optional[str] = "https://job-search-api-h9rl.onrender.com"
 
     # External Service Auth Tokens
     API_KEY: Optional[str] = None
