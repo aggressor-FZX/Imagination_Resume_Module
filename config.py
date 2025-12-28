@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     ENABLE_HERMES: bool = False
     ENABLE_JOB_SEARCH: bool = False
 
+    VERBOSE_PIPELINE_LOGS: bool = False
+    VERBOSE_MICROSERVICE_LOGS: bool = False
+    LOG_INCLUDE_RAW_TEXT: bool = False
+    LOG_MAX_TEXT_CHARS: int = 1200
+
     # External Service Configuration
     LOADER_BASE_URL: Optional[str] = "https://document-reader-service.onrender.com"
     HERMES_BASE_URL: Optional[str] = "https://hermes-resume-extractor.onrender.com"

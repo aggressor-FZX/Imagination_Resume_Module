@@ -12,6 +12,7 @@ import json
 import os
 import re
 import time
+import uuid
 from threading import Lock
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -613,11 +614,79 @@ def process_structured_skills(skills_data: Dict, confidence_threshold: float = 0
 
 # ---- External Module Interfaces (feature-flagged) ----
 
-async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[str] = None, timeout: int = 30) -> Dict[str, Any]:
+def _sha256_hex(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _truncate_text(value: str, max_chars: int) -> str:
+    if max_chars <= 0:
+        return ""
+    if len(value) <= max_chars:
+        return value
+    return value[:max_chars] + f"...(truncated {len(value) - max_chars} chars)"
+
+
+def redact_for_logging(data: Any) -> Any:
+    sensitive_keys = {
+        "resume_text",
+        "text",
+        "raw_text",
+        "processed_text",
+        "job_ad",
+        "raw_json_resume",
+        "generated_text",
+        "prompt",
+    }
+
+    def _walk(value: Any, key: Optional[str] = None) -> Any:
+        if isinstance(value, dict):
+            return {k: _walk(v, k) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_walk(v, key) for v in value]
+        if isinstance(value, str):
+            if key in sensitive_keys and not settings.LOG_INCLUDE_RAW_TEXT:
+                return f"<redacted len={len(value)} sha256={_sha256_hex(value)[:12]}>"
+            return _truncate_text(value, settings.LOG_MAX_TEXT_CHARS)
+        return value
+
+    return _walk(data)
+
+
+async def _post_json(
+    url: str,
+    payload: Dict[str, Any],
+    bearer_token: Optional[str] = None,
+    timeout: int = 30,
+    context: Optional[str] = None,
+) -> Dict[str, Any]:
+    import logging
+
+    logger = logging.getLogger(__name__)
     headers = {"Content-Type": "application/json"}
     if bearer_token:
         headers["Authorization"] = f"Bearer {bearer_token}"
     start = time.time()
+    request_id = uuid.uuid4().hex[:10]
+    label = context or "external_call"
+
+    if settings.VERBOSE_MICROSERVICE_LOGS:
+        safe_headers = dict(headers)
+        if "Authorization" in safe_headers:
+            safe_headers["Authorization"] = "<redacted>"
+        logger.info(
+            json.dumps(
+                {
+                    "event": "microservice.request",
+                    "id": request_id,
+                    "label": label,
+                    "url": url,
+                    "timeout_s": timeout,
+                    "headers": safe_headers,
+                    "json": redact_for_logging(payload),
+                },
+                default=str,
+            )
+        )
     try:
         _POOL_METRICS["http"]["requests_total"] += 1
         if _SHARED_HTTP_SESSION:
@@ -627,6 +696,26 @@ async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[s
                   _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
               )
               _record_latency_ms((time.time() - start) * 1000)
+              if settings.VERBOSE_MICROSERVICE_LOGS:
+                  body_preview: Any = None
+                  try:
+                      body_preview = redact_for_logging(json.loads(text))
+                  except Exception:
+                      body_preview = _truncate_text(text, settings.LOG_MAX_TEXT_CHARS)
+                  logger.info(
+                      json.dumps(
+                          {
+                              "event": "microservice.response",
+                              "id": request_id,
+                              "label": label,
+                              "url": url,
+                              "status": resp.status,
+                              "elapsed_ms": int((time.time() - start) * 1000),
+                              "body": body_preview,
+                          },
+                          default=str,
+                      )
+                  )
               try:
                   return json.loads(text)
               except Exception:
@@ -640,6 +729,26 @@ async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[s
                       _POOL_METRICS["http"]["status_counts"].get(str(resp.status), 0) + 1
                   )
                   _record_latency_ms((time.time() - start) * 1000)
+                  if settings.VERBOSE_MICROSERVICE_LOGS:
+                      body_preview: Any = None
+                      try:
+                          body_preview = redact_for_logging(json.loads(text))
+                      except Exception:
+                          body_preview = _truncate_text(text, settings.LOG_MAX_TEXT_CHARS)
+                      logger.info(
+                          json.dumps(
+                              {
+                                  "event": "microservice.response",
+                                  "id": request_id,
+                                  "label": label,
+                                  "url": url,
+                                  "status": resp.status,
+                                  "elapsed_ms": int((time.time() - start) * 1000),
+                                  "body": body_preview,
+                              },
+                              default=str,
+                          )
+                      )
                   try:
                       return json.loads(text)
                   except Exception:
@@ -647,10 +756,33 @@ async def _post_json(url: str, payload: Dict[str, Any], bearer_token: Optional[s
     except asyncio.TimeoutError:
         _POOL_METRICS["http"]["timeouts_total"] += 1
         _record_latency_ms((time.time() - start) * 1000)
+        logger.error(
+            json.dumps(
+                {
+                    "event": "microservice.timeout",
+                    "id": request_id,
+                    "label": label,
+                    "url": url,
+                    "timeout_s": timeout,
+                    "elapsed_ms": int((time.time() - start) * 1000),
+                }
+            )
+        )
         raise
     except Exception:
         _POOL_METRICS["http"]["errors_total"] += 1
         _record_latency_ms((time.time() - start) * 1000)
+        logger.exception(
+            json.dumps(
+                {
+                    "event": "microservice.error",
+                    "id": request_id,
+                    "label": label,
+                    "url": url,
+                    "elapsed_ms": int((time.time() - start) * 1000),
+                }
+            )
+        )
         raise
 
 
@@ -659,10 +791,24 @@ async def call_loader_process_text_only(text: str) -> Dict[str, Any]:
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_LOADER or not settings.LOADER_BASE_URL:
         logger.info(f"[LOADER] Service DISABLED (ENABLE_LOADER={settings.ENABLE_LOADER}, has_base_url={bool(settings.LOADER_BASE_URL)}) - returning text as-is")
+        if settings.VERBOSE_PIPELINE_LOGS:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "microservice.skipped",
+                        "service": "LOADER",
+                        "reason": {
+                            "ENABLE_LOADER": settings.ENABLE_LOADER,
+                            "has_base_url": bool(settings.LOADER_BASE_URL),
+                        },
+                    },
+                    default=str,
+                )
+            )
         return {"processed_text": text}
     logger.info(f"[LOADER] Calling service at {settings.LOADER_BASE_URL}")
     url = f"{settings.LOADER_BASE_URL}/process-text-only"
-    result = await _post_json(url, {"text": text}, bearer_token=settings.API_KEY)
+    result = await _post_json(url, {"text": text}, bearer_token=settings.API_KEY, context="LOADER.process-text-only")
     logger.info(f"[LOADER] Returned keys: {list(result.keys()) if result else 'none'}")
     return result
 
@@ -672,10 +818,29 @@ async def call_fastsvm_process_resume(resume_text: str, extract_pdf: bool = Fals
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_FASTSVM or not settings.FASTSVM_BASE_URL:
         logger.warning(f"[FASTSVM] Service DISABLED (ENABLE_FASTSVM={settings.ENABLE_FASTSVM}, has_base_url={bool(settings.FASTSVM_BASE_URL)}) - returning empty skills/titles")
+        if settings.VERBOSE_PIPELINE_LOGS:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "microservice.skipped",
+                        "service": "FASTSVM",
+                        "reason": {
+                            "ENABLE_FASTSVM": settings.ENABLE_FASTSVM,
+                            "has_base_url": bool(settings.FASTSVM_BASE_URL),
+                        },
+                    },
+                    default=str,
+                )
+            )
         return {"skills": [], "titles": []}
     logger.info(f"[FASTSVM] Calling service at {settings.FASTSVM_BASE_URL}")
     url = f"{settings.FASTSVM_BASE_URL}/api/v1/process-resume"
-    result = await _post_json(url, {"resume_text": resume_text, "extract_pdf": extract_pdf}, bearer_token=settings.FASTSVM_AUTH_TOKEN)
+    result = await _post_json(
+        url,
+        {"resume_text": resume_text, "extract_pdf": extract_pdf},
+        bearer_token=settings.FASTSVM_AUTH_TOKEN,
+        context="FASTSVM.process-resume",
+    )
     skills_count = len(result.get('skills', [])) if result else 0
     logger.info(f"[FASTSVM] Returned {skills_count} skills")
     return result
@@ -724,10 +889,24 @@ async def call_hermes_extract(raw_json_resume: Dict[str, Any]) -> Dict[str, Any]
     logger = logging.getLogger(__name__)
     if not settings.ENABLE_HERMES or not settings.HERMES_BASE_URL:
         logger.warning(f"[HERMES] Service DISABLED (ENABLE_HERMES={settings.ENABLE_HERMES}, has_base_url={bool(settings.HERMES_BASE_URL)}) - returning empty insights/skills")
+        if settings.VERBOSE_PIPELINE_LOGS:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "microservice.skipped",
+                        "service": "HERMES",
+                        "reason": {
+                            "ENABLE_HERMES": settings.ENABLE_HERMES,
+                            "has_base_url": bool(settings.HERMES_BASE_URL),
+                        },
+                    },
+                    default=str,
+                )
+            )
         return {"insights": [], "skills": []}
     logger.info(f"[HERMES] Calling service at {settings.HERMES_BASE_URL}")
     url = f"{settings.HERMES_BASE_URL}/extract"
-    result = await _post_json(url, raw_json_resume, bearer_token=settings.HERMES_AUTH_TOKEN)
+    result = await _post_json(url, raw_json_resume, bearer_token=settings.HERMES_AUTH_TOKEN, context="HERMES.extract")
     skills_count = len(result.get('skills', [])) if result else 0
     insights_count = len(result.get('insights', [])) if result else 0
     logger.info(f"[HERMES] Returned {skills_count} skills, {insights_count} insights")
@@ -735,7 +914,16 @@ async def call_hermes_extract(raw_json_resume: Dict[str, Any]) -> Dict[str, Any]
 
 
 async def call_job_search_api(query: Dict[str, Any]) -> Dict[str, Any]:
-    return {"status": "disabled"}
+    import logging
+
+    logger = logging.getLogger(__name__)
+    if not settings.ENABLE_JOB_SEARCH or not settings.JOB_SEARCH_BASE_URL:
+        logger.info(
+            f"[JOB_SEARCH] Service DISABLED (ENABLE_JOB_SEARCH={settings.ENABLE_JOB_SEARCH}, has_base_url={bool(settings.JOB_SEARCH_BASE_URL)})"
+        )
+        return {"status": "disabled"}
+    url = f"{settings.JOB_SEARCH_BASE_URL}/api/v1/search"
+    return await _post_json(url, query, bearer_token=settings.JOB_SEARCH_AUTH_TOKEN, context="JOB_SEARCH.search")
 
 
 def _load_json_payload(source: Union[str, Dict[str, Any], None], label: str) -> Dict[str, Any]:

@@ -31,7 +31,14 @@ from models import (
 
 # Import the existing flow functions (will be converted to async)
 from imaginator_flow import (
-    run_analysis_async, run_generation_async, run_criticism_async, run_synthesis_async, RUN_METRICS, validate_output_schema, configure_shared_http_session
+    run_analysis_async,
+    run_generation_async,
+    run_criticism_async,
+    run_synthesis_async,
+    RUN_METRICS,
+    validate_output_schema,
+    configure_shared_http_session,
+    redact_for_logging,
 )
 
 
@@ -161,6 +168,17 @@ async def analyze_resume(
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_LOADER: {settings.ENABLE_LOADER}")
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_FASTSVM: {settings.ENABLE_FASTSVM}")
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_HERMES: {settings.ENABLE_HERMES}")
+    logger.info(f"[IMAGINATOR ENDPOINT]   - VERBOSE_PIPELINE_LOGS: {settings.VERBOSE_PIPELINE_LOGS}")
+    logger.info(f"[IMAGINATOR ENDPOINT]   - VERBOSE_MICROSERVICE_LOGS: {settings.VERBOSE_MICROSERVICE_LOGS}")
+
+    if settings.VERBOSE_PIPELINE_LOGS:
+        payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
+        logger.info(
+            json.dumps(
+                {"event": "proxy.request", "path": "/analyze", "payload": redact_for_logging(payload)},
+                default=str,
+            )
+        )
 
     # Log what structured data we received from backend
     if request.extracted_skills_json:
@@ -224,6 +242,18 @@ async def analyze_resume(
             confidence_threshold=request.confidence_threshold,
             openrouter_api_keys=api_keys
         )
+        if settings.VERBOSE_PIPELINE_LOGS:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "pipeline.stage_result",
+                        "path": "/analyze",
+                        "stage": "analysis",
+                        "result": redact_for_logging(analysis_result),
+                    },
+                    default=str,
+                )
+            )
 
         # If mocked test returns final success payload (v2 shape), return it directly
         if isinstance(analysis_result, dict) and "status" in analysis_result and "analysis" in analysis_result:
@@ -236,6 +266,18 @@ async def analyze_resume(
             job_ad=request.job_ad,
             openrouter_api_keys=api_keys
         )
+        if settings.VERBOSE_PIPELINE_LOGS:
+            logger.info(
+                json.dumps(
+                    {
+                        "event": "pipeline.stage_result",
+                        "path": "/analyze",
+                        "stage": "generation",
+                        "result": redact_for_logging(generation_result),
+                    },
+                    default=str,
+                )
+            )
 
         # Step 3: Run Criticism
         print("🎯 Step 3: Refining suggestions with adversarial review...")
