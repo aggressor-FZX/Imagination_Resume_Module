@@ -1667,25 +1667,30 @@ async def run_synthesis_async(
 
     try:
         if convenience_mode and isinstance(generated_text, dict):
-          # Convenience mode: generated_text is already structured
-          logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
-          # Enhance with provenance from analysis
-          generated_text["final_written_section_provenance"] = analysis_result.get("experiences", [])
-          return generated_text
+            logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
+            provenance = []
+            if isinstance(analysis_result, dict):
+                provenance = analysis_result.get("experiences", []) or []
+            generated_text["final_written_section_provenance"] = provenance
+            return generated_text
 
-        # Build synthesis prompt
-          experiences = analysis_result.get("experiences", []) if isinstance(analysis_result, dict) else []
-          parts = []
-          for exp in experiences:
-              if not isinstance(exp, dict):
-                  continue
-              title = exp.get('title_line', 'Untitled')
-              skills_list = exp.get('skills') if isinstance(exp.get('skills'), list) else []
-              skills_text = ', '.join(skills_list)
-              snippet = (exp.get('snippet') or '')[:500]
-              parts.append(f"• {title}\n  Skills: {skills_text}\n  Body: {snippet}...")
-          experiences_str = "\n\n".join(parts)
-          prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
+        experiences: List[Dict[str, Any]] = []
+        if isinstance(analysis_result, dict):
+            experiences = analysis_result.get("experiences", []) or []
+
+        parts = []
+        for exp in experiences:
+            if not isinstance(exp, dict):
+                continue
+            title = exp.get("title_line", "Untitled")
+            skills_list = exp.get("skills") if isinstance(exp.get("skills"), list) else []
+            skills_text = ", ".join(skills_list)
+            snippet = (exp.get("snippet") or "")[:500]
+            parts.append(f"• {title}\n  Skills: {skills_text}\n  Body: {snippet}...")
+        experiences_str = "\n\n".join(parts)
+
+        system_prompt = "You are an expert resume writer. Return ONLY valid JSON."
+        user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
 GENERATED EXPERIENCES:
 {experiences_str}
@@ -1700,10 +1705,11 @@ Output ONLY structured JSON:
 Make it flow naturally as one resume section. Use professional language."""
 
         result = await call_llm_async(
-          prompt,
-          max_tokens=1200,
-          temperature=0.3,
-          # Removed use_json=True - parse manually below
+            system_prompt,
+            user_prompt,
+            max_tokens=1200,
+            temperature=0.3,
+            **kwargs,
         )
 
         # Manual JSON parsing with error handling
