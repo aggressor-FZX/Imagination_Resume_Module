@@ -1,0 +1,41 @@
+{
+	"folders": [
+		{
+			"name": "Login_Landing_page",
+			"path": "../Login_Landing_page"
+		},
+		{
+			"name": "Hermes",
+			"path": "../Hermes"
+		},
+		{
+			"name": "Imaginator",
+			"path": "."
+		},
+		{
+			"name": "Job_searcher",
+			"path": "../Job_searcher"
+		},
+		{
+			"name": "Loader",
+			"path": "../Loader"
+		},
+		{
+			"name": "FastSVM_Skill_Title_Extraction",
+			"path": "../FastSVM_Skill_Title_Extraction"
+		}
+	],
+	"settings": {
+		"explorer.confirmDelete": false,
+		"explorer.confirmDragAndDrop": false,
+		"files.associations": {
+			"*.chatmode.md": "yaml"
+		},
+		"git.confirmSync": false,
+		"git.allowNoVerifyCommit": true,
+		"task.autoDetect": "on",
+		"terminal.integrated.defaultProfile.linux": "bash",
+		"terminal.integrated.defaultProfile.windows": "PowerShell",
+		"terminal.integrated.defaultProfile.osx": "zsh"
+	}
+}

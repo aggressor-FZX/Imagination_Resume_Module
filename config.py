@@ -73,9 +73,9 @@ class Settings(BaseSettings):
     JOB_SEARCH_BASE_URL: Optional[str] = "https://job-search-api-h9rl.onrender.com"
 
     # External Service Auth Tokens
-    API_KEY: Optional[str] = None
-    HERMES_AUTH_TOKEN: Optional[str] = None
-    FASTSVM_AUTH_TOKEN: Optional[str] = None
+    API_KEY: Optional[str] = Field(default=None, alias="API_SERVICE_KEY")
+    HERMES_AUTH_TOKEN: Optional[str] = Field(default=None, alias="API_SERVICE_KEY")
+    FASTSVM_AUTH_TOKEN: Optional[str] = Field(default=None, alias="API_SERVICE_KEY")
     JOB_SEARCH_AUTH_TOKEN: Optional[str] = Field(
         default=None, alias="JOB_SEARCH_API_TOKEN"
     )

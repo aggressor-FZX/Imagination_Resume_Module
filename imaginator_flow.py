@@ -1883,7 +1883,7 @@ async def run_synthesis_async(
             parts.append(f"• {title}\n  Skills: {skills_text}\n  Body: {snippet}...")
         experiences_str = "\n\n".join(parts)
 
-        system_prompt = "You are an expert resume writer. Return ONLY valid JSON."
+        system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Do not use placeholders like [exp_title1] or [skill1]; use the actual names from the provided experiences."
         user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
 GENERATED EXPERIENCES:
@@ -1891,12 +1891,12 @@ GENERATED EXPERIENCES:
 
 Output ONLY structured JSON:
 {{
-  "final_written_section": "Cohesive paragraph(s) weaving experiences together (300-800 words)",
+  "final_written_section": "Cohesive paragraph(s) weaving experiences together (300-800 words). Use the actual job titles and skills from the experiences provided above. DO NOT use placeholders.",
   "final_written_section_markdown": "Markdown version with bullets/headers",
-  "final_written_section_provenance": ["exp_title1", "exp_title2"]  // list of source experience titles used
+  "final_written_section_provenance": ["Actual Job Title 1", "Actual Job Title 2"]
 }}
 
-Make it flow naturally as one resume section. Use professional language."""
+Make it flow naturally as one resume section. Use professional language. Ensure all placeholders are replaced with real data from the experiences."""
 
         result = await call_llm_async(
             system_prompt,

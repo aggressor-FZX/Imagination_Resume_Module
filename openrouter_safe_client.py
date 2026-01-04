@@ -296,16 +296,13 @@ class OpenRouterSafeClient:
 # Example usage
 if __name__ == "__main__":
     # Test the client
-    api_key = os.getenv("OPENROUTER_API_KEY_1", "YOUR_OPENROUTER_API_KEY")
+    api_key = "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"
     client = OpenRouterSafeClient(api_key)
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
     ]
-
-    result = client.call_model(messages, model="anthropic/claude-3-haiku")
-    print(f"\n\n🎯 Final Result: {json.dumps(result, indent=2)}")
 
     result = client.call_model(messages, model="anthropic/claude-3-haiku")
     print(f"\n\n🎯 Final Result: {json.dumps(result, indent=2)}")
