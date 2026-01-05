@@ -145,6 +145,7 @@ async def keys_health():
 
 @app.post("/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)])
 async def analyze_resume(
+    payload: AnalysisRequest,
     request: Request,
     api_key: str = Depends(get_api_key),
 ):
@@ -159,16 +160,15 @@ async def analyze_resume(
     start_time = time.time()
 
     # Parse incoming body and attach request_id
-    body = await request.json()
+    body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
     request_id = getattr(request.state, "request_id", None)
     logger.info("analyze.request.incoming", extra={"request_id": request_id, "payload_size": len(json.dumps(body)) if body else 0})
 
     # Log incoming request and feature flags
-    import json
     logger.info("[IMAGINATOR ENDPOINT] === Received analyze request ===")
-    logger.info(f"[IMAGINATOR ENDPOINT] Resume length: {len(request.resume_text)}")
-    logger.info(f"[IMAGINATOR ENDPOINT] Job ad length: {len(request.job_ad) if request.job_ad else 0}")
-    logger.info(f"[IMAGINATOR ENDPOINT] Confidence threshold: {request.confidence_threshold}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Resume length: {len(payload.resume_text)}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Job ad length: {len(payload.job_ad) if payload.job_ad else 0}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Confidence threshold: {payload.confidence_threshold}")
     logger.info(f"[IMAGINATOR ENDPOINT] Feature Flags:")
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_LOADER: {settings.ENABLE_LOADER}")
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_FASTSVM: {settings.ENABLE_FASTSVM}")
@@ -177,7 +177,6 @@ async def analyze_resume(
     logger.info(f"[IMAGINATOR ENDPOINT]   - VERBOSE_MICROSERVICE_LOGS: {settings.VERBOSE_MICROSERVICE_LOGS}")
 
     if settings.VERBOSE_PIPELINE_LOGS:
-        payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
         logger.info(
             json.dumps(
                 {"event": "proxy.request", "path": "/analyze", "payload": redact_for_logging(payload)},
@@ -186,9 +185,9 @@ async def analyze_resume(
         )
 
     # Log what structured data we received from backend
-    if request.extracted_skills_json:
+    if payload.extracted_skills_json:
         try:
-            skills_data = json.loads(request.extracted_skills_json) if isinstance(request.extracted_skills_json, str) else request.extracted_skills_json
+            skills_data = json.loads(payload.extracted_skills_json) if isinstance(payload.extracted_skills_json, str) else payload.extracted_skills_json
             skill_count = len(skills_data) if isinstance(skills_data, list) else len(skills_data.get('skills', []))
             logger.info(f"[IMAGINATOR ENDPOINT] Received extracted_skills_json with {skill_count} skills")
             logger.info(f"[IMAGINATOR ENDPOINT] Skills structure type: {type(skills_data).__name__}")
@@ -206,9 +205,9 @@ async def analyze_resume(
     else:
         logger.info(f"[IMAGINATOR ENDPOINT] No extracted_skills_json provided (will use fallback)")
 
-    if request.domain_insights_json:
+    if payload.domain_insights_json:
         try:
-            insights_data = json.loads(request.domain_insights_json) if isinstance(request.domain_insights_json, str) else request.domain_insights_json
+            insights_data = json.loads(payload.domain_insights_json) if isinstance(payload.domain_insights_json, str) else payload.domain_insights_json
             logger.info(f"[IMAGINATOR ENDPOINT] Received domain_insights_json with keys: {list(insights_data.keys()) if isinstance(insights_data, dict) else 'not a dict'}")
         except Exception as e:
             logger.warning(f"[IMAGINATOR ENDPOINT] Could not parse domain_insights_json: {e}")
@@ -218,7 +217,7 @@ async def analyze_resume(
     # Authentication already validated via dependency; no additional checks
 
     try:
-        if not request.resume_text.strip():
+        if not payload.resume_text.strip():
             raise HTTPException(status_code=422, detail="resume_text cannot be empty")
         # Use server-configured OpenRouter keys only (BYOK removed)
         api_keys = [key for key in [settings.openrouter_api_key_1, settings.openrouter_api_key_2] if key]
@@ -241,11 +240,11 @@ async def analyze_resume(
         logger.info("run_analysis.start", extra={"request_id": request_id})
         t0 = time.time()
         analysis_result = await run_analysis_async(
-            resume_text=request.resume_text,
-            job_ad=request.job_ad,
+            resume_text=payload.resume_text,
+            job_ad=payload.job_ad,
             extracted_skills_json=extracted_skills,
             domain_insights_json=domain_insights,
-            confidence_threshold=request.confidence_threshold,
+            confidence_threshold=payload.confidence_threshold,
             openrouter_api_keys=api_keys
         )
         if settings.VERBOSE_PIPELINE_LOGS:
@@ -273,7 +272,7 @@ async def analyze_resume(
         t0 = time.time()
         generation_result = await run_generation_async(
             analysis_json=analysis_result,
-            job_ad=request.job_ad,
+            job_ad=payload.job_ad,
             openrouter_api_keys=api_keys
         )
         if settings.VERBOSE_PIPELINE_LOGS:
@@ -297,7 +296,7 @@ async def analyze_resume(
         t0 = time.time()
         criticism_result = await run_criticism_async(
             generated_text=generation_result,
-            job_ad=request.job_ad,
+            job_ad=payload.job_ad,
             openrouter_api_keys=api_keys
         )
         criticism_duration_ms = int((time.time() - t0) * 1000)
@@ -318,7 +317,7 @@ async def analyze_resume(
         synthesis_result = await run_synthesis_async(
             generated_text=generation_result,
             critique_json=criticism_result,
-            job_ad=request.job_ad,
+            job_ad=payload.job_ad,
             openrouter_api_keys=api_keys,
             analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
             final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
@@ -394,9 +393,8 @@ async def analyze_multi_file(
     api_key: str = Depends(get_api_key),
 ):
     start_time = time.time()
-    
-    # Parse incoming body and attach request_id
-    body = await request.json()
+
+    # Multipart/form-data requests do not support request.json()
     request_id = getattr(request.state, "request_id", None)
     logger.info("analyze_multi_file.request.incoming", extra={"request_id": request_id, "file_count": len(files)})
     try:
