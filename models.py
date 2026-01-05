@@ -6,7 +6,7 @@ Based on SYSTEM_IO_SPECIFICATION.md and Context7 research on Pydantic
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, AliasChoices, ConfigDict
 
 
 class ProcessingStatus(str, Enum):
@@ -84,8 +84,15 @@ class RunMetrics(BaseModel):
 
 class AnalysisRequest(BaseModel):
     """Request model for resume analysis"""
+    model_config = ConfigDict(populate_by_name=True)
+
     resume_text: str = Field(..., min_length=0, description="Raw resume text content")
-    job_ad: str = Field(..., min_length=1, description="Target job description text")
+    job_ad: str = Field(
+        ...,
+        min_length=1,
+        description="Target job description text",
+        validation_alias=AliasChoices("job_ad", "job_description", "jobDescription"),
+    )
     confidence_threshold: float = Field(
         0.7, ge=0.0, le=1.0, description="Minimum confidence score for skills"
     )
