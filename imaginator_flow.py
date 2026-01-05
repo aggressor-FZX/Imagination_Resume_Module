@@ -1882,6 +1882,12 @@ async def run_synthesis_async(
             snippet = (exp.get("snippet") or "")[:500]
             parts.append(f"• {title}\n  Skills: {skills_text}\n  Body: {snippet}...")
         experiences_str = "\n\n".join(parts)
+        
+        # Log what we're actually sending to the LLM
+        logger.info("[SYNTHESIS] Preparing to synthesize %d experiences", len(experiences))
+        if not experiences or len(experiences_str) < 50:
+            logger.error("🚨 [SYNTHESIS] NO VALID EXPERIENCES TO SYNTHESIZE! experiences=%d, str_len=%d", len(experiences), len(experiences_str))
+            logger.error("🚨 [SYNTHESIS] analysis_result keys: %s", list(analysis_result.keys()) if isinstance(analysis_result, dict) else "NOT A DICT")
 
         system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Do not use placeholders like [exp_title1] or [skill1]; use the actual names from the provided experiences."
         user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
@@ -1915,21 +1921,65 @@ Make it flow naturally as one resume section. Use professional language. Ensure 
           # Ensure required fields
           parsed.setdefault("final_written_section_provenance", [])
 
-          logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(parsed.get("final_written_section", "")))
+          final_section_text = parsed.get("final_written_section", "")
+          logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(final_section_text))
+          
+          # Validate that the content is not generic placeholder text
+          if "ABC Tech" in final_section_text or "XYZ Corp" in final_section_text or "Software Engineer at ABC" in final_section_text:
+              logger.error("🚨 [SYNTHESIS] DETECTED GENERIC PLACEHOLDER CONTENT IN LLM RESPONSE!")
+              logger.error("🚨 [SYNTHESIS] Sample: %s", final_section_text[:300])
+              logger.error("🚨 [SYNTHESIS] Replacing with actual user experiences")
+              # Build from actual user experiences
+              fallback_content = "\n\n".join([
+                  f"{exp.get('title_line', 'Position')}\n{exp.get('snippet', '')[:300]}"
+                  for exp in experiences if isinstance(exp, dict)
+              ])[:2000]
+              if fallback_content and len(fallback_content) > 50:
+                  return {"final_written_section": fallback_content, "final_written_section_provenance": []}
+          
           return parsed
 
         except json.JSONDecodeError as e:
-          logger.warning("[SYNTHESIS] JSON parse failed: %s. Raw: %s", e, result[:200])
-          # Fallback to generated_text as-is
-          return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+          logger.error("🚨 [SYNTHESIS] JSON PARSE FAILED: %s. Raw: %s", e, result[:200])
+          logger.error("🚨 [SYNTHESIS] LLM returned non-JSON output. Attempting to use raw text.")
+          # Check if the raw result contains actual resume content (not generic placeholder)
+          if result and len(result) > 100 and "ABC Tech" not in result and "XYZ Corp" not in result:
+              logger.warning("[SYNTHESIS] Using raw LLM output as final section (appears to be custom content)")
+              return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+          else:
+              logger.error("🚨 [SYNTHESIS] RAW LLM OUTPUT CONTAINS GENERIC PLACEHOLDERS - CONSTRUCTING FROM USER EXPERIENCES")
+              # Build from actual user experiences instead of using placeholder
+              fallback_content = "\n\n".join([
+                  f"{exp.get('title_line', 'Position')}\n{exp.get('snippet', '')[:300]}"
+                  for exp in experiences if isinstance(exp, dict)
+              ])[:2000]
+              if fallback_content and len(fallback_content) > 50:
+                  logger.warning("[SYNTHESIS] Using user's actual experiences as fallback (%d chars)", len(fallback_content))
+                  return {"final_written_section": fallback_content, "final_written_section_provenance": []}
+              else:
+                  logger.error("🚨 [SYNTHESIS] NO USER EXPERIENCES FOUND - RETURNING ERROR INDICATOR")
+                  return {"final_written_section": result[:2000], "final_written_section_provenance": []}
 
     except Exception as e:
-        logger.exception("[SYNTHESIS] FAILED: %s", e)
-        # Fallback to generated_text if available
+        logger.exception("🚨🚨🚨 [SYNTHESIS] CRITICAL FAILURE: %s", e)
+        # Build from actual user experiences instead of generic placeholder
+        if isinstance(analysis_result, dict) and analysis_result.get("experiences"):
+            experiences = analysis_result.get("experiences", [])
+            fallback_content = "\n\n".join([
+                f"{exp.get('title_line', 'Position')}\n{exp.get('snippet', '')[:300]}"
+                for exp in experiences if isinstance(exp, dict)
+            ])[:2000]
+            if fallback_content and len(fallback_content) > 50:
+                logger.error("🚨 [SYNTHESIS] EXCEPTION FALLBACK: Using user's actual experiences (%d chars)", len(fallback_content))
+                return {"final_written_section": fallback_content, "final_written_section_provenance": []}
+        
+        # Last resort: use generated_text if it's not empty
         if isinstance(generated_text, str) and len(generated_text) > 50:
-          logger.info("Synthesis fallback to generated_text (length: %d)", len(generated_text))
+          logger.error("🚨 [SYNTHESIS] LAST RESORT: Using generated_text (length: %d)", len(generated_text))
           return {"final_written_section": generated_text[:2000], "final_written_section_provenance": []}
-        return {"final_written_section": "Finalized resume text", "final_written_section_provenance": []}
+        
+        logger.error("🚨🚨🚨 [SYNTHESIS] COMPLETE FAILURE - NO CONTENT AVAILABLE")
+        return {"final_written_section": "ERROR: Resume synthesis failed. Please contact support with correlation ID from logs.", "final_written_section_provenance": []}
     finally:
         RUN_METRICS["stages"]["synthesis"]["end"] = time.time()
 
