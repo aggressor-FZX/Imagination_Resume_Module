@@ -1957,8 +1957,9 @@ Make it flow naturally as one resume section. Use professional language. Ensure 
                   logger.warning("[SYNTHESIS] Using user's actual experiences as fallback (%d chars)", len(fallback_content))
                   return {"final_written_section": fallback_content, "final_written_section_provenance": []}
               else:
-                  logger.error("🚨 [SYNTHESIS] NO USER EXPERIENCES FOUND - RETURNING ERROR INDICATOR")
-                  return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+                  logger.error("🚨 [SYNTHESIS] NO USER EXPERIENCES FOUND - CANNOT CONSTRUCT RESUME")
+                  error_message = "⚠️ Unable to generate resume rewrite. The AI returned generic placeholder content instead of using your actual work history. Please contact support if this issue persists."
+                  return {"final_written_section": error_message, "final_written_section_provenance": []}
 
     except Exception as e:
         logger.exception("🚨🚨🚨 [SYNTHESIS] CRITICAL FAILURE: %s", e)
