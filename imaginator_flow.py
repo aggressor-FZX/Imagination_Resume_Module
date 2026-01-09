@@ -1889,20 +1889,20 @@ async def run_synthesis_async(
             logger.error("🚨 [SYNTHESIS] NO VALID EXPERIENCES TO SYNTHESIZE! experiences=%d, str_len=%d", len(experiences), len(experiences_str))
             logger.error("🚨 [SYNTHESIS] analysis_result keys: %s", list(analysis_result.keys()) if isinstance(analysis_result, dict) else "NOT A DICT")
 
-        system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Do not use placeholders like [exp_title1] or [skill1]; use the actual names from the provided experiences."
+        system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Your ABSOLUTE PRIORITY is to use the ACTUAL content provided in the 'GENERATED EXPERIENCES'. DO NOT invent companies (like ABC Corp, Acme Corp) or job titles. DO NOT use placeholders."
         user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
-GENERATED EXPERIENCES:
+GENERATED EXPERIENCES (SOURCE MATERIAL - USE THIS ONLY):
 {experiences_str}
 
 Output ONLY structured JSON:
 {{
-  "final_written_section": "Cohesive paragraph(s) weaving experiences together (300-800 words). Use the actual job titles and skills from the experiences provided above. DO NOT use placeholders.",
+  "final_written_section": "Cohesive paragraph(s) weaving experiences together (300-800 words). Use ONLY the actual job titles, company names, and skills from the source material. DO NOT INVENT DATA.",
   "final_written_section_markdown": "Markdown version with bullets/headers",
   "final_written_section_provenance": ["Actual Job Title 1", "Actual Job Title 2"]
 }}
 
-Make it flow naturally as one resume section. Use professional language. Ensure all placeholders are replaced with real data from the experiences."""
+CRITICAL INSTRUCTION: If the source material is sparse, do your best with what is there. NEVER use "ABC Corp", "XYZ Tech", "Acme Inc", or "John Doe". If you invent companies, the system will fail."""
 
         result = await call_llm_async(
             system_prompt,
@@ -1922,10 +1922,16 @@ Make it flow naturally as one resume section. Use professional language. Ensure 
           parsed.setdefault("final_written_section_provenance", [])
 
           final_section_text = parsed.get("final_written_section", "")
-          logger.info("[SYNTHESIS] SUCCESS: parsed %d-char section", len(final_section_text))
+          final_section_markdown = parsed.get("final_written_section_markdown", "")
+          
+          # Combine texts for validation
+          combined_text = (final_section_text + " " + final_section_markdown)
+          logger.info("[SYNTHESIS] SUCCESS: parsed section")
           
           # Validate that the content is not generic placeholder text
-          if "ABC Tech" in final_section_text or "XYZ Corp" in final_section_text or "Software Engineer at ABC" in final_section_text:
+          forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company", "John Doe", "Jane Doe"]
+          
+          if any(phrase in combined_text for phrase in forbidden_phrases):
               logger.error("🚨 [SYNTHESIS] DETECTED GENERIC PLACEHOLDER CONTENT IN LLM RESPONSE!")
               logger.error("🚨 [SYNTHESIS] Sample: %s", final_section_text[:300])
               logger.error("🚨 [SYNTHESIS] Replacing with actual user experiences")
@@ -1935,7 +1941,7 @@ Make it flow naturally as one resume section. Use professional language. Ensure 
                   for exp in experiences if isinstance(exp, dict)
               ])[:2000]
               if fallback_content and len(fallback_content) > 50:
-                  return {"final_written_section": fallback_content, "final_written_section_provenance": []}
+                  return {"final_written_section": fallback_content, "final_written_section_markdown": fallback_content, "final_written_section_provenance": []}
           
           return parsed
 
@@ -1943,9 +1949,10 @@ Make it flow naturally as one resume section. Use professional language. Ensure 
           logger.error("🚨 [SYNTHESIS] JSON PARSE FAILED: %s. Raw: %s", e, result[:200])
           logger.error("🚨 [SYNTHESIS] LLM returned non-JSON output. Attempting to use raw text.")
           # Check if the raw result contains actual resume content (not generic placeholder)
-          if result and len(result) > 100 and "ABC Tech" not in result and "XYZ Corp" not in result:
+          forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company"]
+          if result and len(result) > 100 and not any(phrase in result for phrase in forbidden_phrases):
               logger.warning("[SYNTHESIS] Using raw LLM output as final section (appears to be custom content)")
-              return {"final_written_section": result[:2000], "final_written_section_provenance": []}
+              return {"final_written_section": result[:2000], "final_written_section_markdown": result[:2000], "final_written_section_provenance": []}
           else:
               logger.error("🚨 [SYNTHESIS] RAW LLM OUTPUT CONTAINS GENERIC PLACEHOLDERS - CONSTRUCTING FROM USER EXPERIENCES")
               # Build from actual user experiences instead of using placeholder
