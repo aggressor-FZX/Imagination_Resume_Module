@@ -319,7 +319,7 @@ async def analyze_resume(
             critique_json=criticism_result,
             job_ad=payload.job_ad,
             openrouter_api_keys=api_keys,
-            analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
+            analysis_result=analysis_result,  # FIX: Changed from analysis_for_provenance to analysis_result
             final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
         synthesis_duration_ms = int((time.time() - t0) * 1000)
@@ -463,7 +463,7 @@ async def analyze_multi_file(
             critique_json=criticism_result,
             job_ad=job_ad,
             openrouter_api_keys=api_keys,
-            analysis_for_provenance=analysis_result,  # Pass analysis for fact-checking
+            analysis_result=analysis_result,  # FIX: Changed from analysis_for_provenance to analysis_result
             final_writer=getattr(settings, "FINAL_WRITER_PROVIDER", None)  # Use configured provider (safe getattr)
         )
         synthesis_duration_ms = int((time.time() - t0) * 1000)

@@ -1888,6 +1888,13 @@ async def run_synthesis_async(
         if not experiences or len(experiences_str) < 50:
             logger.error("🚨 [SYNTHESIS] NO VALID EXPERIENCES TO SYNTHESIZE! experiences=%d, str_len=%d", len(experiences), len(experiences_str))
             logger.error("🚨 [SYNTHESIS] analysis_result keys: %s", list(analysis_result.keys()) if isinstance(analysis_result, dict) else "NOT A DICT")
+            logger.error("🚨 [SYNTHESIS] kwargs keys: %s", list(kwargs.keys()))
+            # CRITICAL: Raise error instead of hallucinating
+            raise ValueError(
+                f"SYNTHESIS FAILED: No valid experiences provided. "
+                f"Received {len(experiences)} experiences with total length {len(experiences_str)}. "
+                f"This would result in hallucinated content. Check that analysis_result is passed correctly."
+            )
 
         system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Your ABSOLUTE PRIORITY is to use the ACTUAL content provided in the 'GENERATED EXPERIENCES'. DO NOT invent companies (like ABC Corp, Acme Corp) or job titles. DO NOT use placeholders."
         user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
@@ -1929,7 +1936,13 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
           logger.info("[SYNTHESIS] SUCCESS: parsed section")
           
           # Validate that the content is not generic placeholder text
-          forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company", "John Doe", "Jane Doe"]
+          forbidden_phrases = [
+              "ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company",
+              "John Doe", "Jane Doe", "Acme Web Solutions", "Acme Inc", "Tech Corp", "TechCorp",
+              "Macy's", "Best Buy", "Target", "Walmart",  # Common retail hallucinations
+              "Retail Sales Associate at", "Technical Support Specialist at", "Web Developer at Acme",
+              "Generic Company", "Sample Corp", "Test Inc", "Demo Company"
+          ]
           
           if any(phrase in combined_text for phrase in forbidden_phrases):
               logger.error("🚨 [SYNTHESIS] DETECTED GENERIC PLACEHOLDER CONTENT IN LLM RESPONSE!")
