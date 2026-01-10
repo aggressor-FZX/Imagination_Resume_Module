@@ -89,6 +89,33 @@ OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.00
 
 ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "true"
 
+# ============================================================================
+# OpenRouter Model Configuration
+# ============================================================================
+# These models are used in fallback chains for different LLM operations.
+# Models are tried in order until one succeeds.
+#
+# Model Selection Strategy:
+# - CREATIVE tasks (content generation): Use nano models for speed
+# - CRITIC tasks (review/analysis): Use DeepSeek for analytical depth
+# - DEFAULT tasks: Use Claude Haiku for balanced performance
+#
+# Cost considerations (per 1M tokens):
+# - gpt-4.1-nano: ~$0.50 input, ~$1.50 output (fast, creative)
+# - deepseek-chat-v3.1: ~$0.20 input, ~$0.80 output (analytical)
+# - claude-3-haiku: ~$3.00 input, ~$15.00 output (balanced)
+# - gpt-3.5-turbo: ~$0.50 input, ~$1.50 output (fallback)
+# ============================================================================
+
+# Primary models for different task types
+OPENROUTER_MODEL_CREATIVE = "openai/gpt-4.1-nano"        # Fast creative generation
+OPENROUTER_MODEL_ANALYTICAL = "deepseek/deepseek-chat-v3.1"  # Deep analysis tasks
+OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"    # General purpose balanced
+OPENROUTER_MODEL_FALLBACK = "openai/gpt-3.5-turbo"       # Last resort fallback
+
+# Alternative model options (can be enabled via environment variables)
+OPENROUTER_MODEL_ALT_CREATIVE = "qwen/qwen3-30b-a3b"     # Alternative creative model
+
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Estimate per-call cost based on model-specific OpenRouter pricing."""
@@ -240,7 +267,6 @@ class OpenRouterModelRegistry:
         "openai/gpt-4.1-nano",
         "anthropic/claude-3-haiku",
         "deepseek/deepseek-chat-v3.1",
-        "qwen/qwen3-30b-a3b",
     ]
 
     def __init__(self, api_key: Optional[str], referer: Optional[str] = None) -> None:
@@ -323,20 +349,38 @@ class OpenRouterModelRegistry:
 
 
 def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[str]:
+    """
+    Select optimal OpenRouter model based on task type.
+    
+    Strategy:
+    - Creative/generation tasks: Use fast nano models for quick content generation
+    - Critical analysis/review: Use DeepSeek for analytical depth and accuracy
+    - Default: Use Claude Haiku for balanced cost/performance
+    
+    Args:
+        system_prompt: System instruction to analyze for task type
+        user_prompt: User request to analyze for task type
+        
+    Returns:
+        Ordered list of model IDs to try (first = preferred, rest = fallbacks)
+    """
     sys_lower = system_prompt.lower()
     user_lower = user_prompt.lower()
     preferences: List[str] = []
     
+    # Select primary model based on task type
     if "creative" in sys_lower or "generation" in user_lower:
-        preferences.append("qwen/qwen3-30b-a3b")
+        preferences.append(OPENROUTER_MODEL_CREATIVE)  # gpt-4.1-nano for speed
     elif "critic" in sys_lower or "review" in user_lower:
-        preferences.append("deepseek/deepseek-chat-v3.1")
+        preferences.append(OPENROUTER_MODEL_ANALYTICAL)  # DeepSeek for analysis
     else:
-        preferences.append("anthropic/claude-3-haiku")
+        preferences.append(OPENROUTER_MODEL_BALANCED)  # Claude Haiku default
 
+    # Add all other safe models as fallbacks (prevents duplicates)
     for model in OpenRouterModelRegistry.SAFE_MODELS:
         if model not in preferences:
-          preferences.append(model)
+            preferences.append(model)
+    
     return preferences
 
 
