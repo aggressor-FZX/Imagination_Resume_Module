@@ -23,8 +23,6 @@ class OpenRouterSafeClient:
 
     # Hardcoded fallback chain - these are always available
     FALLBACK_CHAIN = [
-        "openai/gpt-oss-120b",          # Preferred primary
-        "openai/gpt-4.1-nano",          # Requested fallback
         "deepseek/deepseek-chat-v3.1",  # Primary fallback - most reliable
         "anthropic/claude-3-haiku",      # Backup if DeepSeek fails
         "openai/gpt-3.5-turbo",          # Last resort
