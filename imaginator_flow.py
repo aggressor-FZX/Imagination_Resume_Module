@@ -1921,6 +1921,11 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
 
         # Manual JSON parsing with error handling
         try:
+          # Some models wrap JSON in quotes - strip if detected
+          if result.strip().startswith('"') and result.strip().endswith('"'):
+              logger.warning("[SYNTHESIS] LLM returned quoted JSON string, unwrapping")
+              result = json.loads(result)  # First parse to remove outer quotes
+          
           parsed = json.loads(result)
           if not isinstance(parsed, dict):
               raise ValueError("Not a JSON object")
