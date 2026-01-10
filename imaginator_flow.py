@@ -236,6 +236,8 @@ class OpenRouterModelRegistry:
     ERROR_TTL_SECONDS = 120
     UNHEALTHY_TTL_SECONDS = 900
     SAFE_MODELS = [
+        "openai/gpt-oss-120b",
+        "openai/gpt-4.1-nano",
         "anthropic/claude-3-haiku",
         "deepseek/deepseek-chat-v3.1",
         "qwen/qwen3-30b-a3b",
@@ -324,6 +326,10 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     sys_lower = system_prompt.lower()
     user_lower = user_prompt.lower()
     preferences: List[str] = []
+    preferred_override = os.getenv("OPENROUTER_PREFERRED_MODEL") or os.getenv("OPENROUTER_PRIMARY_MODEL")
+    preferences.append(preferred_override or "openai/gpt-oss-120b")
+    # Immediate fallback requested by spec
+    preferences.append("openai/gpt-4.1-nano")
     if "creative" in sys_lower or "generation" in user_lower:
         preferences.append("qwen/qwen3-30b-a3b")
     elif "critic" in sys_lower or "review" in user_lower:
@@ -1109,6 +1115,15 @@ def ensure_json_dict(raw_text: str, label: str) -> Dict[str, Any]:
         parsed = json.loads(cleaned)
         if isinstance(parsed, dict):
           return parsed
+        # Some models wrap JSON as a quoted string; attempt a second decode.
+        if isinstance(parsed, str):
+          nested = _strip_code_fences(parsed)
+          try:
+              nested_parsed = json.loads(nested)
+              if isinstance(nested_parsed, dict):
+                  return nested_parsed
+          except json.JSONDecodeError:
+              cleaned = nested
     except json.JSONDecodeError:
         pass
 
@@ -1117,6 +1132,26 @@ def ensure_json_dict(raw_text: str, label: str) -> Dict[str, Any]:
         return json.loads(candidate)
 
     raise ValueError(f"{label} response was not valid JSON. Raw output: {raw_text[:1200]}")
+
+
+def _build_provenance_entries_from_experiences(experiences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    for idx, exp in enumerate(experiences or []):
+        if not isinstance(exp, dict):
+            continue
+        title_line = (exp.get("title_line") or "").strip()
+        if not title_line:
+            continue
+        skills_list = exp.get("skills") if isinstance(exp.get("skills"), list) else []
+        entries.append(
+            {
+                "claim": title_line,
+                "experience_index": idx,
+                "skill_references": [str(s) for s in skills_list if s],
+                "is_synthetic": False,
+            }
+        )
+    return entries
 
 
 
@@ -1323,7 +1358,6 @@ async def call_llm_async(
           return None
 
     if or_async_client:
-        tasks: List[asyncio.Task] = []
         for key in keys_to_try:
           if not key:
               continue
@@ -1331,15 +1365,13 @@ async def call_llm_async(
           candidates = openrouter_model_registry.get_candidates(
               _get_openrouter_preferences(system_prompt, user_prompt)
           )
+          # IMPORTANT: Try in deterministic order (primary -> fallback) rather than racing.
+          # Racing can cause a fast fallback model to "win" even when the primary is available.
           for model in candidates:
-              tasks.append(asyncio.create_task(_try_openrouter_model(model, or_async_client)))
-        if tasks:
-          done, _pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-          for t in done:
-              result = t.result()
+              result = await _try_openrouter_model(model, or_async_client)
               if isinstance(result, str) and result:
                   return result
-          # If none succeeded, continue to fallbacks
+          print(f"OpenRouter key {key[:5]}... failed, trying next key.")
 
     # Fallback to DeepSeek
     deepseek_keys_to_try = deepseek_api_key and [deepseek_api_key] or DEEPSEEK_API_KEYS
@@ -1862,10 +1894,10 @@ async def run_synthesis_async(
     try:
         if convenience_mode and isinstance(generated_text, dict):
             logger.info("[SYNTHESIS] Convenience mode - using structured generated_text")
-            provenance = []
+            experiences_for_provenance: List[Dict[str, Any]] = []
             if isinstance(analysis_result, dict):
-                provenance = analysis_result.get("experiences", []) or []
-            generated_text["final_written_section_provenance"] = provenance
+                experiences_for_provenance = analysis_result.get("experiences", []) or []
+            generated_text["final_written_section_provenance"] = _build_provenance_entries_from_experiences(experiences_for_provenance)
             return generated_text
 
         experiences: List[Dict[str, Any]] = []
@@ -1921,17 +1953,20 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
 
         # Manual JSON parsing with error handling
         try:
-          # Some models wrap JSON in quotes - strip if detected
-          if result.strip().startswith('"') and result.strip().endswith('"'):
-              logger.warning("[SYNTHESIS] LLM returned quoted JSON string, unwrapping")
-              result = json.loads(result)  # First parse to remove outer quotes
-          
-          parsed = json.loads(result)
+          parsed = ensure_json_dict(result, "synthesis")
           if not isinstance(parsed, dict):
               raise ValueError("Not a JSON object")
 
-          # Ensure required fields
-          parsed.setdefault("final_written_section_provenance", [])
+          # Ensure required fields and types
+          parsed.setdefault("final_written_section", "")
+          parsed.setdefault("final_written_section_markdown", "")
+          if not isinstance(parsed.get("final_written_section"), str):
+              parsed["final_written_section"] = json.dumps(parsed.get("final_written_section"), default=str)
+          if not isinstance(parsed.get("final_written_section_markdown"), str):
+              parsed["final_written_section_markdown"] = json.dumps(parsed.get("final_written_section_markdown"), default=str)
+
+          # Force provenance to match API schema using actual experiences.
+          parsed["final_written_section_provenance"] = _build_provenance_entries_from_experiences(experiences)
 
           final_section_text = parsed.get("final_written_section", "")
           final_section_markdown = parsed.get("final_written_section_markdown", "")
@@ -1963,7 +1998,7 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
           
           return parsed
 
-        except json.JSONDecodeError as e:
+        except Exception as e:
           logger.error("🚨 [SYNTHESIS] JSON PARSE FAILED: %s. Raw: %s", e, result[:200])
           logger.error("🚨 [SYNTHESIS] LLM returned non-JSON output. Attempting to use raw text.")
           # Check if the raw result contains actual resume content (not generic placeholder)

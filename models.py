@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, AliasChoices, ConfigDict
+import json
 
 
 class ProcessingStatus(str, Enum):
@@ -109,7 +110,6 @@ class AnalysisRequest(BaseModel):
         """Validate that skills JSON can be parsed"""
         if v is not None:
             try:
-                import json
                 json.loads(v)
             except json.JSONDecodeError:
                 raise ValueError("extracted_skills_json must be valid JSON")
@@ -121,7 +121,6 @@ class AnalysisRequest(BaseModel):
         """Validate that insights JSON can be parsed"""
         if v is not None:
             try:
-                import json
                 json.loads(v)
             except json.JSONDecodeError:
                 raise ValueError("domain_insights_json must be valid JSON")
@@ -149,8 +148,8 @@ class AnalysisResponse(BaseModel):
     seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
     final_written_section: Optional[str] = Field(None, description="Generated resume section text")
     final_written_section_markdown: Optional[str] = Field(None, description="Markdown-formatted resume section")
-    final_written_section_provenance: Optional[List[ProvenanceEntry]] = Field(
-        None, description="Claim-to-source mapping for trust and verification"
+    final_written_section_provenance: List[ProvenanceEntry] = Field(
+        default_factory=list, description="Claim-to-source mapping for trust and verification"
     )
     critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
     run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
@@ -158,6 +157,32 @@ class AnalysisResponse(BaseModel):
         ProcessingStatus.COMPLETED, description="Processing status"
     )
     processing_time_seconds: float = Field(..., description="Total processing time")
+
+    @field_validator("final_written_section_provenance", mode="before")
+    @classmethod
+    def coerce_provenance_entries(cls, v):
+        """Allow provenance to arrive as strings/dicts and coerce into ProvenanceEntry-compatible dicts."""
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            return []
+
+        normalized: List[Any] = []
+        for item in v:
+            if isinstance(item, ProvenanceEntry):
+                normalized.append(item)
+            elif isinstance(item, dict):
+                normalized.append(item)
+            elif isinstance(item, str) and item.strip():
+                normalized.append(
+                    {
+                        "claim": item.strip(),
+                        "experience_index": None,
+                        "skill_references": [],
+                        "is_synthetic": False,
+                    }
+                )
+        return normalized
 
 
 class HealthResponse(BaseModel):

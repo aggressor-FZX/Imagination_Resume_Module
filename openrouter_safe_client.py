@@ -23,32 +23,37 @@ class OpenRouterSafeClient:
 
     # Hardcoded fallback chain - these are always available
     FALLBACK_CHAIN = [
+        "openai/gpt-oss-120b",          # Preferred primary
+        "openai/gpt-4.1-nano",          # Requested fallback
         "deepseek/deepseek-chat-v3.1",  # Primary fallback - most reliable
         "anthropic/claude-3-haiku",      # Backup if DeepSeek fails
         "openai/gpt-3.5-turbo",          # Last resort
     ]
 
     def __init__(self, api_key: str, referer: str = "https://imaginator-resume-cowriter.onrender.com"):
-    """
-    Initialize the safe OpenRouter client.
+        """
+        Initialize the safe OpenRouter client.
 
-    Args:
-        api_key: Primary OpenRouter API key (fallback if env vars not set)
-        referer: HTTP Referer header for OpenRouter tracking
-    """
-    import os
-    self.api_keys = [
-        os.getenv('OPENROUTER_API_KEY_1', api_key),
-        os.getenv('OPENROUTER_API_KEY_2')
-    ]
-    self.api_keys = [k for k in self.api_keys if k]  # Remove empty
-    if not self.api_keys:
-        raise ValueError("No OpenRouter API keys available")
-    self.referer = referer
-    self.base_url = "https://openrouter.ai/api/v1"
-    self._model_cache: Dict[str, bool] = {}  # Cache of available models
-    self._cache_expires_at = 0
-    self._cache_ttl_seconds = 600  # 10 minute cache
+        Args:
+            api_key: Primary OpenRouter API key (fallback if env vars not set)
+            referer: HTTP Referer header for OpenRouter tracking
+        """
+        import os
+        self.api_keys = [
+            os.getenv("OPENROUTER_API_KEY_1", api_key),
+            os.getenv("OPENROUTER_API_KEY_2"),
+        ]
+        self.api_keys = [k for k in self.api_keys if k]  # Remove empty
+        if not self.api_keys:
+            raise ValueError("No OpenRouter API keys available")
+
+        # Current key used for requests; rotate by updating this value.
+        self.api_key = self.api_keys[0]
+        self.referer = referer
+        self.base_url = "https://openrouter.ai/api/v1"
+        self._model_cache: Dict[str, Any] = {}  # Cache of available models
+        self._cache_expires_at = 0
+        self._cache_ttl_seconds = 600  # 10 minute cache
 
     def _get_available_models(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
