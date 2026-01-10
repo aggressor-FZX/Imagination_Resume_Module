@@ -96,25 +96,22 @@ ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "tru
 # Models are tried in order until one succeeds.
 #
 # Model Selection Strategy:
-# - CREATIVE tasks (content generation): Use nano models for speed
-# - CRITIC tasks (review/analysis): Use DeepSeek for analytical depth
-# - DEFAULT tasks: Use Claude Haiku for balanced performance
+# - CREATIVE tasks (content generation): Gemini 2.5 Pro for advanced creative writing
+# - ANALYTICAL tasks (review/analysis): Microsoft Phi-4 for deep technical analysis
+# - DEFAULT tasks: Claude 3 Haiku for balanced cost/performance
 #
 # Cost considerations (per 1M tokens):
-# - gpt-4.1-nano: ~$0.50 input, ~$1.50 output (fast, creative)
-# - deepseek-chat-v3.1: ~$0.20 input, ~$0.80 output (analytical)
-# - claude-3-haiku: ~$3.00 input, ~$15.00 output (balanced)
-# - gpt-3.5-turbo: ~$0.50 input, ~$1.50 output (fallback)
+# - google/gemini-2.5-pro: ~$1.25 input, ~$5.00 output (creative powerhouse)
+# - microsoft/phi-4: ~$0.50 input, ~$1.50 output (analytical precision)
+# - anthropic/claude-3-haiku: ~$3.00 input, ~$15.00 output (balanced)
+# - Fallbacks defined in OpenRouterModelRegistry.SAFE_MODELS
 # ============================================================================
 
 # Primary models for different task types
-OPENROUTER_MODEL_CREATIVE = "openai/gpt-4.1-nano"        # Fast creative generation
-OPENROUTER_MODEL_ANALYTICAL = "deepseek/deepseek-chat-v3.1"  # Deep analysis tasks
-OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"    # General purpose balanced
-OPENROUTER_MODEL_FALLBACK = "openai/gpt-3.5-turbo"       # Last resort fallback
-
-# Alternative model options (can be enabled via environment variables)
-OPENROUTER_MODEL_ALT_CREATIVE = "qwen/qwen3-30b-a3b"     # Alternative creative model
+OPENROUTER_MODEL_CREATIVE = "google/gemini-2.5-pro"      # Advanced creative generation
+OPENROUTER_MODEL_CREATIVE_BACKUP = "microsoft/phi-4"     # Creative backup (also analytical)
+OPENROUTER_MODEL_ANALYTICAL = "microsoft/phi-4"          # Deep technical analysis
+OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"   # General purpose balanced
 
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -353,9 +350,9 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     Select optimal OpenRouter model based on task type.
     
     Strategy:
-    - Creative/generation tasks: Use fast nano models for quick content generation
-    - Critical analysis/review: Use DeepSeek for analytical depth and accuracy
-    - Default: Use Claude Haiku for balanced cost/performance
+    - Creative/generation tasks: Gemini 2.5 Pro (primary) → Phi-4 (backup)
+    - Analytical/review tasks: Microsoft Phi-4 for technical precision
+    - Default: Claude 3 Haiku for balanced cost/performance
     
     Args:
         system_prompt: System instruction to analyze for task type
@@ -370,11 +367,12 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     
     # Select primary model based on task type
     if "creative" in sys_lower or "generation" in user_lower:
-        preferences.append(OPENROUTER_MODEL_CREATIVE)  # gpt-4.1-nano for speed
+        preferences.append(OPENROUTER_MODEL_CREATIVE)         # Gemini 2.5 Pro for creative
+        preferences.append(OPENROUTER_MODEL_CREATIVE_BACKUP)  # Phi-4 as backup
     elif "critic" in sys_lower or "review" in user_lower:
-        preferences.append(OPENROUTER_MODEL_ANALYTICAL)  # DeepSeek for analysis
+        preferences.append(OPENROUTER_MODEL_ANALYTICAL)       # Phi-4 for analysis
     else:
-        preferences.append(OPENROUTER_MODEL_BALANCED)  # Claude Haiku default
+        preferences.append(OPENROUTER_MODEL_BALANCED)         # Claude 3 Haiku default
 
     # Add all other safe models as fallbacks (prevents duplicates)
     for model in OpenRouterModelRegistry.SAFE_MODELS:
