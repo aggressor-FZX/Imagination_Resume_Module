@@ -326,10 +326,7 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     sys_lower = system_prompt.lower()
     user_lower = user_prompt.lower()
     preferences: List[str] = []
-    preferred_override = os.getenv("OPENROUTER_PREFERRED_MODEL") or os.getenv("OPENROUTER_PRIMARY_MODEL")
-    preferences.append(preferred_override or "openai/gpt-oss-120b")
-    # Immediate fallback requested by spec
-    preferences.append("openai/gpt-4.1-nano")
+    
     if "creative" in sys_lower or "generation" in user_lower:
         preferences.append("qwen/qwen3-30b-a3b")
     elif "critic" in sys_lower or "review" in user_lower:
