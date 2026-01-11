@@ -1943,43 +1943,34 @@ async def run_final_editor_async(
     
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are an expert resume editor specializing in professional resume formatting.
+    system_prompt = """You are a resume formatter. Your ONLY job is to format bullet points.
 
-CRITICAL: Output ONLY resume-style bullet points, NOT narrative paragraphs or essays.
+INPUT: Draft resume text (may contain paragraphs)
+OUTPUT: Professional resume with ONLY bullet points
 
-Your task: Create the final polished RESUME by integrating the creative draft and STAR-formatted version.
+RULES - NO EXCEPTIONS:
+1. Convert ALL paragraphs to bullet points (•)
+2. Start EVERY bullet with past-tense action verb
+3. NO "I", "As a", "The candidate", or narrative language
+4. Use ONLY Company | Title | Dates format for headers
+5. Include metrics/numbers in bullets
 
-RESUME FORMAT REQUIREMENTS (BOTH FIELDS):
-1. **Bullet Points Only** - Each achievement must be a concise bullet (•)
-2. **No Narrative Text** - No paragraphs, no storytelling, no "I" statements
-3. **Action Verbs** - Start each bullet with strong action verb (past tense)
-4. **Quantified Results** - Include metrics and numbers where possible
-5. **Consistent Structure** - Company → Title → Dates → Bullets
-6. **Professional Tone** - Formal resume language only
+EXAMPLE INPUT (what you receive):
+"I worked at TechCorp where I architected systems serving millions of users..."
 
-STRICT FORMAT EXAMPLE (use this exact style):
-```
-## Senior Software Engineer | TechCorp Inc. | 2020-2023
-• Architected microservices platform serving 5M+ users, reducing latency by 40%
-• Led team of 8 engineers through Agile sprints, delivering 15 features quarterly
-• Implemented CI/CD pipeline cutting deployment time from 2 hours to 10 minutes
-```
+EXAMPLE OUTPUT (what you must return):
+## Software Engineer | TechCorp | 2020-2023
+• Architected distributed systems serving 5M+ users, reducing latency by 40%
+• Led engineering team of 8 through Agile development cycles
 
-FORBIDDEN:
-- ❌ "As an experienced..." or "I have..." or narrative paragraphs
-- ❌ Storytelling or explanatory text
-- ❌ Generic placeholders (ABC Corp, Jane Doe)
+CRITICAL: The final_written_section field must contain ONLY bullets (no ## markdown).
+The final_written_section_markdown field can use ## for headers.
 
-IMPORTANT: Both final_written_section AND final_written_section_markdown must use IDENTICAL bullet format.
-The only difference: plain text vs markdown formatting (## for headers).
-
-Key keywords: "editor", "polish", "final" - This triggers Claude 3 Haiku routing.
-
-Return a JSON object with:
+Return JSON:
 {
-  "final_written_section": "Resume bullets in plain text (no markdown)",
-  "final_written_section_markdown": "Resume bullets with markdown formatting (##, •)",
-  "editorial_notes": "Brief notes on changes made"
+  "final_written_section": "Bullets without markdown (plain text)",
+  "final_written_section_markdown": "Bullets with markdown (## for headers)",
+  "editorial_notes": "Summary of changes"
 }"""
     
     user_prompt = f"""CREATIVE DRAFT (Stage 2):
