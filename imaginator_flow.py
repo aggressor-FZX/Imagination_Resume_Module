@@ -1929,6 +1929,8 @@ async def run_final_editor_async(
     Stage 4: Final Editor - Uses Claude 3 Haiku to polish and integrate all outputs.
     Applies editorial discretion to create the final cohesive resume.
     
+    CACHE BUST: 2026-01-10-21:28
+    
     Args:
         creative_draft: Stage 2 output
         star_formatted: Stage 3 output
