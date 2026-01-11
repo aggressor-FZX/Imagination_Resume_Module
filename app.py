@@ -233,8 +233,8 @@ async def analyze_resume(
         })
 
         # Optional fields are validated by Pydantic; do not parse manually
-        extracted_skills = None
-        domain_insights = None
+        # extracted_skills = None
+        # domain_insights = None
 
         # Step 1: Run Analysis
         logger.info("run_analysis.start", extra={"request_id": request_id})
@@ -242,8 +242,8 @@ async def analyze_resume(
         analysis_result = await run_analysis_async(
             resume_text=payload.resume_text,
             job_ad=payload.job_ad,
-            extracted_skills_json=extracted_skills,
-            domain_insights_json=domain_insights,
+            extracted_skills_json=payload.extracted_skills_json,
+            domain_insights_json=payload.domain_insights_json,
             confidence_threshold=payload.confidence_threshold,
             openrouter_api_keys=api_keys
         )
@@ -266,6 +266,24 @@ async def analyze_resume(
         # If mocked test returns final success payload (v2 shape), return it directly
         if isinstance(analysis_result, dict) and "status" in analysis_result and "analysis" in analysis_result:
             return JSONResponse(status_code=200, content=analysis_result)
+
+        # CHECK FOR NEW PIPELINE RESULT (4-Stage)
+        if isinstance(analysis_result, dict) and analysis_result.get("final_written_section"):
+            logger.info("analyze.pipeline.fast_track", extra={"request_id": request_id, "msg": "4-Stage Pipeline completed in analysis step. Skipping legacy steps."})
+            
+            # Construct final output from analysis_result
+            output = {
+                **analysis_result,
+                "run_metrics": RUN_METRICS.copy(),
+                "processing_status": ProcessingStatus.COMPLETED,
+                "processing_time_seconds": time.time() - start_time
+            }
+             ## Validate output schema
+            validate_output_schema(output)
+
+            processing_time = time.time() - start_time
+            logger.info("analyze.request.completed", extra={"request_id": request_id, "processing_time_seconds": processing_time, "run_metrics": RUN_METRICS.copy()})
+            return AnalysisResponse(**output)
 
         # Step 2: Run Generation
         logger.info("run_generation.start", extra={"request_id": request_id})
