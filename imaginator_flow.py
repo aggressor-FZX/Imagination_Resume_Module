@@ -2470,18 +2470,19 @@ Seniority analysis: {seniority}
     _analysis_cache_set(cache_key, output)
     
     # 🚀 CRITICAL FIX: Call 4-stage pipeline to get final enhanced resume output
-    try:
-        print("🚀 run_analysis_async: Calling 4-stage pipeline for final enhancement...", flush=True)
-        four_stage_result = await run_full_analysis_async(
-            resume_text=processed_text,
-            job_ad=job_ad or "",
-            resume_url=None,  # FIX: run_analysis_async doesn't have resume_url parameter
-            model_override_researcher=kwargs.get("model_override_researcher"),
-            model_override_creative=kwargs.get("model_override_creative"),
-            model_override_star=kwargs.get("model_override_star"),
-            model_override_final=kwargs.get("model_override_final"),
-            enable_web_search=kwargs.get("enable_web_search", True)
-        )
+    if not kwargs.get("skip_enhancement", False):
+        try:
+            print("🚀 run_analysis_async: Calling 4-stage pipeline for final enhancement...", flush=True)
+            four_stage_result = await run_full_analysis_async(
+                resume_text=processed_text,
+                job_ad=job_ad or "",
+                resume_url=None,  # FIX: run_analysis_async doesn't have resume_url parameter
+                model_override_researcher=kwargs.get("model_override_researcher"),
+                model_override_creative=kwargs.get("model_override_creative"),
+                model_override_star=kwargs.get("model_override_star"),
+                model_override_final=kwargs.get("model_override_final"),
+                enable_web_search=kwargs.get("enable_web_search", True)
+            )
         # Merge 4-stage results into output
         output["creative_draft"] = four_stage_result.get("creative_draft", "")
         output["star_formatted"] = four_stage_result.get("star_formatted", "")
@@ -2855,6 +2856,7 @@ async def run_full_analysis_async(
         extracted_skills_json=skills_payload,
         domain_insights_json=insights_payload,
         openrouter_api_keys=openrouter_api_keys,
+        skip_enhancement=True,  # CRITICAL: Prevent infinite recursion!
         **kwargs,
     )
     if getattr(settings, "environment", "") == "test":
