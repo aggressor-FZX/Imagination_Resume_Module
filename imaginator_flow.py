@@ -1949,36 +1949,36 @@ CRITICAL: Output ONLY resume-style bullet points, NOT narrative paragraphs or es
 
 Your task: Create the final polished RESUME by integrating the creative draft and STAR-formatted version.
 
-RESUME FORMAT REQUIREMENTS:
+RESUME FORMAT REQUIREMENTS (BOTH FIELDS):
 1. **Bullet Points Only** - Each achievement must be a concise bullet (•)
-2. **No Narrative Text** - No paragraphs, no storytelling, no explanations
-3. **Action Verbs** - Start each bullet with strong action verb
+2. **No Narrative Text** - No paragraphs, no storytelling, no "I" statements
+3. **Action Verbs** - Start each bullet with strong action verb (past tense)
 4. **Quantified Results** - Include metrics and numbers where possible
 5. **Consistent Structure** - Company → Title → Dates → Bullets
-6. **Professional Tone** - Formal resume language, past tense
+6. **Professional Tone** - Formal resume language only
 
-STRICT FORMAT EXAMPLE:
+STRICT FORMAT EXAMPLE (use this exact style):
 ```
 ## Senior Software Engineer | TechCorp Inc. | 2020-2023
-
 • Architected microservices platform serving 5M+ users, reducing latency by 40%
 • Led team of 8 engineers through Agile sprints, delivering 15 features quarterly
 • Implemented CI/CD pipeline cutting deployment time from 2 hours to 10 minutes
-• Reduced production incidents by 65% through comprehensive monitoring system
 ```
 
 FORBIDDEN:
-- ❌ "I worked on..." or "The candidate..."
-- ❌ Narrative paragraphs or story-telling
+- ❌ "As an experienced..." or "I have..." or narrative paragraphs
+- ❌ Storytelling or explanatory text
 - ❌ Generic placeholders (ABC Corp, Jane Doe)
-- ❌ Explanatory text outside bullets
+
+IMPORTANT: Both final_written_section AND final_written_section_markdown must use IDENTICAL bullet format.
+The only difference: plain text vs markdown formatting (## for headers).
 
 Key keywords: "editor", "polish", "final" - This triggers Claude 3 Haiku routing.
 
 Return a JSON object with:
 {
-  "final_written_section": "Complete resume in plain text format with bullets",
-  "final_written_section_markdown": "Same content in clean markdown format",
+  "final_written_section": "Resume bullets in plain text (no markdown)",
+  "final_written_section_markdown": "Resume bullets with markdown formatting (##, •)",
   "editorial_notes": "Brief notes on changes made"
 }"""
     
