@@ -1631,7 +1631,7 @@ Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prom
                 "max_results": 5  # Minimal search for cost
             },
             temperature=0.1,      # Deterministic, short outputs
-            max_tokens=600,       # Strict limit for cost control
+            max_tokens=1100,      # Extended limit for comprehensive research output
             openrouter_api_keys=openrouter_api_keys,
             **kwargs
         )
@@ -1702,23 +1702,49 @@ async def run_creative_draft_async(
     logger.info("[CREATIVE DRAFTER] === Stage 2: Drafting enhanced resume ===")
     RUN_METRICS["stages"]["creative_draft"] = {"start": time.time()}
     
-    # Extract key data
+    # Extract key data (PRIORITY: Hermes + FastSVM + Researcher data FIRST)
     experiences = analysis.get("experiences", [])
-    aggregate_skills = list(analysis.get("aggregate_skills", []))
-    implied_skills = research_data.get("implied_skills", [])
-    industry_metrics = research_data.get("industry_metrics", [])
-    research_notes = research_data.get("research_notes", "")
+    aggregate_skills = list(analysis.get("aggregate_skills", []))  # From Hermes/FastSVM
+    implied_skills = research_data.get("implied_skills", [])       # From researcher
+    industry_metrics = research_data.get("industry_metrics", [])   # From researcher
+    research_notes = research_data.get("research_notes", "")       # From researcher
     
-    # Build experiences summary
+    # Build experiences summary - FIT AS MUCH AS POSSIBLE within context limits
+    # Priority: Recent experiences get more detail
     exp_details = []
-    for i, exp in enumerate(experiences[:5], 1):
+    estimated_tokens = 0
+    max_context_tokens = 16000  # Conservative estimate for Skyfall 36B context window
+    
+    # Reserve tokens for: system prompt (~300), skills (~200), job ad (~400), research (~500) = ~1400 tokens
+    # This leaves ~14,600 tokens for experiences
+    available_tokens_for_exp = 14000
+    
+    for i, exp in enumerate(experiences, 1):
         if isinstance(exp, dict):
             title = exp.get("title_line", "Position")
             skills_list = exp.get("skills", [])
             snippet = exp.get("snippet", "")
-            exp_details.append(f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:400]}")
+            
+            # More recent experiences get full detail, older ones get truncated
+            if i <= 3:  # First 3 experiences: full detail
+                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:800]}"
+            elif i <= 5:  # Next 2: moderate detail
+                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:400]}"
+            else:  # Remaining: minimal detail
+                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:5])}\n{snippet[:200]}"
+            
+            # Rough token estimate: 1 token ≈ 4 characters
+            exp_tokens = len(exp_text) // 4
+            
+            if estimated_tokens + exp_tokens > available_tokens_for_exp:
+                logger.info(f"[CREATIVE DRAFTER] Reached context limit at experience {i}/{len(experiences)}")
+                break
+            
+            exp_details.append(exp_text)
+            estimated_tokens += exp_tokens
     
     experiences_text = "\n\n".join(exp_details) or "No detailed experiences"
+    logger.info(f"[CREATIVE DRAFTER] Included {len(exp_details)}/{len(experiences)} experiences (~{estimated_tokens} tokens)")
     
     system_prompt = """You are an expert resume writer specializing in creating compelling, achievement-focused narratives.
 
@@ -1740,24 +1766,27 @@ Return the enhanced experience section in clean markdown format with:
 - 4-6 achievement bullets per position
 - Focus on impact and results"""
     
-    user_prompt = f"""CANDIDATE'S EXPERIENCES:
-{experiences_text}
+    user_prompt = f"""PRIORITY DATA (Hermes + FastSVM Analysis):
+Extracted Skills: {', '.join(aggregate_skills[:50])}
 
-EXTRACTED SKILLS:
-{', '.join(aggregate_skills[:40])}
+WEB RESEARCH INSIGHTS (DeepSeek Search):
+- Implied Skills: {', '.join(implied_skills[:25])}
+- Industry Metrics: {', '.join(industry_metrics[:15])}
+- Research Notes: {research_notes[:600]}
 
 TARGET JOB DESCRIPTION:
-{job_ad}
+{job_ad[:1000]}
 
-RESEARCH INSIGHTS (from web search):
-- Implied Skills: {', '.join(implied_skills[:20])}
-- Industry Metrics: {', '.join(industry_metrics[:10])}
-- Additional Notes: {research_notes[:500]}
+CANDIDATE'S ACTUAL EXPERIENCES (fit within context):
+{experiences_text}
 
 TASK:
-Draft an enhanced "Professional Experience" section for this candidate's resume. Use their ACTUAL experiences but present them in a way that highlights alignment with the target role and incorporates the research insights.
+Draft an enhanced "Professional Experience" section using:
+1. Hermes/FastSVM extracted skills (PRIMARY SOURCE)
+2. Web research insights (implied skills & metrics)
+3. Candidate's actual experiences (fitted within context)
 
-Focus on REWRITING their experiences, not analyzing gaps. Make it compelling."""
+Use ACTUAL experiences only. Incorporate research insights naturally. Make it compelling and aligned with target role."""
     
     try:
         if getattr(settings, "environment", "") == "test":
