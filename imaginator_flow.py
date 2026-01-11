@@ -2031,9 +2031,19 @@ Output complete resume in markdown format."""
             final_data = json.loads(result)
             logger.info(f"[FINAL EDITOR] Final polish complete")
             
-            # Extract markdown (primary format)
+            # Extract fields (handle if Claude double-encoded JSON)
             markdown_resume = final_data.get("final_written_section_markdown", result)
             plain_text_resume = final_data.get("final_written_section", "")
+            
+            # Check if Claude nested JSON (returns JSON as string)
+            if isinstance(markdown_resume, str) and markdown_resume.startswith("{"):
+                try:
+                    nested_data = json.loads(markdown_resume)
+                    markdown_resume = nested_data.get("final_written_section_markdown", markdown_resume)
+                    plain_text_resume = nested_data.get("final_written_section", plain_text_resume)
+                    logger.info("[FINAL EDITOR] Unwrapped double-encoded JSON from Claude")
+                except:
+                    pass
             
             # If Claude returned narrative in plain text, regenerate from markdown
             if not plain_text_resume or "As a" in plain_text_resume or "I have" in plain_text_resume:
