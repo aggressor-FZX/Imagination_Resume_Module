@@ -1943,24 +1943,42 @@ async def run_final_editor_async(
     
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are an expert executive resume editor with impeccable judgment.
+    system_prompt = """You are an expert resume editor specializing in professional resume formatting.
 
-Your task: Create the final polished resume by integrating the creative draft, STAR-formatted version, and research insights.
+CRITICAL: Output ONLY resume-style bullet points, NOT narrative paragraphs or essays.
 
-Editorial Responsibilities:
-1. **Choose Best Elements** - Select the strongest bullets from creative draft and STAR version
-2. **Ensure Consistency** - Uniform tone, tense, and formatting
-3. **Verify Authenticity** - Remove any generic placeholders (ABC Corp, Jane Doe, etc.)
-4. **Optimize Impact** - Lead with strongest achievements
-5. **Match Target Role** - Ensure alignment with job description
-6. **Apply Discretion** - Use your judgment to enhance clarity and impact
+Your task: Create the final polished RESUME by integrating the creative draft and STAR-formatted version.
+
+RESUME FORMAT REQUIREMENTS:
+1. **Bullet Points Only** - Each achievement must be a concise bullet (•)
+2. **No Narrative Text** - No paragraphs, no storytelling, no explanations
+3. **Action Verbs** - Start each bullet with strong action verb
+4. **Quantified Results** - Include metrics and numbers where possible
+5. **Consistent Structure** - Company → Title → Dates → Bullets
+6. **Professional Tone** - Formal resume language, past tense
+
+STRICT FORMAT EXAMPLE:
+```
+## Senior Software Engineer | TechCorp Inc. | 2020-2023
+
+• Architected microservices platform serving 5M+ users, reducing latency by 40%
+• Led team of 8 engineers through Agile sprints, delivering 15 features quarterly
+• Implemented CI/CD pipeline cutting deployment time from 2 hours to 10 minutes
+• Reduced production incidents by 65% through comprehensive monitoring system
+```
+
+FORBIDDEN:
+- ❌ "I worked on..." or "The candidate..."
+- ❌ Narrative paragraphs or story-telling
+- ❌ Generic placeholders (ABC Corp, Jane Doe)
+- ❌ Explanatory text outside bullets
 
 Key keywords: "editor", "polish", "final" - This triggers Claude 3 Haiku routing.
 
 Return a JSON object with:
 {
-  "final_written_section": "Complete polished experience section in plain text",
-  "final_written_section_markdown": "Same content in markdown format",
+  "final_written_section": "Complete resume in plain text format with bullets",
+  "final_written_section_markdown": "Same content in clean markdown format",
   "editorial_notes": "Brief notes on changes made"
 }"""
     
@@ -1978,7 +1996,16 @@ TARGET JOB:
 {job_ad[:800]}
 
 TASK:
-Integrate the creative draft and STAR-formatted version into a final polished resume. Use your editorial judgment to select the best elements from each. Ensure no generic placeholders remain."""
+Integrate the creative draft and STAR-formatted version into a final polished RESUME (bullet point format ONLY).
+
+CRITICAL REQUIREMENTS:
+- Use ONLY bullet points (•), NO narrative paragraphs
+- Start each bullet with action verb
+- Include quantified metrics
+- Professional resume format
+- No storytelling or explanatory text
+
+Select best elements from both versions and output as clean resume bullets."""
     
     try:
         if getattr(settings, "environment", "") == "test":
