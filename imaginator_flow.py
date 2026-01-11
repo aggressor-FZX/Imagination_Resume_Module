@@ -1757,6 +1757,11 @@ Guidelines:
 4. **Match Target Role** - Align language and focus with the job description
 5. **Be Specific** - Use concrete examples from candidate's background
 6. **Maintain Authenticity** - Enhance what exists, don't fabricate
+7. **Handle Chronological Positions Carefully**:
+   - When a candidate has overlapping roles (same time period, different titles), choose the ONE most relevant to target job
+   - Understand career progression: people often change titles slightly while in same position or hold multiple roles
+   - Prioritize roles that best match target job requirements
+   - In reverse chronological order (most recent first)
 
 Key keyword: "creative" - This triggers Gemini 2.5 Pro routing.
 
@@ -1943,60 +1948,80 @@ async def run_final_editor_async(
     
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are a resume formatter. Your ONLY job is to format bullet points.
+    system_prompt = """You are an ATS-optimized resume writer. Create a clean, simple resume in markdown that renders well and passes Applicant Tracking Systems.
 
-INPUT: Draft resume text (may contain paragraphs)
-OUTPUT: Professional resume with ONLY bullet points
+RESUME STRUCTURE (2 pages maximum):
 
-RULES - NO EXCEPTIONS:
-1. Convert ALL paragraphs to bullet points (•)
-2. Start EVERY bullet with past-tense action verb
-3. NO "I", "As a", "The candidate", or narrative language
-4. Use ONLY Company | Title | Dates format for headers
-5. Include metrics/numbers in bullets
+1. **PROFESSIONAL SUMMARY** (2-3 sentences):
+   - Start with: "Dedicated [Job Title] with [X] years of experience"
+   - Highlight unique value proposition and key skills
+   - Match language to target job
 
-EXAMPLE INPUT (what you receive):
-"I worked at TechCorp where I architected systems serving millions of users..."
+2. **SKILLS** (8-12 keywords):
+   - Technical, soft, and transferable abilities
+   - Match job description keywords
+   - Categorize if helpful (e.g., "Technical:", "Leadership:")
 
-EXAMPLE OUTPUT (what you must return):
-## Software Engineer | TechCorp | 2020-2023
-• Architected distributed systems serving 5M+ users, reducing latency by 40%
-• Led engineering team of 8 through Agile development cycles
+3. **PROFESSIONAL EXPERIENCE** (Reverse chronological):
+   - Format: ## Job Title | Company | Start Date – End Date
+   - 3-5 achievement bullets per role
+   - Start with action verbs (present tense for current, past for previous)
+   - Include metrics and quantified impact
+   - Focus on results and accomplishments
 
-CRITICAL: The final_written_section field must contain ONLY bullets (no ## markdown).
-The final_written_section_markdown field can use ## for headers.
+4. **EDUCATION**:
+   - Degree, Institution, Graduation Date
+   - Place higher for recent graduates
 
-Return JSON:
+5. **OPTIONAL SECTIONS** (if relevant):
+   - Certifications, Projects, Volunteer Work
+
+FORMATTING RULES:
+- Use markdown: ## for section headers, - for bullets
+- Simple, clean, ATS-friendly (no fancy formatting)
+- Action verbs: Architected, Led, Developed, Implemented, Reduced, Increased
+- NO narrative paragraphs, NO "I/me/my", NO flowery language
+- Quantify everything possible (%, $, #)
+
+Return JSON with ONLY the markdown field:
 {
-  "final_written_section": "Bullets without markdown (plain text)",
-  "final_written_section_markdown": "Bullets with markdown (## for headers)",
-  "editorial_notes": "Summary of changes"
+  "resume_markdown": "Complete resume in markdown format",
+  "editorial_notes": "Brief summary of approach"
 }"""
     
-    user_prompt = f"""CREATIVE DRAFT (Stage 2):
-{creative_draft}
+    # Extract candidate info for professional summary
+    years_experience = analysis.get("seniority", {}).get("level", "").replace("_", " ").replace("-", " ")
+    job_titles = [exp.get("title_line", "").split("|")[0].strip() for exp in experiences[:3] if isinstance(exp, dict)]
+    primary_title = job_titles[0] if job_titles else "Professional"
+    
+    user_prompt = f"""CANDIDATE BACKGROUND:
+- Primary Title: {primary_title}
+- Experience Level: {years_experience}
+- Key Skills: {', '.join(aggregate_skills[:12])}
+
+CREATIVE DRAFT (Stage 2):
+{creative_draft[:1500]}
 
 STAR-FORMATTED VERSION (Stage 3):
-{star_formatted}
+{star_formatted[:1500]}
 
 RESEARCH INSIGHTS:
 - Implied Skills: {', '.join(research_data.get('implied_skills', [])[:15])}
-- Research Notes: {research_data.get('research_notes', '')[:300]}
+- Industry Metrics: {', '.join(research_data.get('industry_metrics', [])[:10])}
+- Research Notes: {research_data.get('research_notes', '')[:400]}
 
-TARGET JOB:
-{job_ad[:800]}
+TARGET JOB DESCRIPTION:
+{job_ad[:1000]}
 
 TASK:
-Integrate the creative draft and STAR-formatted version into a final polished RESUME (bullet point format ONLY).
+Create a complete ATS-optimized resume following the structure:
+1. Professional Summary (2-3 sentences based on candidate background)
+2. Skills section (8-12 keywords matching job description)
+3. Professional Experience (integrate creative draft + STAR formatting)
+4. Education (if available in analysis)
 
-CRITICAL REQUIREMENTS:
-- Use ONLY bullet points (•), NO narrative paragraphs
-- Start each bullet with action verb
-- Include quantified metrics
-- Professional resume format
-- No storytelling or explanatory text
-
-Select best elements from both versions and output as clean resume bullets."""
+Use present tense for current roles, past tense for previous roles.
+Output complete resume in markdown format."""
     
     try:
         if getattr(settings, "environment", "") == "test":
@@ -2024,15 +2049,28 @@ Select best elements from both versions and output as clean resume bullets."""
             final_data = json.loads(result)
             logger.info(f"[FINAL EDITOR] Final polish complete")
             
-            # Add provenance
-            if "final_written_section_provenance" not in final_data:
-                final_data["final_written_section_provenance"] = _build_provenance_entries_from_experiences(experiences)
+            # Extract markdown (primary format)
+            markdown_resume = final_data.get("resume_markdown", result)
             
-            return final_data
+            # Generate plain text version by stripping markdown formatting
+            # Remove ## headers, convert - bullets to •, keep content identical
+            plain_text = markdown_resume.replace("##", "").replace("\n-", "\n•")
+            
+            # Build response with both formats
+            response_data = {
+                "final_written_section": plain_text,
+                "final_written_section_markdown": markdown_resume,
+                "editorial_notes": final_data.get("editorial_notes", "Markdown formatted"),
+                "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
+            }
+            
+            return response_data
         except json.JSONDecodeError:
             logger.warning("[FINAL EDITOR] JSON parse failed, using raw output")
+            # Strip markdown for plain text version
+            plain_text = result.replace("##", "").replace("\n-", "\n•")
             return {
-                "final_written_section": result,
+                "final_written_section": plain_text,
                 "final_written_section_markdown": result,
                 "editorial_notes": "Raw LLM output (JSON parse failed)",
                 "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
