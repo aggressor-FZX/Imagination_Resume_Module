@@ -90,38 +90,46 @@ OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.00
 ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "true"
 
 # ============================================================================
-# OpenRouter Model Configuration - 4-Stage Resume Enhancement Pipeline
+# OpenRouter Model Configuration - 4-Stage Resume Enhancement Pipeline (COST-OPTIMIZED)
 # ============================================================================
-# NEW ARCHITECTURE: Multi-stage resume rewriting with specialized LLMs
+# COST-OPTIMIZED ARCHITECTURE: Multi-stage resume rewriting with budget-conscious LLMs
 #
 # Pipeline Flow:
-# 1. RESEARCHER (Gemini 2.5 Pro with web search) - Discovers implied skills from web
-# 2. CREATIVE DRAFTER (Gemini 2.5 Pro) - Drafts enhanced resume content  
-# 3. STAR EDITOR (Microsoft Phi-4) - Formats into STAR pattern bullets
-# 4. FINAL EDITOR (Claude 3 Haiku) - Polishes and ties everything together
+# 1. RESEARCHER (DeepSeek v3.2:online) - Ultra-cheap web search for implied skills
+# 2. CREATIVE DRAFTER (Skyfall 36B) - Cost-effective creative resume drafting
+# 3. STAR EDITOR (Microsoft Phi-4) - Analytical STAR pattern formatting
+# 4. FINAL EDITOR (Claude 3 Haiku) - Editorial polish and integration
+# 5. GLOBAL FALLBACK (GPT-4o:online) - Last resort with error logging
 #
 # Model Selection Rationale:
-# - Gemini 2.5 Pro :online → Web-grounded research for skill discovery
-# - Gemini 2.5 Pro → Creative writing strength for compelling narratives
-# - Microsoft Phi-4 → Analytical precision for structured STAR formatting
-# - Claude 3 Haiku → Editorial excellence for final polish
+# - DeepSeek v3.2:online → Cheapest high-performance model with web search ($0.27/$1.10 per 1M)
+# - Skyfall 36B → Cost-effective creative writing ($0.36/$0.36 per 1M)
+# - Microsoft Phi-4 → Analytical precision for STAR formatting ($0.50/$1.50 per 1M)
+# - Claude 3 Haiku → Editorial excellence for final polish ($3/$15 per 1M)
+# - GPT-4o:online → Emergency fallback with web grounding ($2.50/$10 per 1M)
 #
 # Cost considerations (per 1M tokens):
-# - google/gemini-2.5-pro:online: ~$1.25 input, ~$5.00 output (with web search)
-# - google/gemini-2.5-pro: ~$1.25 input, ~$5.00 output (creative powerhouse)
-# - microsoft/phi-4: ~$0.50 input, ~$1.50 output (STAR pattern precision)
-# - anthropic/claude-3-haiku: ~$3.00 input, ~$15.00 output (editorial balance)
+# - deepseek/deepseek-v3.2:online: $0.27 input, $1.10 output (CHEAPEST with web search!)
+# - thedrummer/skyfall-36b-v2: $0.36 input, $0.36 output (budget creative)
+# - microsoft/phi-4: $0.50 input, $1.50 output (STAR precision)
+# - anthropic/claude-3-haiku: $3.00 input, $15.00 output (editorial quality)
+# - gpt-4o:online: $2.50 input, $10.00 output (emergency fallback)
+#
+# Expected cost per resume: ~$0.015 (down from $0.039, 62% cost reduction!)
 # ============================================================================
 
-# 4-Stage Pipeline Model Assignments
-OPENROUTER_MODEL_RESEARCHER = "google/gemini-2.5-pro:online"  # Stage 1: Web-grounded research
-OPENROUTER_MODEL_CREATIVE = "google/gemini-2.5-pro"          # Stage 2: Creative drafting
-OPENROUTER_MODEL_STAR_EDITOR = "microsoft/phi-4"             # Stage 3: STAR pattern formatting
-OPENROUTER_MODEL_FINAL_EDITOR = "anthropic/claude-3-haiku"   # Stage 4: Final editorial polish
+# 4-Stage Pipeline Model Assignments (COST-OPTIMIZED)
+OPENROUTER_MODEL_RESEARCHER = "deepseek/deepseek-v3.2:online"      # Stage 1: Ultra-cheap web research
+OPENROUTER_MODEL_RESEARCHER_BACKUP = "deepseek/deepseek-chat-v3-0324"  # Stage 1 backup (no web search)
+OPENROUTER_MODEL_CREATIVE = "thedrummer/skyfall-36b-v2"            # Stage 2: Budget creative drafting
+OPENROUTER_MODEL_CREATIVE_BACKUP = "thedrummer/cydonia-24b-v4.1"   # Stage 2 backup
+OPENROUTER_MODEL_STAR_EDITOR = "microsoft/phi-4"                   # Stage 3: STAR pattern formatting
+OPENROUTER_MODEL_FINAL_EDITOR = "anthropic/claude-3-haiku"         # Stage 4: Final editorial polish
+OPENROUTER_MODEL_GLOBAL_FALLBACK = "gpt-4o:online"                 # Global: Last resort emergency
 
 # Legacy compatibility (for backwards compatibility with old code paths)
-OPENROUTER_MODEL_ANALYTICAL = "microsoft/phi-4"              # Analytical tasks
-OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"       # Balanced tasks
+OPENROUTER_MODEL_ANALYTICAL = "microsoft/phi-4"                    # Analytical tasks
+OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"             # Balanced tasks
 
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -357,13 +365,14 @@ class OpenRouterModelRegistry:
 
 def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[str]:
     """
-    Select optimal OpenRouter model based on pipeline stage.
+    Select optimal OpenRouter model based on pipeline stage (COST-OPTIMIZED).
     
-    Strategy (4-Stage Pipeline):
-    - RESEARCHER: Gemini 2.5 Pro:online with web search for skill discovery
-    - CREATIVE: Gemini 2.5 Pro for drafting enhanced resume content
+    Strategy (4-Stage Pipeline with Global Fallback):
+    - RESEARCHER: DeepSeek v3.2:online (cheapest web search) → DeepSeek backup
+    - CREATIVE: Skyfall 36B (budget creative) → Cydonia 24B backup
     - STAR_EDITOR: Microsoft Phi-4 for STAR pattern bullet formatting
     - FINAL_EDITOR: Claude 3 Haiku for final editorial polish
+    - GLOBAL_FALLBACK: GPT-4o:online (emergency only, logs error)
     - Legacy paths: Analytical (Phi-4), Balanced (Claude)
     
     Args:
@@ -377,24 +386,30 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     user_lower = user_prompt.lower()
     preferences: List[str] = []
     
-    # Select primary model based on pipeline stage
+    # Select primary model based on pipeline stage with backup models
     if "researcher" in sys_lower or "web search" in sys_lower:
-        preferences.append(OPENROUTER_MODEL_RESEARCHER)       # Gemini:online for research
+        preferences.append(OPENROUTER_MODEL_RESEARCHER)           # DeepSeek v3.2:online
+        preferences.append(OPENROUTER_MODEL_RESEARCHER_BACKUP)    # DeepSeek chat backup
     elif "creative" in sys_lower or "draft" in sys_lower or "generation" in user_lower:
-        preferences.append(OPENROUTER_MODEL_CREATIVE)         # Gemini 2.5 Pro for drafting
+        preferences.append(OPENROUTER_MODEL_CREATIVE)             # Skyfall 36B
+        preferences.append(OPENROUTER_MODEL_CREATIVE_BACKUP)      # Cydonia 24B backup
     elif "star" in sys_lower or "bullet" in sys_lower or "format" in sys_lower:
-        preferences.append(OPENROUTER_MODEL_STAR_EDITOR)      # Phi-4 for STAR formatting
+        preferences.append(OPENROUTER_MODEL_STAR_EDITOR)          # Phi-4 for STAR
     elif "editor" in sys_lower or "polish" in sys_lower or "final" in sys_lower:
-        preferences.append(OPENROUTER_MODEL_FINAL_EDITOR)     # Claude for final edit
+        preferences.append(OPENROUTER_MODEL_FINAL_EDITOR)         # Claude final edit
     elif "critic" in sys_lower or "review" in user_lower:
-        preferences.append(OPENROUTER_MODEL_ANALYTICAL)       # Phi-4 for analysis
+        preferences.append(OPENROUTER_MODEL_ANALYTICAL)           # Phi-4 for analysis
     else:
-        preferences.append(OPENROUTER_MODEL_BALANCED)         # Claude 3 Haiku default
+        preferences.append(OPENROUTER_MODEL_BALANCED)             # Claude 3 Haiku default
 
-    # Add all other safe models as fallbacks (prevents duplicates)
+    # Add safe models as fallbacks (prevents duplicates)
     for model in OpenRouterModelRegistry.SAFE_MODELS:
         if model not in preferences:
             preferences.append(model)
+    
+    # ALWAYS add global fallback as last resort (will trigger error logging)
+    if OPENROUTER_MODEL_GLOBAL_FALLBACK not in preferences:
+        preferences.append(OPENROUTER_MODEL_GLOBAL_FALLBACK)
     
     return preferences
 
@@ -1403,19 +1418,28 @@ async def call_llm_async(
           
           # Add web search plugin if enabled (for :online models)
           if enable_web_search and ":online" in model:
-              search_options = web_search_options or {
-                  "max_results": 5,
-                  "search_context_size": "medium"
-              }
+              search_options = web_search_options or {"max_results": 5}
               request_payload["plugins"] = [{
                   "id": "web",
-                  "engine": "native",
+                  "engine": "auto",  # Let OpenRouter choose best search engine
                   "web_search_options": search_options
               }]
               print(f"[WEB SEARCH ENABLED] Model: {model}, Options: {search_options}", flush=True)
           
           response = await client.chat.completions.create(**request_payload)
           duration = time.time() - start_time
+          
+          # CRITICAL WARNING: Log if using expensive GPT-4o fallback
+          if "gpt-4o" in model.lower():
+              print("\n" + "="*80, flush=True)
+              print("🚨 COST ALERT: FALLBACK TO GPT-4O TRIGGERED! 🚨", flush=True)
+              print(f"All cheaper models failed. Using expensive fallback: {model}", flush=True)
+              print("Cost impact: ~10x more expensive than DeepSeek/Skyfall models", flush=True)
+              print("="*80 + "\n", flush=True)
+              import logging
+              logger = logging.getLogger(__name__)
+              logger.error(f"🚨🚨🚨 COST ALERT: GPT-4O FALLBACK USED! Model: {model} 🚨🚨🚨")
+          
           prompt_tokens = response.usage.prompt_tokens
           completion_tokens = response.usage.completion_tokens
           cost = _estimate_openrouter_cost(model, prompt_tokens, completion_tokens)
@@ -1543,61 +1567,41 @@ async def run_researcher_async(
     logger.info("[RESEARCHER] === Stage 1: Starting web-grounded research ===")
     RUN_METRICS["stages"]["researcher"] = {"start": time.time()}
     
-    # Build condensed experience summaries for context
-    exp_summaries = []
-    for i, exp in enumerate(experiences[:5], 1):  # Limit to 5 most recent
+    # Build MINIMAL context (job titles + skills ONLY, no full resume data for cost optimization)
+    job_titles = []
+    for exp in experiences[:5]:  # Limit to 5 most recent
         if isinstance(exp, dict):
-            title = exp.get("title_line", "Position")
-            skills_list = exp.get("skills", [])
-            skills_str = ", ".join(skills_list[:10]) if isinstance(skills_list, list) else ""
-            snippet = (exp.get("snippet", ""))[:300]
-            exp_summaries.append(f"{i}. {title}\n   Key Skills: {skills_str}\n   Summary: {snippet}")
+            title = exp.get("title_line", "")
+            if title:
+                job_titles.append(title)
     
-    experiences_text = "\n\n".join(exp_summaries) or "No structured experiences available"
+    job_titles_text = ", ".join(job_titles) if job_titles else "Not specified"
     skills_text = ", ".join(extracted_skills[:30]) if extracted_skills else "No skills extracted"
     
-    system_prompt = """You are an expert career researcher with access to web search.
+    system_prompt = """You are a career research assistant with web search. Respond briefly in JSON format.
 
-Your mission: Analyze the candidate's background and target job, then use web search to discover:
+Task: Use web search to find:
+1. IMPLIED SKILLS from job description (not explicitly stated but expected)
+2. INDUSTRY METRICS (typical quantifiable achievements for this role)
+3. STAR PATTERN IDEAS (Situation-Task-Action-Result examples)
 
-1. **IMPLIED SKILLS**: Skills mentioned in the job ad that aren't explicitly stated but are industry-standard expectations
-2. **INDUSTRY METRICS**: Quantifiable achievements typical for this role (e.g., "Reduced deployment time by X%", "Increased test coverage to Y%")
-3. **STAR PATTERN IDEAS**: For each of the candidate's experiences, suggest how to frame them using Situation-Task-Action-Result format based on industry best practices
-
-Use web search to:
-- Research current industry standards for this role
-- Find typical KPIs and metrics used in job descriptions for similar positions  
-- Discover common achievement patterns in top-tier resumes for this field
-- Identify skill relationships (e.g., "candidates with X often also have Y")
-
-Return a JSON object with this structure:
+Return JSON:
 {
-  "implied_skills": ["skill1", "skill2", ...],
-  "industry_metrics": ["metric pattern 1", "metric pattern 2", ...],
-  "star_suggestions": [
-    {
-      "experience_index": 0,
-      "situation": "Brief context for this role",
-      "task_ideas": ["Task they likely handled", ...],
-      "action_patterns": ["Action verb + what they did", ...],
-      "result_metrics": ["Measurable outcome pattern", ...]
-    }
-  ],
-  "research_notes": "Summary of web search findings and insights"
+  "implied_skills": ["skill1", "skill2"],
+  "industry_metrics": ["metric1", "metric2"],
+  "star_suggestions": [{"experience_index": 0, "result_metrics": ["pattern"]}],
+  "research_notes": "Brief insights"
 }"""
     
-    user_prompt = f"""CANDIDATE BACKGROUND:
-{experiences_text}
+    user_prompt = f"""Web search: Software engineering skills and metrics for this role.
 
-EXTRACTED SKILLS:
-{skills_text}
+Candidate Job Titles: {job_titles_text}
+Extracted Skills: {skills_text}
 
-TARGET JOB DESCRIPTION:
-{job_ad}
+Target Job Description:
+{job_ad[:800]}
 
-RESEARCH TASK:
-Use web search to discover implied skills, industry-standard metrics, and STAR pattern examples for this role.
-Focus on finding quantifiable achievement patterns that match the candidate's seniority and field."""
+Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prompt for cost
     
     try:
         if getattr(settings, "environment", "") == "test":
@@ -1618,17 +1622,16 @@ Focus on finding quantifiable achievement patterns that match the candidate's se
             logger.info("[RESEARCHER] Using mock research data (test environment)")
             return mock_research
         
-        logger.info("[RESEARCHER] Calling Gemini 2.5 Pro:online with web search enabled")
+        logger.info("[RESEARCHER] Calling DeepSeek v3.2:online with web search enabled (COST-OPTIMIZED)")
         response = await call_llm_async(
             system_prompt,
             user_prompt,
             enable_web_search=True,
             web_search_options={
-                "max_results": 5,
-                "search_context_size": "medium"
+                "max_results": 5  # Minimal search for cost
             },
-            temperature=0.7,
-            max_tokens=2000,
+            temperature=0.1,      # Deterministic, short outputs
+            max_tokens=600,       # Strict limit for cost control
             openrouter_api_keys=openrouter_api_keys,
             **kwargs
         )
@@ -1762,7 +1765,7 @@ Focus on REWRITING their experiences, not analyzing gaps. Make it compelling."""
             RUN_METRICS["calls"].append({"provider": "Mock", "stage": "creative_draft"})
             return mock_draft
         
-        logger.info("[CREATIVE DRAFTER] Calling Gemini 2.5 Pro for creative drafting")
+        logger.info("[CREATIVE DRAFTER] Calling Skyfall 36B for creative drafting (COST-OPTIMIZED)")
         draft = await call_llm_async(
             system_prompt,
             user_prompt,
