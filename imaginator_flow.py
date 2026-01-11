@@ -90,28 +90,38 @@ OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.00
 ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "true"
 
 # ============================================================================
-# OpenRouter Model Configuration
+# OpenRouter Model Configuration - 4-Stage Resume Enhancement Pipeline
 # ============================================================================
-# These models are used in fallback chains for different LLM operations.
-# Models are tried in order until one succeeds.
+# NEW ARCHITECTURE: Multi-stage resume rewriting with specialized LLMs
 #
-# Model Selection Strategy:
-# - CREATIVE tasks (content generation): Gemini 2.5 Pro for advanced creative writing
-# - ANALYTICAL tasks (review/analysis): Microsoft Phi-4 for deep technical analysis
-# - DEFAULT tasks: Claude 3 Haiku for balanced cost/performance
+# Pipeline Flow:
+# 1. RESEARCHER (Gemini 2.5 Pro with web search) - Discovers implied skills from web
+# 2. CREATIVE DRAFTER (Gemini 2.5 Pro) - Drafts enhanced resume content  
+# 3. STAR EDITOR (Microsoft Phi-4) - Formats into STAR pattern bullets
+# 4. FINAL EDITOR (Claude 3 Haiku) - Polishes and ties everything together
+#
+# Model Selection Rationale:
+# - Gemini 2.5 Pro :online → Web-grounded research for skill discovery
+# - Gemini 2.5 Pro → Creative writing strength for compelling narratives
+# - Microsoft Phi-4 → Analytical precision for structured STAR formatting
+# - Claude 3 Haiku → Editorial excellence for final polish
 #
 # Cost considerations (per 1M tokens):
+# - google/gemini-2.5-pro:online: ~$1.25 input, ~$5.00 output (with web search)
 # - google/gemini-2.5-pro: ~$1.25 input, ~$5.00 output (creative powerhouse)
-# - microsoft/phi-4: ~$0.50 input, ~$1.50 output (analytical precision)
-# - anthropic/claude-3-haiku: ~$3.00 input, ~$15.00 output (balanced)
-# - Fallbacks defined in OpenRouterModelRegistry.SAFE_MODELS
+# - microsoft/phi-4: ~$0.50 input, ~$1.50 output (STAR pattern precision)
+# - anthropic/claude-3-haiku: ~$3.00 input, ~$15.00 output (editorial balance)
 # ============================================================================
 
-# Primary models for different task types
-OPENROUTER_MODEL_CREATIVE = "google/gemini-2.5-pro"      # Advanced creative generation
-OPENROUTER_MODEL_CREATIVE_BACKUP = "microsoft/phi-4"     # Creative backup (also analytical)
-OPENROUTER_MODEL_ANALYTICAL = "microsoft/phi-4"          # Deep technical analysis
-OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"   # General purpose balanced
+# 4-Stage Pipeline Model Assignments
+OPENROUTER_MODEL_RESEARCHER = "google/gemini-2.5-pro:online"  # Stage 1: Web-grounded research
+OPENROUTER_MODEL_CREATIVE = "google/gemini-2.5-pro"          # Stage 2: Creative drafting
+OPENROUTER_MODEL_STAR_EDITOR = "microsoft/phi-4"             # Stage 3: STAR pattern formatting
+OPENROUTER_MODEL_FINAL_EDITOR = "anthropic/claude-3-haiku"   # Stage 4: Final editorial polish
+
+# Legacy compatibility (for backwards compatibility with old code paths)
+OPENROUTER_MODEL_ANALYTICAL = "microsoft/phi-4"              # Analytical tasks
+OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"       # Balanced tasks
 
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -347,12 +357,14 @@ class OpenRouterModelRegistry:
 
 def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[str]:
     """
-    Select optimal OpenRouter model based on task type.
+    Select optimal OpenRouter model based on pipeline stage.
     
-    Strategy:
-    - Creative/generation tasks: Gemini 2.5 Pro (primary) → Phi-4 (backup)
-    - Analytical/review tasks: Microsoft Phi-4 for technical precision
-    - Default: Claude 3 Haiku for balanced cost/performance
+    Strategy (4-Stage Pipeline):
+    - RESEARCHER: Gemini 2.5 Pro:online with web search for skill discovery
+    - CREATIVE: Gemini 2.5 Pro for drafting enhanced resume content
+    - STAR_EDITOR: Microsoft Phi-4 for STAR pattern bullet formatting
+    - FINAL_EDITOR: Claude 3 Haiku for final editorial polish
+    - Legacy paths: Analytical (Phi-4), Balanced (Claude)
     
     Args:
         system_prompt: System instruction to analyze for task type
@@ -365,10 +377,15 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     user_lower = user_prompt.lower()
     preferences: List[str] = []
     
-    # Select primary model based on task type
-    if "creative" in sys_lower or "generation" in user_lower:
-        preferences.append(OPENROUTER_MODEL_CREATIVE)         # Gemini 2.5 Pro for creative
-        preferences.append(OPENROUTER_MODEL_CREATIVE_BACKUP)  # Phi-4 as backup
+    # Select primary model based on pipeline stage
+    if "researcher" in sys_lower or "web search" in sys_lower:
+        preferences.append(OPENROUTER_MODEL_RESEARCHER)       # Gemini:online for research
+    elif "creative" in sys_lower or "draft" in sys_lower or "generation" in user_lower:
+        preferences.append(OPENROUTER_MODEL_CREATIVE)         # Gemini 2.5 Pro for drafting
+    elif "star" in sys_lower or "bullet" in sys_lower or "format" in sys_lower:
+        preferences.append(OPENROUTER_MODEL_STAR_EDITOR)      # Phi-4 for STAR formatting
+    elif "editor" in sys_lower or "polish" in sys_lower or "final" in sys_lower:
+        preferences.append(OPENROUTER_MODEL_FINAL_EDITOR)     # Claude for final edit
     elif "critic" in sys_lower or "review" in user_lower:
         preferences.append(OPENROUTER_MODEL_ANALYTICAL)       # Phi-4 for analysis
     else:
@@ -1332,10 +1349,19 @@ async def call_llm_async(
     openrouter_api_key: Optional[str] = None,
     openrouter_api_keys: Optional[List[str]] = None,
     response_format: Optional[Dict[str, Any]] = None,
+    enable_web_search: bool = False,
+    web_search_options: Optional[Dict[str, Any]] = None,
     **_ignored: Any,
 ) -> str:
     """
     Async call to LLM with automatic fallback: OpenRouter primary, Google Gemini fallback.
+    
+    Args:
+        enable_web_search: If True, enables web search plugin for models that support it
+                          (currently google/gemini-2.5-pro:online). Researcher stage uses this.
+        web_search_options: Optional configuration for web search behavior:
+                           - max_results: int (default 5)
+                           - search_context_size: "small"|"medium"|"large" (default "medium")
     """
     errors: List[str] = []
 
@@ -1358,17 +1384,37 @@ async def call_llm_async(
     async def _try_openrouter_model(model: str, client: Any) -> Optional[str]:
         try:
           start_time = time.time()
-          response = await client.chat.completions.create(
-              model=model,
-              messages=[
+          
+          # Build request payload
+          request_payload: Dict[str, Any] = {
+              "model": model,
+              "messages": [
                   {"role": "system", "content": system_prompt},
                   {"role": "user", "content": user_prompt},
               ],
-              temperature=temperature,
-              max_tokens=max_tokens,
-              stream=False,
-              response_format=response_format,
-          )
+              "temperature": temperature,
+              "max_tokens": max_tokens,
+              "stream": False,
+          }
+          
+          # Add response format if specified
+          if response_format:
+              request_payload["response_format"] = response_format
+          
+          # Add web search plugin if enabled (for :online models)
+          if enable_web_search and ":online" in model:
+              search_options = web_search_options or {
+                  "max_results": 5,
+                  "search_context_size": "medium"
+              }
+              request_payload["plugins"] = [{
+                  "id": "web",
+                  "engine": "native",
+                  "web_search_options": search_options
+              }]
+              print(f"[WEB SEARCH ENABLED] Model: {model}, Options: {search_options}", flush=True)
+          
+          response = await client.chat.completions.create(**request_payload)
           duration = time.time() - start_time
           prompt_tokens = response.usage.prompt_tokens
           completion_tokens = response.usage.completion_tokens
@@ -1455,6 +1501,505 @@ async def call_llm_async(
           })
 
     raise Exception(f"All LLM providers failed: {' | '.join(errors)}")
+
+
+# ============================================================================
+# STAGE 1: RESEARCHER - Web-grounded skill discovery and STAR pattern research
+# ============================================================================
+
+async def run_researcher_async(
+    resume_text: str,
+    job_ad: str,
+    extracted_skills: List[str],
+    experiences: List[Dict[str, Any]],
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Stage 1: Researcher - Uses Gemini 2.5 Pro with web search to discover:
+    - Implied skills from job description
+    - Reasonable metrics and quantifiable achievements for candidate's field
+    - STAR pattern suggestions based on candidate's experience and industry best practices
+    
+    This stage runs FIRST and provides research findings for downstream stages.
+    
+    Args:
+        resume_text: Raw resume text
+        job_ad: Target job description
+        extracted_skills: Skills from Hermes/FastSVM
+        experiences: Parsed work experiences
+        
+    Returns:
+        Dict with:
+            - implied_skills: List[str] - Skills inferred from job ad via web research
+            - industry_metrics: List[str] - Typical quantifiable metrics for this role
+            - star_suggestions: List[Dict] - STAR pattern ideas for each experience
+            - research_notes: str - Additional insights from web research
+    """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("[RESEARCHER] === Stage 1: Starting web-grounded research ===")
+    RUN_METRICS["stages"]["researcher"] = {"start": time.time()}
+    
+    # Build condensed experience summaries for context
+    exp_summaries = []
+    for i, exp in enumerate(experiences[:5], 1):  # Limit to 5 most recent
+        if isinstance(exp, dict):
+            title = exp.get("title_line", "Position")
+            skills_list = exp.get("skills", [])
+            skills_str = ", ".join(skills_list[:10]) if isinstance(skills_list, list) else ""
+            snippet = (exp.get("snippet", ""))[:300]
+            exp_summaries.append(f"{i}. {title}\n   Key Skills: {skills_str}\n   Summary: {snippet}")
+    
+    experiences_text = "\n\n".join(exp_summaries) or "No structured experiences available"
+    skills_text = ", ".join(extracted_skills[:30]) if extracted_skills else "No skills extracted"
+    
+    system_prompt = """You are an expert career researcher with access to web search.
+
+Your mission: Analyze the candidate's background and target job, then use web search to discover:
+
+1. **IMPLIED SKILLS**: Skills mentioned in the job ad that aren't explicitly stated but are industry-standard expectations
+2. **INDUSTRY METRICS**: Quantifiable achievements typical for this role (e.g., "Reduced deployment time by X%", "Increased test coverage to Y%")
+3. **STAR PATTERN IDEAS**: For each of the candidate's experiences, suggest how to frame them using Situation-Task-Action-Result format based on industry best practices
+
+Use web search to:
+- Research current industry standards for this role
+- Find typical KPIs and metrics used in job descriptions for similar positions  
+- Discover common achievement patterns in top-tier resumes for this field
+- Identify skill relationships (e.g., "candidates with X often also have Y")
+
+Return a JSON object with this structure:
+{
+  "implied_skills": ["skill1", "skill2", ...],
+  "industry_metrics": ["metric pattern 1", "metric pattern 2", ...],
+  "star_suggestions": [
+    {
+      "experience_index": 0,
+      "situation": "Brief context for this role",
+      "task_ideas": ["Task they likely handled", ...],
+      "action_patterns": ["Action verb + what they did", ...],
+      "result_metrics": ["Measurable outcome pattern", ...]
+    }
+  ],
+  "research_notes": "Summary of web search findings and insights"
+}"""
+    
+    user_prompt = f"""CANDIDATE BACKGROUND:
+{experiences_text}
+
+EXTRACTED SKILLS:
+{skills_text}
+
+TARGET JOB DESCRIPTION:
+{job_ad}
+
+RESEARCH TASK:
+Use web search to discover implied skills, industry-standard metrics, and STAR pattern examples for this role.
+Focus on finding quantifiable achievement patterns that match the candidate's seniority and field."""
+    
+    try:
+        if getattr(settings, "environment", "") == "test":
+            # Mock response for testing
+            mock_research = {
+                "implied_skills": ["CI/CD", "Kubernetes", "Microservices"],
+                "industry_metrics": ["Reduced deployment time by 40%", "Increased test coverage to 85%"],
+                "star_suggestions": [{
+                    "experience_index": 0,
+                    "situation": "Modernizing legacy infrastructure",
+                    "task_ideas": ["Migrate to cloud", "Implement automation"],
+                    "action_patterns": ["Architected cloud solution", "Automated deployment pipeline"],
+                    "result_metrics": ["Reduced costs by 30%", "Improved uptime to 99.9%"]
+                }],
+                "research_notes": "Mock research findings for testing"
+            }
+            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "researcher"})
+            logger.info("[RESEARCHER] Using mock research data (test environment)")
+            return mock_research
+        
+        logger.info("[RESEARCHER] Calling Gemini 2.5 Pro:online with web search enabled")
+        response = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            enable_web_search=True,
+            web_search_options={
+                "max_results": 5,
+                "search_context_size": "medium"
+            },
+            temperature=0.7,
+            max_tokens=2000,
+            openrouter_api_keys=openrouter_api_keys,
+            **kwargs
+        )
+        
+        # Parse JSON response
+        try:
+            research_data = json.loads(response)
+            logger.info(f"[RESEARCHER] Discovered {len(research_data.get('implied_skills', []))} implied skills")
+            logger.info(f"[RESEARCHER] Found {len(research_data.get('industry_metrics', []))} metric patterns")
+            logger.info(f"[RESEARCHER] Generated {len(research_data.get('star_suggestions', []))} STAR suggestions")
+            return research_data
+        except json.JSONDecodeError:
+            logger.warning("[RESEARCHER] Failed to parse JSON, extracting manually")
+            # Fallback: try to extract JSON object from response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+            else:
+                logger.error("[RESEARCHER] No JSON found in response, returning minimal data")
+                return {
+                    "implied_skills": [],
+                    "industry_metrics": [],
+                    "star_suggestions": [],
+                    "research_notes": response[:500]
+                }
+    
+    except Exception as e:
+        logger.error(f"[RESEARCHER] Error during research stage: {e}")
+        return {
+            "implied_skills": [],
+            "industry_metrics": [],
+            "star_suggestions": [],
+            "research_notes": f"Research failed: {str(e)}"
+        }
+    finally:
+        RUN_METRICS["stages"]["researcher"]["end"] = time.time()
+        s = RUN_METRICS["stages"]["researcher"]
+        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s.get("start") and s.get("end") else None
+
+
+# ============================================================================
+# STAGE 2: CREATIVE DRAFTER - Enhanced resume content generation
+# ============================================================================
+
+async def run_creative_draft_async(
+    analysis: Dict[str, Any],
+    job_ad: str,
+    research_data: Dict[str, Any],
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs,
+) -> str:
+    """
+    Stage 2: Creative Drafter - Uses Gemini 2.5 Pro to draft enhanced resume content.
+    Takes research findings and existing analysis to create compelling narratives.
+    
+    Args:
+        analysis: Base analysis with skills and experiences
+        job_ad: Target job description
+        research_data: Output from Stage 1 (researcher)
+        
+    Returns:
+        Enhanced resume draft as markdown string
+    """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("[CREATIVE DRAFTER] === Stage 2: Drafting enhanced resume ===")
+    RUN_METRICS["stages"]["creative_draft"] = {"start": time.time()}
+    
+    # Extract key data
+    experiences = analysis.get("experiences", [])
+    aggregate_skills = list(analysis.get("aggregate_skills", []))
+    implied_skills = research_data.get("implied_skills", [])
+    industry_metrics = research_data.get("industry_metrics", [])
+    research_notes = research_data.get("research_notes", "")
+    
+    # Build experiences summary
+    exp_details = []
+    for i, exp in enumerate(experiences[:5], 1):
+        if isinstance(exp, dict):
+            title = exp.get("title_line", "Position")
+            skills_list = exp.get("skills", [])
+            snippet = exp.get("snippet", "")
+            exp_details.append(f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:400]}")
+    
+    experiences_text = "\n\n".join(exp_details) or "No detailed experiences"
+    
+    system_prompt = """You are an expert resume writer specializing in creating compelling, achievement-focused narratives.
+
+Your task: Draft an enhanced "Professional Experience" section that positions the candidate optimally for the target role.
+
+Guidelines:
+1. **Use Candidate's ACTUAL Experiences** - Never invent positions, companies, or accomplishments
+2. **Incorporate Research Insights** - Weave in implied skills and industry metrics discovered via web research
+3. **Write Compelling Narratives** - Transform basic job duties into achievement stories
+4. **Match Target Role** - Align language and focus with the job description
+5. **Be Specific** - Use concrete examples from candidate's background
+6. **Maintain Authenticity** - Enhance what exists, don't fabricate
+
+Key keyword: "creative" - This triggers Gemini 2.5 Pro routing.
+
+Return the enhanced experience section in clean markdown format with:
+- Company name and dates (from original)
+- Enhanced position titles (if appropriate)
+- 4-6 achievement bullets per position
+- Focus on impact and results"""
+    
+    user_prompt = f"""CANDIDATE'S EXPERIENCES:
+{experiences_text}
+
+EXTRACTED SKILLS:
+{', '.join(aggregate_skills[:40])}
+
+TARGET JOB DESCRIPTION:
+{job_ad}
+
+RESEARCH INSIGHTS (from web search):
+- Implied Skills: {', '.join(implied_skills[:20])}
+- Industry Metrics: {', '.join(industry_metrics[:10])}
+- Additional Notes: {research_notes[:500]}
+
+TASK:
+Draft an enhanced "Professional Experience" section for this candidate's resume. Use their ACTUAL experiences but present them in a way that highlights alignment with the target role and incorporates the research insights.
+
+Focus on REWRITING their experiences, not analyzing gaps. Make it compelling."""
+    
+    try:
+        if getattr(settings, "environment", "") == "test":
+            mock_draft = f"# Professional Experience\n\n## {experiences[0].get('title_line', 'Position')} (Enhanced)\nMock creative draft using research insights and candidate background."
+            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "creative_draft"})
+            return mock_draft
+        
+        logger.info("[CREATIVE DRAFTER] Calling Gemini 2.5 Pro for creative drafting")
+        draft = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            temperature=0.8,  # Higher temperature for creativity
+            max_tokens=2500,
+            openrouter_api_keys=openrouter_api_keys,
+            **kwargs
+        )
+        
+        logger.info(f"[CREATIVE DRAFTER] Generated draft ({len(draft)} chars)")
+        return draft
+    
+    except Exception as e:
+        logger.error(f"[CREATIVE DRAFTER] Error: {e}")
+        return f"# Professional Experience\n\n_Draft generation failed: {str(e)}_"
+    finally:
+        RUN_METRICS["stages"]["creative_draft"]["end"] = time.time()
+        s = RUN_METRICS["stages"]["creative_draft"]
+        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s.get("start") and s.get("end") else None
+
+
+# ============================================================================
+# STAGE 3: STAR EDITOR - STAR pattern formatting
+# ============================================================================
+
+async def run_star_editor_async(
+    creative_draft: str,
+    research_data: Dict[str, Any],
+    experiences: List[Dict[str, Any]],
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs,
+) -> str:
+    """
+    Stage 3: STAR Editor - Uses Microsoft Phi-4 to format into STAR pattern bullets.
+    Takes creative draft and structures it using Situation-Task-Action-Result format.
+    
+    Args:
+        creative_draft: Output from Stage 2 (creative drafter)
+        research_data: Research findings with STAR suggestions
+        experiences: Original parsed experiences
+        
+    Returns:
+        STAR-formatted resume section as markdown
+    """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("[STAR EDITOR] === Stage 3: Formatting into STAR pattern ===")
+    RUN_METRICS["stages"]["star_editor"] = {"start": time.time()}
+    
+    star_suggestions = research_data.get("star_suggestions", [])
+    star_context = "\n".join([
+        f"- Experience {s.get('experience_index', 0)+1}: {', '.join(s.get('result_metrics', [])[:3])}"
+        for s in star_suggestions[:3]
+    ]) if star_suggestions else "No specific STAR suggestions"
+    
+    system_prompt = """You are an analytical editor specializing in STAR format (Situation-Task-Action-Result) resume bullets.
+
+Your task: Take the creative draft and restructure each achievement bullet to follow STAR pattern.
+
+STAR Format Guidelines:
+- **Situation**: Brief context (1 phrase)
+- **Task**: What needed to be done
+- **Action**: Specific actions taken (strong action verbs)
+- **Result**: Quantifiable outcome with metrics
+
+Example:
+"Reduced deployment time by 60% (Result) by implementing automated CI/CD pipeline (Action) to address frequent production delays (Situation/Task)"
+
+Key keyword: "star" and "format" - This triggers Microsoft Phi-4 routing for analytical precision.
+
+Return formatted experience section maintaining all original content but restructured into STAR bullets."""
+    
+    user_prompt = f"""CREATIVE DRAFT TO FORMAT:
+{creative_draft}
+
+STAR SUGGESTIONS FROM RESEARCH:
+{star_context}
+
+TASK:
+Restructure the draft above into STAR-formatted bullets. Each bullet should clearly show Situation-Task-Action-Result.
+Focus on making metrics and outcomes prominent. Maintain authenticity - don't invent new achievements."""
+    
+    try:
+        if getattr(settings, "environment", "") == "test":
+            mock_star = f"# Professional Experience (STAR Formatted)\n\n{creative_draft[:200]}\n\n(Mock STAR formatting applied)"
+            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "star_editor"})
+            return mock_star
+        
+        logger.info("[STAR EDITOR] Calling Microsoft Phi-4 for STAR formatting")
+        star_formatted = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            temperature=0.5,  # Lower temperature for structured formatting
+            max_tokens=2500,
+            openrouter_api_keys=openrouter_api_keys,
+            **kwargs
+        )
+        
+        logger.info(f"[STAR EDITOR] Formatted into STAR pattern ({len(star_formatted)} chars)")
+        return star_formatted
+    
+    except Exception as e:
+        logger.error(f"[STAR EDITOR] Error: {e}")
+        return creative_draft  # Fallback to creative draft
+    finally:
+        RUN_METRICS["stages"]["star_editor"]["end"] = time.time()
+        s = RUN_METRICS["stages"]["star_editor"]
+        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s.get("start") and s.get("end") else None
+
+
+# ============================================================================
+# STAGE 4: FINAL EDITOR - Polish and integration
+# ============================================================================
+
+async def run_final_editor_async(
+    creative_draft: str,
+    star_formatted: str,
+    research_data: Dict[str, Any],
+    analysis: Dict[str, Any],
+    job_ad: str,
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Stage 4: Final Editor - Uses Claude 3 Haiku to polish and integrate all outputs.
+    Applies editorial discretion to create the final cohesive resume.
+    
+    Args:
+        creative_draft: Stage 2 output
+        star_formatted: Stage 3 output
+        research_data: Stage 1 research findings
+        analysis: Base analysis data
+        job_ad: Target job description
+        
+    Returns:
+        Dict with final_written_section, markdown version, and provenance
+    """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("[FINAL EDITOR] === Stage 4: Final polish and integration ===")
+    RUN_METRICS["stages"]["final_editor"] = {"start": time.time()}
+    
+    experiences = analysis.get("experiences", [])
+    
+    system_prompt = """You are an expert executive resume editor with impeccable judgment.
+
+Your task: Create the final polished resume by integrating the creative draft, STAR-formatted version, and research insights.
+
+Editorial Responsibilities:
+1. **Choose Best Elements** - Select the strongest bullets from creative draft and STAR version
+2. **Ensure Consistency** - Uniform tone, tense, and formatting
+3. **Verify Authenticity** - Remove any generic placeholders (ABC Corp, Jane Doe, etc.)
+4. **Optimize Impact** - Lead with strongest achievements
+5. **Match Target Role** - Ensure alignment with job description
+6. **Apply Discretion** - Use your judgment to enhance clarity and impact
+
+Key keywords: "editor", "polish", "final" - This triggers Claude 3 Haiku routing.
+
+Return a JSON object with:
+{
+  "final_written_section": "Complete polished experience section in plain text",
+  "final_written_section_markdown": "Same content in markdown format",
+  "editorial_notes": "Brief notes on changes made"
+}"""
+    
+    user_prompt = f"""CREATIVE DRAFT (Stage 2):
+{creative_draft}
+
+STAR-FORMATTED VERSION (Stage 3):
+{star_formatted}
+
+RESEARCH INSIGHTS:
+- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:15])}
+- Research Notes: {research_data.get('research_notes', '')[:300]}
+
+TARGET JOB:
+{job_ad[:800]}
+
+TASK:
+Integrate the creative draft and STAR-formatted version into a final polished resume. Use your editorial judgment to select the best elements from each. Ensure no generic placeholders remain."""
+    
+    try:
+        if getattr(settings, "environment", "") == "test":
+            mock_final = {
+                "final_written_section": star_formatted[:500] + "\n\n(Mock final polish applied)",
+                "final_written_section_markdown": star_formatted[:500] + "\n\n(Mock final polish applied)",
+                "editorial_notes": "Test environment mock",
+                "final_written_section_provenance": []
+            }
+            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "final_editor"})
+            return mock_final
+        
+        logger.info("[FINAL EDITOR] Calling Claude 3 Haiku for final polish")
+        result = await call_llm_async(
+            system_prompt,
+            user_prompt,
+            temperature=0.6,  # Balanced for editorial judgment
+            max_tokens=3000,
+            openrouter_api_keys=openrouter_api_keys,
+            **kwargs
+        )
+        
+        # Parse JSON response
+        try:
+            final_data = json.loads(result)
+            logger.info(f"[FINAL EDITOR] Final polish complete")
+            
+            # Add provenance
+            if "final_written_section_provenance" not in final_data:
+                final_data["final_written_section_provenance"] = _build_provenance_entries_from_experiences(experiences)
+            
+            return final_data
+        except json.JSONDecodeError:
+            logger.warning("[FINAL EDITOR] JSON parse failed, using raw output")
+            return {
+                "final_written_section": result,
+                "final_written_section_markdown": result,
+                "editorial_notes": "Raw LLM output (JSON parse failed)",
+                "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
+            }
+    
+    except Exception as e:
+        logger.error(f"[FINAL EDITOR] Error: {e}, falling back to STAR formatted")
+        return {
+            "final_written_section": star_formatted,
+            "final_written_section_markdown": star_formatted,
+            "editorial_notes": f"Fallback due to error: {str(e)}",
+            "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
+        }
+    finally:
+        RUN_METRICS["stages"]["final_editor"]["end"] = time.time()
+        s = RUN_METRICS["stages"]["final_editor"]
+        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s.get("start") and s.get("end") else None
 
 
 def run_analysis(resume_text, job_ad=None, extracted_skills_json=None, domain_insights_json=None, **kwargs):
@@ -2140,8 +2685,24 @@ async def run_full_analysis_async(
     openrouter_api_keys: Optional[List[str]] = None,
     **kwargs,
 ) -> Dict[str, Any]:
+    """
+    NEW 4-STAGE PIPELINE: Research → Draft → STAR Format → Final Polish
+    
+    Stage 1 - RESEARCHER (Gemini 2.5 Pro:online): Web search for implied skills & metrics
+    Stage 2 - CREATIVE DRAFTER (Gemini 2.5 Pro): Draft enhanced resume content
+    Stage 3 - STAR EDITOR (Microsoft Phi-4): Format into STAR pattern bullets
+    Stage 4 - FINAL EDITOR (Claude 3 Haiku): Polish and integrate everything
+    """
+    from config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("[4-STAGE PIPELINE] === Starting NEW resume enhancement pipeline ===")
+    
     skills_payload = _load_json_payload(extracted_skills_json, "skills")
     insights_payload = _load_json_payload(domain_insights_json, "insights")
+    
+    # Get base analysis (skills, experiences, etc.)
     analysis = await run_analysis_async(
         resume_text=resume_text,
         job_ad=job_ad,
@@ -2152,21 +2713,72 @@ async def run_full_analysis_async(
     )
     if getattr(settings, "environment", "") == "test":
         RUN_METRICS["calls"].append({"provider": "Mock", "stage": "analysis"})
-    gen = await run_generation_async(analysis, job_ad, openrouter_api_keys=openrouter_api_keys, **kwargs)
-    crit = await run_criticism_async(gen, job_ad, openrouter_api_keys=openrouter_api_keys, **kwargs)
-    syn = await run_synthesis_async(gen, analysis, convenience_mode=False, critique_json=crit, openrouter_api_keys=openrouter_api_keys, **kwargs)
-    final_section = syn
-    try:
-        parsed = ensure_json_dict(syn, "synthesis")
-        if isinstance(parsed, dict) and parsed.get("final_written_section"):
-          final_section = parsed.get("final_written_section")
-    except Exception:
-        pass
-    if isinstance(final_section, str) and "gap-bridging" not in final_section.lower():
-        final_section = final_section + " Gap-bridging."
+    
+    # Extract data for researcher
+    extracted_skills = list(analysis.get("aggregate_skills", []))
+    experiences = analysis.get("experiences", [])
+    
+    # ===========================================================================
+    # STAGE 1: RESEARCHER - Web-grounded research (Gemini 2.5 Pro:online)
+    # ===========================================================================
+    logger.info("[4-STAGE PIPELINE] Stage 1/4: RESEARCHER (web search enabled)")
+    research_data = await run_researcher_async(
+        resume_text=resume_text,
+        job_ad=job_ad,
+        extracted_skills=extracted_skills,
+        experiences=experiences,
+        openrouter_api_keys=openrouter_api_keys,
+        **kwargs
+    )
+    
+    # ===========================================================================
+    # STAGE 2: CREATIVE DRAFTER - Draft enhanced resume (Gemini 2.5 Pro)
+    # ===========================================================================
+    logger.info("[4-STAGE PIPELINE] Stage 2/4: CREATIVE DRAFTER (Gemini 2.5 Pro)")
+    creative_draft = await run_creative_draft_async(
+        analysis=analysis,
+        job_ad=job_ad,
+        research_data=research_data,
+        openrouter_api_keys=openrouter_api_keys,
+        **kwargs
+    )
+    
+    # ===========================================================================
+    # STAGE 3: STAR EDITOR - Format into STAR bullets (Microsoft Phi-4)
+    # ===========================================================================
+    logger.info("[4-STAGE PIPELINE] Stage 3/4: STAR EDITOR (Microsoft Phi-4)")
+    star_formatted = await run_star_editor_async(
+        creative_draft=creative_draft,
+        research_data=research_data,
+        experiences=experiences,
+        openrouter_api_keys=openrouter_api_keys,
+        **kwargs
+    )
+    
+    # ===========================================================================
+    # STAGE 4: FINAL EDITOR - Polish and integrate (Claude 3 Haiku)
+    # ===========================================================================
+    logger.info("[4-STAGE PIPELINE] Stage 4/4: FINAL EDITOR (Claude 3 Haiku)")
+    final_polish = await run_final_editor_async(
+        creative_draft=creative_draft,
+        star_formatted=star_formatted,
+        research_data=research_data,
+        analysis=analysis,
+        job_ad=job_ad,
+        openrouter_api_keys=openrouter_api_keys,
+        **kwargs
+    )
+    
+    # Build final result
     result = dict(analysis)
-    result["final_written_section"] = final_section
-    result["generated_text"] = gen  # Include generated_text for fallback when synthesis fails
+    result["research_data"] = research_data  # Include research findings
+    result["creative_draft"] = creative_draft  # Stage 2 output
+    result["star_formatted"] = star_formatted  # Stage 3 output
+    result["final_written_section"] = final_polish.get("final_written_section", "")
+    result["final_written_section_markdown"] = final_polish.get("final_written_section_markdown", "")
+    result["final_written_section_provenance"] = final_polish.get("final_written_section_provenance", [])
+    
+    logger.info("[4-STAGE PIPELINE] === Pipeline complete ===")
     return result
 
 def main():
