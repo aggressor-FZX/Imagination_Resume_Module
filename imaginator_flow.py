@@ -2475,12 +2475,12 @@ Seniority analysis: {seniority}
         four_stage_result = await run_full_analysis_async(
             resume_text=processed_text,
             job_ad=job_ad or "",
-            resume_url=resume_url,
-            model_override_researcher=model_override_researcher,
-            model_override_creative=model_override_creative,
-            model_override_star=model_override_star,
-            model_override_final=model_override_final,
-            enable_web_search=enable_web_search
+            resume_url=None,  # FIX: run_analysis_async doesn't have resume_url parameter
+            model_override_researcher=kwargs.get("model_override_researcher"),
+            model_override_creative=kwargs.get("model_override_creative"),
+            model_override_star=kwargs.get("model_override_star"),
+            model_override_final=kwargs.get("model_override_final"),
+            enable_web_search=kwargs.get("enable_web_search", True)
         )
         # Merge 4-stage results into output
         output["creative_draft"] = four_stage_result.get("creative_draft", "")
