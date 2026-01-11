@@ -2029,36 +2029,42 @@ Output complete resume in markdown format."""
         # Parse JSON response
         try:
             final_data = json.loads(result)
-            logger.info(f"[FINAL EDITOR] Final polish complete, parsing response...")
+            logger.info(f"[FINAL EDITOR] ✅ Parsed JSON response")
             
-            # Extract fields
+            # Extract fields from Claude's response
             markdown_resume = final_data.get("final_written_section_markdown", result)
             plain_text_resume = final_data.get("final_written_section", "")
             
-            # Check if Claude nested JSON (returns JSON object as string value)
-            # Both fields will have same nested structure if this happened
+            logger.info(f"[FINAL EDITOR] Markdown type: {type(markdown_resume)}, starts with {{: {str(markdown_resume)[:50] if markdown_resume else 'empty'}")
+            logger.info(f"[FINAL EDITOR] Plain type: {type(plain_text_resume)}, starts with {{: {str(plain_text_resume)[:50] if plain_text_resume else 'empty'}")
+            
+            # ALWAYS unwrap if plain text is JSON string (Claude's double-encoding bug)
             if isinstance(plain_text_resume, str) and plain_text_resume.strip().startswith("{"):
                 try:
+                    logger.info("[FINAL EDITOR] 🔍 Detected nested JSON, unwrapping...")
                     nested = json.loads(plain_text_resume)
                     markdown_resume = nested.get("final_written_section_markdown", markdown_resume)
                     plain_text_resume = nested.get("final_written_section", "")
-                    logger.info("[FINAL EDITOR] ✅ Unwrapped double-encoded JSON from Claude")
+                    logger.info(f"[FINAL EDITOR] ✅ Unwrapped! New plain: {plain_text_resume[:100]}")
                 except Exception as e:
-                    logger.warning(f"[FINAL EDITOR] Failed to unwrap nested JSON: {e}")
+                    logger.error(f"[FINAL EDITOR] ❌ Failed to unwrap: {e}")
             
-            # If still has narrative, regenerate plain from markdown
-            if not plain_text_resume or any(phrase in plain_text_resume for phrase in ["As a", "As an", "I have", "I am"]):
-                logger.warning("[FINAL EDITOR] ⚠️  Narrative detected, regenerating plain text from markdown")
-                # If markdown also has JSON, unwrap it first
+            # ALWAYS regenerate plain from markdown if it has narrative
+            if "As a" in plain_text_resume or "As an" in plain_text_resume or "I have" in plain_text_resume:
+                logger.warning(f"[FINAL EDITOR] ⚠️  NARRATIVE DETECTED, forcing regeneration from markdown")
+                # If markdown is also JSON string, unwrap it first
                 if isinstance(markdown_resume, str) and markdown_resume.strip().startswith("{"):
                     try:
                         nested = json.loads(markdown_resume)
                         markdown_resume = nested.get("final_written_section_markdown", markdown_resume)
+                        logger.info(f"[FINAL EDITOR] Unwrapped markdown too")
                     except:
                         pass
+                # Strip markdown formatting to create plain text
                 plain_text_resume = markdown_resume.replace("##", "").replace("\n-", "\n•")
+                logger.info(f"[FINAL EDITOR] ✅ Regenerated plain text: {plain_text_resume[:100]}")
             
-            # Build response
+            # Build final response
             response_data = {
                 "final_written_section": plain_text_resume,
                 "final_written_section_markdown": markdown_resume,
