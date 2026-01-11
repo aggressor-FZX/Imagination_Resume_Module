@@ -1948,45 +1948,27 @@ async def run_final_editor_async(
     
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are an ATS-optimized resume writer. Create a clean, simple resume in markdown that renders well and passes Applicant Tracking Systems.
+    system_prompt = """You are an ATS-optimized resume writer. Output ONLY markdown-formatted resume with bullets.
 
-RESUME STRUCTURE (2 pages maximum):
+STRUCTURE (2 pages max):
+1. PROFESSIONAL SUMMARY (2-3 sentences): "Dedicated [Title] with [X] years experience..."
+2. SKILLS (8-12 keywords matching job)
+3. EXPERIENCE (reverse chronological, 3-5 bullets each, present tense for current role)
+4. EDUCATION
 
-1. **PROFESSIONAL SUMMARY** (2-3 sentences):
-   - Start with: "Dedicated [Job Title] with [X] years of experience"
-   - Highlight unique value proposition and key skills
-   - Match language to target job
+FORMAT RULES:
+- ## for headers (e.g., ## Software Engineer | TechCorp | 2020-2023)
+- Dash bullets: - Architected system serving 5M users...
+- Action verbs + metrics
+- NO paragraphs, NO "I/me/my"
 
-2. **SKILLS** (8-12 keywords):
-   - Technical, soft, and transferable abilities
-   - Match job description keywords
-   - Categorize if helpful (e.g., "Technical:", "Leadership:")
+CRITICAL: Generate markdown first, then copy IDENTICAL content to plain text (just remove ## and replace - with •).
 
-3. **PROFESSIONAL EXPERIENCE** (Reverse chronological):
-   - Format: ## Job Title | Company | Start Date – End Date
-   - 3-5 achievement bullets per role
-   - Start with action verbs (present tense for current, past for previous)
-   - Include metrics and quantified impact
-   - Focus on results and accomplishments
-
-4. **EDUCATION**:
-   - Degree, Institution, Graduation Date
-   - Place higher for recent graduates
-
-5. **OPTIONAL SECTIONS** (if relevant):
-   - Certifications, Projects, Volunteer Work
-
-FORMATTING RULES:
-- Use markdown: ## for section headers, - for bullets
-- Simple, clean, ATS-friendly (no fancy formatting)
-- Action verbs: Architected, Led, Developed, Implemented, Reduced, Increased
-- NO narrative paragraphs, NO "I/me/my", NO flowery language
-- Quantify everything possible (%, $, #)
-
-Return JSON with ONLY the markdown field:
+Return JSON:
 {
-  "resume_markdown": "Complete resume in markdown format",
-  "editorial_notes": "Brief summary of approach"
+  "final_written_section_markdown": "Full markdown resume",
+  "final_written_section": "Same content, plain text (no ## headers, use • for bullets)",
+  "editorial_notes": "Summary"
 }"""
     
     # Extract candidate info for professional summary
@@ -2050,15 +2032,17 @@ Output complete resume in markdown format."""
             logger.info(f"[FINAL EDITOR] Final polish complete")
             
             # Extract markdown (primary format)
-            markdown_resume = final_data.get("resume_markdown", result)
+            markdown_resume = final_data.get("final_written_section_markdown", result)
+            plain_text_resume = final_data.get("final_written_section", "")
             
-            # Generate plain text version by stripping markdown formatting
-            # Remove ## headers, convert - bullets to •, keep content identical
-            plain_text = markdown_resume.replace("##", "").replace("\n-", "\n•")
+            # If Claude returned narrative in plain text, regenerate from markdown
+            if not plain_text_resume or "As a" in plain_text_resume or "I have" in plain_text_resume:
+                logger.warning("[FINAL EDITOR] Narrative detected in plain text, regenerating from markdown")
+                plain_text_resume = markdown_resume.replace("##", "").replace("\n-", "\n•")
             
             # Build response with both formats
             response_data = {
-                "final_written_section": plain_text,
+                "final_written_section": plain_text_resume,
                 "final_written_section_markdown": markdown_resume,
                 "editorial_notes": final_data.get("editorial_notes", "Markdown formatted"),
                 "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
