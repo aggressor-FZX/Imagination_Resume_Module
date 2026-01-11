@@ -1945,7 +1945,9 @@ async def run_final_editor_async(
     import logging
     logger = logging.getLogger(__name__)
     
-    logger.info("[FINAL EDITOR] === Stage 4: Final polish and integration ===")
+    logger.info("🚀🚀🚀 [FINAL EDITOR] === FUNCTION ENTRY === Stage 4: Final polish and integration ===")
+    logger.info(f"[FINAL EDITOR] creative_draft length: {len(creative_draft) if creative_draft else 0}")
+    logger.info(f"[FINAL EDITOR] star_formatted length: {len(star_formatted) if star_formatted else 0}")
     RUN_METRICS["stages"]["final_editor"] = {"start": time.time()}
     
     experiences = analysis.get("experiences", [])
