@@ -2483,25 +2483,25 @@ Seniority analysis: {seniority}
                 model_override_final=kwargs.get("model_override_final"),
                 enable_web_search=kwargs.get("enable_web_search", True)
             )
-        # Merge 4-stage results into output
-        output["creative_draft"] = four_stage_result.get("creative_draft", "")
-        output["star_formatted"] = four_stage_result.get("star_formatted", "")
-        output["final_written_section"] = four_stage_result.get("final_written_section", "")
-        output["final_written_section_markdown"] = four_stage_result.get("final_written_section_markdown", "")
-        
-        # Merge run metrics
-        if "run_metrics" in four_stage_result:
-            four_stage_metrics = four_stage_result["run_metrics"]
-            RUN_METRICS["calls"].extend(four_stage_metrics.get("calls", []))
-            RUN_METRICS["failures"].extend(four_stage_metrics.get("failures", []))
-            for stage_name, stage_data in four_stage_metrics.get("stages", {}).items():
-                if stage_name not in RUN_METRICS["stages"]:
-                    RUN_METRICS["stages"][stage_name] = stage_data
-        
-        print("✅ 4-stage pipeline completed successfully", flush=True)
-    except Exception as e:
-        print(f"❌ 4-stage pipeline failed: {e}", flush=True)
-        RUN_METRICS["failures"].append({"stage": "4_stage_pipeline", "error": str(e)})
+            # Merge 4-stage results into output
+            output["creative_draft"] = four_stage_result.get("creative_draft", "")
+            output["star_formatted"] = four_stage_result.get("star_formatted", "")
+            output["final_written_section"] = four_stage_result.get("final_written_section", "")
+            output["final_written_section_markdown"] = four_stage_result.get("final_written_section_markdown", "")
+            
+            # Merge run metrics
+            if "run_metrics" in four_stage_result:
+                four_stage_metrics = four_stage_result["run_metrics"]
+                RUN_METRICS["calls"].extend(four_stage_metrics.get("calls", []))
+                RUN_METRICS["failures"].extend(four_stage_metrics.get("failures", []))
+                for stage_name, stage_data in four_stage_metrics.get("stages", {}).items():
+                    if stage_name not in RUN_METRICS["stages"]:
+                        RUN_METRICS["stages"][stage_name] = stage_data
+            
+            print("✅ 4-stage pipeline completed successfully", flush=True)
+        except Exception as e:
+            print(f"❌ 4-stage pipeline failed: {e}", flush=True)
+            RUN_METRICS["failures"].append({"stage": "4_stage_pipeline", "error": str(e)})
     
     # Redis cache disabled per project decision
     if getattr(settings, "environment", "") == "test":
