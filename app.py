@@ -184,7 +184,8 @@ async def analyze_resume(
             )
         )
 
-    # Log what structured data we received from backend
+    # Parse structured data from backend
+    skills_data = None
     if payload.extracted_skills_json:
         try:
             skills_data = json.loads(payload.extracted_skills_json) if isinstance(payload.extracted_skills_json, str) else payload.extracted_skills_json
@@ -202,15 +203,18 @@ async def analyze_resume(
                     logger.warning(f"[COMPLIANCE] structured-skills-v1: Backend sent RAW skills (missing confidence/source) - will trigger fallback")
         except Exception as e:
             logger.warning(f"[IMAGINATOR ENDPOINT] Could not parse extracted_skills_json: {e}")
+            skills_data = None
     else:
         logger.info(f"[IMAGINATOR ENDPOINT] No extracted_skills_json provided (will use fallback)")
 
+    insights_data = None
     if payload.domain_insights_json:
         try:
             insights_data = json.loads(payload.domain_insights_json) if isinstance(payload.domain_insights_json, str) else payload.domain_insights_json
             logger.info(f"[IMAGINATOR ENDPOINT] Received domain_insights_json with keys: {list(insights_data.keys()) if isinstance(insights_data, dict) else 'not a dict'}")
         except Exception as e:
             logger.warning(f"[IMAGINATOR ENDPOINT] Could not parse domain_insights_json: {e}")
+            insights_data = None
     else:
         logger.info(f"[IMAGINATOR ENDPOINT] No domain_insights_json provided")
 
@@ -242,8 +246,8 @@ async def analyze_resume(
         analysis_result = await run_analysis_async(
             resume_text=payload.resume_text,
             job_ad=payload.job_ad,
-            extracted_skills_json=payload.extracted_skills_json,
-            domain_insights_json=payload.domain_insights_json,
+            extracted_skills_json=skills_data,
+            domain_insights_json=insights_data,
             confidence_threshold=payload.confidence_threshold,
             openrouter_api_keys=api_keys
         )
