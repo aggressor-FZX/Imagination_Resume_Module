@@ -1976,28 +1976,35 @@ async def run_final_editor_async(
     
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are an ATS-optimized resume writer. Output ONLY markdown-formatted resume with bullets.
+    system_prompt = """You are a professional resume editor. Your task is to create a polished resume following strict standards.
 
-STRUCTURE (2 pages max):
-1. PROFESSIONAL SUMMARY (2-3 sentences): "Dedicated [Title] with [X] years experience..."
-2. SKILLS (8-12 keywords matching job)
-3. EXPERIENCE (reverse chronological, 3-5 bullets each, present tense for current role)
-4. EDUCATION
+CRITICAL RULES - MUST FOLLOW:
+1. NO cover letter content
+2. NO narrative paragraphs starting with "As a...", "I have...", "I am..."
+3. NO first-person pronouns (I, me, my, we, our)
+4. NO made-up contact information
+5. Use bullet points with action verbs and metrics
+6. Return VALID JSON only (no control characters in strings)
 
-FORMAT RULES:
-- ## for headers (e.g., ## Software Engineer | TechCorp | 2020-2023)
-- Dash bullets: - Architected system serving 5M users...
-- Action verbs + metrics
-- NO paragraphs, NO "I/me/my"
+RESUME STRUCTURE:
+1. PROFESSIONAL SUMMARY (2-4 sentences, third-person)
+2. WORK EXPERIENCE (reverse chronological, 3-6 bullets per role)
+3. EDUCATION (degree, institution, year)
+4. SKILLS (keywords matching job)
+5. OPTIONAL: Certifications, Projects
 
-CRITICAL: Generate markdown first, then copy IDENTICAL content to plain text (just remove ## and replace - with •).
-
-Return JSON:
+EXAMPLE OUTPUT FORMAT:
 {
-  "final_written_section_markdown": "Full markdown resume",
-  "final_written_section": "Same content, plain text (no ## headers, use • for bullets)",
-  "editorial_notes": "Summary"
-}"""
+  "final_written_section_markdown": "## Professional Summary\\n\\nExperienced developer...\\n\\n## Work Experience\\n\\n**Title at Company (Dates)**\\n- Built system serving 5M users...\\n- Reduced latency by 40%...",
+  "final_written_section": "PROFESSIONAL SUMMARY\\n\\nExperienced developer...\\n\\nWORK EXPERIENCE\\n\\nTitle at Company (Dates)\\n• Built system serving 5M users...\\n• Reduced latency by 40%...",
+  "editorial_notes": "ATS-optimized with metrics"
+}
+
+IMPORTANT: 
+- Use \\n for newlines in JSON strings
+- No special characters that break JSON
+- Plain text should use • for bullets, no markdown
+- Markdown should use - for bullets, ## for headers"""
     
     # Extract candidate info for professional summary
     years_experience = analysis.get("seniority", {}).get("level", "").replace("_", " ").replace("-", " ")
@@ -2024,14 +2031,39 @@ TARGET JOB DESCRIPTION:
 {job_ad[:1000]}
 
 TASK:
-Create a complete ATS-optimized resume following the structure:
-1. Professional Summary (2-3 sentences based on candidate background)
-2. Skills section (8-12 keywords matching job description)
-3. Professional Experience (integrate creative draft + STAR formatting)
-4. Education (if available in analysis)
+Create a complete professional resume. Use ONLY the provided information.
 
-Use present tense for current roles, past tense for previous roles.
-Output complete resume in markdown format."""
+OUTPUT REQUIREMENTS:
+1. Return VALID JSON with these exact keys:
+   - final_written_section_markdown
+   - final_written_section
+   - editorial_notes
+
+2. Structure:
+   - Professional Summary (2-4 sentences, third-person)
+   - Work Experience (reverse chronological, bullets with metrics)
+   - Education
+   - Skills
+   - Optional sections if relevant
+
+3. CRITICAL - NO:
+   - Cover letter style
+   - "I have", "As a", "I am" phrases
+   - First-person pronouns
+   - Made-up contact info
+   - Paragraphs (use bullets)
+
+4. Format:
+   - Markdown: ## headers, - bullets
+   - Plain text: UPPERCASE headers, • bullets
+   - Valid JSON (escape newlines as \\n)
+
+EXAMPLE:
+{{
+  "final_written_section_markdown": "## Professional Summary\\nExperienced...\\n\\n## Work Experience\\n**Title** (Dates)\\n- Achieved X...\\n- Improved Y...",
+  "final_written_section": "PROFESSIONAL SUMMARY\\nExperienced...\\n\\nWORK EXPERIENCE\\nTitle (Dates)\\n• Achieved X...\\n• Improved Y...",
+  "editorial_notes": "ATS-optimized"
+}}"""
     
     try:
         if getattr(settings, "environment", "") == "test":
@@ -2061,7 +2093,7 @@ Output complete resume in markdown format."""
             print(f"✅ [FINAL EDITOR] Parsed JSON response", flush=True)
             logger.info(f"[FINAL EDITOR] ✅ Parsed JSON response")
             
-            # Extract fields from Claude's response
+            # Extract fields from response
             markdown_resume = final_data.get("final_written_section_markdown", result)
             plain_text_resume = final_data.get("final_written_section", "")
             
@@ -2069,37 +2101,71 @@ Output complete resume in markdown format."""
             logger.info(f"[FINAL EDITOR] Markdown type: {type(markdown_resume)}, starts with {{: {str(markdown_resume)[:50] if markdown_resume else 'empty'}")
             logger.info(f"[FINAL EDITOR] Plain type: {type(plain_text_resume)}, starts with {{: {str(plain_text_resume)[:50] if plain_text_resume else 'empty'}")
             
-            # ALWAYS unwrap if plain text is JSON string (Claude's double-encoding bug)
-            if isinstance(plain_text_resume, str) and plain_text_resume.strip().startswith("{"):
+            # Robust unwrapping: handle both nested JSON and malformed JSON
+            def unwrap_if_json(value):
+                """Recursively unwrap JSON strings until we get actual content"""
+                if not isinstance(value, str):
+                    return value
+                
+                # Try to parse as JSON
                 try:
-                    print(f"🔍 [FINAL EDITOR] Detected nested JSON, unwrapping...", flush=True)
-                    logger.info("[FINAL EDITOR] 🔍 Detected nested JSON, unwrapping...")
-                    nested = json.loads(plain_text_resume)
-                    markdown_resume = nested.get("final_written_section_markdown", markdown_resume)
-                    plain_text_resume = nested.get("final_written_section", "")
-                    print(f"✅ [FINAL EDITOR] Unwrapped! New plain: {plain_text_resume[:100]}", flush=True)
-                    logger.info(f"[FINAL EDITOR] ✅ Unwrapped! New plain: {plain_text_resume[:100]}")
-                except Exception as e:
-                    print(f"❌ [FINAL EDITOR] Failed to unwrap: {e}", flush=True)
-                    logger.error(f"[FINAL EDITOR] ❌ Failed to unwrap: {e}")
+                    # Handle malformed JSON by replacing control characters
+                    cleaned = value.replace('\n', '\\n').replace('\r', '')
+                    parsed = json.loads(cleaned)
+                    
+                    # If it's a dict with our expected fields, extract them
+                    if isinstance(parsed, dict):
+                        if "final_written_section" in parsed:
+                            return unwrap_if_json(parsed["final_written_section"])
+                        if "final_written_section_markdown" in parsed:
+                            return unwrap_if_json(parsed["final_written_section_markdown"])
+                    
+                    # Otherwise return the parsed value
+                    return parsed
+                except (json.JSONDecodeError, TypeError):
+                    # Not JSON, return as-is
+                    return value
             
-            # ALWAYS regenerate plain from markdown if it has narrative
-            if "As a" in plain_text_resume or "As an" in plain_text_resume or "I have" in plain_text_resume:
-                print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, forcing regeneration", flush=True)
-                logger.warning(f"[FINAL EDITOR] ⚠️  NARRATIVE DETECTED, forcing regeneration from markdown")
-                # If markdown is also JSON string, unwrap it first
-                if isinstance(markdown_resume, str) and markdown_resume.strip().startswith("{"):
-                    try:
-                        nested = json.loads(markdown_resume)
-                        markdown_resume = nested.get("final_written_section_markdown", markdown_resume)
-                        print(f"📝 [FINAL EDITOR] Unwrapped markdown too", flush=True)
-                        logger.info(f"[FINAL EDITOR] Unwrapped markdown too")
-                    except:
-                        pass
-                # Strip markdown formatting to create plain text
-                plain_text_resume = markdown_resume.replace("##", "").replace("\n-", "\n•")
+            # Unwrap both fields
+            markdown_resume = unwrap_if_json(markdown_resume)
+            plain_text_resume = unwrap_if_json(plain_text_resume)
+            
+            # Ensure they're strings
+            if not isinstance(markdown_resume, str):
+                markdown_resume = str(markdown_resume)
+            if not isinstance(plain_text_resume, str):
+                plain_text_resume = str(plain_text_resume)
+            
+            print(f"🔍 [FINAL EDITOR] After unwrapping - Plain: {plain_text_resume[:100]}", flush=True)
+            logger.info(f"[FINAL EDITOR] After unwrapping - Plain type: {type(plain_text_resume)}")
+            
+            # Check for narrative and regenerate if needed
+            narrative_indicators = ["As a", "As an", "I have", "I am", "I've", "I'm"]
+            has_narrative = any(indicator in plain_text_resume for indicator in narrative_indicators)
+            
+            if has_narrative:
+                print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, regenerating from markdown", flush=True)
+                logger.warning(f"[FINAL EDITOR] Narrative detected in plain text, regenerating")
+                
+                # If markdown is still a JSON string, unwrap it
+                markdown_resume = unwrap_if_json(markdown_resume)
+                
+                # Convert markdown to plain text
+                if isinstance(markdown_resume, str):
+                    # Remove markdown headers and convert bullets
+                    plain_text_resume = markdown_resume
+                    # Remove ## headers
+                    plain_text_resume = re.sub(r'^##+\s*', '', plain_text_resume, flags=re.MULTILINE)
+                    # Remove **bold** markers
+                    plain_text_resume = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text_resume)
+                    # Convert - bullets to •
+                    plain_text_resume = re.sub(r'^-\s*', '• ', plain_text_resume, flags=re.MULTILINE)
+                    # Clean up extra whitespace
+                    plain_text_resume = re.sub(r'\n\s*\n\s*\n', '\n\n', plain_text_resume)
+                    plain_text_resume = plain_text_resume.strip()
+                
                 print(f"✅ [FINAL EDITOR] Regenerated: {plain_text_resume[:100]}", flush=True)
-                logger.info(f"[FINAL EDITOR] ✅ Regenerated plain text: {plain_text_resume[:100]}")
+                logger.info(f"[FINAL EDITOR] ✅ Regenerated plain text")
             
             # Build final response
             response_data = {
@@ -2110,14 +2176,30 @@ Output complete resume in markdown format."""
             }
             
             return response_data
-        except json.JSONDecodeError:
-            logger.warning("[FINAL EDITOR] JSON parse failed, using raw output")
-            # Strip markdown for plain text version
-            plain_text = result.replace("##", "").replace("\n-", "\n•")
+        except json.JSONDecodeError as e:
+            logger.warning(f"[FINAL EDITOR] JSON parse failed: {e}, using raw output")
+            print(f"❌ [FINAL EDITOR] JSON parse failed: {e}", flush=True)
+            
+            # Try to extract content manually from raw result
+            plain_text = result
+            markdown = result
+            
+            # If it looks like JSON but failed to parse, try to extract content
+            if result.strip().startswith('{'):
+                # Try to find the content using regex
+                match = re.search(r'"final_written_section":\s*"([^"]*)"', result)
+                if match:
+                    plain_text = match.group(1).replace('\\n', '\n').replace('\\"', '"')
+                    # Remove narrative if present
+                    if any(indicator in plain_text for indicator in ["As a", "I have", "I am"]):
+                        plain_text = re.sub(r'^##+\s*', '', markdown, flags=re.MULTILINE)
+                        plain_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text)
+                        plain_text = re.sub(r'^-\s*', '• ', plain_text, flags=re.MULTILINE)
+            
             return {
                 "final_written_section": plain_text,
-                "final_written_section_markdown": result,
-                "editorial_notes": "Raw LLM output (JSON parse failed)",
+                "final_written_section_markdown": markdown,
+                "editorial_notes": "Raw LLM output (JSON parse failed, manual extraction)",
                 "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
             }
     
