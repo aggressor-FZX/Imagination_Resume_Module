@@ -1719,7 +1719,28 @@ async def run_creative_draft_async(
     
     # Reserve tokens for: system prompt (~300), skills (~200), job ad (~400), research (~500) = ~1400 tokens
     # This leaves ~14,600 tokens for experiences
-    available_tokens_for_exp = 14000
+    # WARNING: Stage 3 (Phi-4) has a 16k context window, and its prompt includes the OUTPUT of this stage.
+    # To be safe, we must ensure Stage 2 input + output fits easily within limits.
+    # But Stage 3 INPUT is Stage 2 OUTPUT.
+    # Stage 2 INPUT can be large (Skyfall/Gemini have large context).
+    # But Stage 2 OUTPUT (the draft) needs to be reasonable length.
+    # The output length is limited by `max_tokens=2500` in the call_llm_async below.
+    # So Stage 3 INPUT will be roughly 2500 tokens (draft) + Star Prompt (~1000).
+    # That should fit easily in 16k.
+    # So why did we get 18k requested? 
+    # Maybe `experiences_text` was huge and it somehow got echoed? 
+    # Or maybe the error came from THIS stage (Creative Drafter)?
+    # "Context Window exceeded" in Imaginator usually comes from the model we are calling.
+    # If the user saw "Requested 18k, Limit 16k", and it was Phi-4, then Phi-4 received 18k tokens.
+    # Phi-4 is used in Stage 3.
+    # Stage 3 prompt: creative_draft + star_suggestions.
+    # If creative_draft is 15k tokens, that explains it.
+    # Does Gemini/Skyfall produce 15k output? No, max_tokens=2500.
+    # Wait, did the user confuse the stage?
+    # If the error was at Stage 2, maybe Skyfall/Gemini has a limit?
+    # Skyfall 36B might have a smaller context than we think?
+    # Let's reduce available_tokens_for_exp just in case.
+    available_tokens_for_exp = 8000  # Reduced from 14000 to be safe
     
     for i, exp in enumerate(experiences, 1):
         if isinstance(exp, dict):
@@ -2180,6 +2201,7 @@ async def run_analysis_async(
 
     # Initialize aggregate_set to prevent UnboundLocalError
     aggregate_set = set()
+    aggregate_skills = []  # Initialize to prevent NameError if early exit occurs
 
     RUN_METRICS["stages"]["analysis"]["start"] = time.time()
     cache_key = _make_analysis_cache_key(
