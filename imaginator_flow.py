@@ -2151,7 +2151,9 @@ EXAMPLE:
             narrative_indicators = [
                 "as a", "as an", "i have", "i am", "i've", "i'm",
                 "is a", "is an", "he has", "she has", "they have",
-                "he is", "she is", "they are", "we have", "we are"
+                "he is", "she is", "they are", "we have", "we are",
+                "a motivated", "an experienced", "the candidate", "the professional",
+                "this professional", "this candidate", "this individual"
             ]
             plain_lower = plain_text_resume.lower()
             has_narrative = any(indicator in plain_lower for indicator in narrative_indicators)
@@ -2207,7 +2209,9 @@ EXAMPLE:
                     narrative_indicators = [
                         "as a", "as an", "i have", "i am", "i've", "i'm",
                         "is a", "is an", "he has", "she has", "they have",
-                        "he is", "she is", "they are", "we have", "we are"
+                        "he is", "she is", "they are", "we have", "we are",
+                        "a motivated", "an experienced", "the candidate", "the professional",
+                        "this professional", "this candidate", "this individual"
                     ]
                     plain_lower = plain_text.lower()
                     if any(indicator in plain_lower for indicator in narrative_indicators):
