@@ -588,7 +588,7 @@ def parse_experiences(text: str) -> List[Dict]:
         "is a", "is an", "are a", "are an", "was a", "was an", "were a", "were an"
     ]
     
-    # Split on double newlines only - don't split on "experience" or "work history" keywords
+    # Split on double newlines and section headers to separate resume sections
     # This preserves experience blocks that contain those words
     blocks = re.split(r'\n{2,}', text)
     experiences = []
