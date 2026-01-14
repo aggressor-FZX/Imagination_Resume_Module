@@ -2153,7 +2153,10 @@ EXAMPLE:
                 "is a", "is an", "he has", "she has", "they have",
                 "he is", "she is", "they are", "we have", "we are",
                 "a motivated", "an experienced", "the candidate", "the professional",
-                "this professional", "this candidate", "this individual"
+                "this professional", "this candidate", "this individual",
+                "is seeking", "is looking", "he is seeking", "she is seeking",
+                "they are seeking", "wants to", "would like to", "aims to",
+                "strives to", "seeks to"
             ]
             plain_lower = plain_text_resume.lower()
             has_narrative = any(indicator in plain_lower for indicator in narrative_indicators)
@@ -2211,7 +2214,10 @@ EXAMPLE:
                         "is a", "is an", "he has", "she has", "they have",
                         "he is", "she is", "they are", "we have", "we are",
                         "a motivated", "an experienced", "the candidate", "the professional",
-                        "this professional", "this candidate", "this individual"
+                        "this professional", "this candidate", "this individual",
+                        "is seeking", "is looking", "he is seeking", "she is seeking",
+                        "they are seeking", "wants to", "would like to", "aims to",
+                        "strives to", "seeks to"
                     ]
                     plain_lower = plain_text.lower()
                     if any(indicator in plain_lower for indicator in narrative_indicators):
