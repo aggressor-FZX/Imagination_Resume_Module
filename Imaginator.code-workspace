@@ -4,13 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../res_data"
-		},
-		{
-			"path": "../Loader"
-		},
-		{
-			"path": "../Job_searcher"
+			"path": "../HF_Resume_Samples"
 		}
 	],
 	"settings": {
