@@ -2109,9 +2109,17 @@ EXAMPLE:
                 
                 # Try to parse as JSON
                 try:
-                    # Handle malformed JSON by replacing control characters
-                    cleaned = value.replace('\n', '\\n').replace('\r', '')
-                    parsed = json.loads(cleaned)
+                    # Try to parse directly first
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    # If that fails, try cleaning up common issues
+                    try:
+                        # Remove any actual newlines that might break JSON parsing
+                        cleaned = value.replace('\n', ' ').replace('\r', ' ')
+                        parsed = json.loads(cleaned)
+                    except json.JSONDecodeError:
+                        # If still failing, return original value
+                        return value
                     
                     # If it's a dict with our expected fields, extract them
                     if isinstance(parsed, dict):
