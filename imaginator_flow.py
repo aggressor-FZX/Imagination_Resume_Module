@@ -573,6 +573,28 @@ _ROLE_MAP = {
 
 
 def parse_experiences(text: str) -> List[Dict]:
+    # Check if text contains narrative indicators
+    narrative_indicators = [
+        "as a", "i am", "i have", "i'm", "i've", "my", "me", "myself",
+        "he is", "she is", "they are", "he has", "she has", "they have",
+        "he was", "she was", "they were", "he will", "she will", "they will",
+        "he can", "she can", "they can", "he should", "she should", "they should",
+        "he would", "she would", "they would", "he could", "she could", "they could",
+        "a motivated", "an experienced", "the candidate", "the professional",
+        "this professional", "this candidate", "this individual",
+        "is seeking", "is looking", "he is seeking", "she is seeking",
+        "they are seeking", "wants to", "would like to", "aims to",
+        "strives to", "seeks to"
+    ]
+    
+    text_lower = text.lower()
+    has_narrative = any(indicator in text_lower for indicator in narrative_indicators)
+    
+    if has_narrative:
+        # If text looks like narrative/cover letter, don't parse as experiences
+        # Return empty list to indicate no structured experiences found
+        return []
+    
     blocks = re.split(r'\n{2,}|experience|work history', text, flags=re.IGNORECASE)
     experiences = []
     for b in blocks:
@@ -2010,11 +2032,12 @@ IMPORTANT:
     years_experience = analysis.get("seniority", {}).get("level", "").replace("_", " ").replace("-", " ")
     job_titles = [exp.get("title_line", "").split("|")[0].strip() for exp in experiences[:3] if isinstance(exp, dict)]
     primary_title = job_titles[0] if job_titles else "Professional"
+    aggregate_skills = analysis.get("aggregate_skills", [])
     
     user_prompt = f"""CANDIDATE BACKGROUND:
 - Primary Title: {primary_title}
 - Experience Level: {years_experience}
-- Key Skills: {', '.join(aggregate_skills[:12])}
+- Key Skills: {', '.join(aggregate_skills[:12]) if aggregate_skills else 'Not specified'}
 
 CREATIVE DRAFT (Stage 2):
 {creative_draft[:1500]}
@@ -2166,12 +2189,41 @@ EXAMPLE:
                 "they are seeking", "wants to", "would like to", "aims to",
                 "strives to", "seeks to"
             ]
-            plain_lower = plain_text_resume.lower()
-            has_narrative = any(indicator in plain_lower for indicator in narrative_indicators)
+            
+            # Check multiple text sources for narrative content
+            text_to_check = []
+            
+            # 1. Check plain_text_resume (LLM output)
+            if isinstance(plain_text_resume, str):
+                text_to_check.append(plain_text_resume.lower())
+            
+            # 2. Check markdown_resume (LLM output)
+            if isinstance(markdown_resume, str):
+                text_to_check.append(markdown_resume.lower())
+            
+            # 3. Check analysis_result experiences (original input)
+            if analysis_result and isinstance(analysis_result, dict):
+                experiences = analysis_result.get("experiences", [])
+                for exp in experiences:
+                    if isinstance(exp, dict):
+                        # Check title_line
+                        if "title_line" in exp and isinstance(exp["title_line"], str):
+                            text_to_check.append(exp["title_line"].lower())
+                        # Check snippet
+                        if "snippet" in exp and isinstance(exp["snippet"], str):
+                            text_to_check.append(exp["snippet"].lower())
+            
+            # Check all text sources for narrative indicators
+            has_narrative = False
+            for text in text_to_check:
+                if any(indicator in text for indicator in narrative_indicators):
+                    has_narrative = True
+                    print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED in text source: {text[:100]}...", flush=True)
+                    break
             
             if has_narrative:
                 print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, regenerating from markdown", flush=True)
-                logger.warning(f"[FINAL EDITOR] Narrative detected in plain text, regenerating")
+                logger.warning(f"[FINAL EDITOR] Narrative detected, regenerating")
                 
                 # If markdown is still a JSON string, unwrap it
                 markdown_resume = unwrap_if_json(markdown_resume)
@@ -2317,6 +2369,28 @@ async def run_analysis_async(
     logger.info(f"[ANALYZE_RESUME] Job ad length: {len(job_ad) if job_ad else 0}")
     logger.info(f"[ANALYZE_RESUME] Extracted skills JSON provided: {extracted_skills_json is not None}")
     logger.info(f"[ANALYZE_RESUME] Domain insights JSON provided: {domain_insights_json is not None}")
+
+    # Check for narrative content in resume text
+    narrative_indicators = [
+        "as a", "i am", "i have", "i'm", "i've", "my", "me", "myself",
+        "he is", "she is", "they are", "he has", "she has", "they have",
+        "he was", "she was", "they were", "he will", "she will", "they will",
+        "he can", "she can", "they can", "he should", "she should", "they should",
+        "he would", "she would", "they would", "he could", "she could", "they could",
+        "a motivated", "an experienced", "the candidate", "the professional",
+        "this professional", "this candidate", "this individual",
+        "is seeking", "is looking", "he is seeking", "she is seeking",
+        "they are seeking", "wants to", "would like to", "aims to",
+        "strives to", "seeks to"
+    ]
+    
+    resume_lower = resume_text.lower()
+    has_narrative = any(indicator in resume_lower for indicator in narrative_indicators)
+    
+    if has_narrative:
+        logger.warning("[ANALYZE_RESUME] WARNING: Resume text contains narrative/cover letter content")
+        logger.warning("[ANALYZE_RESUME] Narrative indicators detected - this may affect experience parsing")
+        # We'll continue processing but log the warning
 
     # Initialize aggregate_set to prevent UnboundLocalError
     aggregate_set = set()
@@ -2976,10 +3050,10 @@ async def run_full_analysis_async(
     """
     NEW 4-STAGE PIPELINE: Research → Draft → STAR Format → Final Polish
     
-    Stage 1 - RESEARCHER (Gemini 2.5 Pro:online): Web search for implied skills & metrics
-    Stage 2 - CREATIVE DRAFTER (Gemini 2.5 Pro): Draft enhanced resume content
+    Stage 1 - RESEARCHER (Deepseek v3.2:online): Web search for implied skills & metrics
+    Stage 2 - CREATIVE DRAFTER (Drummer: rocinanite): Draft enhanced resume content
     Stage 3 - STAR EDITOR (Microsoft Phi-4): Format into STAR pattern bullets
-    Stage 4 - FINAL EDITOR (Claude 3 Haiku): Polish and integrate everything
+    Stage 4 - FINAL EDITOR (google gemini 2.5 pro )flash: Polish and integrate everything
     """
     from config import settings
     import logging
@@ -3008,7 +3082,7 @@ async def run_full_analysis_async(
     experiences = analysis.get("experiences", [])
     
     # ===========================================================================
-    # STAGE 1: RESEARCHER - Web-grounded research (Gemini 2.5 Pro:online)
+    # STAGE 1: RESEARCHER - Web-grounded research (deepseek v3.2:online)
     # ===========================================================================
     logger.info("[4-STAGE PIPELINE] Stage 1/4: RESEARCHER (web search enabled)")
     research_data = await run_researcher_async(
@@ -3021,7 +3095,7 @@ async def run_full_analysis_async(
     )
     
     # ===========================================================================
-    # STAGE 2: CREATIVE DRAFTER - Draft enhanced resume (Gemini 2.5 Pro)
+    # STAGE 2: CREATIVE DRAFTER - Draft enhanced resume (Drummner rocinante)
     # ===========================================================================
     logger.info("[4-STAGE PIPELINE] Stage 2/4: CREATIVE DRAFTER (Gemini 2.5 Pro)")
     creative_draft = await run_creative_draft_async(
@@ -3045,7 +3119,7 @@ async def run_full_analysis_async(
     )
     
     # ===========================================================================
-    # STAGE 4: FINAL EDITOR - Polish and integrate (Claude 3 Haiku)
+    # STAGE 4: FINAL EDITOR - Polish and integrate (google 2.5 pro)
     # ===========================================================================
     logger.info("[4-STAGE PIPELINE] Stage 4/4: FINAL EDITOR (Claude 3 Haiku)")
     final_polish = await run_final_editor_async(
