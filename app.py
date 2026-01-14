@@ -273,7 +273,7 @@ async def analyze_resume(
 
         # CHECK FOR NEW PIPELINE RESULT (4-Stage)
         if isinstance(analysis_result, dict) and analysis_result.get("final_written_section"):
-            logger.info("analyze.pipeline.fast_track", extra={"request_id": request_id, "msg": "4-Stage Pipeline completed in analysis step. Skipping legacy steps."})
+            logger.info("analyze.pipeline.fast_track", extra={"request_id": request_id, "message": "4-Stage Pipeline completed in analysis step. Skipping legacy steps."})
             
             # Construct final output from analysis_result
             output = {
