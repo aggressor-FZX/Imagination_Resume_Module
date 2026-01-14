@@ -2115,10 +2115,17 @@ EXAMPLE:
                     
                     # If it's a dict with our expected fields, extract them
                     if isinstance(parsed, dict):
+                        # Handle common typos from LLM responses
                         if "final_written_section" in parsed:
                             return unwrap_if_json(parsed["final_written_section"])
-                        if "final_written_section_markdown" in parsed:
+                        elif "final_wrtten_section" in parsed:  # Handle typo: missing 'i'
+                            return unwrap_if_json(parsed["final_wrtten_section"])
+                        elif "final_writen_section" in parsed:  # Handle typo: missing 't'
+                            return unwrap_if_json(parsed["final_writen_section"])
+                        elif "final_written_section_markdown" in parsed:
                             return unwrap_if_json(parsed["final_written_section_markdown"])
+                        elif "final_wrtten_section_markdown" in parsed:  # Handle typo in markdown field
+                            return unwrap_if_json(parsed["final_wrtten_section_markdown"])
                     
                     # Otherwise return the parsed value
                     return parsed
@@ -2192,8 +2199,8 @@ EXAMPLE:
             
             # If it looks like JSON but failed to parse, try to extract content
             if result.strip().startswith('{'):
-                # Try to find the content using regex
-                match = re.search(r'"final_written_section":\s*"([^"]*)"', result)
+                # Try to find the content using regex - handle common typos
+                match = re.search(r'"final_wr[it]{1,2}ten_section":\s*"([^"]*)"', result)
                 if match:
                     plain_text = match.group(1).replace('\\n', '\n').replace('\\"', '"')
                     # Remove narrative if present (case-insensitive)
