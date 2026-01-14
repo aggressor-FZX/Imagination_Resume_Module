@@ -1,125 +1,75 @@
 {
-  "experiences": [
-    {
-      "title_line": "Jeff Calderon",
-      "duration": "",
-      "description": "Jeff Calderon Data Scientist and IT Specialist \u2642\u00b6obile+1 916.712.8396 /envel\u2322pejeff.d.calderon@gmail.com /h\u2322meMarysville, WA /linkedinjeffdcalderon /githubaggressor-FZX SUMMARY Skilled and innovative computing professional with extensive",
-      "skills": [],
-      "snippet": "Jeff Calderon\nData Scientist and IT Specialist\n\u2642\u00b6obile+1 916.712.8396 /envel\u2322pejeff.d.calderon@gmail.com /h\u2322meMarysville, WA\n/linkedinjeffdcalderon /githubaggressor-FZX\nSUMMARY\nSkilled and innovative "
-    },
-    {
-      "title_line": "in scripting and validating software solutions. Also skilled",
-      "duration": "",
-      "description": "in scripting and validating software solutions. Also skilled in software development, mustache templates, and automating workflow optimizing initiatives to realize operational efficiencies. Detail-oriented and self-motivated professional adept at translating complex technical requirements into robust solutions. Demonstrates a strong propensity for quick learning, with a track record of applying technical skills to solve complex problems. Seeking challenging data analysis role to leverage my knowledge of scripting, APIs, SQL, and UI/UX design to enhance team productivity. SKILLS AND TECHNOLOGIES Strong knowledge of computing, spreadsheets, automation, Project Management, C++, Python, cloud computing, Windows, databases and SQL.",
-      "skills": [
-        "api",
-        "cloud",
-        "data-analysis",
-        "project-management",
-        "python"
-      ],
-      "snippet": "in scripting and validating software solutions. Also skilled\nin software development, mustache templates, and automating workflow optimizing initiatives to realize operational efficiencies.\nDetail-ori"
-    },
-    {
-      "title_line": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid",
-      "duration": "",
-      "description": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid understanding of Power BI, Excel macros, google suite and Windows/Linux/PowerShell scripting. Excellent communication and collaboration skills. Ability to learn quickly and adapt to new technologies. PROFESSIONAL",
-      "skills": [
-        "communication",
-        "data-analysis",
-        "leadership"
-      ],
-      "snippet": "d in cybersecurity, statistics, and Leadership. Analytical thinking with a growth mindset. Solid\nunderstanding of Power BI, Excel macros, google suite and Windows/Linux/PowerShell scripting. Excellent"
-    },
-    {
-      "title_line": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023",
-      "duration": "06/2016 - 05/2023",
-      "description": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023 \u2022Served as Operations Manager of a Marine Operation Center; Managed military ID administration database, security and infrastructure management software, project management software, dashboard creation and metric tracking. \u2022Created monitored Official Travel data base and tracking UI/database. \u2022Designed implemented UI Sea Service letter generator and spearheaded work flow initiatives using automation. \u2022Led daily status meetings with regional leadership, produced dashboards, visualization and realtime metric reporting for 13 Ships. Research Physicist (Naval Research Laboratory) Washington, DC 01/2014 - 06/2016 \u2022Supported software development to predict active interrogation procedures and passive detection of WMD/radiological devices. \u2022Conducted unit and integration testing of UI java software and C++ code. \u2022Developed Python based graphic user interface for fast implementation of scenario-based radiation simulation software running on Linux. Faculty Assistant Researcher (University of Maryland College Park) College Park, MD 01/2013 - 04/2015 \u2022Designed software for data analysis and publication quality plots in particle physics experiments using. \u2022Co-authored publications on experiments conducted at the Large Hadron Collider. Weapon System Controller (United States Air Force) World Wide 05/2002 - 01/2010 \u2022Administered equipment databases, supervised maintenance operations, and ensured aircraft data availability. \u2022Maintained aircraft maintenance records supporting F-16 fighter jets and presented readiness statistics to base leadership. \u2022Excelled in interpreting technical schematics and delivering precise information. CERTIFICATIONS \u2022Washington State University Everett 2024 - Data Analytics \u2022Everett Community College (2024) - Cybersecurity Analyst \u2022CompTIA (2024) - Security+ EDUCATION BS Professional Physics University of Maryland College Park, MD 2011-2015 Relevant Course Work: MATLAB and Computational Physics, Data Visualization AAS Computer Science Everett Community College Everett, WA 2023-2024 Relevant Course Work: Networking, C++, Cybersecurity, Cloud Computing BS Social Science University of Maryland Adelphi, MD 2005-2010",
-      "skills": [
-        "api",
-        "cloud",
-        "communication",
-        "data-analysis",
-        "leadership",
-        "project-management",
-        "python",
-        "testing"
-      ],
-      "snippet": "Operations Manager (National Oceanic & Atmospheric Administration) Newport, OR 06/2016 - 05/2023\n\u2022Served as Operations Manager of a Marine Operation Center; Managed military ID administration database"
-    }
-  ],
+  "experiences": [],
   "aggregate_skills": [
     "api",
     "cloud",
     "communication",
     "data-analysis",
     "leadership",
+    "machine-learning",
     "project-management",
     "python",
     "testing"
   ],
-  "processed_skills": {},
-  "domain_insights": {},
-  "gap_analysis": "",
-  "role_suggestions": [
-    {
-      "role": "product-manager",
-      "score": 1.0,
-      "matched_skills": [
-        "communication",
-        "leadership",
-        "project-management"
-      ]
+  "processed_skills": {
+    "high_confidence": [],
+    "medium_confidence": [],
+    "low_confidence": [
+      "api",
+      "cloud",
+      "communication",
+      "data-analysis",
+      "leadership",
+      "machine-learning",
+      "project-management",
+      "python",
+      "testing"
+    ],
+    "inferred_skills": [
+      "scripting",
+      "automation",
+      "data_processing",
+      "backend_development",
+      "api_development",
+      "debugging"
+    ]
+  },
+  "domain_insights": {
+    "error": "Input must contain 'content' field",
+    "processing_metadata": {
+      "error_occurred": true,
+      "processing_time_ms": 0.011444091796875
     },
-    {
-      "role": "data-engineer",
-      "score": 0.75,
-      "matched_skills": [
-        "api",
-        "cloud",
-        "python"
-      ]
-    },
-    {
-      "role": "software-engineer",
-      "score": 0.75,
-      "matched_skills": [
-        "api",
-        "python",
-        "testing"
-      ]
-    },
-    {
-      "role": "data-scientist",
-      "score": 0.67,
-      "matched_skills": [
-        "data-analysis",
-        "python"
-      ]
-    },
-    {
-      "role": "ml-engineer",
-      "score": 0.5,
-      "matched_skills": [
-        "cloud",
-        "python"
-      ]
-    }
-  ],
+    "timestamp": "2026-01-14T05:47:38.303119Z",
+    "version": "1.0.0",
+    "domain": "unknown",
+    "market_demand": "Unknown",
+    "skill_gap_priority": "Medium",
+    "emerging_trends": [],
+    "insights": []
+  },
+  "gap_analysis": "{\"critical_gaps\": [], \"nice_to_have_gaps\": [], \"gap_bridging_strategy\": {\"suggestion\": \"Ensure your most relevant achievements are highlighted in your resume and cover letter to align with job ad keywords.\", \"reasoning\": \"The job advertisement does not explicitly mention critical gaps in skills, but highlighting relevant achievements can bridge any implicit expectations or preferences for specific experiences or accomplishments.\"}, \"summary\": {\"statement\": \"No critical gaps detected against the job ad keywords. Ensure your most relevant achievements are highlighted to align with job expectations.\", \"reasoning\": \"The analysis indicates that the resume does not explicitly mention critical skills required by the job advertisement. However, the suggestion to highlight relevant achievements implies a strategy to align the resume with job expectations, potentially bridging any implicit gaps in experience or accomplishments.\"}}",
   "seniority_analysis": {
     "level": "junior",
-    "confidence": 0.8666666666666667,
-    "total_years_experience": 7.0,
-    "experience_quality_score": 0.36624999999999996,
-    "leadership_score": 0.03,
-    "skill_depth_score": 0.4625,
-    "achievement_complexity_score": 0.25,
-    "reasoning": "7.0 years of experience demonstrates significant expertise Solid technical foundation with intermediate to advanced skills",
+    "confidence": 0.4266666666666667,
+    "total_years_experience": 0.0,
+    "experience_quality_score": 0,
+    "leadership_score": 0.0,
+    "skill_depth_score": 0.4444444444444444,
+    "achievement_complexity_score": 0,
+    "reasoning": "0.0 years of experience indicates early career stage Solid technical foundation with intermediate to advanced skills",
     "recommendations": [
       "Focus on building technical depth in core skills",
       "Seek opportunities for mentorship and code reviews",
       "Work on small to medium-sized features independently",
       "Develop understanding of system architecture"
     ]
-  }
+  },
+  "final_written_section": "```json\n{\n  \"final_written_section_markdown\": \"## Professional Summary\\n\\nExpert in cloud engineering and API integration, with a focus on reducing costs and improving system performance. The candidate has led mainframe migration projects to AWS cloud, reducing costs by 30% and improving system performance by 45%. They have developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%. Additionally, they have automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%. The candidate has also led teams in testing and debugging applications, maintaining high performance and reliability.\\n\\n## Work Experience\\n\\n**Cloud Engineer | Mainframe Migration Lead**\\nXYZ Technologies, Seattle | June 2018 - Present\\n- Spearheaded migration of mainframe systems to AWS cloud, reducing costs by 30% and improving system performance by 45%\\n- Led cross-functional team of 8 to design and implement scalable, secure cloud architecture using Python\\n- Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%\\n- Collaborated with stakeholders to gather requirements and translate them into technical solutions\\n\\n**Programmer Analyst | API Integration Specialist**\\nABC Consulting, Seattle | August 2014 - May 2018\\n- Developed and maintained over 15 APIs, increasing integration by 50% and boosting efficiency by 35%\\n- Conducted data analysis to identify automation opportunities, yielding 20% time savings\\n- Led team of 4 in testing, debugging, and optimizing application performance\\n- Mentored junior team members, providing project management and leadership\\n\\n**Programmer Analyst**\\n123 Inc, Seattle | June 2010 - July 2014\\n- Analyzed and translated business requirements into technical specifications for software applications\\n- Developed and tested machine learning models to automate data processing, reducing manual effort by 40%\\n- Maintained high application performance and reliability\\n\\n## Education\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\n## Skills\\nCloud engineering, API development, Python, data analysis, machine learning, testing and debugging, project management, leadership\\n\\n## Target Job Description\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\\n## Compensation\\n\\nOffered compensation range for SR Programmer Analyst position: $99,200 - $124,000\\n\\n## Why Work with Us\\n\\nPurpose-driven, inclusive environment with opportunities for professional growth and community involvement. Salary range: $99,200 - $148,800\\n\\n\",\n  \"final_written_section\": \"PROFESSIONAL SUMMARY\\n\\nExpert in cloud engineering and API integration, focusing on reducing costs and improving system performance. Led mainframe migration projects to AWS cloud, achieving 30% cost reduction and 45% performance improvement. Developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%. Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%. Collaborated with stakeholders to gather requirements and translate them into technical solutions.\\n\\nWORK EXPERIENCE\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\u2022 Spearheaded migration of mainframe systems to AWS cloud, reducing costs by 30% and improving system performance by 45%\\n\u2022 Led cross-functional team of 8 to design and implement scalable, secure cloud architecture using Python\\n\u2022 Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%\\n\u2022 Collaborated with stakeholders to gather requirements and develop technical solutions\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\u2022 Developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%\\n\u2022 Conducted data analysis to identify automation opportunities, yielding 20% time savings\\n\u2022 Led team of 4 in testing, debugging, and optimizing application performance\\n\u2022 Mentored junior team members, providing project management and leadership\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\u2022 Analyzed and translated business requirements into technical specifications for software applications\\n\u2022 Developed and tested machine learning models to automate data processing, reducing manual effort by 40%\\n\u2022 Maintained high application performance and reliability\\n\\nEDUCATION\\n\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nSKILLS\\nCloud engineering, API development, Python, data analysis, machine learning, testing and debugging, project management, leadership\\n\\nTARGET JOB DESCRIPTION\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\\nCOMPENSATION\\n\\nOffered compensation range for SR Programmer Analyst position: $99,200 - $124,000\\n\\nWHY WORK WITH US\\n\\nPurpose-driven, inclusive environment with opportunities for professional growth and community involvement. Salary range: $99,200 - $148,800\\n\\n\",\n  \"editorial_notes\": \"ATS optimized with metrics and keywords matching target job description\"\n}\n```",
+  "suggested_experiences": {
+    "bridging_gaps": []
+  },
+  "creative_draft": "**Professional Experience**\n\n**Cloud Engineer | Mainframe Migration Lead**\nXYZ Technologies, Seattle | June 2018 - Present\n- Spearheaded migration of mainframe systems to AWS cloud, reducing costs by 30% and improving system performance by 45%\n- Led cross-functional team of 8 to design and implement scalable, secure cloud architecture using Python and data analysis\n- Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%\n- Collaborated with stakeholders to gather requirements and translate into technical solutions\n\n**Programmer Analyst | API Integration Specialist**\nABC Consulting, Seattle | August 2014 - May 2018\n- Developed and maintained 15+ APIs, increasing system integration by 50% and boosting efficiency by 35%\n- Conducted data analysis to identify opportunities for automation and process improvement, yielding 20% time savings\n- Led team of 4 in testing, debugging, and optimizing application performance\n- Mentored junior team members, providing project management and leadership to drive successful project delivery\n- Collaborated with clients to understand needs and provide tailored technical solutions\n\n**Programmer Analyst** \n123 Inc, Seattle | June 2010 - July 2014\n- Analyzed and translated business requirements into technical specifications for software applications\n- Developed and tested machine learning models to automate data processing, reducing manual effort by 40%\n- Resolved complex technical issues, maintaining 99.9% uptime and reliability\n- Collaborated with cross-functional teams to plan and execute project milestones, consistently delivering on time\n- Conducted code reviews and provided constructive feedback to improve quality and efficiency",
+  "star_formatted": "**Professional Experience**\n\n**Cloud Engineer | Mainframe Migration Lead**\nXYZ Technologies, Seattle | June 2018 - Present\n- **To reduce costs and improve performance (Situation/Task)**, spearheaded migration of mainframe systems to AWS cloud, **implementing** scalable, secure architecture and **automating** pipelines (Action), **achieving** 30% cost reduction and 45% performance improvement (Result)\n- **To accelerate delivery and reduce errors (Situation/Task)**, **automated** testing and deployment pipelines (Action), **accelerating** delivery by 60% and **reducing** errors by 75% (Result)\n- **To translate stakeholder needs into solutions (Situation/Task)**, **collaborated** with stakeholders to **gather requirements** and **develop** technical solutions (Action) \n\n**Programmer Analyst | API Integration Specialist**\nABC Consulting, Seattle | August 2014 - May 2018\n- **To increase system integration and efficiency (Situation/Task)**, **developed and maintained** 15+ APIs (Action), **boosting** integration by 50% and **improving** efficiency by 35% (Result)\n- **To identify automation opportunities (Situation/Task)**, **conducted** data analysis and **implemented** process improvements (Action), **yielding** 20% time savings (Result)\n- **To optimize application performance (Situation/Task)**, **led** a team of 4 in **testing, debugging, and optimizing** (Action), **maintaining** high performance and reliability\n- **To drive successful project delivery (Situation/Task)**, **mentored** junior team members and **provided** project management and leadership (Action), **consistently delivering** projects on time\n- **To understand client needs (Situation/Task)**, **collaborated** with clients and **provided** tailored technical solutions (Action)\n\n**Programmer Analyst**\n123 Inc, Seattle | June 2010 - July 2014\n- **To translate requirements into technical specs (Situation/Task)**, **analyzed** business requirements and **developed** technical specifications for software applications (Action)\n- **To automate data processing (Situation/Task)**, **developed and tested** machine learning models (Action), **reducing** manual effort by 40% (Result)\n- **To resolve technical issues (Situation/Task)**, **debugged** and **implemented** solutions (Action), **maintaining** 99.9% uptime and reliability (Result)\n- **To plan and execute projects (Situation/Task)**, **collaborated** with cross-functional teams to **plan** and **execute** project milestones (Action), **consistently delivering** on time (Result)\n- **To improve code quality (Situation/Task)**, **conducted** code reviews and **provided** constructive feedback (Action), **enhancing** quality and efficiency (Result)\n\nThe reformatted experience section now follows the STAR pattern, with Situation/Task, Action, and Result clearly defined for each bullet. Metrics and outcomes are prominently displayed. The original content and achievements are maintained, with no new information invented.",
+  "final_written_section_markdown": "```json\n{\n  \"final_written_section_markdown\": \"## Professional Summary\\n\\nExpert in cloud engineering and API integration, with a focus on reducing costs and improving system performance. The candidate has led mainframe migration projects to AWS cloud, reducing costs by 30% and improving system performance by 45%. They have developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%. Additionally, they have automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%. The candidate has also led teams in testing and debugging applications, maintaining high performance and reliability.\\n\\n## Work Experience\\n\\n**Cloud Engineer | Mainframe Migration Lead**\\nXYZ Technologies, Seattle | June 2018 - Present\\n- Spearheaded migration of mainframe systems to AWS cloud, reducing costs by 30% and improving system performance by 45%\\n- Led cross-functional team of 8 to design and implement scalable, secure cloud architecture using Python\\n- Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%\\n- Collaborated with stakeholders to gather requirements and translate them into technical solutions\\n\\n**Programmer Analyst | API Integration Specialist**\\nABC Consulting, Seattle | August 2014 - May 2018\\n- Developed and maintained over 15 APIs, increasing integration by 50% and boosting efficiency by 35%\\n- Conducted data analysis to identify automation opportunities, yielding 20% time savings\\n- Led team of 4 in testing, debugging, and optimizing application performance\\n- Mentored junior team members, providing project management and leadership\\n\\n**Programmer Analyst**\\n123 Inc, Seattle | June 2010 - July 2014\\n- Analyzed and translated business requirements into technical specifications for software applications\\n- Developed and tested machine learning models to automate data processing, reducing manual effort by 40%\\n- Maintained high application performance and reliability\\n\\n## Education\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\n## Skills\\nCloud engineering, API development, Python, data analysis, machine learning, testing and debugging, project management, leadership\\n\\n## Target Job Description\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\\n## Compensation\\n\\nOffered compensation range for SR Programmer Analyst position: $99,200 - $124,000\\n\\n## Why Work with Us\\n\\nPurpose-driven, inclusive environment with opportunities for professional growth and community involvement. Salary range: $99,200 - $148,800\\n\\n\",\n  \"final_written_section\": \"PROFESSIONAL SUMMARY\\n\\nExpert in cloud engineering and API integration, focusing on reducing costs and improving system performance. Led mainframe migration projects to AWS cloud, achieving 30% cost reduction and 45% performance improvement. Developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%. Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%. Collaborated with stakeholders to gather requirements and translate them into technical solutions.\\n\\nWORK EXPERIENCE\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\u2022 Spearheaded migration of mainframe systems to AWS cloud, reducing costs by 30% and improving system performance by 45%\\n\u2022 Led cross-functional team of 8 to design and implement scalable, secure cloud architecture using Python\\n\u2022 Automated testing and deployment pipelines, accelerating delivery by 60% and reducing errors by 75%\\n\u2022 Collaborated with stakeholders to gather requirements and develop technical solutions\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\u2022 Developed and maintained over 15 APIs, enhancing system integration by 50% and boosting efficiency by 35%\\n\u2022 Conducted data analysis to identify automation opportunities, yielding 20% time savings\\n\u2022 Led team of 4 in testing, debugging, and optimizing application performance\\n\u2022 Mentored junior team members, providing project management and leadership\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\u2022 Analyzed and translated business requirements into technical specifications for software applications\\n\u2022 Developed and tested machine learning models to automate data processing, reducing manual effort by 40%\\n\u2022 Maintained high application performance and reliability\\n\\nEDUCATION\\n\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nSKILLS\\nCloud engineering, API development, Python, data analysis, machine learning, testing and debugging, project management, leadership\\n\\nTARGET JOB DESCRIPTION\\n\\nCloud Engineer | Mainframe Migration Lead\\nXYZ Technologies, Seattle | June 2018 - Present\\n\\nProgrammer Analyst | API Integration Specialist\\nABC Consulting, Seattle | August 2014 - May 2018\\n\\nProgrammer Analyst\\n123 Inc, Seattle | June 2010 - July 2014\\n\\nCOMPENSATION\\n\\nOffered compensation range for SR Programmer Analyst position: $99,200 - $124,000\\n\\nWHY WORK WITH US\\n\\nPurpose-driven, inclusive environment with opportunities for professional growth and community involvement. Salary range: $99,200 - $148,800\\n\\n\",\n  \"editorial_notes\": \"ATS optimized with metrics and keywords matching target job description\"\n}\n```"
 }

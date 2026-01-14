@@ -372,9 +372,8 @@ def _get_openrouter_preferences(system_prompt: str, user_prompt: str) -> List[st
     - RESEARCHER: DeepSeek v3.2:online (cheapest web search) → DeepSeek backup
     - CREATIVE: Skyfall 36B (budget creative) → Cydonia 24B backup
     - STAR_EDITOR: Microsoft Phi-4 for STAR pattern bullet formatting
-    - FINAL_EDITOR: Claude 3 Haiku for final editorial polish
+    - FINAL_EDITOR: gemini for final editorial polish
     - GLOBAL_FALLBACK: GPT-4o:online (emergency only, logs error)
-    - Legacy paths: Analytical (Phi-4), Balanced (Claude)
     
     Args:
         system_prompt: System instruction to analyze for task type
@@ -2120,14 +2119,9 @@ EXAMPLE:
             **kwargs
         )
         
-        # Parse JSON response - handle markdown-wrapped JSON
+        # Parse JSON response
         try:
-            # Try using ensure_json_dict to handle markdown code fences
-            try:
-                final_data = ensure_json_dict(result, "final_editor")
-            except (ValueError, json.JSONDecodeError):
-                # Fallback to direct parsing
-                final_data = json.loads(result)
+            final_data = json.loads(result)
             print(f"✅ [FINAL EDITOR] Parsed JSON response", flush=True)
             logger.info(f"[FINAL EDITOR] ✅ Parsed JSON response")
             
@@ -2216,9 +2210,9 @@ EXAMPLE:
             if isinstance(markdown_resume, str):
                 text_to_check.append(markdown_resume.lower())
             
-            # 3. Check analysis experiences (original input)
-            if analysis and isinstance(analysis, dict):
-                experiences = analysis.get("experiences", [])
+            # 3. Check analysis_result experiences (original input)
+            if analysis_result and isinstance(analysis_result, dict):
+                experiences = analysis_result.get("experiences", [])
                 for exp in experiences:
                     if isinstance(exp, dict):
                         # Check title_line
@@ -2237,21 +2231,16 @@ EXAMPLE:
                     break
             
             if has_narrative:
-                print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, checking fallback options", flush=True)
-                logger.warning(f"[FINAL EDITOR] Narrative detected, checking fallback options")
+                print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, regenerating from markdown", flush=True)
+                logger.warning(f"[FINAL EDITOR] Narrative detected, regenerating")
                 
-                # Check if star_formatted also contains narrative
-                star_has_narrative = False
-                if star_formatted and isinstance(star_formatted, str):
-                    star_lower = star_formatted.lower()
-                    star_has_narrative = any(indicator in star_lower for indicator in narrative_indicators)
+                # If markdown is still a JSON string, unwrap it
+                markdown_resume = unwrap_if_json(markdown_resume)
                 
-                # Use star_formatted as fallback ONLY if it doesn't contain narrative
-                if star_formatted and isinstance(star_formatted, str) and len(star_formatted.strip()) > 0 and not star_has_narrative:
-                    markdown_resume = star_formatted
-                    
-                    # Convert markdown to plain text format
-                    plain_text_resume = star_formatted
+                # Convert markdown to plain text
+                if isinstance(markdown_resume, str):
+                    # Remove markdown headers and convert bullets
+                    plain_text_resume = markdown_resume
                     # Remove ## headers
                     plain_text_resume = re.sub(r'^##+\s*', '', plain_text_resume, flags=re.MULTILINE)
                     # Remove **bold** markers
@@ -2261,49 +2250,9 @@ EXAMPLE:
                     # Clean up extra whitespace
                     plain_text_resume = re.sub(r'\n\s*\n\s*\n', '\n\n', plain_text_resume)
                     plain_text_resume = plain_text_resume.strip()
-                    
-                    print(f"✅ [FINAL EDITOR] Using clean STAR-formatted content: {plain_text_resume[:100]}", flush=True)
-                    logger.info(f"[FINAL EDITOR] ✅ Using clean STAR-formatted content as fallback")
-                else:
-                    # If star_formatted also has narrative or is unavailable, regenerate from original experiences
-                    print(f"⚠️  [FINAL EDITOR] STAR-formatted also contains narrative or unavailable, regenerating from experiences", flush=True)
-                    logger.warning(f"[FINAL EDITOR] Regenerating from original experiences")
-                    
-                    # Build resume from original parsed experiences (should be clean)
-                    experience_sections = []
-                    for exp in experiences:
-                        if isinstance(exp, dict):
-                            title_line = exp.get("title_line", "")
-                            snippet = exp.get("snippet", "")
-                            if title_line or snippet:
-                                section = f"{title_line}\n{snippet}" if title_line and snippet else (title_line or snippet)
-                                experience_sections.append(section)
-                    
-                    if experience_sections:
-                        # Use original experiences as base (should be clean resume format)
-                        regenerated_content = "\n\n".join(experience_sections)
-                        markdown_resume = regenerated_content
-                        plain_text_resume = regenerated_content
-                        
-                        print(f"✅ [FINAL EDITOR] Regenerated from experiences: {plain_text_resume[:100]}", flush=True)
-                        logger.info(f"[FINAL EDITOR] ✅ Regenerated from original experiences")
-                    else:
-                        # Last resort: clean the markdown
-                        markdown_resume = unwrap_if_json(markdown_resume)
-                        if isinstance(markdown_resume, str):
-                            plain_text_resume = markdown_resume
-                            # Remove ## headers
-                            plain_text_resume = re.sub(r'^##+\s*', '', plain_text_resume, flags=re.MULTILINE)
-                            # Remove **bold** markers
-                            plain_text_resume = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text_resume)
-                            # Convert - bullets to •
-                            plain_text_resume = re.sub(r'^-\s*', '• ', plain_text_resume, flags=re.MULTILINE)
-                            # Clean up extra whitespace
-                            plain_text_resume = re.sub(r'\n\s*\n\s*\n', '\n\n', plain_text_resume)
-                            plain_text_resume = plain_text_resume.strip()
-                        
-                        print(f"⚠️  [FINAL EDITOR] Using cleaned markdown as last resort: {plain_text_resume[:100]}", flush=True)
-                        logger.warning(f"[FINAL EDITOR] Using cleaned markdown as last resort")
+                
+                print(f"✅ [FINAL EDITOR] Regenerated: {plain_text_resume[:100]}", flush=True)
+                logger.info(f"[FINAL EDITOR] ✅ Regenerated plain text")
             
             # Build final response
             response_data = {
