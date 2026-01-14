@@ -50,7 +50,8 @@ def configure_logging(service_name: str = "imaginator"):
         fmt = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s service=%(service)s env=%(env)s request_id=%(request_id)s')
     else:
         # Fallback to text formatter if json logger isn't available
-        fmt = logging.Formatter('%(asctime)s - %(service)s - %(env)s - %(name)s - %(levelname)s - %(message)s')
+        # Use safer format that doesn't crash if service/env are missing
+        fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     handler.setFormatter(fmt)
     root.setLevel(getattr(logging, log_level, logging.INFO))
