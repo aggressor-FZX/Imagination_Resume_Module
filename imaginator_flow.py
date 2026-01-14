@@ -573,7 +573,7 @@ _ROLE_MAP = {
 
 
 def parse_experiences(text: str) -> List[Dict]:
-    # Check if text contains narrative indicators
+    # Narrative indicators to detect cover letter/narrative content
     narrative_indicators = [
         "as a", "i am", "i have", "i'm", "i've", "my", "me", "myself",
         "he is", "she is", "they are", "he has", "she has", "they have",
@@ -587,20 +587,22 @@ def parse_experiences(text: str) -> List[Dict]:
         "strives to", "seeks to"
     ]
     
-    text_lower = text.lower()
-    has_narrative = any(indicator in text_lower for indicator in narrative_indicators)
-    
-    if has_narrative:
-        # If text looks like narrative/cover letter, don't parse as experiences
-        # Return empty list to indicate no structured experiences found
-        return []
-    
     blocks = re.split(r'\n{2,}|experience|work history', text, flags=re.IGNORECASE)
     experiences = []
+    
     for b in blocks:
         b = b.strip()
         if not b or len(b) < 40:
-          continue
+            continue
+            
+        # Check if this block contains narrative content
+        b_lower = b.lower()
+        has_narrative_in_block = any(indicator in b_lower for indicator in narrative_indicators)
+        
+        # Skip blocks that look like narrative/cover letter content
+        if has_narrative_in_block:
+            continue
+            
         lines = [l.strip() for l in b.splitlines() if l.strip()]
         title_line = lines[0] if lines else ""
         body = " ".join(lines[1:]) if len(lines) > 1 else " ".join(lines)
@@ -615,6 +617,7 @@ def parse_experiences(text: str) -> List[Dict]:
           "duration": duration,
           "description": f"{title_line} {body}"
         })
+    
     return experiences
 
 
