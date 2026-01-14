@@ -124,7 +124,7 @@ OPENROUTER_MODEL_RESEARCHER_BACKUP = "deepseek/deepseek-chat-v3-0324"  # Stage 1
 OPENROUTER_MODEL_CREATIVE = "thedrummer/skyfall-36b-v2"            # Stage 2: Budget creative drafting
 OPENROUTER_MODEL_CREATIVE_BACKUP = "thedrummer/cydonia-24b-v4.1"   # Stage 2 backup
 OPENROUTER_MODEL_STAR_EDITOR = "microsoft/phi-4"                   # Stage 3: STAR pattern formatting
-OPENROUTER_MODEL_FINAL_EDITOR = "google/gemini-2.5-pro"            # Stage 4: Final editorial polish
+OPENROUTER_MODEL_FINAL_EDITOR = "google/gemini-2.5-flash-exp"      # Stage 4: Final editorial polish (user preferred)
 OPENROUTER_MODEL_FINAL_EDITOR_BACKUP = "mistralai/mistral-large-3.1"  # Stage 4 backup
 OPENROUTER_MODEL_GLOBAL_FALLBACK = "gpt-4o:online"                 # Global: Last resort emergency
 
@@ -2140,8 +2140,14 @@ EXAMPLE:
             logger.info(f"[FINAL EDITOR] After unwrapping - Plain type: {type(plain_text_resume)}")
             
             # Check for narrative and regenerate if needed
-            narrative_indicators = ["As a", "As an", "I have", "I am", "I've", "I'm"]
-            has_narrative = any(indicator in plain_text_resume for indicator in narrative_indicators)
+            # Case-insensitive check for narrative patterns
+            narrative_indicators = [
+                "as a", "as an", "i have", "i am", "i've", "i'm",
+                "is a", "is an", "he has", "she has", "they have",
+                "he is", "she is", "they are", "we have", "we are"
+            ]
+            plain_lower = plain_text_resume.lower()
+            has_narrative = any(indicator in plain_lower for indicator in narrative_indicators)
             
             if has_narrative:
                 print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, regenerating from markdown", flush=True)
