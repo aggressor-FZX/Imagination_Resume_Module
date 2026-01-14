@@ -584,10 +584,13 @@ def parse_experiences(text: str) -> List[Dict]:
         "this professional", "this candidate", "this individual",
         "is seeking", "is looking", "he is seeking", "she is seeking",
         "they are seeking", "wants to", "would like to", "aims to",
-        "strives to", "seeks to"
+        "strives to", "seeks to",
+        "is a", "is an", "are a", "are an", "was a", "was an", "were a", "were an"
     ]
     
-    blocks = re.split(r'\n{2,}|experience|work history', text, flags=re.IGNORECASE)
+    # Split on double newlines only - don't split on "experience" or "work history" keywords
+    # This preserves experience blocks that contain those words
+    blocks = re.split(r'\n{2,}', text)
     experiences = []
     
     for b in blocks:
@@ -601,6 +604,10 @@ def parse_experiences(text: str) -> List[Dict]:
         
         # Skip blocks that look like narrative/cover letter content
         if has_narrative_in_block:
+            continue
+            
+        # Skip education sections
+        if b_lower.startswith(("education", "academic", "degree", "certification")):
             continue
             
         lines = [l.strip() for l in b.splitlines() if l.strip()]
@@ -2384,7 +2391,8 @@ async def run_analysis_async(
         "this professional", "this candidate", "this individual",
         "is seeking", "is looking", "he is seeking", "she is seeking",
         "they are seeking", "wants to", "would like to", "aims to",
-        "strives to", "seeks to"
+        "strives to", "seeks to",
+        "is a", "is an", "are a", "are an", "was a", "was an", "were a", "were an"
     ]
     
     resume_lower = resume_text.lower()
