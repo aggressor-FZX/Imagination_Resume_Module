@@ -2196,8 +2196,14 @@ EXAMPLE:
                 match = re.search(r'"final_written_section":\s*"([^"]*)"', result)
                 if match:
                     plain_text = match.group(1).replace('\\n', '\n').replace('\\"', '"')
-                    # Remove narrative if present
-                    if any(indicator in plain_text for indicator in ["As a", "I have", "I am"]):
+                    # Remove narrative if present (case-insensitive)
+                    narrative_indicators = [
+                        "as a", "as an", "i have", "i am", "i've", "i'm",
+                        "is a", "is an", "he has", "she has", "they have",
+                        "he is", "she is", "they are", "we have", "we are"
+                    ]
+                    plain_lower = plain_text.lower()
+                    if any(indicator in plain_lower for indicator in narrative_indicators):
                         plain_text = re.sub(r'^##+\s*', '', markdown, flags=re.MULTILINE)
                         plain_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text)
                         plain_text = re.sub(r'^-\s*', '• ', plain_text, flags=re.MULTILINE)
