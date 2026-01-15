@@ -1656,6 +1656,10 @@ Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prom
             return mock_research
         
         logger.info("[RESEARCHER] Calling DeepSeek v3.2:online with web search enabled (COST-OPTIMIZED)")
+        # Clean kwargs to avoid multiple values for same argument
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in [
+            'enable_web_search', 'web_search_options', 'temperature', 'max_tokens', 'openrouter_api_keys'
+        ]}
         response = await call_llm_async(
             system_prompt,
             user_prompt,
@@ -1666,7 +1670,7 @@ Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prom
             temperature=0.1,      # Deterministic, short outputs
             max_tokens=1100,      # Extended limit for comprehensive research output
             openrouter_api_keys=openrouter_api_keys,
-            **kwargs
+            **clean_kwargs
         )
         
         # Parse JSON response
@@ -1854,13 +1858,17 @@ Use ACTUAL experiences only. Incorporate research insights naturally. Make it co
             return mock_draft
         
         logger.info("[CREATIVE DRAFTER] Calling Skyfall 36B for creative drafting (COST-OPTIMIZED)")
+        # Clean kwargs to avoid multiple values for same argument
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in [
+            'temperature', 'max_tokens', 'openrouter_api_keys'
+        ]}
         draft = await call_llm_async(
             system_prompt,
             user_prompt,
             temperature=0.8,  # Higher temperature for creativity
             max_tokens=2500,
             openrouter_api_keys=openrouter_api_keys,
-            **kwargs
+            **clean_kwargs
         )
         
         logger.info(f"[CREATIVE DRAFTER] Generated draft ({len(draft)} chars)")
@@ -1945,13 +1953,17 @@ Focus on making metrics and outcomes prominent. Maintain authenticity - don't in
             return mock_star
         
         logger.info("[STAR EDITOR] Calling Microsoft Phi-4 for STAR formatting")
+        # Clean kwargs to avoid multiple values for same argument
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in [
+            'temperature', 'max_tokens', 'openrouter_api_keys'
+        ]}
         star_formatted = await call_llm_async(
             system_prompt,
             user_prompt,
             temperature=0.5,  # Lower temperature for structured formatting
             max_tokens=2500,
             openrouter_api_keys=openrouter_api_keys,
-            **kwargs
+            **clean_kwargs
         )
         
         logger.info(f"[STAR EDITOR] Formatted into STAR pattern ({len(star_formatted)} chars)")
@@ -2110,13 +2122,17 @@ EXAMPLE:
         
         print("[FINAL EDITOR] Calling Gemini 2.5 Pro for final polish", flush=True)
         logger.info("[FINAL EDITOR] Calling Gemini 2.5 Pro for final polish")
+        # Clean kwargs to avoid multiple values for same argument
+        clean_kwargs = {k: v for k, v in kwargs.items() if k not in [
+            'temperature', 'max_tokens', 'openrouter_api_keys'
+        ]}
         result = await call_llm_async(
             system_prompt,
             user_prompt,
             temperature=0.6,  # Balanced for editorial judgment
             max_tokens=3000,
             openrouter_api_keys=openrouter_api_keys,
-            **kwargs
+            **clean_kwargs
         )
         
         # Parse JSON response
