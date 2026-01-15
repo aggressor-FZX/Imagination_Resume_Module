@@ -1,0 +1,2 @@
+{"detail":[{"type":"json_invalid","loc":["body",30],"msg":"JSON decode error","input":{},"ctx":{"error":"Invalid control character at"}}]}
+FastSVM HTTP: 422
