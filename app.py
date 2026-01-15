@@ -282,6 +282,15 @@ async def analyze_resume(
                 "processing_status": ProcessingStatus.COMPLETED,
                 "processing_time_seconds": time.time() - start_time
             }
+
+            # Fix nested domain_insights structure from upstream services (Hermes/FastSVM)
+            if "domain_insights" in output and isinstance(output["domain_insights"], dict):
+                di = output["domain_insights"]
+                if "domain_insights" in di and isinstance(di["domain_insights"], dict):
+                    nested_di = di.pop("domain_insights")
+                    di.update(nested_di)
+                    logger.info("[SCHEMA_FIX] Merged nested domain_insights")
+
              ## Validate output schema
             validate_output_schema(output)
 
