@@ -1992,343 +1992,79 @@ async def run_final_editor_async(
     **kwargs,
 ) -> Dict[str, Any]:
     """
-    Stage 4: Final Editor - Uses Claude 3 Haiku to polish and integrate all outputs.
-    Applies editorial discretion to create the final cohesive resume.
-    
-    CACHE BUST: 2026-01-10-21:28
-    
-    Args:
-        creative_draft: Stage 2 output
-        star_formatted: Stage 3 output
-        research_data: Stage 1 research findings
-        analysis: Base analysis data
-        job_ad: Target job description
-        
-    Returns:
-        Dict with final_written_section, markdown version, and provenance
+    Stage 4: Final Editor - Transforms analytical STAR/CAR content into 
+    a standard, high-end professional resume document.
     """
     from config import settings
     import logging
     logger = logging.getLogger(__name__)
     
-    print("🚀🚀🚀 [FINAL EDITOR] === FUNCTION ENTRY === Stage 4", flush=True)
-    logger.info("🚀🚀🚀 [FINAL EDITOR] === FUNCTION ENTRY === Stage 4: Final polish and integration ===")
-    logger.info(f"[FINAL EDITOR] creative_draft length: {len(creative_draft) if creative_draft else 0}")
-    logger.info(f"[FINAL EDITOR] star_formatted length: {len(star_formatted) if star_formatted else 0}")
     RUN_METRICS["stages"]["final_editor"] = {"start": time.time()}
-    
     experiences = analysis.get("experiences", [])
     
-    system_prompt = """You are a professional resume editor. Your task is to create a polished resume following strict standards.
+    # SYSTEM PROMPT: Forces a professional document layout
+    system_prompt = """You are a Master Resume Writer. Your goal is to produce a polished, "ready-to-apply" professional resume.
 
-CRITICAL RULES - MUST FOLLOW:
-1. NO cover letter content
-2. NO narrative paragraphs starting with "As a...", "I have...", "I am..."
-3. NO first-person pronouns (I, me, my, we, our)
-4. NO made-up contact information
-5. Use bullet points with action verbs and metrics
-6. Return VALID JSON only (no control characters in strings)
+CRITICAL FORMATTING RULES:
+1. NO HEADERS like "Challenge:", "Action:", "Result:", or "STAR:".
+2. WEAVE those elements into fluid, impactful bullet points.
+3. Use THIRD-PERSON, past-tense action verbs (e.g., "Spearheaded," "Architected").
+4. ABSOLUTELY NO first-person pronouns ("I," "me," "my").
+5. ABSOLUTELY NO cover letter narrative ("I am a motivated...").
+6. The layout must follow standard Executive Resume conventions.
 
-RESUME STRUCTURE:
-1. PROFESSIONAL SUMMARY (2-4 sentences, third-person)
-2. WORK EXPERIENCE (reverse chronological, 3-6 bullets per role)
-3. EDUCATION (degree, institution, year)
-4. SKILLS (keywords matching job)
-5. OPTIONAL: Certifications, Projects
+REQUIRED STRUCTURE:
+- NAME & CONTACT (Use [Full Name] [Email] placeholders)
+- PROFESSIONAL SUMMARY: 3-4 sentences of high-impact value proposition.
+- TECHNICAL SKILLS: Categorized (e.g., Languages, Frameworks, Cloud).
+- PROFESSIONAL EXPERIENCE: 
+    - Company | Title | Dates
+    - 4-6 Achievement-based bullets (Integrating the STAR/CAR data).
+- EDUCATION: Degree, School, Year.
 
-EXAMPLE OUTPUT FORMAT:
+Return ONLY a VALID JSON object with:
 {
-  "final_written_section_markdown": "## Professional Summary\\n\\nExperienced developer...\\n\\n## Work Experience\\n\\n**Title at Company (Dates)**\\n- Built system serving 5M users...\\n- Reduced latency by 40%...",
-  "final_written_section": "PROFESSIONAL SUMMARY\\n\\nExperienced developer...\\n\\nWORK EXPERIENCE\\n\\nTitle at Company (Dates)\\n• Built system serving 5M users...\\n• Reduced latency by 40%...",
-  "editorial_notes": "ATS-optimized with metrics"
-}
+  "final_written_section_markdown": "Full formatted markdown resume",
+  "final_written_section": "Plain text version for ATS",
+  "editorial_notes": "Summary of optimizations made"
+}"""
 
-IMPORTANT: 
-- Use \\n for newlines in JSON strings
-- No special characters that break JSON
-- Plain text should use • for bullets, no markdown
-- Markdown should use - for bullets, ## for headers"""
-    
-    # Extract candidate info for professional summary
-    years_experience = analysis.get("seniority", {}).get("level", "").replace("_", " ").replace("-", " ")
-    job_titles = [exp.get("title_line", "").split("|")[0].strip() for exp in experiences[:3] if isinstance(exp, dict)]
-    primary_title = job_titles[0] if job_titles else "Professional"
-    aggregate_skills = analysis.get("aggregate_skills", [])
-    
-    user_prompt = f"""CANDIDATE BACKGROUND:
-- Primary Title: {primary_title}
-- Experience Level: {years_experience}
-- Key Skills: {', '.join(aggregate_skills[:12]) if aggregate_skills else 'Not specified'}
+    # USER PROMPT: Provides the raw data and the STAR-structured points to be refined
+    user_prompt = f"""DATA SOURCE:
+- STAR-STRUCTURED DATA: {star_formatted}
+- RESEARCH INSIGHTS: {json.dumps(research_data.get('implied_skills', []))}
+- TARGET JOB: {job_ad[:500]}...
 
-CREATIVE DRAFT (Stage 2):
-{creative_draft[:1500]}
+TASK: 
+1. Take the STAR/CAR points from the source data and rewrite them as standard, high-impact resume bullets.
+2. Remove all "Challenge/Action/Result" labels.
+3. Ensure every bullet point starts with a strong action verb and includes a metric where possible.
+4. Assemble into a full resume document starting with a Professional Summary and ending with Education.
+"""
 
-STAR-FORMATTED VERSION (Stage 3):
-{star_formatted[:1500]}
-
-RESEARCH INSIGHTS:
-- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:15])}
-- Industry Metrics: {', '.join(research_data.get('industry_metrics', [])[:10])}
-- Research Notes: {research_data.get('research_notes', '')[:400]}
-
-TARGET JOB DESCRIPTION:
-{job_ad[:1000]}
-
-TASK:
-Create a complete professional resume. Use ONLY the provided information.
-
-OUTPUT REQUIREMENTS:
-1. Return VALID JSON with these exact keys:
-   - final_written_section_markdown
-   - final_written_section
-   - editorial_notes
-
-2. Structure:
-   - Professional Summary (2-4 sentences, third-person)
-   - Work Experience (reverse chronological, bullets with metrics)
-   - Education
-   - Skills
-   - Optional sections if relevant
-
-3. CRITICAL - NO:
-   - Cover letter style
-   - "I have", "As a", "I am" phrases
-   - First-person pronouns
-   - Made-up contact info
-   - Paragraphs (use bullets)
-
-4. Format:
-   - Markdown: ## headers, - bullets
-   - Plain text: UPPERCASE headers, • bullets
-   - Valid JSON (escape newlines as \\n)
-
-EXAMPLE:
-{{
-  "final_written_section_markdown": "## Professional Summary\\nExperienced...\\n\\n## Work Experience\\n**Title** (Dates)\\n- Achieved X...\\n- Improved Y...",
-  "final_written_section": "PROFESSIONAL SUMMARY\\nExperienced...\\n\\nWORK EXPERIENCE\\nTitle (Dates)\\n• Achieved X...\\n• Improved Y...",
-  "editorial_notes": "ATS-optimized"
-}}"""
-    
     try:
-        if getattr(settings, "environment", "") == "test":
-            mock_final = {
-                "final_written_section": star_formatted[:500] + "\n\n(Mock final polish applied)",
-                "final_written_section_markdown": star_formatted[:500] + "\n\n(Mock final polish applied)",
-                "editorial_notes": "Test environment mock",
-                "final_written_section_provenance": []
-            }
-            RUN_METRICS["calls"].append({"provider": "Mock", "stage": "final_editor"})
-            return mock_final
-        
-        print("[FINAL EDITOR] Calling Gemini 2.5 Pro for final polish", flush=True)
-        logger.info("[FINAL EDITOR] Calling Gemini 2.5 Pro for final polish")
-        # Clean kwargs to avoid multiple values for same argument
-        clean_kwargs = {k: v for k, v in kwargs.items() if k not in [
-            'temperature', 'max_tokens', 'openrouter_api_keys'
-        ]}
+        # Calling the LLM (Gemini 2.5 Pro or similar)
         result = await call_llm_async(
             system_prompt,
             user_prompt,
-            temperature=0.6,  # Balanced for editorial judgment
-            max_tokens=3000,
+            temperature=0.3, # Low temperature for consistency
+            max_tokens=3500,
             openrouter_api_keys=openrouter_api_keys,
-            **clean_kwargs
+            response_format={ "type": "json_object" }
         )
         
-        # Parse JSON response
-        try:
-            final_data = json.loads(result)
-            print(f"✅ [FINAL EDITOR] Parsed JSON response", flush=True)
-            logger.info(f"[FINAL EDITOR] ✅ Parsed JSON response")
-            
-            # Extract fields from response
-            markdown_resume = final_data.get("final_written_section_markdown", result)
-            plain_text_resume = final_data.get("final_written_section", "")
-            
-            print(f"📊 [FINAL EDITOR] Plain starts with: {str(plain_text_resume)[:50]}", flush=True)
-            logger.info(f"[FINAL EDITOR] Markdown type: {type(markdown_resume)}, starts with {{: {str(markdown_resume)[:50] if markdown_resume else 'empty'}")
-            logger.info(f"[FINAL EDITOR] Plain type: {type(plain_text_resume)}, starts with {{: {str(plain_text_resume)[:50] if plain_text_resume else 'empty'}")
-            
-            # Robust unwrapping: handle both nested JSON and malformed JSON
-            def unwrap_if_json(value):
-                """Recursively unwrap JSON strings until we get actual content"""
-                if not isinstance(value, str):
-                    return value
-                
-                # Try to parse as JSON
-                try:
-                    # Try to parse directly first
-                    parsed = json.loads(value)
-                except json.JSONDecodeError:
-                    # If that fails, try cleaning up common issues
-                    try:
-                        # Remove any actual newlines that might break JSON parsing
-                        cleaned = value.replace('\n', ' ').replace('\r', ' ')
-                        parsed = json.loads(cleaned)
-                    except json.JSONDecodeError:
-                        # If still failing, return original value
-                        return value
-                    
-                    # If it's a dict with our expected fields, extract them
-                    if isinstance(parsed, dict):
-                        # Handle common typos from LLM responses
-                        if "final_written_section" in parsed:
-                            return unwrap_if_json(parsed["final_written_section"])
-                        elif "final_wrtten_section" in parsed:  # Handle typo: missing 'i'
-                            return unwrap_if_json(parsed["final_wrtten_section"])
-                        elif "final_writen_section" in parsed:  # Handle typo: missing 't'
-                            return unwrap_if_json(parsed["final_writen_section"])
-                        elif "final_written_section_markdown" in parsed:
-                            return unwrap_if_json(parsed["final_written_section_markdown"])
-                        elif "final_wrtten_section_markdown" in parsed:  # Handle typo in markdown field
-                            return unwrap_if_json(parsed["final_wrtten_section_markdown"])
-                    
-                    # Otherwise return the parsed value
-                    return parsed
-                except (json.JSONDecodeError, TypeError):
-                    # Not JSON, return as-is
-                    return value
-            
-            # Unwrap both fields
-            markdown_resume = unwrap_if_json(markdown_resume)
-            plain_text_resume = unwrap_if_json(plain_text_resume)
-            
-            # Ensure they're strings
-            if not isinstance(markdown_resume, str):
-                markdown_resume = str(markdown_resume)
-            if not isinstance(plain_text_resume, str):
-                plain_text_resume = str(plain_text_resume)
-            
-            print(f"🔍 [FINAL EDITOR] After unwrapping - Plain: {plain_text_resume[:100]}", flush=True)
-            logger.info(f"[FINAL EDITOR] After unwrapping - Plain type: {type(plain_text_resume)}")
-            
-            # Check for narrative and regenerate if needed
-            # Case-insensitive check for narrative patterns
-            narrative_indicators = [
-                "as a", "as an", "i have", "i am", "i've", "i'm",
-                "is a", "is an", "he has", "she has", "they have",
-                "he is", "she is", "they are", "we have", "we are",
-                "a motivated", "an experienced", "the candidate", "the professional",
-                "this professional", "this candidate", "this individual",
-                "is seeking", "is looking", "he is seeking", "she is seeking",
-                "they are seeking", "wants to", "would like to", "aims to",
-                "strives to", "seeks to"
-            ]
-            
-            # Check multiple text sources for narrative content
-            text_to_check = []
-            
-            # 1. Check plain_text_resume (LLM output)
-            if isinstance(plain_text_resume, str):
-                text_to_check.append(plain_text_resume.lower())
-            
-            # 2. Check markdown_resume (LLM output)
-            if isinstance(markdown_resume, str):
-                text_to_check.append(markdown_resume.lower())
-            
-            # 3. Check analysis_result experiences (original input)
-            if analysis_result and isinstance(analysis_result, dict):
-                experiences = analysis_result.get("experiences", [])
-                for exp in experiences:
-                    if isinstance(exp, dict):
-                        # Check title_line
-                        if "title_line" in exp and isinstance(exp["title_line"], str):
-                            text_to_check.append(exp["title_line"].lower())
-                        # Check snippet
-                        if "snippet" in exp and isinstance(exp["snippet"], str):
-                            text_to_check.append(exp["snippet"].lower())
-            
-            # Check all text sources for narrative indicators
-            has_narrative = False
-            for text in text_to_check:
-                if any(indicator in text for indicator in narrative_indicators):
-                    has_narrative = True
-                    print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED in text source: {text[:100]}...", flush=True)
-                    break
-            
-            if has_narrative:
-                print(f"⚠️  [FINAL EDITOR] NARRATIVE DETECTED, regenerating from markdown", flush=True)
-                logger.warning(f"[FINAL EDITOR] Narrative detected, regenerating")
-                
-                # If markdown is still a JSON string, unwrap it
-                markdown_resume = unwrap_if_json(markdown_resume)
-                
-                # Convert markdown to plain text
-                if isinstance(markdown_resume, str):
-                    # Remove markdown headers and convert bullets
-                    plain_text_resume = markdown_resume
-                    # Remove ## headers
-                    plain_text_resume = re.sub(r'^##+\s*', '', plain_text_resume, flags=re.MULTILINE)
-                    # Remove **bold** markers
-                    plain_text_resume = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text_resume)
-                    # Convert - bullets to •
-                    plain_text_resume = re.sub(r'^-\s*', '• ', plain_text_resume, flags=re.MULTILINE)
-                    # Clean up extra whitespace
-                    plain_text_resume = re.sub(r'\n\s*\n\s*\n', '\n\n', plain_text_resume)
-                    plain_text_resume = plain_text_resume.strip()
-                
-                print(f"✅ [FINAL EDITOR] Regenerated: {plain_text_resume[:100]}", flush=True)
-                logger.info(f"[FINAL EDITOR] ✅ Regenerated plain text")
-            
-            # Build final response
-            response_data = {
-                "final_written_section": plain_text_resume,
-                "final_written_section_markdown": markdown_resume,
-                "editorial_notes": final_data.get("editorial_notes", "ATS-optimized"),
-                "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
-            }
-            
-            return response_data
-        except json.JSONDecodeError as e:
-            logger.warning(f"[FINAL EDITOR] JSON parse failed: {e}, using raw output")
-            print(f"❌ [FINAL EDITOR] JSON parse failed: {e}", flush=True)
-            
-            # Try to extract content manually from raw result
-            plain_text = result
-            markdown = result
-            
-            # If it looks like JSON but failed to parse, try to extract content
-            if result.strip().startswith('{'):
-                # Try to find the content using regex - handle common typos
-                match = re.search(r'"final_wr[it]{1,2}ten_section":\s*"([^"]*)"', result)
-                if match:
-                    plain_text = match.group(1).replace('\\n', '\n').replace('\\"', '"')
-                    # Remove narrative if present (case-insensitive)
-                    narrative_indicators = [
-                        "as a", "as an", "i have", "i am", "i've", "i'm",
-                        "is a", "is an", "he has", "she has", "they have",
-                        "he is", "she is", "they are", "we have", "we are",
-                        "a motivated", "an experienced", "the candidate", "the professional",
-                        "this professional", "this candidate", "this individual",
-                        "is seeking", "is looking", "he is seeking", "she is seeking",
-                        "they are seeking", "wants to", "would like to", "aims to",
-                        "strives to", "seeks to"
-                    ]
-                    plain_lower = plain_text.lower()
-                    if any(indicator in plain_lower for indicator in narrative_indicators):
-                        plain_text = re.sub(r'^##+\s*', '', markdown, flags=re.MULTILINE)
-                        plain_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', plain_text)
-                        plain_text = re.sub(r'^-\s*', '• ', plain_text, flags=re.MULTILINE)
-            
-            return {
-                "final_written_section": plain_text,
-                "final_written_section_markdown": markdown,
-                "editorial_notes": "Raw LLM output (JSON parse failed, manual extraction)",
-                "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
-            }
-    
-    except Exception as e:
-        logger.error(f"[FINAL EDITOR] Error: {e}, falling back to STAR formatted")
+        final_data = ensure_json_dict(result, "final_editor")
+        
+        # Build response
         return {
-            "final_written_section": star_formatted,
-            "final_written_section_markdown": star_formatted,
-            "editorial_notes": f"Fallback due to error: {str(e)}",
+            "final_written_section": final_data.get("final_written_section", ""),
+            "final_written_section_markdown": final_data.get("final_written_section_markdown", ""),
+            "editorial_notes": final_data.get("editorial_notes", ""),
             "final_written_section_provenance": _build_provenance_entries_from_experiences(experiences)
         }
-    finally:
-        RUN_METRICS["stages"]["final_editor"]["end"] = time.time()
-        s = RUN_METRICS["stages"]["final_editor"]
-        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s.get("start") and s.get("end") else None
+    except Exception as e:
+        logger.error(f"Final Editor Failed: {e}")
+        return {"final_written_section": star_formatted, "final_written_section_markdown": star_formatted}
 
 
 def run_analysis(resume_text, job_ad=None, extracted_skills_json=None, domain_insights_json=None, **kwargs):
