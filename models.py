@@ -137,22 +137,22 @@ class ProvenanceEntry(BaseModel):
 
 class AnalysisResponse(BaseModel):
     """Response model for resume analysis results"""
-    experiences: List[ExperienceEntry] = Field(..., description="Parsed work experiences")
-    aggregate_skills: List[str] = Field(..., description="All unique skills found")
-    processed_skills: ProcessedSkills = Field(..., description="Categorized skills")
-    domain_insights: DomainInsights = Field(..., description="Domain intelligence")
-    gap_analysis: Union[str, Dict[str, Any]] = Field(..., description="Gap analysis (string or structured object)")
-    suggested_experiences: Dict[str, Any] = Field(
-        ..., description="Refined improvement suggestions"
+    experiences: Optional[List[ExperienceEntry]] = Field(None, description="Parsed work experiences")
+    aggregate_skills: Optional[List[str]] = Field(None, description="All unique skills found")
+    processed_skills: Optional[ProcessedSkills] = Field(None, description="Categorized skills")
+    domain_insights: Optional[DomainInsights] = Field(None, description="Domain intelligence")
+    gap_analysis: Optional[Union[str, Dict[str, Any]]] = Field(None, description="Gap analysis (string or structured object)")
+    suggested_experiences: Optional[Dict[str, Any]] = Field(
+        None, description="Refined improvement suggestions"
     )
-    seniority_analysis: SeniorityAnalysis = Field(..., description="Seniority level analysis")
+    seniority_analysis: Optional[SeniorityAnalysis] = Field(None, description="Seniority level analysis")
     final_written_section: Optional[str] = Field(None, description="Generated resume section text")
     final_written_section_markdown: Optional[str] = Field(None, description="Markdown-formatted resume section")
     final_written_section_provenance: List[ProvenanceEntry] = Field(
         default_factory=list, description="Claim-to-source mapping for trust and verification"
     )
     critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
-    run_metrics: RunMetrics = Field(..., description="Usage metrics and costs")
+    run_metrics: Optional[RunMetrics] = Field(None, description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
     )
