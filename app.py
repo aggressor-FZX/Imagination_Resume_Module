@@ -39,6 +39,9 @@ from imaginator_flow import (
     redact_for_logging,
 )
 
+# Import new 3-stage pipeline integration
+from imaginator_new_integration import run_new_pipeline_async
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -240,15 +243,14 @@ async def analyze_resume(
         # extracted_skills = None
         # domain_insights = None
 
-        # Step 1: Run Analysis
-        logger.info("run_analysis.start", extra={"request_id": request_id})
+        # Step 1: Run NEW 3-Stage Pipeline (replaces old analysis)
+        logger.info("run_new_pipeline.start", extra={"request_id": request_id})
         t0 = time.time()
-        analysis_result = await run_analysis_async(
+        analysis_result = await run_new_pipeline_async(
             resume_text=payload.resume_text,
             job_ad=payload.job_ad,
             extracted_skills_json=skills_data,
             domain_insights_json=insights_data,
-            confidence_threshold=payload.confidence_threshold,
             openrouter_api_keys=api_keys
         )
         if settings.VERBOSE_PIPELINE_LOGS:
@@ -257,16 +259,15 @@ async def analyze_resume(
                     {
                         "event": "pipeline.stage_result",
                         "path": "/analyze",
-                        "stage": "analysis",
+                        "stage": "new_3stage_pipeline",
                         "result": redact_for_logging(analysis_result),
                     },
                     default=str,
                 )
             )
         analysis_duration_ms = int((time.time() - t0) * 1000)
-        logger.info("run_analysis.end", extra={"request_id": request_id, "duration_ms": analysis_duration_ms})
-        RUN_METRICS.setdefault("durations_ms", {})["analysis_ms"] = analysis_duration_ms
-
+        logger.info("run_new_pipeline.end", extra={"request_id": request_id, "duration_ms": analysis_duration_ms})
+        RUN_METRICS.setdefault("durations_ms", {})["pipeline_ms"] = analysis_duration_ms
         # If mocked test returns final success payload (v2 shape), return it directly
         if isinstance(analysis_result, dict) and "status" in analysis_result and "analysis" in analysis_result:
             return JSONResponse(status_code=200, content=analysis_result)

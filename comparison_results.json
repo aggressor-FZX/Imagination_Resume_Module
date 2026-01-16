@@ -1,0 +1,146 @@
+{
+  "new": {
+    "pipeline_version": "3.0",
+    "pipeline_start": "2026-01-16T06:30:22.372242",
+    "stages": {
+      "researcher": {
+        "status": "completed",
+        "duration_seconds": 1.6158230304718018,
+        "data": {
+          "implied_metrics": [
+            "Millions of users",
+            "5+ years experience",
+            "Scalable web applications"
+          ],
+          "domain_vocab": [
+            "Python",
+            "JavaScript",
+            "React",
+            "Node.js",
+            "AWS",
+            "GCP",
+            "Azure",
+            "Docker",
+            "Kubernetes",
+            "SQL",
+            "NoSQL",
+            "CI/CD",
+            "Microservices",
+            "Machine Learning"
+          ],
+          "insider_tips": "Emphasize experience with cloud deployment, container orchestration, and designing for a large user base."
+        },
+        "summary": "Research Analysis:\n- Expected Metrics: Millions of users, 5+ years experience, Scalable web applications\n- Key Technologies: Python, JavaScript, React, Node.js, AWS\n- Insider Tip: Emphasize experience with cloud deployment, container orchestration, and designing for a large user base.\n"
+      },
+      "drafter": {
+        "status": "completed",
+        "duration_seconds": 8.372277736663818,
+        "data": {
+          "rewritten_experiences": [
+            {
+              "company": "NOTICE: Insufficient experience data provided",
+              "role": "N/A",
+              "bullets": [
+                "GUIDANCE: For this role, you should document experiences like:",
+                "\u2022 Contributed to full-stack web applications using Python and JavaScript, serving 1000+ daily active users",
+                "\u2022 Assisted in implementing React components and Node.js services, reducing page load time by 25%",
+                "\u2022 Supported deployment of 3 microservices on AWS, achieving 99.9% uptime",
+                "\u2022 Collaborated on database optimization projects, improving query response time by 40%"
+              ],
+              "metrics_used": [
+                "1000+ users",
+                "25% reduction",
+                "99.9% uptime",
+                "40% improvement"
+              ]
+            }
+          ],
+          "seniority_applied": "junior",
+          "quantification_score": 1.0,
+          "total_bullets": 5,
+          "quantified_bullets": 5
+        },
+        "summary": "Generated 5 STAR bullets (100% quantified) at junior level"
+      },
+      "star_editor": {
+        "status": "completed",
+        "duration_seconds": 3.759693145751953,
+        "data": {
+          "final_markdown": "## Skills\n\n- Python\n- JavaScript\n- React\n- Node.js\n- AWS\n- GCP\n- Azure\n- Docker\n- Kubernetes\n- SQL\n\n## Projects\n\n- Contributed to full-stack web applications using Python and JavaScript, serving 1000+ daily active users.\n- Assisted in implementing React components and Node.js services, reducing page load time by 25%.\n",
+          "final_plain_text": "Skills\n\n- Python\n- JavaScript\n- React\n- Node.js\n- AWS\n- GCP\n- Azure\n- Docker\n- Kubernetes\n- SQL\n\nProjects\n\n- Contributed to full-stack web applications using Python and JavaScript, serving 1000+ daily active users.\n- Assisted in implementing React components and Node.js services, reducing page load time by 25%.\n",
+          "editorial_notes": "Formatted skills and project sections based on provided guidance. Added metrics to project bullet points.",
+          "seniority_level": "junior",
+          "domain_terms_used": [
+            "Python",
+            "JavaScript",
+            "React",
+            "Node.js",
+            "AWS",
+            "GCP",
+            "Azure",
+            "Docker",
+            "Kubernetes",
+            "SQL"
+          ],
+          "quantification_check": {
+            "total_bullets": 12,
+            "quantified_bullets": 1,
+            "quantification_score": 0.08333333333333333,
+            "needs_improvement": true
+          }
+        },
+        "summary": "Produced 54-word ATS-ready resume. Formatted skills and project sections based on provided guidance. Added metrics to project bullet po"
+      }
+    },
+    "metrics": {
+      "total_duration_seconds": 13.747862339019775,
+      "stage_durations": {
+        "researcher": 1.6158230304718018,
+        "drafter": 8.372277736663818,
+        "star_editor": 3.759693145751953
+      },
+      "stage_summaries": {
+        "researcher": "Extracted 3 metrics",
+        "drafter": "Created 5 bullets",
+        "star_editor": "Produced 54 word resume"
+      },
+      "pipeline_status": "completed",
+      "pipeline_end": "2026-01-16T06:30:36.120116"
+    },
+    "errors": [],
+    "final_output": {
+      "final_written_section_markdown": "## Skills\n\n- Python\n- JavaScript\n- React\n- Node.js\n- AWS\n- GCP\n- Azure\n- Docker\n- Kubernetes\n- SQL\n\n## Projects\n\n- Contributed to full-stack web applications using Python and JavaScript, serving 1000+ daily active users.\n- Assisted in implementing React components and Node.js services, reducing page load time by 25%.\n",
+      "final_written_section": "Skills\n\n- Python\n- JavaScript\n- React\n- Node.js\n- AWS\n- GCP\n- Azure\n- Docker\n- Kubernetes\n- SQL\n\nProjects\n\n- Contributed to full-stack web applications using Python and JavaScript, serving 1000+ daily active users.\n- Assisted in implementing React components and Node.js services, reducing page load time by 25%.\n",
+      "editorial_notes": "Formatted skills and project sections based on provided guidance. Added metrics to project bullet points.",
+      "seniority_level": "junior",
+      "domain_terms_used": [
+        "Python",
+        "JavaScript",
+        "React",
+        "Node.js",
+        "AWS",
+        "GCP",
+        "Azure",
+        "Docker",
+        "Kubernetes",
+        "SQL"
+      ],
+      "quantification_analysis": {
+        "total_bullets": 12,
+        "quantified_bullets": 1,
+        "quantification_score": 0.08333333333333333,
+        "needs_improvement": true
+      },
+      "hallucination_checked": true
+    }
+  },
+  "old": {
+    "final_resume_markdown": "# Professional Experience\n\n_Draft generation failed: 'coroutine' object is not iterable_",
+    "editorial_notes": "Polish failed: 'coroutine' object is not iterable",
+    "_metrics": {
+      "start": 1768545036.1588147,
+      "end": 1768545036.1588871,
+      "duration_ms": 0
+    }
+  }
+}
