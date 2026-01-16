@@ -380,8 +380,8 @@ class PipelineOrchestrator:
             summary += "\nPreview:\n"
             for line in preview_lines:
                 summary += f"  {line}\n"
-            if len(markdown.split('\n')) > 5:
-                summary += f"  ... and {len(markdown.split('\n')) - 5} more lines\n"
+            if line_count > 5:
+                summary += f"  ... and {line_count - 5} more lines\n"
         
         # Errors
         errors = result.get("errors", [])
