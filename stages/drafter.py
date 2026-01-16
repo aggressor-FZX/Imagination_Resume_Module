@@ -44,6 +44,7 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     # Get domain vocabulary from research
     domain_vocab = research_data.get("domain_vocab", [])
     implied_metrics = research_data.get("implied_metrics", [])
+    implied_skills = research_data.get("implied_skills", [])
     
     system_prompt = f"""You are an expert Resume Writer. Rewrite the user's experiences into 3-5 STAR bullets.
 SENIORITY TONE: {seniority_level.upper()}
@@ -55,6 +56,7 @@ CRITICAL RULES:
 3. MANDATORY QUANTIFICATION: Every bullet must include a number (%, $, time, or scale).
 4. FORMAT: [Action Verb] [Skill/Task] to achieve [Outcome], resulting in [Metric].
 5. Incorporate relevant domain terms: {', '.join(domain_vocab[:5]) if domain_vocab else 'Technical skills'}
+6. Highlight these IMPLIED SKILLS where possible: {', '.join(implied_skills[:5]) if implied_skills else 'Key Competencies'}
 
 EXAMPLE FORMATS:
 ✓ "Optimized PyTorch inference pipeline using TensorRT to reduce latency by 35% (120ms to 78ms) for 5k+ daily active users."
@@ -140,6 +142,7 @@ Job Description:
 Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
 - Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
+- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
 """
         
         try:

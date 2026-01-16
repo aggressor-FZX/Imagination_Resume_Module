@@ -9,7 +9,7 @@ Based on Alternate_flow_proposal.md recommendations:
 
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pipeline_config import OR_SLUG_RESEARCHER, TEMPERATURES, TIMEOUTS
 
 logger = logging.getLogger(__name__)
@@ -18,21 +18,23 @@ logger = logging.getLogger(__name__)
 # PROMPT TEMPLATES
 # ============================================================================
 
-RESEARCHER_SYSTEM_PROMPT = """You are a career research agent. Analyze the Job Description to find technical benchmarks.
-DO NOT summarize the job. Extract ONLY quantifiable metrics and domain vocabulary.
+RESEARCHER_SYSTEM_PROMPT = """You are a career research agent. Analyze the Job Description and User Profile to find technical benchmarks and implied skills.
+DO NOT summarize the job. Extract ONLY quantifiable metrics, domain vocabulary, and implied skills.
 
 Output JSON Schema:
 {
   "implied_metrics": ["40% reduction in latency", "99.9% uptime", "10k+ concurrent users"],
   "domain_vocab": ["Kubernetes", "PyTorch", "CI/CD", "Microservices"],
+  "implied_skills": ["Docker (implied by Kubernetes)", "System Design (implied by Senior role)", "Mentorship"],
   "insider_tips": "Focus on scale and high-availability architecture."
 }
 
 CRITICAL RULES:
-1. Extract ONLY from the job description text
+1. Extract ONLY from the job description text and user profile
 2. Provide 3-5 specific, quantifiable metrics
 3. List 5-10 domain-specific keywords
-4. Keep insider_tips concise (1-2 sentences)
+4. Identify 3-5 IMPLIED skills that the user likely has based on their experience but didn't explicitly list
+5. Keep insider_tips concise (1-2 sentences)
 """
 
 # ============================================================================
@@ -54,29 +56,36 @@ class Researcher:
         self.temperature = TEMPERATURES["researcher"]
         self.timeout = TIMEOUTS["researcher"]
         
-    async def analyze(self, job_ad: str) -> Dict[str, Any]:
+    async def analyze(self, job_ad: str, experiences: Optional[List[Dict]] = None) -> Dict[str, Any]:
         """
-        Analyze job ad to extract metrics and domain vocabulary.
+        Analyze job ad and user profile to extract metrics, vocabulary, and implied skills.
         
         Args:
             job_ad: Job description text
+            experiences: Optional list of user experiences
             
         Returns:
-            Dictionary with implied_metrics, domain_vocab, and insider_tips
+            Dictionary with implied_metrics, domain_vocab, implied_skills, and insider_tips
         """
         logger.info(f"[RESEARCHER] Analyzing job ad ({len(job_ad)} chars)")
         
         user_prompt = f"Job Description:\n\n{job_ad[:2000]}"
         
+        if experiences:
+            exp_text = json.dumps(experiences, indent=2)
+            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:2000]}"
+            user_prompt += "\n\nBased on the user's profile and the job description, what IMPLIED skills do they likely possess?"
+        
         try:
-            # Call LLM with strict JSON schema
+            # Call LLM with strict JSON schema and optimized parameters
             response = await self.llm_client.call_llm_async(
                 system_prompt=RESEARCHER_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 model=self.model,
                 temperature=self.temperature,
                 response_format={"type": "json_object"},
-                timeout=self.timeout
+                timeout=self.timeout,
+                max_tokens=1024  # Ensure sufficient tokens for complex JSON
             )
             
             # Parse and validate response
@@ -123,6 +132,7 @@ class Researcher:
             result = {
                 "implied_metrics": data.get("implied_metrics", []),
                 "domain_vocab": data.get("domain_vocab", []),
+                "implied_skills": data.get("implied_skills", []),
                 "insider_tips": data.get("insider_tips", "Focus on relevant achievements.")
             }
             
@@ -131,6 +141,8 @@ class Researcher:
                 result["implied_metrics"] = []
             if not isinstance(result["domain_vocab"], list):
                 result["domain_vocab"] = []
+            if not isinstance(result["implied_skills"], list):
+                result["implied_skills"] = []
             if not isinstance(result["insider_tips"], str):
                 result["insider_tips"] = "Focus on relevant achievements."
             
@@ -139,6 +151,8 @@ class Researcher:
                 result["implied_metrics"] = ["Demonstrate measurable impact", "Show technical proficiency"]
             if not result["domain_vocab"]:
                 result["domain_vocab"] = ["Relevant technical skills"]
+            if not result["implied_skills"]:
+                result["implied_skills"] = ["Problem Solving", "Communication"]
                 
             return result
             

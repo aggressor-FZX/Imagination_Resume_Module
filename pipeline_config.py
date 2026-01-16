@@ -17,13 +17,13 @@ load_dotenv()
 # ============================================================================
 
 # Correct OpenRouter Slugs for the 3-Stage Pipeline
-OR_SLUG_RESEARCHER = "google/gemini-2.0-flash-001"  # Grounded search capability
+OR_SLUG_RESEARCHER = "perplexity/sonar-pro"       # Grounded search capability (Optimized)
 OR_SLUG_DRAFTER = "anthropic/claude-3.5-sonnet"     # Best for STAR reasoning
 OR_SLUG_STAR_EDITOR = "google/gemini-2.0-flash-001" # High speed, clean Markdown
 
 # Fallback models (in case primary models are unavailable)
 FALLBACK_MODELS = {
-    "researcher": ["google/gemini-2.0-flash-001", "anthropic/claude-3-haiku"],
+    "researcher": ["perplexity/sonar", "google/gemini-2.0-flash-001"],
     "drafter": ["anthropic/claude-3.5-sonnet", "google/gemini-2.0-pro"],
     "star_editor": ["google/gemini-2.0-flash-001", "anthropic/claude-3-haiku"]
 }
@@ -33,6 +33,8 @@ FALLBACK_MODELS = {
 # ============================================================================
 
 PRICING = {
+    "perplexity/sonar-pro": {"input": 0.003, "output": 0.015}, # Estimate based on search models
+    "perplexity/sonar": {"input": 0.001, "output": 0.001},
     "google/gemini-2.0-flash-001": {"input": 0.00025, "output": 0.0005},
     "google/gemini-2.0-pro": {"input": 0.00125, "output": 0.0025},
     "anthropic/claude-3.5-sonnet": {"input": 0.003, "output": 0.015},

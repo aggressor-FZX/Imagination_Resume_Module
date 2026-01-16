@@ -86,7 +86,7 @@ class PipelineOrchestrator:
             stage1_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 1: Researcher")
             
-            research_data = await self.researcher.analyze(job_ad)
+            research_data = await self.researcher.analyze(job_ad, experiences)
             stage1_duration = time.time() - stage1_start
             
             result["stages"]["researcher"] = {
@@ -97,7 +97,7 @@ class PipelineOrchestrator:
             }
             
             logger.info(f"[ORCHESTRATOR] Stage 1 completed in {stage1_duration:.2f}s")
-            logger.info(f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics")
+            logger.info(f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics and {len(research_data.get('implied_skills', []))} implied skills")
             
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
