@@ -103,7 +103,10 @@ class PipelineOrchestrator:
             stage2_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 2: Drafter")
             
-            draft_data = await self.drafter.draft(experiences, job_ad, research_data)
+            # Inject Golden Bullets if available
+            golden_bullets = kwargs.get("golden_bullets")
+            
+            draft_data = await self.drafter.draft(experiences, job_ad, research_data, golden_bullets=golden_bullets)
             stage2_duration = time.time() - stage2_start
             
             result["stages"]["drafter"] = {

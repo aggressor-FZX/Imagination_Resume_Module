@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict, 
-                         seniority_level: str, allowed_verbs: List[str]) -> str:
+                         seniority_level: str, allowed_verbs: List[str],
+                         golden_bullets: Optional[List[str]] = None) -> str:
     """
-    Create the drafter prompt with dynamic seniority calibration.
+    Create the drafter prompt with dynamic seniority calibration and golden examples.
     
     Args:
         experiences: User's actual experiences
@@ -30,34 +31,49 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
         research_data: Output from Researcher stage
         seniority_level: "junior", "mid", or "senior"
         allowed_verbs: List of action verbs for this seniority level
+        golden_bullets: Optional list of high-quality example bullets
         
     Returns:
         Formatted system prompt
     """
     # Extract original company names to prevent hallucination
-    original_companies = []
-    for exp in experiences:
-        company = exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
-        if company and company not in original_companies:
-            original_companies.append(company)
+    original_companies = [exp.get("company", "Unknown") for exp in experiences if exp.get("company")]
     
-    # Get domain vocabulary from research
-    domain_vocab = research_data.get("domain_vocab", [])
-    implied_metrics = research_data.get("implied_metrics", [])
     implied_skills = research_data.get("implied_skills", [])
     
+    golden_section = ""
+    if golden_bullets:
+        # 1. We bump this to 15 to give a wide variety of "Tech patterns"
+        selected_bullets = golden_bullets[:15]
+        bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
+        
+        golden_section = f"""
+### GOLDEN PATTERN LIBRARY (Analyze & Adapt)
+The following examples demonstrate the perfect "Action -> Tech -> Result" syntax.
+REFERENCE THESE PATTERNS:
+{bullets_text}
+
+### STRUCTURAL MAPPING INSTRUCTIONS (CRITICAL):
+1. **Identify the Archetype:** Look at the User's raw input. Are they describing a Backend task? Frontend? DevOps? Leadership?
+2. **Find the Match:** Look at the 'GOLDEN PATTERN LIBRARY' above. Find a bullet that describes a similar *type* of work, even if the specific technology is different (e.g., if User has 'Python', look for a 'Java' or 'Ruby' golden bullet).
+3. **Steal the Syntax:** Adopt the sentence structure of the Golden Bullet.
+   - *Golden:* "Refactored [Java] monolith to [Microservices], reducing [Metric]."
+   - *User Input:* "Fixed messy Python scripts."
+   - *Result:* "Refactored legacy [Python] scripts into modular functions, improving code maintainability."
+4. **Metric Inference:** If the user lacks specific numbers, use the Golden Bullet's structure to highlight *qualitative impact* (e.g., "increasing reliability," "automating manual workflows") instead of making up fake numbers.
+"""
+
     system_prompt = f"""You are an expert Resume Writer. Rewrite the user's experiences into 3-5 STAR bullets.
 SENIORITY TONE: {seniority_level.upper()}
 ALLOWED VERBS: {', '.join(allowed_verbs)}
 
+{golden_section}
+
 CRITICAL RULES:
 1. USE ONLY the user's actual company names: {', '.join(original_companies) if original_companies else 'User companies'}
-2. NEVER use "ABC Corp" or placeholders. If the user's data is sparse, stay truthful but technical.
-3. MANDATORY QUANTIFICATION: Every bullet must include a number (%, $, time, or scale).
-4. FORMAT: [Action Verb] [Skill/Task] to achieve [Outcome], resulting in [Metric].
-5. Incorporate relevant domain terms: {', '.join(domain_vocab[:5]) if domain_vocab else 'Technical skills'}
-6. Highlight these IMPLIED SKILLS where possible: {', '.join(implied_skills[:5]) if implied_skills else 'Key Competencies'}
-
+2. DO NOT hallucinate technologies the user didn't mention.
+3. **Structure Mapping:** As defined above, force the user's content into the syntactic structures found in the Golden Examples.
+# ...existing code...
 EXAMPLE FORMATS:
 ✓ "Optimized PyTorch inference pipeline using TensorRT to reduce latency by 35% (120ms to 78ms) for 5k+ daily active users."
 ✓ "Led migration of legacy monolith to microservices, improving deployment frequency by 200% and reducing downtime 90%."
@@ -105,7 +121,8 @@ class Drafter:
         self.timeout = TIMEOUTS["drafter"]
         
     async def draft(self, experiences: List[Dict], job_ad: str, 
-                   research_data: Dict[str, Any]) -> Dict[str, Any]:
+                   research_data: Dict[str, Any],
+                   golden_bullets: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
         
@@ -113,6 +130,7 @@ class Drafter:
             experiences: User's actual experiences
             job_ad: Job description text
             research_data: Output from Researcher stage
+            golden_bullets: Optional list of high-quality example bullets
             
         Returns:
             Dictionary with rewritten experiences and metadata
@@ -129,7 +147,8 @@ class Drafter:
             job_ad=job_ad,
             research_data=research_data,
             seniority_level=seniority_level,
-            allowed_verbs=allowed_verbs
+            allowed_verbs=allowed_verbs,
+            golden_bullets=golden_bullets
         )
         
         user_prompt = f"""

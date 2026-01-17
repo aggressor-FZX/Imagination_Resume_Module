@@ -21,11 +21,15 @@ logger = logging.getLogger(__name__)
 RESEARCHER_SYSTEM_PROMPT = """You are a career research agent. Analyze the Job Description and User Profile to find technical benchmarks and implied skills.
 DO NOT summarize the job. Extract ONLY quantifiable metrics, domain vocabulary, and implied skills.
 
+### SYNTACTIC ARCHETYPE IDENTIFICATION (NEW):
+Identify the primary "Work Archetypes" required by this job (e.g., "Migration", "Scaling", "Optimization", "Greenfield Development", "Legacy Maintenance"). This helps the Drafter map the correct Golden Bullet structures.
+
 Output JSON Schema:
 {
   "implied_metrics": ["40% reduction in latency", "99.9% uptime", "10k+ concurrent users"],
   "domain_vocab": ["Kubernetes", "PyTorch", "CI/CD", "Microservices"],
   "implied_skills": ["Docker (implied by Kubernetes)", "System Design (implied by Senior role)", "Mentorship"],
+  "work_archetypes": ["Migration", "Scaling"],
   "insider_tips": "Focus on scale and high-availability architecture."
 }
 
@@ -34,7 +38,8 @@ CRITICAL RULES:
 2. Provide 3-5 specific, quantifiable metrics
 3. List 5-10 domain-specific keywords
 4. Identify 3-5 IMPLIED skills that the user likely has based on their experience but didn't explicitly list
-5. Keep insider_tips concise (1-2 sentences)
+5. Identify 1-3 Work Archetypes to guide the Drafter's structure mapping.
+6. Keep insider_tips concise (1-2 sentences)
 """
 
 # ============================================================================
@@ -133,6 +138,7 @@ class Researcher:
                 "implied_metrics": data.get("implied_metrics", []),
                 "domain_vocab": data.get("domain_vocab", []),
                 "implied_skills": data.get("implied_skills", []),
+                "work_archetypes": data.get("work_archetypes", []),
                 "insider_tips": data.get("insider_tips", "Focus on relevant achievements.")
             }
             
@@ -143,6 +149,8 @@ class Researcher:
                 result["domain_vocab"] = []
             if not isinstance(result["implied_skills"], list):
                 result["implied_skills"] = []
+            if not isinstance(result["work_archetypes"], list):
+                result["work_archetypes"] = []
             if not isinstance(result["insider_tips"], str):
                 result["insider_tips"] = "Focus on relevant achievements."
             

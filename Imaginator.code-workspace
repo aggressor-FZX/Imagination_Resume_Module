@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../HF_Resume_Samples"
+		},
+		{
+			"path": ".."
 		}
 	],
 	"settings": {

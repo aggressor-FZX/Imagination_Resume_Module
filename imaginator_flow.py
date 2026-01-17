@@ -127,11 +127,17 @@ async def run_analysis_async(
     orchestrator = PipelineOrchestrator(llm_client)
     
     # Run pipeline
+    # Check for golden bullets in domain_insights_json
+    golden_bullets = domain_insights_json.get("domain_market_data", {}).get("top_skills", []) if domain_insights_json else []
+    # Note: We are using top_skills as a proxy for golden bullets for now, 
+    # but in a real scenario, we would call the SmartHarvester here.
+    
     result = await orchestrator.run_pipeline(
         resume_text=resume_text,
         job_ad=job_ad or "",
         experiences=experiences,
-        openrouter_api_keys=openrouter_api_keys
+        openrouter_api_keys=openrouter_api_keys,
+        golden_bullets=golden_bullets
     )
     
     # Extract final output
