@@ -1,0 +1,5 @@
+ id |           email           | password_hash 
+----+---------------------------+---------------
+ 22 | jeff.d.calderon@gmail.com | 
+(1 row)
+

@@ -76,9 +76,9 @@
 ### User Payment Structure
 
 **Pricing Model**: $10 initial + $5 per credit pack
-- **Credits per pack**: ~1,000 credits ($5)
+- **Credits per pack**: ~870 credits ($10) / ~435 credits ($5)
 - **Credits per API call**: 5 credits
-- **API calls per pack**: ~200 calls
+- **API calls per pack**: ~174 calls ($10) / ~87 calls ($5)
 
 ### Cost vs Revenue Analysis
 
