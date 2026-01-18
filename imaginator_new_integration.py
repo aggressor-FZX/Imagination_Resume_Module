@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List
 
 from orchestrator import PipelineOrchestrator
 from llm_client_adapter import LLMClientAdapter
-from imaginator_flow import parse_experiences
+from imaginator_flow import parse_experiences, run_criticism_async
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,29 @@ async def run_new_pipeline_async(
         # Extract final output
         final_output = result.get("final_output", {})
         
+        # RESTORE CRITICISM STAGE: Get ATS/critique score from the generated resume
+        logger.info("[NEW_PIPELINE] Stage 4/4: CRITICISM (ATS Score Calculation)")
+        criticism_result = await run_criticism_async(
+            generated_text=final_output.get("final_written_section_markdown", ""),
+            job_ad=job_ad,
+            openrouter_api_keys=openrouter_api_keys,
+            **kwargs
+        )
+        
+        # Parse criticism result
+        critique_score = None
+        if isinstance(criticism_result, str):
+            try:
+                criticism_data = json.loads(criticism_result)
+                critique_score = criticism_data.get("score")
+                logger.info(f"[NEW_PIPELINE] Critique score calculated: {critique_score}")
+            except json.JSONDecodeError:
+                logger.warning(f"[NEW_PIPELINE] Could not parse criticism result as JSON: {criticism_result}")
+                criticism_data = {}
+        else:
+            criticism_data = criticism_result if isinstance(criticism_result, dict) else {}
+            critique_score = criticism_data.get("score")
+        
         # Build backward-compatible response
         response = {
             "final_written_section_markdown": final_output.get("final_written_section_markdown", ""),
@@ -82,6 +105,7 @@ async def run_new_pipeline_async(
             "domain_terms_used": final_output.get("domain_terms_used", []),
             "quantification_analysis": final_output.get("quantification_analysis", {}),
             "hallucination_checked": final_output.get("hallucination_checked", False),
+            "critique_score": critique_score,  # ATS Score from criticism stage
             "pipeline_version": "3.0",
             "pipeline_status": result.get("metrics", {}).get("pipeline_status", "completed"),
             "pipeline_metrics": {
@@ -91,7 +115,7 @@ async def run_new_pipeline_async(
             }
         }
         
-        logger.info(f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}")
+        logger.info(f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}, Critique Score: {critique_score}")
         return response
         
     except Exception as e:

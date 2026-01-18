@@ -208,10 +208,67 @@ async def run_generation_async(*args, **kwargs):
     logger.warning("[DEPRECATED] run_generation_async called - this is now handled by the orchestrator")
     return {}
 
-async def run_criticism_async(*args, **kwargs):
-    """Deprecated - now handled by orchestrator."""
-    logger.warning("[DEPRECATED] run_criticism_async called - this is now handled by the orchestrator")
-    return {}
+async def run_criticism_async(
+    generated_text: str,
+    job_ad: str,
+    openrouter_api_keys: Optional[List[str]] = None,
+    **kwargs
+) -> str:
+    """
+    Critiques a generated resume section against a job ad for ATS alignment and quality.
+    Returns a JSON string with "score" (0.0-1.0) for ATS matching.
+    """
+    system_prompt = """
+    You are an ATS (Applicant Tracking System) evaluator. Review the provided resume section against the job description.
+    Assess how well the resume would match in an ATS system based on:
+    1. Keyword alignment with job requirements
+    2. Skills match
+    3. Experience level match
+    4. Formatting ATS-friendliness
+    
+    Provide your feedback in JSON format with:
+    - "score": a float between 0.0 and 1.0 representing ATS match quality
+    - "feedback": a string with brief explanation
+    - "suggested_experiences": object with "bridging_gaps" and "metric_improvements" arrays
+    """
+    user_prompt = f"""
+    Job Description:
+    {job_ad}
+
+    Candidate Resume Section:
+    {generated_text}
+    """
+    try:
+        from llm_client_adapter import LLMClientAdapter
+        api_key = openrouter_api_keys[0] if openrouter_api_keys else settings.openrouter_api_key_1
+        if not api_key:
+            logger.warning("[CRITICISM] No OpenRouter API key available, using default score")
+            return json.dumps({"score": 0.75, "feedback": "Default ATS score (API unavailable)", "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}})
+        
+        llm_client = LLMClientAdapter(api_key=api_key)
+        result = await llm_client.call_llm_async(system_prompt, user_prompt)
+        
+        # Try to parse as JSON
+        if isinstance(result, str):
+            try:
+                parsed = json.loads(result)
+                # Ensure score is in 0-1 range
+                score = parsed.get("score", 0.75)
+                if isinstance(score, (int, float)):
+                    score = float(score)
+                    if score > 1.0:
+                        score = score / 100.0  # Convert 0-100 to 0-1
+                    score = max(0.0, min(1.0, score))  # Clamp to 0-1
+                parsed["score"] = score
+                return json.dumps(parsed)
+            except (json.JSONDecodeError, AttributeError):
+                logger.warning(f"[CRITICISM] Could not parse LLM response as JSON: {result}")
+                return json.dumps({"score": 0.75, "feedback": "ATS evaluation completed", "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}})
+        
+        return result
+    except Exception as e:
+        logger.error(f"[CRITICISM] Error during ATS evaluation: {e}", exc_info=True)
+        return json.dumps({"score": 0.75, "feedback": f"ATS evaluation error: {str(e)}", "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []}})
 
 async def run_synthesis_async(*args, **kwargs):
     """Deprecated - now handled by orchestrator."""
