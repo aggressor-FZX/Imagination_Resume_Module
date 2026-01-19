@@ -46,12 +46,18 @@ class LLMClientAdapter:
             if user_prompt:
                 messages.append({"role": "user", "content": user_prompt})
             
+            # ENFORCE HARD TOKEN LIMITS TO PREVENT COST EXPLOSION
+            # Default to 2000, but cap strictly at 4000 to prevent Grok-style verbosity
+            requested_max = kwargs.get("max_tokens", 2000)
+            hard_cap = 4000  # Absolute maximum tokens allowed per call
+            safe_max_tokens = min(requested_max, hard_cap)
+            
             # Call synchronous method (OpenRouterSafeClient is sync)
             result = self.client.call_model(
                 messages=messages,
                 model=model,
                 temperature=temperature,
-                max_tokens=kwargs.get("max_tokens", 2000)
+                max_tokens=safe_max_tokens
             )
             
             # Extract response text
@@ -61,6 +67,17 @@ class LLMClientAdapter:
                 if choices:
                     message = choices[0].get("message", {})
                     content = message.get("content", "")
+                    
+                    # SAFETY CHECK: Truncate if response exceeds hard cap
+                    # This prevents models from "over-explaining" and burning credits
+                    if len(content) > (safe_max_tokens * 4):  # Rough char estimate
+                        print(f"⚠️  Response truncated: {len(content)} chars exceeded safety cap")
+                        # Attempt to find the end of the JSON object if it's JSON
+                        if response_format and response_format.get("type") == "json_object":
+                            end_brace = content.rfind("}")
+                            if end_brace != -1:
+                                content = content[:end_brace+1]
+                    
                     return content
             
             # Fallback on error

@@ -1,0 +1,151 @@
+{
+  "timestamp": "2026-01-18T19:53:08.638677",
+  "models_tested": [
+    "DeepSeek v3.2",
+    "Grok 4.1 Fast",
+    "Xiaomi MiMo v2 Flash"
+  ],
+  "stages": [
+    "researcher",
+    "drafter",
+    "star_editor"
+  ],
+  "results": [
+    {
+      "model_name": "DeepSeek v3.2",
+      "model_slug": "deepseek/deepseek-v3.2",
+      "total_cost": 0.0015165,
+      "total_tokens": 2386,
+      "avg_response_time": 17.570000012715656,
+      "avg_quality_score": 0.9666666666666667,
+      "success_rate": 1.0,
+      "cost_per_token": 6.3558256496228e-07,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 0.0010536,
+          "tokens": 1540,
+          "response_time": 36.13672208786011,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 0.00027315,
+          "tokens": 477,
+          "response_time": 10.060105562210083,
+          "quality_score": 0.8999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 0.00018975,
+          "tokens": 369,
+          "response_time": 6.513172388076782,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "model_name": "Grok 4.1 Fast",
+      "model_slug": "x-ai/grok-4.1-fast",
+      "total_cost": 7.853000000000001,
+      "total_tokens": 8469,
+      "avg_response_time": 29.235314925511677,
+      "avg_quality_score": 1.0,
+      "success_rate": 1.0,
+      "cost_per_token": 0.0009272641398039911,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 1.2179000000000002,
+          "tokens": 1437,
+          "response_time": 12.201772451400757,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 4.5609,
+          "tokens": 4759,
+          "response_time": 57.8996376991272,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 2.0742000000000003,
+          "tokens": 2273,
+          "response_time": 17.60453462600708,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "model_name": "Xiaomi MiMo v2 Flash",
+      "model_slug": "xiaomi/mimo-v2-flash",
+      "total_cost": 0.45449999999999996,
+      "total_tokens": 1835,
+      "avg_response_time": 10.15647037823995,
+      "avg_quality_score": 0.9666666666666667,
+      "success_rate": 1.0,
+      "cost_per_token": 0.00024768392370572205,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 0.2712,
+          "tokens": 1024,
+          "response_time": 17.859761476516724,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 0.11899999999999998,
+          "tokens": 496,
+          "response_time": 7.487385511398315,
+          "quality_score": 0.8999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 0.0643,
+          "tokens": 315,
+          "response_time": 5.12226414680481,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_tests": 9,
+    "successful_tests": 9,
+    "overall_success_rate": 1.0,
+    "best_cost_model": "DeepSeek v3.2",
+    "best_quality_model": "Grok 4.1 Fast",
+    "fastest_model": "Xiaomi MiMo v2 Flash",
+    "most_cost_efficient": "DeepSeek v3.2"
+  },
+  "recommendations": [
+    "\ud83d\udcb0 COST LEADER: DeepSeek v3.2 at $0.001517 total ($0.00000064 per token)",
+    "\ud83c\udfc6 QUALITY LEADER: Grok 4.1 Fast with 1.00/1.0 average quality",
+    "\u26a1 SPEED LEADER: Xiaomi MiMo v2 Flash at 10.16s average response time",
+    "\ud83c\udfaf BEST OVERALL: DeepSeek v3.2 - Best cost efficiency at $0.00000064 per token",
+    "\n\ud83d\udcca COST FOR 1000 PIPELINE RUNS:",
+    "   DeepSeek v3.2: $1.52",
+    "   Xiaomi MiMo v2 Flash: $454.50",
+    "   Grok 4.1 Fast: $7853.00"
+  ]
+}
