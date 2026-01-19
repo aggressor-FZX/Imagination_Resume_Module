@@ -16,6 +16,7 @@ from datetime import datetime
 from stages.researcher import Researcher
 from stages.drafter import Drafter
 from stages.star_editor import StarEditor
+from seniority_detector import SeniorityDetector
 from pipeline_config import estimate_cost, TIMEOUTS
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ class PipelineOrchestrator:
         self.researcher = Researcher(llm_client)
         self.drafter = Drafter(llm_client)
         self.star_editor = StarEditor(llm_client)
+        self.seniority_detector = SeniorityDetector()
         
         # Pipeline metrics
         self.metrics = {
@@ -165,6 +167,29 @@ class PipelineOrchestrator:
             logger.info(f"[ORCHESTRATOR] Stage 3 completed in {stage3_duration:.2f}s")
             logger.info(f"[ORCHESTRATOR] StarEditor produced {len(editor_data.get('final_markdown', '').split())} word resume")
             
+            # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
+            # Aggregate skills for analysis
+            all_skills = set(research_data.get("implied_skills", []))
+            for exp in experiences:
+                if "skills" in exp and isinstance(exp["skills"], list):
+                    all_skills.update(exp["skills"])
+            
+            # Run Seniority Analysis
+            try:
+                seniority_result = self.seniority_detector.detect_seniority(experiences, all_skills)
+                logger.info(f"[ORCHESTRATOR] Detected seniority: {seniority_result.get('level')} ({seniority_result.get('confidence'):.2f})")
+            except Exception as e:
+                logger.error(f"[ORCHESTRATOR] Seniority detection failed: {e}")
+                seniority_result = {"level": "mid-level", "confidence": 0.5, "reasoning": "Fallback due to error"}
+
+            # Construct Processed Skills
+            processed_skills = {
+                "high_confidence": list(all_skills), # Treat all found skills as high confidence for now
+                "medium_confidence": [],
+                "low_confidence": [],
+                "inferred_skills": research_data.get("implied_skills", [])
+            }
+
             # Combine results
             total_duration = time.time() - start_time
             
@@ -177,6 +202,8 @@ class PipelineOrchestrator:
                 errors.append("Pipeline used fallback generation for one or more stages")
             
             result.update({
+                "processed_skills": processed_skills,
+                "seniority_analysis": seniority_result,
                 "final_output": {
                     "final_written_section_markdown": editor_data.get("final_markdown", ""),
                     "final_written_section": editor_data.get("final_plain_text", ""),

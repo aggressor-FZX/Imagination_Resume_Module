@@ -50,25 +50,25 @@ class ExperienceEntry(BaseModel):
 
 class ProcessedSkills(BaseModel):
     """Processed skills with categorization and confidence"""
-    high_confidence: List[str] = Field(..., description="High confidence skills")
-    medium_confidence: List[str] = Field(..., description="Medium confidence skills")
-    low_confidence: List[str] = Field(..., description="Low confidence skills")
-    inferred_skills: List[str] = Field(
-        ..., description="Skills inferred from skill adjacency"
+    high_confidence: Optional[List[str]] = Field(None, description="High confidence skills")
+    medium_confidence: Optional[List[str]] = Field(None, description="Medium confidence skills")
+    low_confidence: Optional[List[str]] = Field(None, description="Low confidence skills")
+    inferred_skills: Optional[List[str]] = Field(
+        None, description="Skills inferred from skill adjacency"
     )
 
 
 class SeniorityAnalysis(BaseModel):
     """Seniority level analysis results"""
-    level: str = Field(..., description="Detected seniority level")
-    confidence: float = Field(..., description="Confidence score (0-1)")
-    total_years_experience: float = Field(..., description="Total years of experience")
-    experience_quality_score: float = Field(..., description="Experience quality score")
-    leadership_score: float = Field(..., description="Leadership experience score")
-    skill_depth_score: float = Field(..., description="Technical skill depth score")
-    achievement_complexity_score: float = Field(..., description="Achievement complexity score")
-    reasoning: str = Field(..., description="Human-readable reasoning")
-    recommendations: List[str] = Field(..., description="Career development recommendations")
+    level: Optional[str] = Field(None, description="Detected seniority level")
+    confidence: Optional[float] = Field(None, description="Confidence score (0-1)")
+    total_years_experience: Optional[float] = Field(None, description="Total years of experience")
+    experience_quality_score: Optional[float] = Field(None, description="Experience quality score")
+    leadership_score: Optional[float] = Field(None, description="Leadership experience score")
+    skill_depth_score: Optional[float] = Field(None, description="Technical skill depth score")
+    achievement_complexity_score: Optional[float] = Field(None, description="Achievement complexity score")
+    reasoning: Optional[str] = Field(None, description="Human-readable reasoning")
+    recommendations: Optional[List[str]] = Field(None, description="Career development recommendations")
 
 
 class RunMetrics(BaseModel):
