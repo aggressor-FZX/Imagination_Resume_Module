@@ -1,0 +1,55 @@
+{
+  "model": "minimax/minimax-m2.1",
+  "timestamp": "2026-01-18T23:31:39.925686",
+  "response_time": 21.845146417617798,
+  "tokens_in": 581,
+  "tokens_out": 962,
+  "total_tokens": 1543,
+  "cost": 0.0012219669,
+  "raw_response": "```json\n{\n  \"rewritten_experiences\": [\n    {\n      \"company\": \"FinTech Analytics\",\n      \"role\": \"Senior Data Scientist\",\n      \"bullets\": [\n        \"Designed and deployed production ML pipeline for churn prediction achieving 87% accuracy, generating $2M in annual savings through customer retention\",\n        \"Architected real-time analytics infrastructure using Python and Tableau, enabling stakeholders to monitor key metrics with sub-second latency\",\n        \"Led A/B testing framework implementation across 5 product lines, driving 12% improvement in conversion rates through data-driven feature decisions\",\n        \"Built automated ETL pipelines reducing manual reporting overhead by 20 hours/week, improving data availability for downstream ML workflows\"\n      ]\n    },\n    {\n      \"company\": \"Retail Insights\",\n      \"role\": \"Data Analyst\",\n      \"bullets\": [\n        \"Developed predictive models analyzing behavioral data for 1M+ users, identifying purchasing patterns that informed $500K+ in targeted marketing campaigns\",\n        \"Created inventory forecasting systems reducing waste by 18% through statistical demand modeling and seasonal trend analysis\"\n      ]\n    }\n  ],\n  \"seniority_applied\": \"senior\",\n  \"quantification_score\": 0.95\n}\n```",
+  "pipeline_inputs": {
+    "hermes_skills": [
+      {
+        "skill": "Python",
+        "confidence": 0.95,
+        "source": "resume"
+      },
+      {
+        "skill": "Machine Learning",
+        "confidence": 0.92,
+        "source": "resume"
+      },
+      {
+        "skill": "Statistical Analysis",
+        "confidence": 0.88,
+        "source": "resume"
+      },
+      {
+        "skill": "Data Visualization",
+        "confidence": 0.85,
+        "source": "resume"
+      },
+      {
+        "skill": "SQL",
+        "confidence": 0.9,
+        "source": "resume"
+      },
+      {
+        "skill": "TensorFlow",
+        "confidence": 0.82,
+        "source": "resume"
+      }
+    ],
+    "fastsvm_titles": [
+      {
+        "title": "Data Scientist",
+        "confidence": 0.92
+      },
+      {
+        "title": "ML Engineer",
+        "confidence": 0.88
+      }
+    ],
+    "domain": "Data Science / ML"
+  }
+}

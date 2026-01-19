@@ -145,6 +145,9 @@ class PipelineOrchestrator:
                 editor_data = await self.star_editor.polish(draft_data, research_data)
                 if editor_data.get("fallback"):
                     logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
+                
+                # Log the model used for the final output
+                logger.info(f"[ORCHESTRATOR] StarEditor completed. Model: {editor_data.get('model_used', 'unknown')}")
             except Exception as e:
                 logger.exception(f"[ORCHESTRATOR] Stage 3 CRITICAL FAILURE: {e}")
                 result["errors"].append(f"StarEditor Exception: {str(e)}")

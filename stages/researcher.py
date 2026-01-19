@@ -95,6 +95,7 @@ class Researcher:
             
             # Parse and validate response
             result = self._parse_response(response)
+            result["model_used"] = self.model # Track model in result
             logger.info(f"[RESEARCHER] Extracted {len(result.get('implied_metrics', []))} metrics, "
                        f"{len(result.get('domain_vocab', []))} domain terms")
             

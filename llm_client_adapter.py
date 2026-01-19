@@ -63,6 +63,12 @@ class LLMClientAdapter:
                 max_tokens=safe_max_tokens
             )
             
+            # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)
+            model_used = result.get("model_used")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[LLM_ADAPTER] Model requested: {model} | Model actually used: {model_used}")
+            
             # Extract response text
             if result.get("success"):
                 data = result.get("data", {})

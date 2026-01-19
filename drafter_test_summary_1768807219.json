@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-01-18T23:20:19.692838",
+  "test_type": "Realistic Drafter Test",
+  "resume": "Data Scientist",
+  "target_job": "Senior ML Engineer",
+  "models_tested": [
+    "MiniMax M2.1",
+    "DeepSeek v3.2",
+    "Claude 3 Haiku",
+    "Xiaomi MiMo v2 Flash"
+  ],
+  "results": [
+    {
+      "success": false,
+      "model": "MiniMax M2.1",
+      "error": "API Error 401: {\"error\":{\"message\":\"No cookie auth credentials found\",\"code\":401}}"
+    },
+    {
+      "success": false,
+      "model": "DeepSeek v3.2",
+      "error": "API Error 401: {\"error\":{\"message\":\"No cookie auth credentials found\",\"code\":401}}"
+    },
+    {
+      "success": false,
+      "model": "Claude 3 Haiku",
+      "error": "API Error 401: {\"error\":{\"message\":\"No cookie auth credentials found\",\"code\":401}}"
+    },
+    {
+      "success": false,
+      "model": "Xiaomi MiMo v2 Flash",
+      "error": "API Error 401: {\"error\":{\"message\":\"No cookie auth credentials found\",\"code\":401}}"
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "timestamp": "2026-01-18T20:38:35.355550",
+  "models_tested": [
+    "DeepSeek v3.2",
+    "Grok 4.1 Fast",
+    "Xiaomi MiMo v2 Flash",
+    "Claude 3 Haiku"
+  ],
+  "stages": [
+    "researcher",
+    "drafter",
+    "star_editor"
+  ],
+  "results": [
+    {
+      "model_name": "DeepSeek v3.2",
+      "model_slug": "deepseek/deepseek-v3.2",
+      "total_cost": 0.0009168,
+      "total_tokens": 1584,
+      "avg_response_time": 20.823882182439167,
+      "avg_quality_score": 1.0,
+      "success_rate": 1.0,
+      "cost_per_token": 5.787878787878787e-07,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 0.0006207,
+          "tokens": 962,
+          "response_time": 43.38845229148865,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 0.00011925,
+          "tokens": 271,
+          "response_time": 9.640804290771484,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 0.00017685,
+          "tokens": 351,
+          "response_time": 9.442389965057373,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "model_name": "Grok 4.1 Fast",
+      "model_slug": "x-ai/grok-4.1-fast",
+      "total_cost": 6.777,
+      "total_tokens": 7393,
+      "avg_response_time": 24.308558861414593,
+      "avg_quality_score": 0.9666666666666667,
+      "success_rate": 1.0,
+      "cost_per_token": 0.0009166779385905586,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 1.1889,
+          "tokens": 1408,
+          "response_time": 11.379339456558228,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 2.7939000000000003,
+          "tokens": 2992,
+          "response_time": 36.97311544418335,
+          "quality_score": 0.8999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 2.7942,
+          "tokens": 2993,
+          "response_time": 24.573221683502197,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "model_name": "Xiaomi MiMo v2 Flash",
+      "model_slug": "xiaomi/mimo-v2-flash",
+      "total_cost": 0.44009999999999994,
+      "total_tokens": 1787,
+      "avg_response_time": 10.390518426895142,
+      "avg_quality_score": 1.0,
+      "success_rate": 1.0,
+      "cost_per_token": 0.00024627867935086734,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 0.21239999999999998,
+          "tokens": 828,
+          "response_time": 14.370465517044067,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 0.15259999999999999,
+          "tokens": 608,
+          "response_time": 9.613738059997559,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 0.0751,
+          "tokens": 351,
+          "response_time": 7.187351703643799,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    },
+    {
+      "model_name": "Claude 3 Haiku",
+      "model_slug": "anthropic/claude-3-haiku",
+      "total_cost": 0.0007815000000000001,
+      "total_tokens": 1018,
+      "avg_response_time": 1.7573861281077068,
+      "avg_quality_score": 0.9666666666666667,
+      "success_rate": 1.0,
+      "cost_per_token": 7.676817288801572e-07,
+      "stages": [
+        {
+          "stage": "researcher",
+          "cost": 0.000319,
+          "tokens": 408,
+          "response_time": 2.027773141860962,
+          "quality_score": 1.0,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "drafter",
+          "cost": 0.000182,
+          "tokens": 264,
+          "response_time": 1.4219114780426025,
+          "quality_score": 0.8999999999999999,
+          "success": true,
+          "error": ""
+        },
+        {
+          "stage": "star_editor",
+          "cost": 0.00028050000000000004,
+          "tokens": 346,
+          "response_time": 1.8224737644195557,
+          "quality_score": 0.9999999999999999,
+          "success": true,
+          "error": ""
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_tests": 12,
+    "successful_tests": 12,
+    "overall_success_rate": 1.0,
+    "best_cost_model": "Claude 3 Haiku",
+    "best_quality_model": "DeepSeek v3.2",
+    "fastest_model": "Claude 3 Haiku",
+    "most_cost_efficient": "DeepSeek v3.2"
+  },
+  "recommendations": [
+    "\ud83d\udcb0 COST LEADER: Claude 3 Haiku at $0.000782 total ($0.00000077 per token)",
+    "\ud83c\udfc6 QUALITY LEADER: DeepSeek v3.2 with 1.00/1.0 average quality",
+    "\u26a1 SPEED LEADER: Claude 3 Haiku at 1.76s average response time",
+    "\ud83c\udfaf BEST OVERALL: DeepSeek v3.2 - Best cost efficiency at $0.00000058 per token",
+    "\n\ud83d\udcca COST FOR 1000 PIPELINE RUNS:",
+    "   Claude 3 Haiku: $0.78",
+    "   DeepSeek v3.2: $0.92",
+    "   Xiaomi MiMo v2 Flash: $440.10",
+    "   Grok 4.1 Fast: $6777.00"
+  ]
+}

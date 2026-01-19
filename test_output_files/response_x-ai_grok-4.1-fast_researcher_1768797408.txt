@@ -1,0 +1,27 @@
+Model: x-ai/grok-4.1-fast
+Stage: researcher
+Tokens Used: 313 in / 1095 out
+Response Time: 11.38s
+==================================================
+{
+  "gap_analysis": [
+    "Node.js: No mention of Node.js experience or skills; resume lists Python as backend technology instead. Job requires 5+ years with React AND Node.js.",
+    "Experience duration: Resume shows 4 years (2020-2024) at TechCorp; job requires 5+ years specifically with React/Node.js.",
+    "Azure: Job mentions AWS/Azure for cloud; resume only lists AWS (partial match, but Azure exposure missing).",
+    "Full-stack emphasis: Strong React and backend (Python) but lacks Node.js for backend full-stack alignment."
+  ],
+  "implied_skills": [
+    "Proficiency in Node.js for backend development (e.g., Express.js, APIs).",
+    "5+ years combined React/Node.js full-stack experience.",
+    "Cloud-agnostic skills (AWS or Azure deployment/management).",
+    "Integration of microservices with React/Node.js stacks."
+  ],
+  "action_plan": [
+    "Upskill in Node.js: Complete online courses (e.g., freeCodeCamp Node.js/Express, Udemy 'Node.js - The Complete Guide') and build 2-3 full-stack projects (React + Node.js + AWS) to gain hands-on experience. Target 1-2 months.",
+    "Quantify prior experience: Research and add pre-2020 roles or freelance to resume to meet 5+ years threshold; emphasize transferable Python backend skills to Node.js (highlight similarities in async programming).",
+    "Showcase projects: Create a GitHub portfolio with microservices using React, Node.js, Docker/Kubernetes on AWS. Deploy a demo app serving simulated high traffic.",
+    "Tailor resume/cover letter: Map existing microservices/leadership to job reqs; add 'Quick learner in Node.js (self-projects)' and quantify impacts (e.g., 'Led microservices scalable to 1M+ users, adaptable to Node.js ecosystems').",
+    "Certifications/Networking: Earn AWS Certified Developer (leverage existing AWS) or Node.js certs; attend meetups/LinkedIn outreach to Tech Innovations for Azure exposure.",
+    "Interview prep: Practice Node.js questions (e.g., event loop, npm); prepare stories bridging Python to Node.js via personal projects."
+  ]
+}

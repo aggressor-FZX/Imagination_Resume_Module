@@ -177,6 +177,7 @@ Research Insights:
             
             # Parse and validate response
             result = self._parse_response(response, experiences)
+            result["model_used"] = self.model # Track model in result
             logger.info(f"[DRAFTER] Created {self._count_bullets(result)} STAR bullets "
                        f"with {seniority_level} seniority")
             

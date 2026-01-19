@@ -1,0 +1,11 @@
+Model: anthropic/claude-3-haiku
+Stage: star_editor
+Tokens Used: 152 in / 194 out
+Response Time: 1.82s
+==================================================
+Here is the resume data polished into clean, ATS-friendly Markdown format:
+
+{
+  "final_markdown": "# John Doe\n\n## Experience\n\n### Senior Developer, TechCorp Inc. (2020-2024)\n- Led development of microservices architecture serving 1M+ users\n- Optimized database queries reducing response time by 40%\n- Mentored 5 junior developers and conducted code reviews\n\n## Skills\n- Python\n- React\n- AWS\n- Docker\n- Kubernetes",
+  "editorial_notes": "The resume data has been formatted into a clean, ATS-friendly Markdown format. All labels have been removed, and the information has been presented in a professional and organized manner. The skills section has been formatted as a bulleted list."
+}

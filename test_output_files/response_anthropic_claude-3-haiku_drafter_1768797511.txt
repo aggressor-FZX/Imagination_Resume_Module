@@ -1,0 +1,15 @@
+Model: anthropic/claude-3-haiku
+Stage: drafter
+Tokens Used: 148 in / 116 out
+Response Time: 1.42s
+==================================================
+{
+  "gap_bridging": [
+    "Developed microservices architecture to serve 1 million+ users, demonstrating strong technical leadership and scalability expertise",
+    "Mentored 5 junior developers, contributing to team growth and knowledge sharing",
+    "Conducted code reviews to ensure high-quality standards and best practices"
+  ],
+  "metric_improvements": [
+    "Optimized database queries, reducing response time by 40% and enhancing application performance"
+  ]
+}

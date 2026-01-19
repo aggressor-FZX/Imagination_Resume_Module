@@ -1,0 +1,58 @@
+======================================================================
+MODEL: Xiaomi MiMo v2 Flash
+======================================================================
+Tokens: 847 in / 308 out
+Cost: $0.177100
+======================================================================
+
+REWRITTEN RESUME BULLETS:
+----------------------------------------------------------------------
+
+**Data Scientist** at *FinTech Analytics*
+• Engineered a churn prediction model using TensorFlow and Scikit-learn, achieving 87% accuracy and saving $2M annually in customer retention costs
+• Architected automated ETL pipelines and A/B testing frameworks, reducing manual reporting time by 20 hours/week and increasing conversion rates by 12%
+• Built real-time analytics dashboards using Python and Tableau, processing high-volume data streams for C-suite executive decision-making
+
+**Data Analyst** at *Retail Insights*
+• Analyzed large-scale customer behavior data for 1M+ users using Python and SQL, identifying key purchasing patterns to drive business strategy
+• Developed forecasting models for inventory management, reducing waste by 18% through statistical machine learning techniques
+• Collaborated with cross-functional teams to optimize marketing campaign targeting, applying data-driven insights to improve ROI
+
+
+======================================================================
+RAW JSON OUTPUT:
+======================================================================
+{
+  "rewritten_experiences": [
+    {
+      "company": "FinTech Analytics",
+      "role": "Data Scientist",
+      "bullets": [
+        "Engineered a churn prediction model using TensorFlow and Scikit-learn, achieving 87% accuracy and saving $2M annually in customer retention costs",
+        "Architected automated ETL pipelines and A/B testing frameworks, reducing manual reporting time by 20 hours/week and increasing conversion rates by 12%",
+        "Built real-time analytics dashboards using Python and Tableau, processing high-volume data streams for C-suite executive decision-making"
+      ],
+      "metrics_used": [
+        "87% accuracy",
+        "$2M savings",
+        "20 hours/week",
+        "12% increase"
+      ]
+    },
+    {
+      "company": "Retail Insights",
+      "role": "Data Analyst",
+      "bullets": [
+        "Analyzed large-scale customer behavior data for 1M+ users using Python and SQL, identifying key purchasing patterns to drive business strategy",
+        "Developed forecasting models for inventory management, reducing waste by 18% through statistical machine learning techniques",
+        "Collaborated with cross-functional teams to optimize marketing campaign targeting, applying data-driven insights to improve ROI"
+      ],
+      "metrics_used": [
+        "1M+ users",
+        "18% reduction"
+      ]
+    }
+  ],
+  "seniority_applied": "mid",
+  "quantification_score": 0.95
+}

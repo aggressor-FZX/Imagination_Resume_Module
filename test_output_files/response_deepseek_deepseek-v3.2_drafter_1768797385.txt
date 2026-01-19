@@ -1,0 +1,13 @@
+Model: deepseek/deepseek-v3.2
+Stage: drafter
+Tokens Used: 140 in / 131 out
+Response Time: 9.64s
+==================================================
+{
+  "gap_bridging": "These resume bullets bridge technical expertise with leadership and business impact, highlighting both hands-on development skills and strategic contributions. They demonstrate scalability, performance optimization, and team development—key areas valued in senior roles.",
+  "metric_improvements": [
+    "Scaled microservices architecture to support over 1 million active users, ensuring system reliability and uptime.",
+    "Optimized critical database queries, reducing average response time by 40% and improving overall application performance.",
+    "Mentored and guided 5 junior developers through code reviews and technical training, accelerating team productivity and skill development."
+  ]
+}

@@ -1,0 +1,58 @@
+======================================================================
+MODEL: Claude 3 Haiku
+======================================================================
+Tokens: 970 in / 362 out
+Cost: $0.000695
+======================================================================
+
+REWRITTEN RESUME BULLETS:
+----------------------------------------------------------------------
+
+**Data Scientist** at *FinTech Analytics*
+• Developed a churn prediction model using TensorFlow, achieving 87% accuracy and saving the company $2M annually in customer retention
+• Architected a real-time analytics dashboard using Tableau and Python, processing 10M+ daily events and providing C-suite executives with actionable insights
+• Implemented an A/B testing framework that increased conversion rates by 12%, demonstrating expertise in deploying ML models in production
+
+**Data Analyst** at *Retail Insights*
+• Analyzed customer behavior data for 1M+ users, identifying key purchasing patterns to inform strategic decision-making
+• Developed forecasting models for inventory management using statistical machine learning techniques, reducing waste by 18%
+• Collaborated with the marketing team to optimize campaign targeting, showcasing experience in applying ML to real-world business problems
+
+
+======================================================================
+RAW JSON OUTPUT:
+======================================================================
+{
+  "rewritten_experiences": [
+    {
+      "company": "FinTech Analytics",
+      "role": "Data Scientist",
+      "bullets": [
+        "Developed a churn prediction model using TensorFlow, achieving 87% accuracy and saving the company $2M annually in customer retention",
+        "Architected a real-time analytics dashboard using Tableau and Python, processing 10M+ daily events and providing C-suite executives with actionable insights",
+        "Implemented an A/B testing framework that increased conversion rates by 12%, demonstrating expertise in deploying ML models in production"
+      ],
+      "metrics_used": [
+        "87% accuracy",
+        "$2M savings",
+        "10M+ daily events",
+        "12% increase in conversion rates"
+      ]
+    },
+    {
+      "company": "Retail Insights",
+      "role": "Data Analyst",
+      "bullets": [
+        "Analyzed customer behavior data for 1M+ users, identifying key purchasing patterns to inform strategic decision-making",
+        "Developed forecasting models for inventory management using statistical machine learning techniques, reducing waste by 18%",
+        "Collaborated with the marketing team to optimize campaign targeting, showcasing experience in applying ML to real-world business problems"
+      ],
+      "metrics_used": [
+        "1M+ users",
+        "18% reduction in waste"
+      ]
+    }
+  ],
+  "seniority_applied": "mid",
+  "quantification_score": 0.95
+}

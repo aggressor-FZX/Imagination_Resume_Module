@@ -1,0 +1,60 @@
+======================================================================
+MODEL: DeepSeek v3.2
+======================================================================
+Tokens: 836 in / 336 out
+Cost: $0.000377
+======================================================================
+
+REWRITTEN RESUME BULLETS:
+----------------------------------------------------------------------
+
+**Data Scientist** at *FinTech Analytics*
+• Engineered a churn prediction model using statistical machine learning, achieving 87% accuracy and saving $2M annually in customer retention costs.
+• Architected a real-time analytics pipeline processing millions of events, delivering insights via a Tableau dashboard used by C-suite executives for strategic decisions.
+• Designed and implemented an A/B testing framework that increased conversion rates by 12%, demonstrating rigorous model evaluation and benchmarking.
+• Automated ETL pipelines using Python, reducing manual reporting time by 20 hours per week and showcasing scalable data preparation for model training.
+
+**Data Analyst** at *Retail Insights*
+• Analyzed customer behavior data for a distributed user base of 1M+ users, identifying key patterns to inform scalable AI model development.
+• Built forecasting models for inventory management using traditional ML techniques, reducing operational waste by 18% through optimized predictions.
+• Collaborated cross-functionally to optimize campaign targeting, applying data-driven insights that align with end-to-end AI system deployment workflows.
+
+
+======================================================================
+RAW JSON OUTPUT:
+======================================================================
+{
+  "rewritten_experiences": [
+    {
+      "company": "FinTech Analytics",
+      "role": "Data Scientist",
+      "bullets": [
+        "Engineered a churn prediction model using statistical machine learning, achieving 87% accuracy and saving $2M annually in customer retention costs.",
+        "Architected a real-time analytics pipeline processing millions of events, delivering insights via a Tableau dashboard used by C-suite executives for strategic decisions.",
+        "Designed and implemented an A/B testing framework that increased conversion rates by 12%, demonstrating rigorous model evaluation and benchmarking.",
+        "Automated ETL pipelines using Python, reducing manual reporting time by 20 hours per week and showcasing scalable data preparation for model training."
+      ],
+      "metrics_used": [
+        "87% accuracy",
+        "$2M savings",
+        "12% increase",
+        "20 hours/week reduction"
+      ]
+    },
+    {
+      "company": "Retail Insights",
+      "role": "Data Analyst",
+      "bullets": [
+        "Analyzed customer behavior data for a distributed user base of 1M+ users, identifying key patterns to inform scalable AI model development.",
+        "Built forecasting models for inventory management using traditional ML techniques, reducing operational waste by 18% through optimized predictions.",
+        "Collaborated cross-functionally to optimize campaign targeting, applying data-driven insights that align with end-to-end AI system deployment workflows."
+      ],
+      "metrics_used": [
+        "1M+ users",
+        "18% waste reduction"
+      ]
+    }
+  ],
+  "seniority_applied": "mid",
+  "quantification_score": 0.95
+}

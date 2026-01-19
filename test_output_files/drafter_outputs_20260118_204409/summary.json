@@ -1,0 +1,50 @@
+{
+  "timestamp": "20260118_204409",
+  "output_directory": "drafter_outputs_20260118_204409",
+  "test_scenario": "Data Scientist \u2192 AI Engineer (Armada)",
+  "total_tests": 3,
+  "successful_tests": 3,
+  "results": [
+    {
+      "model": "DeepSeek v3.2",
+      "slug": "deepseek/deepseek-v3.2",
+      "success": true,
+      "tokens_in": 836,
+      "tokens_out": 336,
+      "cost": 0.00037739999999999996,
+      "response_time": 30.571309328079224,
+      "quality_score": 1.0,
+      "output_file": "drafter_outputs_20260118_204409/DeepSeek_v3.2_output.txt",
+      "error": ""
+    },
+    {
+      "model": "Claude 3 Haiku",
+      "slug": "anthropic/claude-3-haiku",
+      "success": true,
+      "tokens_in": 970,
+      "tokens_out": 362,
+      "cost": 0.000695,
+      "response_time": 3.046312093734741,
+      "quality_score": 1.0,
+      "output_file": "drafter_outputs_20260118_204409/Claude_3_Haiku_output.txt",
+      "error": ""
+    },
+    {
+      "model": "Xiaomi MiMo v2 Flash",
+      "slug": "xiaomi/mimo-v2-flash",
+      "success": true,
+      "tokens_in": 847,
+      "tokens_out": 308,
+      "cost": 0.17709999999999998,
+      "response_time": 8.388064861297607,
+      "quality_score": 1.0,
+      "output_file": "drafter_outputs_20260118_204409/Xiaomi_MiMo_v2_Flash_output.txt",
+      "error": ""
+    }
+  ],
+  "recommendations": {
+    "best_cost": "DeepSeek v3.2 ($0.000377)",
+    "best_quality": "DeepSeek v3.2 (1.00/1.0)",
+    "fastest": "Claude 3 Haiku (3.05s)"
+  }
+}

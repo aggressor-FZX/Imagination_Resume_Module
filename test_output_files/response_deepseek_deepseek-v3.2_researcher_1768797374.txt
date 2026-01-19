@@ -1,0 +1,105 @@
+Model: deepseek/deepseek-v3.2
+Stage: researcher
+Tokens Used: 168 in / 794 out
+Response Time: 43.39s
+==================================================
+```json
+{
+  "gap_analysis": {
+    "explicit_gaps": [
+      {
+        "skill": "Node.js",
+        "severity": "high",
+        "reason": "Job ad requires 5+ years experience with Node.js, but resume shows only Python and React. Node.js is a core requirement for full stack role."
+      }
+    ],
+    "implicit_gaps": [
+      {
+        "skill": "Full Stack Experience Visibility",
+        "severity": "medium",
+        "reason": "Resume emphasizes backend/microservices but doesn't clearly demonstrate frontend expertise beyond React listing. Job title seeks 'Full Stack' engineer."
+      },
+      {
+        "skill": "Azure Experience",
+        "severity": "low",
+        "reason": "Job ad mentions AWS/Azure, but resume only shows AWS. While AWS may suffice, Azure knowledge gap exists."
+      }
+    ],
+    "strengths": [
+      {
+        "skill": "Microservices Architecture",
+        "alignment": "excellent",
+        "reason": "Resume explicitly mentions leading microservices development for large-scale system (1M+ users)."
+      },
+      {
+        "skill": "AWS Cloud Infrastructure",
+        "alignment": "strong",
+        "reason": "AWS listed in skills matches job requirement."
+      },
+      {
+        "skill": "Leadership Experience",
+        "alignment": "strong",
+        "reason": "Mentoring 5 junior developers and conducting code reviews demonstrates leadership."
+      }
+    ]
+  },
+  "implied_skills": [
+    "Database optimization (implied from query optimization achievement)",
+    "System scalability experience (implied from 1M+ users mention)",
+    "DevOps/containerization skills (implied from Docker/Kubernetes)",
+    "Team collaboration and mentoring abilities"
+  ],
+  "action_plan": [
+    {
+      "priority": "urgent",
+      "action": "Bridge Node.js gap",
+      "steps": [
+        "Complete Node.js crash course or certification within 2 weeks",
+        "Build 2-3 portfolio projects using Node.js with React frontend",
+        "Highlight any transferable JavaScript/backend concepts from Python experience"
+      ],
+      "timeline": "2-4 weeks"
+    },
+    {
+      "priority": "high",
+      "action": "Reframe resume for full stack positioning",
+      "steps": [
+        "Add specific frontend achievements to experience section",
+        "Update title to 'Senior Full Stack Engineer' or similar",
+        "Quantify React experience (years, projects, metrics)"
+      ],
+      "timeline": "1 week"
+    },
+    {
+      "priority": "medium",
+      "action": "Address Azure knowledge gap",
+      "steps": [
+        "Complete Azure Fundamentals certification (AZ-900)",
+        "Compare AWS services used with Azure equivalents",
+        "Add 'Cloud Platforms: AWS (primary), Azure (familiar)' to skills"
+      ],
+      "timeline": "3-4 weeks"
+    },
+    {
+      "priority": "medium",
+      "action": "Leverage implied skills in application",
+      "steps": [
+        "Explicitly mention database optimization in cover letter",
+        "Quantify scalability achievements (1M+ users, 40% performance improvement)",
+        "Connect Docker/Kubernetes experience to DevOps requirements"
+      ],
+      "timeline": "1 week"
+    },
+    {
+      "priority": "low",
+      "action": "Prepare for interview scenarios",
+      "steps": [
+        "Practice explaining Python-to-Node.js transition story",
+        "Prepare examples of full stack projects (frontend + backend)",
+        "Research Tech Innovations Inc.'s tech stack to tailor responses"
+      ],
+      "timeline": "Ongoing"
+    }
+  ]
+}
+```

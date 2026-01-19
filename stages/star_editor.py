@@ -94,6 +94,7 @@ class StarEditor:
             
             # Parse and validate response
             result = self._parse_response(response)
+            result["model_used"] = self.model # Track model in result
             
             # Apply hallucination guard
             result = self._apply_hallucination_guard(result, experiences)

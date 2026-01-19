@@ -1,0 +1,72 @@
+Model: xiaomi/mimo-v2-flash
+Stage: researcher
+Tokens Used: 180 in / 648 out
+Response Time: 14.37s
+==================================================
+```json
+{
+  "gap_analysis": [
+    {
+      "requirement": "5+ years experience with React and Node.js",
+      "candidate_level": "React (implied intermediate, 4 years at TechCorp)",
+      "gap": "Missing Node.js proficiency and potentially insufficient React experience duration",
+      "criticality": "High"
+    },
+    {
+      "2": "Cloud infrastructure (AWS/Azure)",
+      "candidate_level": "AWS (explicitly listed)",
+      "gap": "No Azure experience mentioned",
+      "criticality": "Medium"
+    },
+    {
+      "3": "Microservices architecture",
+      "candidate_level": "Led development of microservices architecture (explicit)",
+      "gap": "None - meets requirement",
+      "criticality": "None"
+    },
+    {
+      "4": "Leadership experience",
+      "candidate_level": "Mentored 5 junior developers and conducted code reviews (explicit)",
+      "gap": "None - meets requirement",
+      "criticality": "None"
+    }
+  ],
+  "implied_skills": [
+    "Python (explicit) - may not be required for this Node.js-focused role",
+    "Docker (explicit) - aligns with cloud infrastructure requirements",
+    "Kubernetes (explicit) - aligns with cloud infrastructure requirements",
+    "Database optimization skills (implied from 40% response time reduction)",
+    "Performance engineering skills (implied from optimization work)",
+    "Team collaboration skills (implied from mentoring)",
+    "Code quality assurance skills (implied from code reviews)"
+  ],
+  "action_plan": {
+    "immediate_actions": [
+      "Enroll in Node.js crash course or bootcamp to build foundational knowledge",
+      "Practice Node.js by building a personal project or contributing to open source",
+      "Research Azure fundamentals and compare with AWS knowledge"
+    ],
+    "short_term_goals": [
+      "Complete 2-3 Node.js tutorials and build a RESTful API or microservice",
+      "Obtain AZ-900 Azure Fundamentals certification (1-2 weeks of study)",
+      "Update resume to emphasize React experience and de-emphasize Python if not relevant"
+    ],
+    "long_term_goals": [
+      "Gain 6 months of hands-on Node.js experience before applying",
+      "Consider AZ-104 Azure Administrator certification for deeper cloud knowledge",
+      "Contribute to a Node.js-based open source project to demonstrate expertise"
+    ],
+    "interview_preparation": [
+      "Prepare to discuss microservices architecture in depth (strength)",
+      "Prepare STAR stories about mentoring and code review processes (strength)",
+      "Be ready to discuss AWS experience and how it translates to Azure",
+      "Practice Node.js coding challenges and system design questions"
+    ],
+    "resume_modifications": [
+      "Add 'React' to skills section if not already present (job requires it)",
+      "Consider adding 'JavaScript' as a skill if proficient",
+      "Quantify mentoring impact (e.g., 'Mentored 5 junior developers, resulting in X% increase in code quality')"
+    ]
+  }
+}
+```

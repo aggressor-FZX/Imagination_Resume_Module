@@ -1,0 +1,21 @@
+Model: anthropic/claude-3-haiku
+Stage: researcher
+Tokens Used: 191 in / 217 out
+Response Time: 2.03s
+==================================================
+{
+  "gap_analysis": [
+    "The resume does not mention experience with Node.js, which is a key requirement for the job ad.",
+    "The resume does not explicitly state leadership experience, which is also a requirement for the job ad."
+  ],
+  "implied_skills": [
+    "The resume shows experience with React, which is a requirement for the job ad.",
+    "The resume shows experience with AWS, which is a requirement for the job ad.",
+    "The resume shows experience with microservices architecture, which is a requirement for the job ad."
+  ],
+  "action_plan": [
+    "Gain experience with Node.js, either through personal projects or by taking an online course.",
+    "Highlight any leadership experience, such as mentoring junior developers or leading a team, in the resume.",
+    "Expand on the microservices architecture experience and cloud infrastructure experience in the resume to demonstrate expertise in these areas."
+  ]
+}

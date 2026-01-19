@@ -1,0 +1,9 @@
+Model: deepseek/deepseek-v3.2
+Stage: star_editor
+Tokens Used: 144 in / 207 out
+Response Time: 9.44s
+==================================================
+{
+  "final_markdown": "## Experience\n\n**Senior Developer**  \nTechCorp Inc. | 2020-2024  \n• Led development of microservices architecture serving 1M+ users  \n• Optimized database queries, reducing response time by 40%  \n• Mentored 5 junior developers and conducted code reviews\n\n## Skills\n\nPython | React | AWS | Docker | Kubernetes",
+  "editorial_notes": "• Reformatted into clean, scannable Markdown sections without labels (e.g., removed 'experience:' and 'skills:' as headers).  \n• Used standard section headers (##) for clear ATS parsing.  \n• Applied consistent bullet formatting with clear role, company, and date presentation.  \n• Skills listed in a single line with pipe separators for optimal ATS readability.  \n• Removed JSON structure and all extraneous formatting from the original data."
+}
