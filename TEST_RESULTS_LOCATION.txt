@@ -1,0 +1,146 @@
+================================================================================
+REALISTIC DRAFTER TEST - COMPLETE RESULTS
+================================================================================
+Date: January 18, 2026
+Location: /home/skystarved/Render_Dockers/Imaginator/
+
+================================================================================
+📄 MAIN ANALYSIS DOCUMENT (START HERE)
+================================================================================
+File: DRAFTER_MODEL_SELECTION_ANALYSIS.md
+- Comprehensive analysis of all 3 models
+- Cost comparison and recommendations
+- Sample outputs from each model
+- Implementation steps for deployment
+
+================================================================================
+📋 ACTUAL RESUME OUTPUTS (The Real Deliverables)
+================================================================================
+
+1. DeepSeek v3.2 (RECOMMENDED - $0.000396 per analysis)
+   File: resume_DeepSeek_v3.2_1768798180.md
+   - Cost: $0.40 per 1,000 analyses
+   - Speed: 16.92s
+   - Quality: 95% quantification score
+   - Tokens: 861 in / 356 out
+   
+   Sample Bullets:
+   • Led development of production churn prediction model achieving 87% accuracy, 
+     generating $2M annual savings in customer retention costs through improved targeting
+   • Architected and implemented A/B testing framework that increased conversion rates 
+     by 12% across multiple product features, establishing standardized experimentation practices
+   • Designed automated ETL pipelines reducing manual reporting time by 20 hours weekly, 
+     enabling real-time analytics for executive decision-making
+   • Mentored junior data scientists on model development best practices and production 
+     deployment workflows, improving team efficiency by 30%
+
+2. Claude 3 Haiku (ALTERNATIVE - $0.000719 per analysis)
+   File: resume_Claude_3_Haiku_1768798184.md
+   - Cost: $0.72 per 1,000 analyses (1.8x more expensive)
+   - Speed: 2.92s (5.8x faster)
+   - Quality: 95% quantification score
+   - Tokens: 961 in / 383 out
+   
+   Sample Bullets:
+   • Led development of an 87% accurate churn prediction model, saving the company 
+     $2M annually in customer retention
+   • Designed and implemented a real-time analytics dashboard using Tableau and Python, 
+     which was adopted by the C-suite executives
+   • Spearheaded the implementation of an A/B testing framework that increased conversion 
+     rates by 12%
+   • Automated ETL pipelines, reducing manual reporting time by 20 hours per week and 
+     improving operational efficiency
+
+3. Xiaomi MiMo v2 Flash (NOT RECOMMENDED - $0.184900 per analysis)
+   File: resume_Xiaomi_MiMo_v2_Flash_1768798195.md
+   - Cost: $184.90 per 1,000 analyses (467x more expensive than DeepSeek)
+   - Speed: 9.69s
+   - Quality: 92% quantification score
+   - Tokens: 877 in / 324 out
+   
+   Sample Bullets:
+   • Architected and deployed production-grade churn prediction model using TensorFlow 
+     and Scikit-learn, achieving 87% accuracy and directly saving $2M annually in 
+     customer retention revenue
+   • Engineered automated ETL pipelines and ML infrastructure that reduced manual 
+     reporting time by 20 hours/week, enabling scalable data processing for 500K+ 
+     daily transactions
+   • Built real-time analytics dashboard with Tableau and Python for C-suite executives, 
+     establishing a data-driven decision framework that influenced strategic business initiatives
+
+================================================================================
+🔧 RAW API RESPONSES (For Technical Review)
+================================================================================
+- drafter_output_DeepSeek_v3.2_1768798180.json
+- drafter_output_Claude_3_Haiku_1768798184.json
+- drafter_output_Xiaomi_MiMo_v2_Flash_1768798195.json
+
+Each file contains:
+- Model name and slug
+- Timestamp
+- Token usage (input/output)
+- Response time
+- Raw JSON response from API
+
+================================================================================
+📊 TEST SUMMARY
+================================================================================
+File: drafter_test_summary_1768798196.json
+- Complete test metadata
+- All model results
+- Token usage comparison
+- Cost analysis
+
+================================================================================
+🧪 REUSABLE TEST SCRIPT
+================================================================================
+File: realistic_drafter_test.py
+- Simulates real pipeline conditions
+- Uses actual Hermes/FastSVM outputs
+- Tests with real resume/job ad data
+- Saves all outputs automatically
+- Can be re-run anytime for regression testing
+
+Usage:
+  export OPENROUTER_API_KEY_1=your_key
+  python realistic_drafter_test.py
+
+================================================================================
+🎯 QUICK DECISION MATRIX
+================================================================================
+
+For PRODUCTION (Backend Processing):
+  → Use: DeepSeek v3.2
+  → Cost: $0.40 per 1,000 analyses
+  → Quality: 95%
+  → Speed: 16.92s (acceptable for backend)
+
+For REAL-TIME (User-Facing Features):
+  → Use: Claude 3 Haiku
+  → Cost: $0.72 per 1,000 analyses (only 80% more)
+  → Quality: 95%
+  → Speed: 2.92s (instant feedback)
+
+For PREMIUM TIER (If needed):
+  → Use: Claude 3 Haiku (not Xiaomi - too expensive)
+
+================================================================================
+💰 ANNUAL COST IMPACT (10,000 analyses/month)
+================================================================================
+DeepSeek v3.2:    $48/year
+Claude 3 Haiku:   $86.40/year
+Xiaomi MiMo v2:   $22,188/year
+
+Savings with DeepSeek: $22,140/year vs Xiaomi
+
+================================================================================
+✅ NEXT STEPS
+================================================================================
+1. Review DRAFTER_MODEL_SELECTION_ANALYSIS.md
+2. Compare the three resume outputs (resume_*.md files)
+3. Approve DeepSeek v3.2 as primary model
+4. Update pipeline_config.py:
+   OR_SLUG_DRAFTER = "deepseek/deepseek-v3.2"
+5. Deploy to production
+
+================================================================================
