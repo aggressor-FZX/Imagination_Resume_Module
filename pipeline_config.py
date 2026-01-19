@@ -18,13 +18,13 @@ load_dotenv()
 
 # Correct OpenRouter Slugs for the 3-Stage Pipeline
 OR_SLUG_RESEARCHER = "perplexity/sonar-pro"       # Grounded search capability (Optimized)
-OR_SLUG_DRAFTER = "anthropic/claude-3.5-sonnet"     # Best for STAR reasoning
+OR_SLUG_DRAFTER = "xiaomi/mimo-v2-flash"            # Cost-optimized STAR reasoning
 OR_SLUG_STAR_EDITOR = "google/gemini-2.0-flash-001" # High speed, clean Markdown
 
 # Fallback models (in case primary models are unavailable)
 FALLBACK_MODELS = {
     "researcher": ["perplexity/sonar", "google/gemini-2.0-flash-001"],
-    "drafter": ["anthropic/claude-3.5-sonnet", "google/gemini-2.0-pro"],
+    "drafter": ["xiaomi/mimo-v2-flash", "anthropic/claude-3-haiku"],
     "star_editor": ["google/gemini-2.0-flash-001", "anthropic/claude-3-haiku"]
 }
 
@@ -37,8 +37,9 @@ PRICING = {
     "perplexity/sonar": {"input": 0.001, "output": 0.001},
     "google/gemini-2.0-flash-001": {"input": 0.0001, "output": 0.0004}, # Corrected: was 2.5x too high
     "google/gemini-2.0-pro": {"input": 0.00125, "output": 0.0025}, # Needs verification
-    "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # CORRECTED: 2x higher than estimated
-    "anthropic/claude-3-haiku": {"input": 0.00025, "output": 0.00125},
+    "xiaomi/mimo-v2-flash": {"input": 0.00015, "output": 0.0006}, # Current: Ultra-low cost drafter
+    "anthropic/claude-3-haiku": {"input": 0.00025, "output": 0.00125}, # Fallback: Reliable & cheap
+    "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # DEPRECATED: 2x higher than estimated
     "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075} # Added: cheap alternative
 }
 

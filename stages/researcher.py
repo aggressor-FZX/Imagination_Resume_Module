@@ -90,7 +90,7 @@ class Researcher:
                 temperature=self.temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
-                max_tokens=1024  # Ensure sufficient tokens for complex JSON
+                max_tokens=1024  # Token limit for Perplexity Sonar Pro output
             )
             
             # Parse and validate response

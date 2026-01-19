@@ -15,9 +15,19 @@
 
 ## 📊 ACTUAL COSTS PER ANALYSIS
 
-### Current Configuration (Needs Fixing)
+### Current Configuration (UPDATED - Xiaomi MiMo v2 Flash + Perplexity Sonar Pro)
 ```
-Imaginator Pipeline:    $0.0535  (Claude 3.5 Sonnet is expensive!)
+Imaginator Pipeline:    $0.0090  (Xiaomi MiMo v2 Flash + Claude 3 Haiku fallback + Perplexity Sonar Pro)
+Other Services:        $0.0101
+Storage:               $0.0000
+────────────────────────────────
+TOTAL:                 $0.0191
+MARGIN at $0.38:      94.9% ($0.3609)
+```
+
+### Previous Configuration (Claude 3.5 Sonnet - Deprecated)
+```
+Imaginator Pipeline:    $0.0535  (Claude 3.5 Sonnet was expensive!)
 Other Services:        $0.0101
 Storage:               $0.0000
 ────────────────────────────────
@@ -25,23 +35,21 @@ TOTAL:                 $0.0636
 MARGIN at $0.38:      83.3% ($0.3164)
 ```
 
-### Cost-Optimized Configuration (Recommended)
-```
-Imaginator Pipeline:    $0.0025  (Switch to cheaper models)
-Other Services:        $0.0101
-Storage:               $0.0000
-────────────────────────────────
-TOTAL:                 $0.0126
-MARGIN at $0.38:      96.7% ($0.3674)
-```
-
-**SAVINGS:** $0.0431 per analysis by optimizing models!
+**SAVINGS:** $0.0516 per analysis by switching to Xiaomi MiMo v2 Flash!
 
 ---
 
 ## 🔍 OPENROUTER PRICING VERIFICATION
 
-### What We Got Wrong:
+### Current Model Pricing (OpenRouter API):
+| Model | Input | Output | Status |
+|-------|-------|--------|--------|
+| **Xiaomi MiMo v2 Flash** | $0.00015 | $0.0006 | ✓ Current (Drafter) |
+| **Claude 3 Haiku** | $0.00025 | $0.00125 | ✓ Fallback (Drafter) |
+| **Perplexity Sonar Pro** | $0.003 | $0.015 | ✓ Researcher (with token limits) |
+| **Gemini 2.0 Flash** | $0.0001 | $0.0004 | ✓ StarEditor |
+
+### Previous Pricing (Deprecated):
 | Model | Our Config | Actual (OpenRouter API) | Difference |
 |-------|------------|-------------------------|------------|
 | **Claude 3.5 Sonnet** | $0.003/$0.015 | $0.006/$0.030 | **2x higher!** |
@@ -58,16 +66,22 @@ MARGIN at $0.38:      96.7% ($0.3674)
 
 ## 🏗️ PIPELINE COST BREAKDOWN
 
-### Most Expensive Components:
+### Current Pipeline Components (Xiaomi MiMo v2 Flash + Perplexity Sonar Pro):
+1. **Drafter Stage (Xiaomi MiMo v2 Flash):** $0.0009 (10% of pipeline cost)
+2. **Researcher Stage (Perplexity Sonar Pro):** $0.0081 (90% of pipeline cost, with token limits)
+3. **Job Search API:** $0.0061 (10% of total cost)
+4. **StarEditor Stage (Gemini Flash):** $0.0004 (1% of pipeline cost)
+
+### Fallback Strategy:
+- **Primary:** Xiaomi MiMo v2 Flash (ultra-low cost, high quality)
+- **Fallback:** Claude 3 Haiku ($0.0019 per analysis) if primary unavailable
+- **Savings vs Claude 3.5 Sonnet:** **$0.0516 per analysis**
+
+### Previous Configuration (Deprecated):
 1. **Drafter Stage (Claude 3.5 Sonnet):** $0.0450 (71% of pipeline cost)
 2. **Researcher Stage (Perplexity Sonar Pro):** $0.0081 (15% of pipeline cost)
 3. **Job Search API:** $0.0061 (10% of total cost)
 4. **StarEditor Stage (Gemini Flash):** $0.0004 (1% of pipeline cost)
-
-### Cost Optimization Targets:
-1. **Drafter:** Switch from Claude 3.5 Sonnet ($0.0450) to Claude Haiku ($0.0019) - **Save $0.0431**
-2. **Researcher:** Switch from Perplexity Sonar Pro ($0.0081) to Gemini Flash ($0.0002) - **Save $0.0079**
-3. **Total potential savings:** **$0.0510 per analysis**
 
 ---
 
