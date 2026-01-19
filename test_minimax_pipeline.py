@@ -130,7 +130,8 @@ Focus on: Leadership, ML infrastructure, production systems, quantifiable impact
 def test_minimax():
     """Test MiniMax M2.1 with pipeline inputs."""
     
-    api_key = "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"
+    import os
+    api_key = os.getenv("OPENROUTER_API_KEY")
     
     system_prompt, user_prompt = create_drafter_prompt(
         RESUME_DATA, JOB_AD, HERMES_OUTPUT, FASTSVM_OUTPUT
