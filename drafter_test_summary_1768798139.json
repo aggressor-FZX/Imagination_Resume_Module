@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-01-18T20:48:59.893168",
+  "test_type": "Realistic Drafter Test",
+  "resume": "Data Scientist",
+  "target_job": "Senior ML Engineer",
+  "models_tested": [
+    "DeepSeek v3.2",
+    "Claude 3 Haiku",
+    "Xiaomi MiMo v2 Flash"
+  ],
+  "results": [
+    {
+      "success": true,
+      "model": "DeepSeek v3.2",
+      "tokens_in": 861,
+      "tokens_out": 327,
+      "response_time": 19.300527095794678,
+      "parsed": {
+        "rewritten_experiences": [
+          {
+            "company": "FinTech Analytics",
+            "role": "Data Scientist",
+            "bullets": [
+              "Led development of churn prediction model achieving 87% accuracy, generating $2M annual savings in customer retention costs through improved targeting strategies",
+              "Designed and implemented A/B testing framework that increased conversion rates by 12% through systematic experimentation and statistical validation",
+              "Architected automated ETL pipelines reducing manual reporting overhead by 20 hours/week while improving data reliability and accessibility for stakeholders",
+              "Built real-time analytics dashboard using Python and Tableau adopted by C-suite executives for strategic decision-making across the organization"
+            ],
+            "metrics_used": [
+              "87% accuracy",
+              "$2M annual savings",
+              "12% conversion increase",
+              "20 hours/week reduction"
+            ]
+          },
+          {
+            "company": "Retail Insights",
+            "role": "Data Analyst",
+            "bullets": [
+              "Analyzed customer behavior data for 1M+ users, identifying key purchasing patterns that informed product strategy and marketing initiatives",
+              "Developed forecasting models for inventory management that reduced waste by 18% through optimized stock levels and demand prediction",
+              "Collaborated with marketing team to optimize campaign targeting, leveraging data insights to improve ROI and customer engagement metrics"
+            ],
+            "metrics_used": [
+              "1M+ users",
+              "18% waste reduction"
+            ]
+          }
+        ],
+        "seniority_applied": "senior",
+        "quantification_score": 0.95
+      },
+      "raw_file": "drafter_output_DeepSeek_v3.2_1768798125.json",
+      "resume_file": "resume_DeepSeek_v3.2_1768798125.md",
+      "cost": 0.0003744
+    },
+    {
+      "success": false,
+      "model": "Claude 3 Haiku",
+      "error": "Failed to parse JSON response",
+      "raw_file": "drafter_output_Claude_3_Haiku_1768798129.json",
+      "tokens_in": 961,
+      "tokens_out": 368,
+      "response_time": 3.141145944595337
+    },
+    {
+      "success": true,
+      "model": "Xiaomi MiMo v2 Flash",
+      "tokens_in": 877,
+      "tokens_out": 335,
+      "response_time": 8.225086450576782,
+      "parsed": {
+        "rewritten_experiences": [
+          {
+            "company": "FinTech Analytics",
+            "role": "Data Scientist",
+            "bullets": [
+              "Designed and deployed production ML infrastructure for churn prediction models serving 50K+ customers, achieving 87% accuracy and $2M annual retention savings",
+              "Architected automated ETL pipelines and MLOps workflows that reduced manual reporting time by 20 hours/week and enabled real-time model retraining",
+              "Led A/B testing framework implementation across 12+ product features, increasing conversion rates by 12% and establishing ML experimentation standards"
+            ],
+            "metrics_used": [
+              "87% accuracy",
+              "$2M annual savings",
+              "20 hours/week reduction",
+              "12% conversion increase"
+            ]
+          },
+          {
+            "company": "Retail Insights",
+            "role": "Data Analyst",
+            "bullets": [
+              "Built forecasting models for inventory management across 1M+ user dataset, reducing waste by 18% through predictive analytics",
+              "Developed customer behavior analysis systems using Python and SQL, identifying key purchasing patterns for 1M+ users",
+              "Collaborated with cross-functional teams to optimize data pipelines and model deployment strategies"
+            ],
+            "metrics_used": [
+              "18% waste reduction",
+              "1M+ users",
+              "1M+ user dataset"
+            ]
+          }
+        ],
+        "seniority_applied": "senior",
+        "quantification_score": 0.95
+      },
+      "raw_file": "drafter_output_Xiaomi_MiMo_v2_Flash_1768798138.json",
+      "resume_file": "resume_Xiaomi_MiMo_v2_Flash_1768798138.md",
+      "cost": 0.1882
+    }
+  ]
+}

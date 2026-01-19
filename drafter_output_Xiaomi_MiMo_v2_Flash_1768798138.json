@@ -1,0 +1,9 @@
+{
+  "model": "Xiaomi MiMo v2 Flash",
+  "model_slug": "xiaomi/mimo-v2-flash",
+  "timestamp": "2026-01-18T20:48:58.890859",
+  "tokens_in": 877,
+  "tokens_out": 335,
+  "response_time": 8.225086450576782,
+  "raw_response": "```json\n{\n  \"rewritten_experiences\": [\n    {\n      \"company\": \"FinTech Analytics\",\n      \"role\": \"Data Scientist\",\n      \"bullets\": [\n        \"Designed and deployed production ML infrastructure for churn prediction models serving 50K+ customers, achieving 87% accuracy and $2M annual retention savings\",\n        \"Architected automated ETL pipelines and MLOps workflows that reduced manual reporting time by 20 hours/week and enabled real-time model retraining\",\n        \"Led A/B testing framework implementation across 12+ product features, increasing conversion rates by 12% and establishing ML experimentation standards\"\n      ],\n      \"metrics_used\": [\n        \"87% accuracy\",\n        \"$2M annual savings\",\n        \"20 hours/week reduction\",\n        \"12% conversion increase\"\n      ]\n    },\n    {\n      \"company\": \"Retail Insights\",\n      \"role\": \"Data Analyst\",\n      \"bullets\": [\n        \"Built forecasting models for inventory management across 1M+ user dataset, reducing waste by 18% through predictive analytics\",\n        \"Developed customer behavior analysis systems using Python and SQL, identifying key purchasing patterns for 1M+ users\",\n        \"Collaborated with cross-functional teams to optimize data pipelines and model deployment strategies\"\n      ],\n      \"metrics_used\": [\n        \"18% waste reduction\",\n        \"1M+ users\",\n        \"1M+ user dataset\"\n      ]\n    }\n  ],\n  \"seniority_applied\": \"senior\",\n  \"quantification_score\": 0.95\n}\n```"
+}

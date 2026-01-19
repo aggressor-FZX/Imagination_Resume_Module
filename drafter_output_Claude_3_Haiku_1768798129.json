@@ -1,0 +1,9 @@
+{
+  "model": "Claude 3 Haiku",
+  "model_slug": "anthropic/claude-3-haiku",
+  "timestamp": "2026-01-18T20:48:49.663365",
+  "tokens_in": 961,
+  "tokens_out": 368,
+  "response_time": 3.141145944595337,
+  "raw_response": "Here is the rewritten resume in JSON format:\n\n{\n  \"rewritten_experiences\": [\n    {\n      \"company\": \"FinTech Analytics\",\n      \"role\": \"Data Scientist\",\n      \"bullets\": [\n        \"Led development of an 87% accurate churn prediction model, saving the company $2M annually in customer retention\",\n        \"Designed and implemented a real-time analytics dashboard using Tableau and Python, which was adopted by the C-suite executives\",\n        \"Spearheaded the implementation of an A/B testing framework that increased conversion rates by 12%\",\n        \"Automated ETL pipelines, reducing manual reporting time by 20 hours per week\"\n      ],\n      \"metrics_used\": [\n        \"87% accuracy\",\n        \"$2M annual savings\",\n        \"12% increase in conversion rates\",\n        \"20 hours/week reduction in manual reporting\"\n      ]\n    },\n    {\n      \"company\": \"Retail Insights\",\n      \"role\": \"Data Analyst\",\n      \"bullets\": [\n        \"Analyzed customer behavior data for over 1 million users, identifying key purchasing patterns to inform business strategy\",\n        \"Created forecasting models for inventory management, reducing waste by 18%\",\n        \"Collaborated cross-functionally with the marketing team to optimize campaign targeting\"\n      ],\n      \"metrics_used\": [\n        \"1M+ users\",\n        \"18% reduction in waste\"\n      ]\n    }\n  ],\n  \"seniority_applied\": \"senior\",\n  \"quantification_score\": 0.95\n}"
+}

@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-01-18T20:47:55.325552",
+  "test_type": "Realistic Drafter Test",
+  "resume": "Data Scientist",
+  "target_job": "Senior ML Engineer",
+  "models_tested": [
+    "DeepSeek v3.2",
+    "Claude 3 Haiku",
+    "Xiaomi MiMo v2 Flash"
+  ],
+  "results": [
+    {
+      "success": false,
+      "model": "DeepSeek v3.2",
+      "error": "Failed to parse JSON response",
+      "raw_file": "drafter_output_DeepSeek_v3.2_1768798057.json",
+      "tokens_in": 862,
+      "tokens_out": 388,
+      "response_time": 21.114705085754395
+    },
+    {
+      "success": false,
+      "model": "Claude 3 Haiku",
+      "error": "Failed to parse JSON response",
+      "raw_file": "drafter_output_Claude_3_Haiku_1768798061.json",
+      "tokens_in": 961,
+      "tokens_out": 377,
+      "response_time": 3.1004185676574707
+    },
+    {
+      "success": false,
+      "model": "Xiaomi MiMo v2 Flash",
+      "error": "Failed to parse JSON response",
+      "raw_file": "drafter_output_Xiaomi_MiMo_v2_Flash_1768798074.json",
+      "tokens_in": 877,
+      "tokens_out": 335,
+      "response_time": 11.42563796043396
+    }
+  ]
+}

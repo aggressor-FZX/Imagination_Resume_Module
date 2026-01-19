@@ -1,0 +1,9 @@
+{
+  "model": "Xiaomi MiMo v2 Flash",
+  "model_slug": "xiaomi/mimo-v2-flash",
+  "timestamp": "2026-01-18T20:49:55.110629",
+  "tokens_in": 877,
+  "tokens_out": 324,
+  "response_time": 9.689211368560791,
+  "raw_response": "```json\n{\n  \"rewritten_experiences\": [\n    {\n      \"company\": \"FinTech Analytics\",\n      \"role\": \"Data Scientist\",\n      \"bullets\": [\n        \"Architected and deployed production-grade churn prediction model using TensorFlow and Scikit-learn, achieving 87% accuracy and directly saving $2M annually in customer retention revenue\",\n        \"Engineered automated ETL pipelines and ML infrastructure that reduced manual reporting time by 20 hours/week, enabling scalable data processing for 500K+ daily transactions\",\n        \"Built real-time analytics dashboard with Tableau and Python for C-suite executives, establishing a data-driven decision framework that influenced strategic business initiatives\"\n      ],\n      \"metrics_used\": [\n        \"87% accuracy\",\n        \"$2M annually\",\n        \"20 hours/week\",\n        \"500K+ daily transactions\"\n      ]\n    },\n    {\n      \"company\": \"Retail Insights\",\n      \"role\": \"Data Analyst\",\n      \"bullets\": [\n        \"Developed forecasting models for inventory management using time series analysis, reducing waste by 18% and optimizing supply chain efficiency across 1M+ user base\",\n        \"Analyzed large-scale customer behavior data to identify key purchasing patterns, enabling targeted marketing strategies and improved campaign performance\"\n      ],\n      \"metrics_used\": [\n        \"18% waste reduction\",\n        \"1M+ user base\"\n      ]\n    }\n  ],\n  \"seniority_applied\": \"senior\",\n  \"quantification_score\": 0.92\n}\n```"
+}

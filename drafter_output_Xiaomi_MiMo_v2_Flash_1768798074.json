@@ -1,0 +1,9 @@
+{
+  "model": "Xiaomi MiMo v2 Flash",
+  "model_slug": "xiaomi/mimo-v2-flash",
+  "timestamp": "2026-01-18T20:47:54.322994",
+  "tokens_in": 877,
+  "tokens_out": 335,
+  "response_time": 11.42563796043396,
+  "raw_response": "```json\n{\n  \"rewritten_experiences\": [\n    {\n      \"company\": \"FinTech Analytics\",\n      \"role\": \"Data Scientist\",\n      \"bullets\": [\n        \"Led development and deployment of production-grade churn prediction model using TensorFlow and Scikit-learn, achieving 87% accuracy and $2M annual customer retention savings\",\n        \"Architected and automated ETL pipelines for ML feature engineering, reducing manual reporting time by 20 hours/week and enabling real-time model inference at scale\",\n        \"Built scalable analytics infrastructure with Tableau and Python, delivering insights to C-suite executives and supporting data-driven decision making across the organization\"\n      ],\n      \"metrics_used\": [\n        \"87% accuracy\",\n        \"$2M annual savings\",\n        \"20 hours/week reduction\"\n      ]\n    },\n    {\n      \"company\": \"Retail Insights\",\n      \"role\": \"Data Analyst\",\n      \"bullets\": [\n        \"Analyzed customer behavior data for 1M+ users using Python and SQL, identifying key patterns that informed ML feature development and business strategy\",\n        \"Created time-series forecasting models for inventory management, reducing waste by 18% through predictive analytics and data-driven optimization\",\n        \"Collaborated with cross-functional teams to implement A/B testing frameworks, optimizing campaign targeting and conversion metrics\"\n      ],\n      \"metrics_used\": [\n        \"1M+ users\",\n        \"18% waste reduction\",\n        \"Cross-functional collaboration\"\n      ]\n    }\n  ],\n  \"seniority_applied\": \"senior\",\n  \"quantification_score\": 0.95\n}\n```"
+}
