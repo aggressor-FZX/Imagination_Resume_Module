@@ -25,13 +25,13 @@
 
 | Metric | DeepSeek v3.2 | Claude 3 Haiku | Xiaomi MiMo v2 |
 |--------|---------------|----------------|----------------|
-| **Cost** | **$0.000396** ✅ | $0.000719 | $0.184900 |
+| **Cost** | $0.000396 | $0.000719 | **$0.000173** ✅ |
 | **Speed** | 16.92s | **2.92s** ✅ | 9.69s |
 | **Input Tokens** | 861 | 961 | 877 |
 | **Output Tokens** | 356 | 383 | 324 |
 | **Total Tokens** | 1,217 | 1,344 | 1,201 |
 | **Quality Score** | 95% | 95% | 92% |
-| **Cost per Token** | **$0.000000325** ✅ | $0.000000535 | $0.000154 |
+| **Cost per Token** | $0.000000325 | $0.000000535 | **$0.000000144** ✅ |
 
 ---
 
@@ -99,19 +99,19 @@
 
 ---
 
-### 3. **Xiaomi MiMo v2 Flash** - The Expensive Option
-**Cost per Analysis:** $0.184900  
-**Cost for 1,000 Analyses:** $184.90
+### 3. **Xiaomi MiMo v2 Flash** - The Cost Leader (Corrected Pricing)
+**Cost per Analysis:** $0.000173  
+**Cost for 1,000 Analyses:** $0.17
 
 #### Strengths:
+- ✅ **CHEAPEST** - $0.000173 per analysis (2.3x cheaper than DeepSeek!)
 - ✅ **Fast** - 9.69s response time (middle ground)
 - ✅ **Good quality** - 92% quantification score
 - ✅ **Detailed output** - Mentions specific technologies (TensorFlow, Scikit-learn)
 
 #### Weaknesses:
-- ❌ **Extremely expensive** - 467x more expensive than DeepSeek
-- ❌ **Not justified** - Quality doesn't justify the cost premium
-- ❌ **Overkill** - For resume drafting, this is unnecessary
+- ❌ **Slightly lower quality** - 92% vs 95% quantification (marginal difference)
+- ❌ **Slower than Claude** - 9.69s vs 2.92s (but acceptable for backend)
 
 #### Sample Output Quality:
 ```
@@ -129,23 +129,28 @@
 
 ---
 
-## 🏆 Final Recommendation
+## 🏆 Final Recommendation (CORRECTED)
 
-### **Primary Choice: DeepSeek v3.2**
-- **Use Case:** Backend processing, batch resume generation, cost-sensitive operations
-- **Cost:** $0.40 per 1,000 analyses
-- **Quality:** 95% quantification, perfect JSON, no hallucinations
-- **Deployment:** Immediate - no changes needed
+### **Primary Choice: Xiaomi MiMo v2 Flash** ⭐
+- **Use Case:** Cost-optimized backend processing, maximum savings
+- **Cost:** $0.17 per 1,000 analyses ($20.75/year for 10K/month)
+- **Quality:** 92% quantification (only 3% lower than DeepSeek)
+- **Speed:** 9.69s (acceptable for backend)
+- **Deployment:** Immediate - best ROI
 
-### **Secondary Choice: Claude 3 Haiku**
+### **Secondary Choice: DeepSeek v3.2**
+- **Use Case:** If you need 95% quality (vs 92%)
+- **Cost:** $0.40 per 1,000 analyses ($48/year for 10K/month)
+- **Quality:** 95% quantification, perfect JSON
+- **Speed:** 16.92s (slower but acceptable)
+- **Deployment:** Alternative if quality is critical
+
+### **Premium Choice: Claude 3 Haiku**
 - **Use Case:** Real-time user-facing features, instant feedback needed
-- **Cost:** $0.72 per 1,000 analyses (80% more expensive)
+- **Cost:** $0.72 per 1,000 analyses ($86.40/year for 10K/month)
 - **Quality:** 95% quantification, reliable JSON
-- **Deployment:** Use as fallback or for premium tier
-
-### **Avoid: Xiaomi MiMo v2 Flash**
-- **Reason:** 467x more expensive than DeepSeek with no quality justification
-- **Cost:** $184.90 per 1,000 analyses
+- **Speed:** 2.92s (5.8x faster than Xiaomi)
+- **Deployment:** Use for real-time features or premium tier
 
 ---
 
@@ -154,11 +159,11 @@
 ### For 10,000 Resume Analyses:
 | Model | Cost | Annual (assuming 10K/month) |
 |-------|------|---------------------------|
-| DeepSeek v3.2 | $4.00 | $48.00 |
-| Claude 3 Haiku | $7.20 | $86.40 |
-| Xiaomi MiMo v2 | $1,849.00 | $22,188.00 |
+| **Xiaomi MiMo v2** | **$1.73** | **$20.75** |
+| DeepSeek v3.2 | $3.96 | $48.00 |
+| Claude 3 Haiku | $7.19 | $86.40 |
 
-**Savings with DeepSeek:** $22,140/year vs Xiaomi
+**Savings with Xiaomi:** $27.25/year vs DeepSeek, $65.65/year vs Claude
 
 ---
 
@@ -228,16 +233,17 @@ All test files are in `/home/skystarved/Render_Dockers/Imaginator/`:
 
 ---
 
-## ✅ Conclusion
+## ✅ Conclusion (CORRECTED)
 
-**DeepSeek v3.2 is the clear winner** for the Drafter stage:
-- 500x cheaper than Xiaomi
-- 95% quality score (same as Claude)
+**Xiaomi MiMo v2 Flash is the clear winner** for the Drafter stage:
+- **2.3x cheaper than DeepSeek** ($20.75 vs $48/year)
+- **3.8x cheaper than Claude** ($20.75 vs $86.40/year)
+- 92% quality score (only 3% lower than DeepSeek/Claude)
+- Fast enough for backend (9.69s)
 - Reliable, consistent JSON output
-- No hallucinations or safety issues
 - Production-ready
 
-**Recommendation:** Deploy DeepSeek v3.2 immediately as the primary Drafter model.
+**Recommendation:** Deploy Xiaomi MiMo v2 Flash immediately as the primary Drafter model for maximum cost efficiency.
 
 ---
 
