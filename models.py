@@ -43,9 +43,9 @@ class DomainInsights(BaseModel):
 
 class ExperienceEntry(BaseModel):
     """Parsed work experience entry"""
-    title_line: str = Field(..., description="Job title and company")
-    skills: List[str] = Field(..., description="Skills associated with this experience")
-    snippet: str = Field(..., description="Relevant experience description")
+    title_line: Optional[str] = Field(None, description="Job title and company")
+    skills: Optional[List[str]] = Field(None, description="Skills associated with this experience")
+    snippet: Optional[str] = Field(None, description="Relevant experience description")
 
 
 class ProcessedSkills(BaseModel):
