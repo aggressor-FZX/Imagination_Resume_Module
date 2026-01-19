@@ -110,6 +110,12 @@ FASTSVM_OUTPUT = {
 
 # Model configurations
 MODELS = {
+    "MiniMax M2.1": {
+        "slug": "minimax/minimax-m2.1",
+        "input_price": 0.00010,
+        "output_price": 0.00040,
+        "notes": "MiniMax M2.1 - Fast reasoning model"
+    },
     "DeepSeek v3.2": {
         "slug": "deepseek/deepseek-v3.2",
         "input_price": 0.00015,

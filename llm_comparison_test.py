@@ -78,6 +78,13 @@ MODELS = {
         "output_price": 0.30,
         "context": "256K",
         "notes": "MoE beast, #1 open-src SWE-Bench"
+    },
+    "Claude 3 Haiku": {
+        "slug": "anthropic/claude-3-haiku",
+        "input_price": 0.00025,
+        "output_price": 0.00125,
+        "context": "200K",
+        "notes": "Reliable JSON/writing baseline"
     }
 }
 
@@ -133,8 +140,8 @@ class LLMComparisonTest:
             "X-Title": "Imaginator LLM Comparison Test"
         }
     
-    async def call_model(self, model_slug: str, prompt: str, temperature: float = 0.7) -> Dict[str, Any]:
-        """Make API call to OpenRouter with specific model."""
+    async def call_model(self, model_slug: str, prompt: str, temperature: float = 0.7, stage: str = "test") -> Dict[str, Any]:
+        """Make API call to OpenRouter with specific model and 2000 hard limit."""
         start_time = time.time()
         
         try:
@@ -145,7 +152,7 @@ class LLMComparisonTest:
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": temperature,
-                "max_tokens": 2000
+                "max_tokens": 2000  # HARD LIMIT as requested
             }
             
             response = requests.post(
@@ -160,14 +167,26 @@ class LLMComparisonTest:
             if response.status_code == 200:
                 result = response.json()
                 usage = result.get("usage", {})
+                content = result["choices"][0]["message"]["content"]
+                
+                # Save response to file for inspection
+                filename = f"response_{model_slug.replace('/', '_')}_{stage}_{int(time.time())}.txt"
+                with open(filename, "w") as f:
+                    f.write(f"Model: {model_slug}\n")
+                    f.write(f"Stage: {stage}\n")
+                    f.write(f"Tokens Used: {usage.get('prompt_tokens', 0)} in / {usage.get('completion_tokens', 0)} out\n")
+                    f.write(f"Response Time: {response_time:.2f}s\n")
+                    f.write("="*50 + "\n")
+                    f.write(content)
                 
                 return {
                     "success": True,
-                    "content": result["choices"][0]["message"]["content"],
+                    "content": content,
                     "input_tokens": usage.get("prompt_tokens", 0),
                     "output_tokens": usage.get("completion_tokens", 0),
                     "response_time": response_time,
-                    "raw_response": result
+                    "raw_response": result,
+                    "saved_file": filename
                 }
             else:
                 return {
@@ -256,8 +275,8 @@ class LLMComparisonTest:
         print(f"Model: {model['slug']}")
         print(f"Prompt length: {len(prompt)} chars")
         
-        # Call model
-        result = await self.call_model(model["slug"], prompt)
+        # Call model with stage name for file saving
+        result = await self.call_model(model["slug"], prompt, stage=stage)
         
         if result["success"]:
             cost = self.calculate_cost(
@@ -272,6 +291,7 @@ class LLMComparisonTest:
             print(f"   Tokens: {result['input_tokens']} in, {result['output_tokens']} out")
             print(f"   Cost: ${cost:.6f}")
             print(f"   Quality score: {quality:.2f}/1.0")
+            print(f"   Saved to: {result.get('saved_file', 'N/A')}")
             
             return TestResult(
                 model_name=model_name,

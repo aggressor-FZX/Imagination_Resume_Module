@@ -219,9 +219,9 @@ def analyze_credit_system():
     price_per_analysis = 0.38
     
     credit_packages = {
-        "$5": 435,    # credits
-        "$10": 870,   # credits
-        "$25": 2170   # credits
+        "$5": 435,    # credits (0% bonus)
+        "$10": 914,   # credits (+5% bonus)
+        "$25": 2393   # credits (+10% bonus)
     }
     
     # Calculate credit value

@@ -86,11 +86,20 @@ class PipelineOrchestrator:
             stage1_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 1: Researcher")
             
-            research_data = await self.researcher.analyze(job_ad, experiences)
+            try:
+                research_data = await self.researcher.analyze(job_ad, experiences)
+                if "error" in research_data:
+                    logger.error(f"[ORCHESTRATOR] Stage 1 returned error: {research_data['error']}")
+                    result["errors"].append(f"Researcher Error: {research_data['error']}")
+            except Exception as e:
+                logger.exception(f"[ORCHESTRATOR] Stage 1 CRITICAL FAILURE: {e}")
+                result["errors"].append(f"Researcher Exception: {str(e)}")
+                research_data = {"implied_metrics": [], "domain_vocab": [], "fallback": True}
+
             stage1_duration = time.time() - stage1_start
             
             result["stages"]["researcher"] = {
-                "status": "completed",
+                "status": "completed" if "error" not in research_data else "failed",
                 "duration_seconds": stage1_duration,
                 "data": research_data,
                 "summary": self.researcher.get_metrics_summary(research_data)
@@ -106,11 +115,19 @@ class PipelineOrchestrator:
             # Inject Golden Bullets if available
             golden_bullets = kwargs.get("golden_bullets")
             
-            draft_data = await self.drafter.draft(experiences, job_ad, research_data, golden_bullets=golden_bullets)
+            try:
+                draft_data = await self.drafter.draft(experiences, job_ad, research_data, golden_bullets=golden_bullets)
+                if draft_data.get("fallback"):
+                    logger.warning("[ORCHESTRATOR] Stage 2 used fallback logic")
+            except Exception as e:
+                logger.exception(f"[ORCHESTRATOR] Stage 2 CRITICAL FAILURE: {e}")
+                result["errors"].append(f"Drafter Exception: {str(e)}")
+                draft_data = {"rewritten_experiences": [], "fallback": True}
+
             stage2_duration = time.time() - stage2_start
             
             result["stages"]["drafter"] = {
-                "status": "completed",
+                "status": "completed" if not draft_data.get("fallback") else "fallback",
                 "duration_seconds": stage2_duration,
                 "data": draft_data,
                 "summary": self.drafter.get_draft_summary(draft_data)
@@ -124,7 +141,15 @@ class PipelineOrchestrator:
             stage3_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 3: StarEditor")
             
-            editor_data = await self.star_editor.polish(draft_data, research_data)
+            try:
+                editor_data = await self.star_editor.polish(draft_data, research_data)
+                if editor_data.get("fallback"):
+                    logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
+            except Exception as e:
+                logger.exception(f"[ORCHESTRATOR] Stage 3 CRITICAL FAILURE: {e}")
+                result["errors"].append(f"StarEditor Exception: {str(e)}")
+                editor_data = {"final_markdown": "", "fallback": True}
+
             stage3_duration = time.time() - stage3_start
             
             result["stages"]["star_editor"] = {

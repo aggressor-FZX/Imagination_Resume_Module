@@ -97,6 +97,10 @@ async def run_new_pipeline_async(
             critique_score = criticism_data.get("score")
         
         # Build backward-compatible response
+        errors = result.get("errors", [])
+        if errors:
+            logger.error(f"[NEW_PIPELINE] Pipeline encountered {len(errors)} errors: {errors}")
+
         response = {
             "final_written_section_markdown": final_output.get("final_written_section_markdown", ""),
             "final_written_section": final_output.get("final_written_section", ""),
@@ -111,7 +115,7 @@ async def run_new_pipeline_async(
             "pipeline_metrics": {
                 "total_duration_seconds": result.get("metrics", {}).get("total_duration_seconds", 0),
                 "stage_durations": result.get("metrics", {}).get("stage_durations", {}),
-                "errors": result.get("errors", [])
+                "errors": errors
             }
         }
         
