@@ -11,7 +11,7 @@ Based on Alternate_flow_proposal.md recommendations:
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from pipeline_config import OR_SLUG_DRAFTER, TEMPERATURES, TIMEOUTS, get_seniority_config
+from pipeline_config import OR_SLUG_DRAFTER, FALLBACK_MODELS, TEMPERATURES, TIMEOUTS, get_seniority_config
 
 logger = logging.getLogger(__name__)
 
@@ -19,80 +19,83 @@ logger = logging.getLogger(__name__)
 # PROMPT TEMPLATES
 # ============================================================================
 
-def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict, 
+def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict,
                          seniority_level: str, allowed_verbs: List[str],
                          golden_bullets: Optional[List[str]] = None) -> str:
     """
-    Create the drafter prompt with dynamic seniority calibration and golden examples.
-    
-    Args:
-        experiences: User's actual experiences
-        job_ad: Job description text
-        research_data: Output from Researcher stage
-        seniority_level: "junior", "mid", or "senior"
-        allowed_verbs: List of action verbs for this seniority level
-        golden_bullets: Optional list of high-quality example bullets
-        
-    Returns:
-        Formatted system prompt
+    Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
     """
-    # Extract original company names to prevent hallucination
+    # 1. Extract TRUTH constraints
     original_companies = [exp.get("company", "Unknown") for exp in experiences if exp.get("company")]
+    original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
     
-    implied_skills = research_data.get("implied_skills", [])
-    
+    # 2. Format Golden Bullets as "Style Reference Only"
     golden_section = ""
     if golden_bullets:
-        # 1. We bump this to 15 to give a wide variety of "Tech patterns"
-        selected_bullets = golden_bullets[:15]
+        selected_bullets = golden_bullets[:10] # Reduced to 10 to reduce context noise
         bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
         
         golden_section = f"""
-### GOLDEN PATTERN LIBRARY (Analyze & Adapt)
-The following examples demonstrate the perfect "Action -> Tech -> Result" syntax.
-REFERENCE THESE PATTERNS:
+### GOLDEN PATTERN LIBRARY (THE SOURCE OF TRUTH)
+WARNING: The following examples contain FAKE DATA and EXTERNAL COMPANIES.
+USE THEM FOR SYNTAX ONLY. DO NOT COPY THE CONTENT, COMPANY NAMES, OR DATES.
+You must transform the User's experience to match the *grammatical structure* and *density* of these examples.
+DO NOT COPY THE CONTENT. COPY THE SYNTAX.
+
+REFERENCE PATTERNS:
 {bullets_text}
 
-### STRUCTURAL MAPPING INSTRUCTIONS (CRITICAL):
-1. **Identify the Archetype:** Look at the User's raw input. Are they describing a Backend task? Frontend? DevOps? Leadership?
-2. **Find the Match:** Look at the 'GOLDEN PATTERN LIBRARY' above. Find a bullet that describes a similar *type* of work, even if the specific technology is different (e.g., if User has 'Python', look for a 'Java' or 'Ruby' golden bullet).
-3. **Steal the Syntax:** Adopt the sentence structure of the Golden Bullet.
-   - *Golden:* "Refactored [Java] monolith to [Microservices], reducing [Metric]."
-   - *User Input:* "Fixed messy Python scripts."
-   - *Result:* "Refactored legacy [Python] scripts into modular functions, improving code maintainability."
-4. **Metric Inference:** If the user lacks specific numbers, use the Golden Bullet's structure to highlight *qualitative impact* (e.g., "increasing reliability," "automating manual workflows") instead of making up fake numbers.
+### STYLE TRANSFER INSTRUCTIONS (MANDATORY):
+1. **Select a Template:** For every user bullet, find a Golden Bullet that matches the *type* of work (e.g., Migration, Optimization, Leadership).
+2. **Map the Variables:**
+   - Golden: "Reduced [Metric] by [Action] using [Tech]."
+   - User: "I made python scripts to run faster."
+   - Result: "Reduced [processing time] by [optimizing Python scripts] using [multithreading]."
+3. **Kill the Fluff:** Delete weak verbs like "Strategized," "Participated," "Pioneered," "Worked on." Use hard technical verbs (e.g., "Deployed," "Engineered," "Refactored").
 """
 
-    system_prompt = f"""You are an expert Resume Writer. Rewrite the user's experiences into 3-5 STAR bullets.
-SENIORITY TONE: {seniority_level.upper()}
-ALLOWED VERBS: {', '.join(allowed_verbs)}
+    system_prompt = f"""You are an elite Technical Resume Writer. Your goal is to rewrite the user's raw notes into high-impact, metric-driven STAR bullets.
+You are NOT allowed to invent new jobs or change the user's employment history.
+
+SENIORITY LEVEL: {seniority_level.upper()}
+STRICT ACTION VERBS: {', '.join(allowed_verbs)}
 
 {golden_section}
 
-CRITICAL RULES:
-1. USE ONLY the user's actual company names: {', '.join(original_companies) if original_companies else 'User companies'}
-2. DO NOT hallucinate technologies the user didn't mention.
-3. **Structure Mapping:** As defined above, force the user's content into the syntactic structures found in the Golden Examples.
-# ...existing code...
-EXAMPLE FORMATS:
-✓ "Optimized PyTorch inference pipeline using TensorRT to reduce latency by 35% (120ms to 78ms) for 5k+ daily active users."
-✓ "Led migration of legacy monolith to microservices, improving deployment frequency by 200% and reducing downtime 90%."
-✓ "Architected cloud-native data platform on AWS, handling 10TB+ daily data volume with 99.99% availability."
+### *** TRUTH CONSTRAINTS (VIOLATION = FAILURE) ***
+1. **COMPANY NAMES:** You must ONLY use the companies provided in the User Input.
+   - ALLOWED: {json.dumps(original_companies)}
+   - PROHIBITED: Do NOT use company names found in the Job Description or Golden Patterns.
+   - If the User is applying to "Armada", do NOT list "Armada" as a past job.
 
-BAD EXAMPLES (AVOID):
-✗ "Worked on ML projects" (vague)
-✗ "Improved performance" (no metric)
-✗ "ABC Corp project" (hallucination - DON'T USE)
-✗ "Responsible for tasks" (passive voice)
+2. **JOB TITLES:** You must preserve the user's actual role hierarchy.
+   - ALLOWED: {json.dumps(original_titles)}
+   - You may slightly polish titles (e.g., "Programmer" -> "Software Engineer"), but DO NOT promote a "Junior" to "VP".
+
+3. **TECHNOLOGY:** Only use technologies the user explicitly mentioned or strongly implied by the specific task. Do not copy tech stacks from the Golden Bullets.
+
+### CRITICAL RULES:
+1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
+2. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
+3. **No Hallucinations:** Use ONLY the user's actual companies listed above.
+4. **Concrete Tech:** Do not say "cutting-edge tech." Name the specific tool (e.g., "TensorFlow", "Kubernetes") if the user mentioned it or if it is heavily implied by the Research Data.
+
+BAD VS GOOD:
+✗ Weak: "Strategized deployment of models." (Vague, passive)
+✓ Strong: "Deployed deep learning models to 1,000+ edge devices, reducing latency by 90% via quantization." (Specific, metric-driven)
 
 Output JSON Schema:
 {{
   "rewritten_experiences": [
     {{
-      "company": "Original Company Name",
-      "role": "Job Title",
-      "bullets": ["Bullet 1 with metric", "Bullet 2 with metric"],
-      "metrics_used": ["35% latency reduction", "200% deployment frequency"]
+      "company": "MUST MATCH INPUT EXACTLY",
+      "role": "Original or Polished Title",
+      "bullets": [
+        "Strong Action Verb + Specific Tech + Quantifiable Result",
+        "Strong Action Verb + Problem Solved + Benefit"
+      ],
+      "metrics_used": ["90% latency reduction", "10k+ assets"],
+      "style_transfer_rationale": "Mapped user's edge computing note to the Golden Bullet about 'High-availability distributed systems'."
     }}
   ],
   "seniority_applied": "{seniority_level}",
@@ -117,6 +120,7 @@ class Drafter:
         """
         self.llm_client = llm_client
         self.model = OR_SLUG_DRAFTER
+        self.fallback_models = FALLBACK_MODELS.get("drafter", [])
         self.temperature = TEMPERATURES["drafter"]
         self.timeout = TIMEOUTS["drafter"]
         
@@ -165,24 +169,29 @@ Research Insights:
 """
         
         try:
-            # Call LLM with strict JSON schema
+            # Call LLM with strict JSON schema and fallback support
             response = await self.llm_client.call_llm_async(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=self.model,
                 temperature=self.temperature,
                 response_format={"type": "json_object"},
-                timeout=self.timeout
+                timeout=self.timeout,
+                fallback_models=self.fallback_models
             )
             
             # Parse and validate response
             result = self._parse_response(response, experiences)
-            result["model_used"] = self.model # Track model in result
+            
+            # Track model in result (Note: actual model used is logged in adapter)
+            result["model_requested"] = self.model
+            
             logger.info(f"[DRAFTER] Created {self._count_bullets(result)} STAR bullets "
                        f"with {seniority_level} seniority")
             
             # Ensure we have at least some data
             if not result.get("rewritten_experiences"):
+                logger.warning("[DRAFTER] No rewritten experiences generated, using fallback")
                 result["rewritten_experiences"] = []
                 result["total_bullets"] = 0
                 result["quantified_bullets"] = 0
@@ -208,6 +217,10 @@ Research Insights:
             Parsed and validated draft data
         """
         try:
+            if not response or response == "{}":
+                logger.warning("[DRAFTER] Empty response from LLM")
+                return self._create_fallback_output(original_experiences, "mid")
+
             data = json.loads(response)
             
             # Ensure required structure
@@ -227,7 +240,8 @@ Research Insights:
                         "company": exp.get("company", ""),
                         "role": exp.get("role", ""),
                         "bullets": exp.get("bullets", []),
-                        "metrics_used": exp.get("metrics_used", [])
+                        "metrics_used": exp.get("metrics_used", []),
+                        "style_transfer_rationale": exp.get("style_transfer_rationale", "")
                     }
                     # Ensure bullets is a list
                     if not isinstance(validated["bullets"], list):
