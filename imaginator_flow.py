@@ -1656,6 +1656,10 @@ Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prom
             return mock_research
         
         logger.info("[RESEARCHER] Calling DeepSeek v3.2:online with web search enabled (COST-OPTIMIZED)")
+        
+        # Remove enable_web_search from kwargs to avoid conflict with explicit argument
+        kwargs.pop("enable_web_search", None)
+        
         response = await call_llm_async(
             system_prompt,
             user_prompt,
@@ -2484,6 +2488,8 @@ async def run_analysis_async(
         logger.info(f"[ANALYZE_RESUME] Using extracted_skills_json from backend (count: {len(structured_input.get('skills', []))})")
     if not structured_input:
         structured_input = _structured_from_fastsvm(fastsvm_output)
+        print(f"DEBUG: fastsvm_output keys: {list(fastsvm_output.keys()) if isinstance(fastsvm_output, dict) else 'NOT DICT'}")
+        print(f"DEBUG: structured_input: {structured_input}")
         if structured_input:
           logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
     fallback_used = False
@@ -2874,21 +2880,39 @@ async def run_synthesis_async(
         # Log what we're actually sending to the LLM
         logger.info("[SYNTHESIS] Preparing to synthesize %d experiences", len(experiences))
         if not experiences or len(experiences_str) < 50:
-            logger.error("🚨 [SYNTHESIS] NO VALID EXPERIENCES TO SYNTHESIZE! experiences=%d, str_len=%d", len(experiences), len(experiences_str))
-            logger.error("🚨 [SYNTHESIS] analysis_result keys: %s", list(analysis_result.keys()) if isinstance(analysis_result, dict) else "NOT A DICT")
-            logger.error("🚨 [SYNTHESIS] kwargs keys: %s", list(kwargs.keys()))
-            # CRITICAL: Raise error instead of hallucinating
-            raise ValueError(
-                f"SYNTHESIS FAILED: No valid experiences provided. "
-                f"Received {len(experiences)} experiences with total length {len(experiences_str)}. "
-                f"This would result in hallucinated content. Check that analysis_result is passed correctly."
-            )
+            fallback_text = None
+            if isinstance(generated_text, dict):
+                for key in ("generated_text", "final_written_section", "text", "content"):
+                    value = generated_text.get(key)
+                    if isinstance(value, str) and value.strip():
+                        fallback_text = value.strip()
+                        break
+            elif isinstance(generated_text, str) and generated_text.strip():
+                fallback_text = generated_text.strip()
+            if fallback_text:
+                experiences_str = f"• Generated Draft\n  Body: {fallback_text[:2000]}"
+            else:
+                logger.error("🚨 [SYNTHESIS] NO VALID EXPERIENCES TO SYNTHESIZE! experiences=%d, str_len=%d", len(experiences), len(experiences_str))
+                logger.error("🚨 [SYNTHESIS] analysis_result keys: %s", list(analysis_result.keys()) if isinstance(analysis_result, dict) else "NOT A DICT")
+                logger.error("🚨 [SYNTHESIS] kwargs keys: %s", list(kwargs.keys()))
+                raise ValueError(
+                    f"SYNTHESIS FAILED: No valid experiences provided. "
+                    f"Received {len(experiences)} experiences with total length {len(experiences_str)}. "
+                    f"This would result in hallucinated content. Check that analysis_result is passed correctly."
+                )
 
-        system_prompt = "You are an expert resume writer. Return ONLY valid JSON. Your ABSOLUTE PRIORITY is to use the ACTUAL content provided in the 'GENERATED EXPERIENCES'. DO NOT invent companies (like ABC Corp, Acme Corp) or job titles. DO NOT use placeholders."
+        system_prompt = "You are the final resume writing agent. Return ONLY valid JSON. Your ABSOLUTE PRIORITY is to use the ACTUAL content provided in the 'GENERATED EXPERIENCES'. DO NOT invent companies (like ABC Corp, Acme Corp) or job titles. DO NOT use placeholders."
+        critique_payload = None
+        if critique_json is not None:
+            if isinstance(critique_json, (dict, list)):
+                critique_payload = json.dumps(critique_json, indent=2)
+            else:
+                critique_payload = str(critique_json)
+        critique_block = f"\n\nCritique Feedback:\n{critique_payload}\n" if critique_payload else ""
         user_prompt = f"""Synthesize these generated experiences into a single, cohesive resume section.
 
 GENERATED EXPERIENCES (SOURCE MATERIAL - USE THIS ONLY):
-{experiences_str}
+{experiences_str}{critique_block}
 
 Output ONLY structured JSON:
 {{
@@ -2957,25 +2981,21 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
         except Exception as e:
           logger.error("🚨 [SYNTHESIS] JSON PARSE FAILED: %s. Raw: %s", e, result[:200])
           logger.error("🚨 [SYNTHESIS] LLM returned non-JSON output. Attempting to use raw text.")
-          # Check if the raw result contains actual resume content (not generic placeholder)
           forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company"]
-          if result and len(result) > 100 and not any(phrase in result for phrase in forbidden_phrases):
+          if isinstance(result, str) and result.strip() and not any(phrase in result for phrase in forbidden_phrases):
               logger.warning("[SYNTHESIS] Using raw LLM output as final section (appears to be custom content)")
-              return {"final_written_section": result[:2000], "final_written_section_markdown": result[:2000], "final_written_section_provenance": []}
-          else:
-              logger.error("🚨 [SYNTHESIS] RAW LLM OUTPUT CONTAINS GENERIC PLACEHOLDERS - CONSTRUCTING FROM USER EXPERIENCES")
-              # Build from actual user experiences instead of using placeholder
-              fallback_content = "\n\n".join([
-                  f"{exp.get('title_line', 'Position')}\n{exp.get('snippet', '')[:300]}"
-                  for exp in experiences if isinstance(exp, dict)
-              ])[:2000]
-              if fallback_content and len(fallback_content) > 50:
-                  logger.warning("[SYNTHESIS] Using user's actual experiences as fallback (%d chars)", len(fallback_content))
-                  return {"final_written_section": fallback_content, "final_written_section_provenance": []}
-              else:
-                  logger.error("🚨 [SYNTHESIS] NO USER EXPERIENCES FOUND - CANNOT CONSTRUCT RESUME")
-                  error_message = "⚠️ Unable to generate resume rewrite. The AI returned generic placeholder content instead of using your actual work history. Please contact support if this issue persists."
-                  return {"final_written_section": error_message, "final_written_section_provenance": []}
+              return result.strip()
+          logger.error("🚨 [SYNTHESIS] RAW LLM OUTPUT CONTAINS GENERIC PLACEHOLDERS - CONSTRUCTING FROM USER EXPERIENCES")
+          fallback_content = "\n\n".join([
+              f"{exp.get('title_line', 'Position')}\n{exp.get('snippet', '')[:300]}"
+              for exp in experiences if isinstance(exp, dict)
+          ])[:2000]
+          if fallback_content and len(fallback_content) > 50:
+              logger.warning("[SYNTHESIS] Using user's actual experiences as fallback (%d chars)", len(fallback_content))
+              return {"final_written_section": fallback_content, "final_written_section_provenance": []}
+          logger.error("🚨 [SYNTHESIS] NO USER EXPERIENCES FOUND - CANNOT CONSTRUCT RESUME")
+          error_message = "⚠️ Unable to generate resume rewrite. The AI returned generic placeholder content instead of using your actual work history. Please contact support if this issue persists."
+          return {"final_written_section": error_message, "final_written_section_provenance": []}
 
     except Exception as e:
         logger.exception("🚨🚨🚨 [SYNTHESIS] CRITICAL FAILURE: %s", e)

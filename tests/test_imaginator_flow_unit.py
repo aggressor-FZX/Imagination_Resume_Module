@@ -116,6 +116,14 @@ class _DummySettings:
         self.HERMES_AUTH_TOKEN = None
         self.FASTSVM_AUTH_TOKEN = None
         self.CORS_ORIGINS = '*'
+        self.VERBOSE_PIPELINE_LOGS = False
+        self.VERBOSE_MICROSERVICE_LOGS = False
+        self.LOG_INCLUDE_RAW_TEXT = False
+        self.LOG_MAX_TEXT_CHARS = 1000
+
+    @property
+    def api_key(self):
+        return self.IMAGINATOR_AUTH_TOKEN
 
 settings = _DummySettings()
 config_module.settings = settings
@@ -185,12 +193,13 @@ def test_run_generation_fallback_on_decode(monkeypatch, sample_analysis_json):
 
 
 def test_run_criticism_with_mock_llm(monkeypatch):
+    mod.settings.environment = "production"  # Disable internal test mock path
     generated = {
         "gap_bridging": [{"skill_focus": "react", "suggestions": ["A", "B"]}],
         "metric_improvements": [{"skill_focus": "aws", "suggestions": ["C", "D"]}],
     }
 
-    def mock_call_llm(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3, response_format=None, **kwargs):
+    async def mock_call_llm_async(system_prompt, user_prompt, temperature=0.3, max_tokens=1500, max_retries=3, response_format=None, **kwargs):
         return json.dumps(
             {
                 "suggested_experiences": {
@@ -204,7 +213,7 @@ def test_run_criticism_with_mock_llm(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
     out = mod.run_criticism(generated, "Senior Engineer")
     assert "suggested_experiences" in out
     se = out["suggested_experiences"]
@@ -236,19 +245,22 @@ def test_ats_integration_appends_insights(monkeypatch):
 
 
 def test_run_criticism_fallback_transform(monkeypatch):
-    # Force exception in call_llm to hit fallback transform path
-    def mock_call_llm(*args, **kwargs):
+    # Force exception in call_llm_async to hit fallback transform path
+    async def mock_call_llm_async(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(mod, "call_llm", mock_call_llm)
+    monkeypatch.setattr(mod, "call_llm_async", mock_call_llm_async)
 
     generated = {
         "gap_bridging": [{"skill_focus": "react", "suggestions": ["A", "B"]}],
         "metric_improvements": [{"skill_focus": "aws", "suggestions": ["C", "D"]}],
     }
 
-    with pytest.raises(RuntimeError):
-        mod.run_criticism(generated, "Senior Engineer")
+    # Should gracefully return fallback instead of raising exception
+    result = mod.run_criticism(generated, "Senior Engineer")
+    assert "suggested_experiences" in result
+    assert result["suggested_experiences"]["bridging_gaps"] == []
+    assert result["suggested_experiences"]["metric_improvements"] == []
 
 
 def test_validate_output_schema_with_fallbacks(monkeypatch):
@@ -301,8 +313,8 @@ def test_validate_output_schema_with_fallbacks(monkeypatch):
 
 def test_inferred_skills_from_adjacency(tmp_path, monkeypatch):
     adj = {
-        "python": ["django", "flask"],
-        "aws": ["lambda", "ecs"]
+        "python": {"django": 0.8, "flask": 0.7},
+        "aws": {"lambda": 0.9, "ecs": 0.8}
     }
     p = tmp_path / "skill_adjacency.json"
     p.write_text(json.dumps(adj), encoding="utf-8")
@@ -348,6 +360,7 @@ def test_process_structured_skills_confidence_mapping_and_categories():
 
 
 def test_run_analysis_uses_confidence_mapping(monkeypatch):
+    mod.settings.ENABLE_FASTSVM = True
     async def fake_loader(text):
         return {"processed_text": text}
 
@@ -385,6 +398,8 @@ def test_run_analysis_uses_confidence_mapping(monkeypatch):
 
 
 def test_run_analysis_maps_fasts_svm_skill_confidences(monkeypatch):
+    mod.ANALYSIS_CACHE.clear()
+    mod.settings.ENABLE_FASTSVM = True
     async def fake_loader(text):
         return {"processed_text": text}
 
@@ -422,6 +437,8 @@ def test_run_analysis_maps_fasts_svm_skill_confidences(monkeypatch):
 
 
 def test_run_analysis_maps_fasts_svm_dict_items(monkeypatch):
+    mod.ANALYSIS_CACHE.clear()
+    mod.settings.ENABLE_FASTSVM = True
     async def fake_loader(text):
         return {"processed_text": text}
 
@@ -525,6 +542,7 @@ async def test_call_llm_async_retries_gemini(monkeypatch):
 
 
 def test_analysis_cache_hit(monkeypatch):
+    mod.settings.ENABLE_FASTSVM = True
     async def fake_loader(text):
         return {"processed_text": text}
 
@@ -548,6 +566,7 @@ def test_analysis_cache_hit(monkeypatch):
         job_ad="Backend role",
         extracted_skills_json=None,
         confidence_threshold=0.7,
+        skip_enhancement=True,
     )
 
     first = asyncio.run(mod.run_analysis_async(**args))
