@@ -61,7 +61,12 @@ class Researcher:
         self.temperature = TEMPERATURES["researcher"]
         self.timeout = TIMEOUTS["researcher"]
         
-    async def analyze(self, job_ad: str, experiences: Optional[List[Dict]] = None) -> Dict[str, Any]:
+    async def analyze(
+        self,
+        job_ad: str,
+        experiences: Optional[List[Dict]] = None,
+        temperature_override: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """
         Analyze job ad and user profile to extract metrics, vocabulary, and implied skills.
         
@@ -83,11 +88,14 @@ class Researcher:
         
         try:
             # Call LLM with strict JSON schema and optimized parameters
+            temperature = (
+                temperature_override if temperature_override is not None else self.temperature
+            )
             response = await self.llm_client.call_llm_async(
                 system_prompt=RESEARCHER_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 model=self.model,
-                temperature=self.temperature,
+                temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 max_tokens=1024  # Token limit for Perplexity Sonar Pro output

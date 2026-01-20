@@ -22,22 +22,27 @@ logger = logging.getLogger(__name__)
 
 STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. Convert the STAR bullet data into a high-end, ATS-friendly Markdown resume.
 
+### THE FORMULA:
+Your output must be a clean, reverse-chronological list of experiences.
+Each experience MUST follow this visual structure:
+## **Job Title** | **Company Name**
+*Dates | Location*
+- Achievement Bullet 1
+- Achievement Bullet 2
+
 STRICT RULES:
-1. DELETE all STAR/CAR labels (e.g., no "Situation:", no "Result:").
-2. Ensure the formatting is clean Markdown:
-   - Use ## for section headers
-   - Use - for bullet points
-   - Use **bold** for job titles and companies
-   - Use *italic* for dates/locations
-3. NO generic advice or analysis. Output ONLY the resume text.
-4. Ensure every bullet point includes at least one quantifiable metric (%, $, time, scale).
-5. Maintain professional tone appropriate for the seniority level.
+1. **NO BLOCKS OF TEXT:** Do not write paragraphs. Every achievement must be a distinct bullet point starting with a hyphen (-).
+2. **DELETE ALL LABELS:** Remove all "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" labels.
+3. **MANDATORY QUANTIFICATION:** Ensure every bullet point includes a metric (%, $, time, count).
+4. **STYLE TRANSFER:** Maintain the punchy, technical syntax from the input.
+5. **NO LEAKAGE:** Do not include any meta-commentary, "editorial notes" within the markdown, or analysis results. Output ONLY the resume content.
+6. **ANTI-HALLUCINATION:** NEVER list the Target Company (the company from the Job Ad) as an employer. You must ONLY use the company names provided in the user's input data.
 
 Output JSON Schema:
 {
-  "final_markdown": "## Professional Experience...",
-  "final_plain_text": "Professional Experience...",
-  "editorial_notes": "Polished for ATS compliance. Added metrics to 3 bullets."
+  "final_markdown": "## **Software Engineer** | **Google**\\n*2020 - Present*\\n- Deployed CI/CD...",
+  "final_plain_text": "Software Engineer | Google...",
+  "editorial_notes": "Polished for ATS compliance. Ensured bulleted list format."
 }
 """
 
@@ -63,7 +68,7 @@ class StarEditor:
     async def polish(self, draft_data: Dict[str, Any], 
                     research_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Polish STAR draft into final resume format.
+        Polish STAR draft into final resume format with TARGET COMPANY GUARD.
         
         Args:
             draft_data: Output from Drafter stage
@@ -79,7 +84,11 @@ class StarEditor:
         seniority = draft_data.get("seniority_applied", "mid")
         domain_vocab = research_data.get("domain_vocab", [])
         
-        user_prompt = self._create_user_prompt(experiences, seniority, domain_vocab)
+        # EXTRACT TARGET COMPANY from Research Data (e.g., "Armada")
+        target_company = research_data.get("company_name", "")
+        
+        # Create prompt with EXPLICIT warning about the target company
+        user_prompt = self._create_user_prompt(experiences, seniority, domain_vocab, target_company)
         
         try:
             # Call LLM with strict JSON schema
@@ -97,7 +106,13 @@ class StarEditor:
             result["model_used"] = self.model # Track model in result
             
             # Apply hallucination guard
-            result = self._apply_hallucination_guard(result, experiences)
+            # --- CRITICAL FIX: Pass Target Company to Guard ---
+            result = self._apply_hallucination_guard(
+                result, 
+                experiences, 
+                target_company=target_company
+            )
+            # --------------------------------------------------
             
             # Add metadata
             result.update({
@@ -123,7 +138,7 @@ class StarEditor:
             return self._create_fallback_output(experiences, seniority)
     
     def _create_user_prompt(self, experiences: List[Dict], seniority: str, 
-                           domain_vocab: List[str]) -> str:
+                           domain_vocab: List[str], target_company: str = "") -> str:
         """
         Create user prompt for the editor.
         
@@ -131,6 +146,7 @@ class StarEditor:
             experiences: Rewritten experiences from Drafter
             seniority: Seniority level applied
             domain_vocab: Domain vocabulary from Researcher
+            target_company: Target company name to guard against hallucination
             
         Returns:
             Formatted user prompt
@@ -143,6 +159,10 @@ class StarEditor:
         # Add domain vocabulary guidance
         if domain_vocab:
             prompt_parts.append(f"DOMAIN VOCABULARY TO INCORPORATE: {', '.join(domain_vocab[:10])}")
+        
+        # Add SPECIFIC negative constraint for target company
+        if target_company:
+            prompt_parts.append(f"\nCRITICAL: The user is applying to '{target_company}'. DO NOT list '{target_company}' as their employer in the headers unless it explicitly appears in the experience list below.")
         
         # Add experiences
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
@@ -322,28 +342,55 @@ class StarEditor:
         return '\n'.join(cleaned_lines)
     
     def _apply_hallucination_guard(self, result: Dict[str, Any], 
-                                  original_experiences: List[Dict]) -> Dict[str, Any]:
+                                  original_experiences: List[Dict],
+                                  target_company: str = "") -> Dict[str, Any]:
         """
-        Apply hallucination guard to detect and fix placeholder content.
+        Apply hallucination guard to detect and fix placeholder content AND target company bleed.
         
         Args:
             result: Editor result with final_markdown
             original_experiences: Original experiences for validation
+            target_company: Target company name to guard against hallucination
             
         Returns:
             Result with hallucination fixes applied
         """
         markdown = result.get("final_markdown", "")
         
+        # 1. Build list of legitimate companies from input
+        original_companies = []
+        for exp in original_experiences:
+            # Handle various input formats
+            comp = exp.get("company")
+            if not comp and "title_line" in exp:
+                comp = exp.get("title_line", "").split("|")[-1].strip()
+            
+            if comp and comp not in original_companies:
+                original_companies.append(comp)
+        
+        # 2. TARGET COMPANY GUARD (The "Armada" Fix)
+        if target_company:
+            # Check if Target Company appears in a Header format: "| **Armada**" or "| Armada"
+            # But ONLY if the user didn't actually work there (not in original_companies)
+            is_legit_employee = any(target_company.lower() in c.lower() for c in original_companies)
+            
+            if not is_legit_employee:
+                # Regex to find the target company in a header position
+                # Looks for: | **Armada** or | Armada at end of line
+                pattern = re.compile(rf'\|\s*\**{re.escape(target_company)}\**', re.IGNORECASE)
+                
+                if pattern.search(markdown):
+                    logger.warning(f"[STAR_EDITOR] Target company '{target_company}' hallucinated as employer. Fixing...")
+                    
+                    # Replace strictly prohibited company with actual employer or safe fallback
+                    replacement = f"| **{original_companies[0] if original_companies else 'Previous Employer'}**"
+                    markdown = pattern.sub(replacement, markdown)
+                    
+                    result["editorial_notes"] = f"{result.get('editorial_notes', '')} Fixed target company hallucination ({target_company})."
+        
+        # 3. Standard Placeholder Guard (Existing logic)
         if contains_hallucination(markdown):
             logger.warning("[STAR_EDITOR] Hallucination detected in final output")
-            
-            # Extract original company names
-            original_companies = []
-            for exp in original_experiences:
-                company = exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
-                if company and company not in original_companies:
-                    original_companies.append(company)
             
             # Replace placeholder companies with first original company or generic
             replacement = original_companies[0] if original_companies else "Previous Company"
@@ -352,10 +399,11 @@ class StarEditor:
                 # Case-insensitive replacement
                 markdown = re.sub(rf'\b{re.escape(phrase)}\b', replacement, markdown, flags=re.IGNORECASE)
             
-            # Update result
-            result["final_markdown"] = markdown
-            result["final_plain_text"] = re.sub(r'\*\*|\*|##|- ', '', markdown)
             result["editorial_notes"] = f"{result.get('editorial_notes', '')} Hallucination guard applied."
+        
+        # Update result
+        result["final_markdown"] = markdown
+        result["final_plain_text"] = re.sub(r'\*\*|\*|##|- ', '', markdown)
         
         return result
     

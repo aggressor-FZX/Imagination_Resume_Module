@@ -17,7 +17,7 @@ from stages.researcher import Researcher
 from stages.drafter import Drafter
 from stages.star_editor import StarEditor
 from seniority_detector import SeniorityDetector
-from pipeline_config import estimate_cost, TIMEOUTS
+from pipeline_config import estimate_cost, TIMEOUTS, get_temperatures
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +51,15 @@ class PipelineOrchestrator:
             "stage_costs": {}
         }
     
-    async def run_pipeline(self, resume_text: str, job_ad: str, 
-                          experiences: List[Dict], 
-                          openrouter_api_keys: Optional[List[str]] = None,
-                          **kwargs) -> Dict[str, Any]:
+    async def run_pipeline(
+        self,
+        resume_text: str,
+        job_ad: str,
+        experiences: List[Dict],
+        openrouter_api_keys: Optional[List[str]] = None,
+        creativity_mode: Optional[str] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
         """
         Run the complete 3-stage pipeline.
         
@@ -84,12 +89,18 @@ class PipelineOrchestrator:
         }
         
         try:
+            temperatures = get_temperatures(creativity_mode)
+
             # STAGE 1: RESEARCHER - Extract metrics and domain vocabulary
             stage1_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 1: Researcher")
             
             try:
-                research_data = await self.researcher.analyze(job_ad, experiences)
+                research_data = await self.researcher.analyze(
+                    job_ad,
+                    experiences,
+                    temperature_override=temperatures["researcher"],
+                )
                 if "error" in research_data:
                     logger.error(f"[ORCHESTRATOR] Stage 1 returned error: {research_data['error']}")
                     result["errors"].append(f"Researcher Error: {research_data['error']}")
@@ -118,7 +129,13 @@ class PipelineOrchestrator:
             golden_bullets = kwargs.get("golden_bullets")
             
             try:
-                draft_data = await self.drafter.draft(experiences, job_ad, research_data, golden_bullets=golden_bullets)
+                draft_data = await self.drafter.draft(
+                    experiences,
+                    job_ad,
+                    research_data,
+                    golden_bullets=golden_bullets,
+                    temperature_override=temperatures["drafter"],
+                )
                 if draft_data.get("fallback"):
                     logger.warning("[ORCHESTRATOR] Stage 2 used fallback logic")
             except Exception as e:
@@ -144,7 +161,11 @@ class PipelineOrchestrator:
             logger.info("[ORCHESTRATOR] Starting Stage 3: StarEditor")
             
             try:
-                editor_data = await self.star_editor.polish(draft_data, research_data)
+                editor_data = await self.star_editor.polish(
+                    draft_data,
+                    research_data,
+                    temperature_override=temperatures["star_editor"],
+                )
                 if editor_data.get("fallback"):
                     logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
                 

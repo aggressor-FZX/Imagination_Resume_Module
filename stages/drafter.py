@@ -124,9 +124,14 @@ class Drafter:
         self.temperature = TEMPERATURES["drafter"]
         self.timeout = TIMEOUTS["drafter"]
         
-    async def draft(self, experiences: List[Dict], job_ad: str, 
-                   research_data: Dict[str, Any],
-                   golden_bullets: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def draft(
+        self,
+        experiences: List[Dict],
+        job_ad: str,
+        research_data: Dict[str, Any],
+        golden_bullets: Optional[List[str]] = None,
+        temperature_override: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
         
@@ -170,11 +175,14 @@ Research Insights:
         
         try:
             # Call LLM with strict JSON schema and fallback support
+            temperature = (
+                temperature_override if temperature_override is not None else self.temperature
+            )
             response = await self.llm_client.call_llm_async(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=self.model,
-                temperature=self.temperature,
+                temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 fallback_models=self.fallback_models

@@ -18,6 +18,12 @@ class ProcessingStatus(str, Enum):
     FAILED = "failed"
 
 
+class CreativityMode(str, Enum):
+    CONSERVATIVE = "conservative"
+    BALANCED = "balanced"
+    BOLD = "bold"
+
+
 class SkillData(BaseModel):
     """Structured skill data with confidence scores"""
     title: str = Field(..., description="Job title or role")
@@ -102,6 +108,11 @@ class AnalysisRequest(BaseModel):
     )
     domain_insights_json: Optional[str] = Field(
         None, description="JSON string of domain insights"
+    )
+    creativity_mode: Optional[CreativityMode] = Field(
+        CreativityMode.BALANCED,
+        validation_alias=AliasChoices("creativity_mode", "creativityMode"),
+        description="Creativity preset for generation"
     )
 
     @field_validator('extracted_skills_json')

@@ -6,7 +6,7 @@ Based on the Alternate_flow_proposal.md recommendations.
 """
 
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -18,13 +18,13 @@ load_dotenv()
 
 # Correct OpenRouter Slugs for the 3-Stage Pipeline
 OR_SLUG_RESEARCHER = "perplexity/sonar-pro"       # Grounded search capability (Optimized)
-OR_SLUG_DRAFTER = "xiaomi/mimo-v2-flash"            # Cost-optimized STAR reasoning
+OR_SLUG_DRAFTER = "google/gemini-3-flash-preview"   # High-quality STAR reasoning
 OR_SLUG_STAR_EDITOR = "google/gemini-2.0-flash-001" # High speed, clean Markdown
 
 # Fallback models (in case primary models are unavailable)
 FALLBACK_MODELS = {
     "researcher": ["perplexity/sonar", "google/gemini-2.0-flash-001"],
-    "drafter": ["xiaomi/mimo-v2-flash", "anthropic/claude-3-haiku"],
+    "drafter": ["google/gemini-3-flash-preview", "anthropic/claude-3.5-haiku"],
     "star_editor": ["google/gemini-2.0-flash-001", "anthropic/claude-3-haiku"]
 }
 
@@ -37,8 +37,10 @@ PRICING = {
     "perplexity/sonar": {"input": 0.001, "output": 0.001},
     "google/gemini-2.0-flash-001": {"input": 0.0001, "output": 0.0004}, # Corrected: was 2.5x too high
     "google/gemini-2.0-pro": {"input": 0.00125, "output": 0.0025}, # Needs verification
-    "xiaomi/mimo-v2-flash": {"input": 0.00015, "output": 0.0006}, # Current: Ultra-low cost drafter
+    "google/gemini-3-flash-preview": {"input": 0.0005, "output": 0.003}, # New high-quality drafter
+    "xiaomi/mimo-v2-flash": {"input": 0.00015, "output": 0.0006}, # DEPRECATED: Hallucinates too much
     "anthropic/claude-3-haiku": {"input": 0.00025, "output": 0.00125}, # Fallback: Reliable & cheap
+    "anthropic/claude-3.5-haiku": {"input": 0.0008, "output": 0.004}, # New high-quality fallback
     "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # DEPRECATED: 2x higher than estimated
     "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075} # Added: cheap alternative
 }
@@ -107,9 +109,20 @@ TEMPERATURES = {
     "star_editor": 0.1    # Low for consistent formatting
 }
 
+CREATIVITY_TEMPERATURES = {
+    "conservative": {"researcher": 0.1, "drafter": 0.2, "star_editor": 0.1},
+    "balanced": {"researcher": 0.1, "drafter": 0.3, "star_editor": 0.1},
+    "bold": {"researcher": 0.15, "drafter": 0.45, "star_editor": 0.2}
+}
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def get_temperatures(creativity_mode: Optional[str] = None) -> Dict[str, float]:
+    mode = (creativity_mode or "balanced").lower()
+    preset = CREATIVITY_TEMPERATURES.get(mode, CREATIVITY_TEMPERATURES["balanced"])
+    return {**TEMPERATURES, **preset}
 
 def get_seniority_config(job_ad: str) -> Tuple[str, Dict]:
     """
