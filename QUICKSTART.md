@@ -178,7 +178,7 @@ docker-compose down
   },
   "run_metrics": {
     "total_tokens": 3500,
-    "estimated_cost_usd": 0.042
+    "estimated_cost_usd": 0.023
   }
 }
 ```

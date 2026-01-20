@@ -49,12 +49,20 @@ class _DummySettings:
     openrouter_api_key_1 = "test-openrouter-key-1"
     openrouter_api_key_2 = "test-openrouter-key-2"
     environment = "test"
+    ENABLE_LOADER = False
+    ENABLE_FASTSVM = False
+    ENABLE_HERMES = False
+    CORS_ORIGINS = "*"
     @property
     def is_production(self):
         return False
     @property
     def is_development(self):
         return True
+
+    @property
+    def api_key(self):
+        return self.IMAGINATOR_AUTH_TOKEN
 settings = _DummySettings()
 config_module.settings = settings
 sys.modules["config"] = config_module

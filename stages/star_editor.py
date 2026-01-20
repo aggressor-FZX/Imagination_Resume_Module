@@ -66,13 +66,15 @@ class StarEditor:
         self.timeout = TIMEOUTS["star_editor"]
         
     async def polish(self, draft_data: Dict[str, Any], 
-                    research_data: Dict[str, Any]) -> Dict[str, Any]:
+                    research_data: Dict[str, Any],
+                    temperature_override: Optional[float] = None) -> Dict[str, Any]:
         """
         Polish STAR draft into final resume format with TARGET COMPANY GUARD.
         
         Args:
             draft_data: Output from Drafter stage
             research_data: Output from Researcher stage
+            temperature_override: Optional temperature setting to override default
             
         Returns:
             Dictionary with final_markdown, final_plain_text, and editorial_notes
@@ -92,11 +94,12 @@ class StarEditor:
         
         try:
             # Call LLM with strict JSON schema
+            temperature = temperature_override if temperature_override is not None else self.temperature
             response = await self.llm_client.call_llm_async(
                 system_prompt=STAR_EDITOR_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 model=self.model,
-                temperature=self.temperature,
+                temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout
             )

@@ -22,6 +22,7 @@ async def run_new_pipeline_async(
     extracted_skills_json: Optional[Dict] = None,
     domain_insights_json: Optional[Dict] = None,
     openrouter_api_keys: Optional[List[str]] = None,
+    creativity_mode: Optional[str] = None,
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -68,7 +69,8 @@ async def run_new_pipeline_async(
             resume_text=resume_text,
             job_ad=job_ad,
             experiences=experiences,
-            openrouter_api_keys=openrouter_api_keys
+            openrouter_api_keys=openrouter_api_keys,
+            creativity_mode=creativity_mode,
         )
         
         # Extract final output

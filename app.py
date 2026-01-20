@@ -28,12 +28,17 @@ from models import (
 )
 
 # Import the existing flow functions (will be converted to async)
+import imaginator_flow as imaginator_flow_module
 from imaginator_flow import (
     RUN_METRICS,
     validate_output_schema,
     configure_shared_http_session,
     redact_for_logging,
+    run_analysis_async,
+    run_criticism_async,
+    run_synthesis_async,
 )
+run_generation_async = imaginator_flow_module.run_generation_async
 
 # Import new 3-stage pipeline integration
 from imaginator_new_integration import run_new_pipeline_async
@@ -247,7 +252,8 @@ async def analyze_resume(
             job_ad=payload.job_ad,
             extracted_skills_json=skills_data,
             domain_insights_json=insights_data,
-            openrouter_api_keys=api_keys
+            openrouter_api_keys=api_keys,
+            creativity_mode=payload.creativity_mode,
         )
         if settings.VERBOSE_PIPELINE_LOGS:
             logger.info(
@@ -298,7 +304,7 @@ async def analyze_resume(
         # Step 2: Run Generation
         logger.info("run_generation.start", extra={"request_id": request_id})
         t0 = time.time()
-        generation_result = await run_generation_async(
+        generation_result = await imaginator_flow_module.run_generation_async(
             analysis_json=analysis_result,
             job_ad=payload.job_ad,
             openrouter_api_keys=api_keys

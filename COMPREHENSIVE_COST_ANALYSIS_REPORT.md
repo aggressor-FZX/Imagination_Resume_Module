@@ -1,6 +1,6 @@
 # COMPREHENSIVE COST ANALYSIS REPORT
 ## Cogito Metric Resume Analysis Pipeline
-### Date: January 18, 2025
+### Date: January 19, 2025
 
 ---
 
@@ -18,14 +18,14 @@
 
 ## 1. IMAGINATOR 3-STAGE PIPELINE COSTS
 
-### 1.1 Current Configuration (Recommended Quality)
+### 1.1 Current Configuration (Cost-Optimized)
 
 | Stage | Model | Input Tokens | Output Tokens | Cost |
 |-------|-------|--------------|---------------|------|
 | **Researcher** | `perplexity/sonar-pro` | 1,200 | 300 | $0.0081 |
-| **Drafter** | `anthropic/claude-3.5-sonnet` | 3,500 | 800 | $0.0225 |
+| **Drafter** | `google/gemini-3-flash-preview` | 3,500 | 800 | $0.0042 |
 | **StarEditor** | `google/gemini-2.0-flash-001` | 2,500 | 600 | $0.0009 |
-| **Total Pipeline** | | **7,200** | **1,700** | **$0.0315** |
+| **Total Pipeline** | | **7,200** | **1,700** | **$0.0132** |
 
 ### 1.2 Cost-Optimized Configuration
 
@@ -41,7 +41,7 @@
 | Stage | Model | Input Tokens | Output Tokens | Cost |
 |-------|-------|--------------|---------------|------|
 | **Researcher** | `perplexity/sonar-pro` | 2,000 | 500 | $0.0135 |
-| **Drafter** | `anthropic/claude-3.5-sonnet` | 5,000 | 1,200 | $0.0330 |
+| **Drafter** | `google/gemini-3-flash-preview` | 5,000 | 1,200 | $0.0330 |
 | **StarEditor** | `google/gemini-2.0-pro` | 3,500 | 1,000 | $0.0069 |
 | **Total Pipeline** | | **10,500** | **2,700** | **$0.0534** |
 
@@ -84,11 +84,11 @@
 
 ### 4.1 Current Configuration
 ```
-Imaginator Pipeline:    $0.0315
+Imaginator Pipeline:    $0.0132
 Other Services:        $0.0101
 Storage:               $0.0000
 ────────────────────────────────
-TOTAL:                 $0.0417
+TOTAL:                 $0.0233
 ```
 
 ### 4.2 Cost-Optimized
@@ -122,7 +122,7 @@ TOTAL:                 $0.0635
 
 | Configuration | Cost | Price | Margin | Margin % |
 |---------------|------|-------|--------|----------|
-| **Current** | $0.0417 | $0.38 | $0.3383 | 89.0% |
+| **Current** | $0.0233 | $0.38 | $0.3383 | 89.0% |
 | **Cost-Optimized** | $0.0134 | $0.38 | $0.3666 | 96.5% |
 | **High-Quality** | $0.0635 | $0.38 | $0.3165 | 83.3% |
 
@@ -132,12 +132,12 @@ TOTAL:                 $0.0635
 |---------|---------|----------|---------|------|--------|--------|
 | **$5** | 435 | 13.2 | $5.00 | $0.71 | $4.29 | 85.8% |
 | **$10** | 870 | 26.4 | $10.00 | $1.42 | $8.58 | 85.8% |
-| **$25** | 2170 | 65.8 | $25.00 | $3.55 | $21.45 | 85.8% |
+| **$25** | 2393 | 72.5 | $25.00 | $3.55 | $21.45 | 85.8% |
 
 ### 5.4 Free Trial Analysis
-- **Free trial credits:** 100 credits
+- **Free trial credits:** 99 credits
 - **Free analyses:** 3 analyses
-- **Free trial value:** $1.15
+- **Free trial value:** $1.14
 - **Customer acquisition cost:** Effectively $0.38 per acquired user
 
 ---

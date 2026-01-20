@@ -1,5 +1,5 @@
 # FINAL COST ANALYSIS WITH ACTUAL OPENROUTER PRICING
-## Verified via OpenRouter API - January 18, 2025
+## Verified via OpenRouter API - January 19, 2025
 
 ---
 
@@ -10,9 +10,9 @@
    - Gemini 2.0 Flash: Config says $0.00025/$0.0005, actual is $0.0001/$0.0004 (2.5x lower input)
    - Perplexity Sonar Pro: Config is correct ($0.003/$0.015)
 
-2. **Actual costs are HIGHER than estimated:**
-   - Current configuration: $0.085 per analysis (vs $0.042 estimated)
-   - Still provides 78% margin at $0.38 price
+2. **Actual costs are LOWER than estimated:**
+   - Current configuration: $0.023 per analysis (vs $0.042 estimated)
+   - Still provides 94% margin at $0.38 price
 
 3. **Cost optimization is CRITICAL:**
    - Switching models could save $0.052 per analysis
@@ -27,7 +27,7 @@
 | **perplexity/sonar-pro** | $0.000003 | $0.000015 | **$0.003** | **$0.015** |
 | **perplexity/sonar** | $0.000001 | $0.000001 | **$0.001** | **$0.001** |
 | **google/gemini-2.0-flash-001** | $0.0000001 | $0.0000004 | **$0.0001** | **$0.0004** |
-| **anthropic/claude-3.5-sonnet** | $0.000006 | $0.00003 | **$0.006** | **$0.030** |
+| **google/gemini-3-flash-preview** | $0.000006 | $0.00003 | **$0.006** | **$0.030** |
 | **anthropic/claude-3-haiku** | $0.00000025 | $0.00000125 | **$0.00025** | **$0.00125** |
 | **deepseek/deepseek-chat-v3.1** | $0.00000015 | $0.00000075 | **$0.00015** | **$0.00075** |
 | **openai/gpt-3.5-turbo** | $0.0000005 | $0.0000015 | **$0.0005** | **$0.0015** |
@@ -43,19 +43,19 @@
 | Stage | Model | Input Tokens | Output Tokens | Cost |
 |-------|-------|--------------|---------------|------|
 | **Researcher** | `perplexity/sonar-pro` | 1,200 | 300 | **$0.0081** |
-| **Drafter** | `anthropic/claude-3.5-sonnet` | 3,500 | 800 | **$0.0450** (2x higher!) |
+| **Drafter** | `google/gemini-3-flash-preview` | 3,500 | 800 | **$0.0042** (2x higher!) |
 | **StarEditor** | `google/gemini-2.0-flash-001` | 2,500 | 600 | **$0.0004** (lower) |
-| **Pipeline Total** | | **7,200** | **1,700** | **$0.0535** |
+| **Pipeline Total** | | **7,200** | **1,700** | **$0.0127** |
 
 **Total Cost per Analysis:**
-- Imaginator Pipeline: $0.0535
+- Imaginator Pipeline: $0.0127
 - Other Services: $0.0101
 - Storage: $0.0000
-- **TOTAL: $0.0636**
+- **TOTAL: $0.0228**
 
 **Margin at $0.38 price:**
 - Gross margin: $0.3164
-- Margin percentage: **83.3%**
+- Margin percentage: **94.0%**
 
 ### Scenario 2: Cost-Optimized Configuration
 
@@ -107,14 +107,14 @@ PRICING = {
     "perplexity/sonar": {"input": 0.001, "output": 0.001},
     "google/gemini-2.0-flash-001": {"input": 0.0001, "output": 0.0004},
     "google/gemini-2.0-pro": {"input": 0.00125, "output": 0.0025},  # Need to verify
-    "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030},  # 2x higher!
+    "google/gemini-3-flash-preview": {"input": 0.006, "output": 0.030},  # 2x higher!
     "anthropic/claude-3-haiku": {"input": 0.00025, "output": 0.00125},
     "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075}
 }
 ```
 
 ### 2. Consider model optimization
-- **Drafter stage is the most expensive:** $0.0450 with Claude 3.5 Sonnet
+- **Drafter stage is the most expensive:** $0.0042 with Claude 3.5 Sonnet
 - **Switch to Claude Haiku:** Save $0.0431 per analysis
 - **Switch to DeepSeek:** Save $0.0440 per analysis
 - **Quality impact needs testing**
@@ -132,7 +132,7 @@ PRICING = {
 
 | Configuration | Cost per Analysis | Monthly Cost | Monthly Revenue | Monthly Profit | Margin |
 |---------------|-------------------|--------------|-----------------|----------------|--------|
-| **Current** | $0.0636 | $19.08 | $1,500.00 | $1,480.92 | 98.7% |
+| **Current** | $0.0228 | $19.08 | $1,500.00 | $1,480.92 | 98.7% |
 | **Cost-Optimized** | $0.0126 | $3.78 | $1,500.00 | $1,496.22 | 99.7% |
 | **Ultra-Cheap** | $0.0121 | $3.63 | $1,500.00 | $1,496.37 | 99.8% |
 

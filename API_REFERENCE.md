@@ -139,13 +139,13 @@ X-API-Key: your-api-key-here
         "model": "claude-3-haiku",
         "prompt_tokens": 1500,
         "completion_tokens": 800,
-        "cost_usd": 0.045
+        "cost_usd": 0.023
       }
     ],
     "total_prompt_tokens": 1500,
     "total_completion_tokens": 800,
     "total_tokens": 2300,
-    "estimated_cost_usd": 0.045,
+    "estimated_cost_usd": 0.023,
     "failures": []
   },
   "processing_status": "COMPLETED",

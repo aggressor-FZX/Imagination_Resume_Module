@@ -71,10 +71,16 @@ async def main():
         )
 
         print("\n--- Running Criticism Stage ---")
-        criticism_result = mod.run_criticism(
-            generated_suggestions=generation_result,
+        # Extract the text content from the generation result if it's a dict
+        generated_text_content = generation_result
+        if isinstance(generation_result, dict):
+            generated_text_content = generation_result.get("final_written_section", "")
+
+        raw_criticism = await mod.run_criticism_async(
+            generated_text=generated_text_content,
             job_ad=sample_job_ad
         )
+        criticism_result = mod.ensure_json_dict(raw_criticism, "criticism")
 
         final_output = {
             **analysis_result,

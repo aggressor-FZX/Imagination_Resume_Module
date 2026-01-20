@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict,
                          seniority_level: str, allowed_verbs: List[str],
-                         golden_bullets: Optional[List[str]] = None) -> str:
+                         golden_bullets: Optional[List[str]] = None,
+                         tone_instruction: str = "Maintain a standard, professional corporate tone.") -> str:
     """
     Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
     """
@@ -59,6 +60,7 @@ You are NOT allowed to invent new jobs or change the user's employment history.
 
 SENIORITY LEVEL: {seniority_level.upper()}
 STRICT ACTION VERBS: {', '.join(allowed_verbs)}
+TONE INSTRUCTION: {tone_instruction}
 
 {golden_section}
 
@@ -130,6 +132,7 @@ class Drafter:
         job_ad: str,
         research_data: Dict[str, Any],
         golden_bullets: Optional[List[str]] = None,
+        tone_instruction: Optional[str] = None,
         temperature_override: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
@@ -157,7 +160,8 @@ class Drafter:
             research_data=research_data,
             seniority_level=seniority_level,
             allowed_verbs=allowed_verbs,
-            golden_bullets=golden_bullets
+            golden_bullets=golden_bullets,
+            tone_instruction=tone_instruction or "Maintain a standard, professional corporate tone."
         )
         
         user_prompt = f"""

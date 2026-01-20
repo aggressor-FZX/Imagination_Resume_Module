@@ -1,0 +1,58 @@
+================================================================================
+TARGET COMPANY GUARD - IMPLEMENTATION COMPLETE
+================================================================================
+Date: January 19, 2026
+File: /home/skystarved/Render_Dockers/Imaginator/stages/star_editor.py
+
+CHANGES MADE:
+-------------
+
+1. ✅ STAR_EDITOR_SYSTEM_PROMPT - Added Rule #6
+   - New anti-hallucination rule explicitly forbids listing target company
+   - Instructs LLM to only use company names from user's input data
+
+2. ✅ polish() method - Enhanced with target company extraction
+   - Extracts target_company from research_data.get("company_name", "")
+   - Passes target_company to _create_user_prompt()
+   - Passes target_company to _apply_hallucination_guard()
+   - Updated docstring to mention "TARGET COMPANY GUARD"
+
+3. ✅ _create_user_prompt() - Added target company warning
+   - New parameter: target_company: str = ""
+   - Adds CRITICAL warning to prompt when target_company is present
+   - Warning explicitly tells LLM not to list target company as employer
+
+4. ✅ _apply_hallucination_guard() - Implemented detection & fix
+   - New parameter: target_company: str = ""
+   - Builds list of legitimate companies from user's work history
+   - Checks if target company appears in header format (| **Company**)
+   - Only triggers if user didn't actually work at target company
+   - Replaces hallucinated company with actual employer or "Previous Employer"
+   - Logs fix in editorial_notes and warning logs
+
+DEFENSE LAYERS:
+---------------
+Layer 1: System Prompt (Rule #6) - Preventive instruction
+Layer 2: User Prompt (CRITICAL warning) - Contextual constraint  
+Layer 3: Code Guard (Regex detection) - Post-processing fix
+
+FILE SIZE:
+----------
+Before: 19K (18,936 bytes)
+After:  22K (22,xxx bytes)
+Backup: star_editor.py.backup_20260119_203402
+
+TESTING STATUS:
+---------------
+✅ Syntax validation passed (py_compile)
+⏳ Runtime testing pending
+⏳ Integration testing pending
+
+NEXT STEPS:
+-----------
+1. Deploy to Render service: imaginator-resume-cowriter
+2. Test with Armada job ad scenario
+3. Verify editorial_notes contains fix notification
+4. Monitor logs for hallucination warnings
+
+================================================================================

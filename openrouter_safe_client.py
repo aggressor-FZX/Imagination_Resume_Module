@@ -160,7 +160,7 @@ class OpenRouterSafeClient:
         model: Optional[str] = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
-        fallback_to_deepseek: bool = True
+        fallback_models: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Call OpenRouter with proper request formatting and failsafe fallback.
@@ -170,7 +170,7 @@ class OpenRouterSafeClient:
             model: Model to use (uses first available from preferred list if None)
             max_tokens: Max tokens in response
             temperature: Sampling temperature (0-2)
-            fallback_to_deepseek: If True, fall back to DeepSeek chain on failure
+            fallback_models: Optional list of models to try if primary fails
 
         Returns:
             Response dict with 'success', 'data', 'error', and 'model_used'
@@ -185,9 +185,13 @@ class OpenRouterSafeClient:
 
         # Determine models to try
         models_to_try = []
-        if model and self._is_model_available(model):
+        if model:
             models_to_try.append(model)
-        models_to_try.extend(self.FALLBACK_CHAIN)
+        
+        if fallback_models:
+            models_to_try.extend(fallback_models)
+        else:
+            models_to_try.extend(self.FALLBACK_CHAIN)
 
         # Remove duplicates while preserving order
         seen = set()
@@ -309,4 +313,3 @@ if __name__ == "__main__":
 
     result = client.call_model(messages, model="anthropic/claude-3-haiku")
     print(f"\n\n🎯 Final Result: {json.dumps(result, indent=2)}")
-

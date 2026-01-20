@@ -21,6 +21,7 @@ class LLMClientAdapter:
         temperature: float = 0.7,
         response_format: Optional[Dict] = None,
         timeout: Optional[int] = None,
+        fallback_models: Optional[List[str]] = None,
         **kwargs
     ) -> str:
         """
@@ -33,6 +34,7 @@ class LLMClientAdapter:
             temperature: Temperature
             response_format: Response format (e.g., {"type": "json_object"})
             timeout: Timeout in seconds
+            fallback_models: Optional list of models to try if primary fails
             **kwargs: Additional arguments
             
         Returns:
@@ -60,7 +62,8 @@ class LLMClientAdapter:
                 messages=messages,
                 model=model,
                 temperature=temperature,
-                max_tokens=safe_max_tokens
+                max_tokens=safe_max_tokens,
+                fallback_models=fallback_models
             )
             
             # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)

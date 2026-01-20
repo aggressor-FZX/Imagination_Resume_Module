@@ -1,4 +1,4 @@
-# Generative Resume Co-Writer
+# Imaginator Resume Co-Writer
 
 AI-powered resume analysis tool that provides personalized career development recommendations by analyzing resumes against target job descriptions using advanced language models and structured skill processing.
 
@@ -347,7 +347,7 @@ X-API-Key: your-api-key-here
   "final_written_section": "Generated resume experience section text",
   "run_metrics": {
     "total_tokens": 2300,
-    "estimated_cost_usd": 0.045,
+    "estimated_cost_usd": 0.023,
     "calls": [...],
     "failures": []
   },
@@ -429,135 +429,56 @@ python imaginator_flow.py \
   --confidence_threshold 0.8
 ```
 
-  --resume sample_resume.txt \| `--resume` | Path to resume file | - |
+### Input Options
 
-  --target_job_ad "Senior Python Developer with 5+ years experience in Django, React, and AWS"| `--parsed_resume_text` | Resume text from Resume_Document_Loader | - |
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `--target_job_ad` | Job description text to analyze against | Yes |
+| `--resume` | Path to resume text file | Yes* |
+| `--parsed_resume_text` | Direct resume text input | Yes* |
+| `--extracted_skills_json` | JSON file with structured skills data | No |
+| `--domain_insights_json` | JSON file with domain insights | No |
+| `--confidence_threshold` | Minimum skill confidence score (0.0-1.0) | No (default: 0.7) |
 
-```| `--extracted_skills_json` | Skills data from FastSVM/Hermes | - |
+*Either `--resume` or `--parsed_resume_text` must be provided.
 
-| `--domain_insights_json` | Domain insights from Hermes | - |
-
-### Advanced Usage with Structured Data| `--target_job_ad` | Job description (required) | - |
-
-```bash| `--confidence_threshold` | Minimum skill confidence | 0.7 |
-
-python imaginator_flow.py \
-
-  --parsed_resume_text "$(cat sample_resume.txt)" \## 📊 Output Format
-
-  --extracted_skills_json sample_skills.json \
-
-  --domain_insights_json sample_insights.json \```json
-
-  --target_job_ad "$(cat sample_job_ad.txt)" \{
-
-  --confidence_threshold 0.8  "experiences": [...],
-
-```  "aggregate_skills": ["python", "aws", "docker"],
-
-  "processed_skills": {
-
-### Input Options    "high_confidence_skills": ["python", "aws"],
-
-    "skill_confidences": {"python": 0.95, "aws": 0.92},
-
-| Parameter | Description | Required |    "categories": {...}
-
-|-----------|-------------|----------|  },
-
-| `--target_job_ad` | Job description text to analyze against | Yes |  "domain_insights": {
-
-| `--resume` | Path to resume text file | Yes* |    "domain": "tech",
-
-| `--parsed_resume_text` | Direct resume text input | Yes* |    "insights": {
-
-| `--extracted_skills_json` | JSON file with structured skills data | No |      "strengths": [...],
-
-| `--domain_insights_json` | JSON file with domain insights | No |      "gaps": [...],
-
-| `--confidence_threshold` | Minimum skill confidence score (0.0-1.0) | No (default: 0.7) |      "recommendations": [...]
-
-    }
-
-*Either `--resume` or `--parsed_resume_text` must be provided.  },
-
-  "gap_analysis": "Creative development recommendations..."
-
-## 📊 Output Format}
-
-```
+## 📊 Output Format
 
 The system produces validated JSON output with the following structure:
 
-## Run Metrics, Token Usage, and Cost Estimation
-
 ```json
-
-{The module now appends a `run_metrics` block to the final JSON output so callers can reliably parse token usage, per-call breakdowns, failures, and an estimated cost for the run.
-
+{
   "experiences": [...],
-
-  "aggregate_skills": [...],Example output tail:
-
+  "aggregate_skills": [...],
   "processed_skills": {...},
+  "domain_insights": {...},
+  "gap_analysis": "...",
+  "suggested_experiences": {
+    "bridging_gaps": [...],
+    "metric_improvements": [...]
+  },
+  "run_metrics": {
+    "total_tokens": 2300,
+    "estimated_cost_usd": 0.023,
+    "calls": [...],
+    "failures": [...]
+  }
+}
+```
 
-  "domain_insights": {...},```json
+See `SYSTEM_IO_SPECIFICATION.md` for complete input/output documentation.
 
-  "gap_analysis": "...",{
+## 🔧 Configuration
 
-  "suggested_experiences": {  "suggested_experiences": { /* ... */ },
-
-    "bridging_gaps": [...],  "run_metrics": {
-
-    "metric_improvements": [...]    "calls": [
-
-  },      {
-
-  "run_metrics": {        "provider": "openai",
-
-    "total_tokens": 2300,        "model": "gpt-3.5-turbo",
-
-    "estimated_cost_usd": 0.045,        "prompt_tokens": 1499,
-
-    "calls": [...],        "completion_tokens": 629,
-
-    "failures": [...]        "total_tokens": 2128,
-
-  }        "estimated_cost_usd": 0.001693
-
-}      },
-
-```      {
-
-        "provider": "openai",
-
-See `SYSTEM_IO_SPECIFICATION.md` for complete input/output documentation.        "model": "gpt-3.5-turbo",
-
-        "prompt_tokens": 511,
-
-## 🔧 Configuration        "completion_tokens": 366,
-
-        "total_tokens": 877,
-
-### Environment Variables        "estimated_cost_usd": 0.000805
-
-      }
+### Environment Variables
 
 | Variable | Description | Default | Example |
-
 |----------|-------------|---------|---------|
-
 | `OPENROUTER_API_KEY` | OpenRouter API key | Required | `sk-or-v1-...` |
-
 | `API_KEY` | Service authentication key | Required | `your-secret-key` |
-
 | `CONTEXT7_API_KEY` | Context7 documentation API key | Optional | `ctx7-...` |
-
 | `OPENROUTER_PRICE_INPUT_PER_1K` | OpenRouter input token price | 0.0005 | `0.0005` |
-
 | `OPENROUTER_PRICE_OUTPUT_PER_1K` | OpenRouter output token price | 0.0015 | `0.0015` |
-
-```
 
 ### Custom Pricing
 
@@ -674,78 +595,6 @@ def test_api_fallback_behavior(self):
     # Test provider fallback functionality
 ```
 
-- `test_report.md`: Comprehensive test summary with performance metrics
-- `test_results.json`: Raw test data for programmatic analysis
-- `test_results.log`: Detailed execution logs
-- `test_results.html`: Visual performance dashboard (if generated)
-
-### Test Configuration
-
-Tests use the following sample data:
-- `sample_resume.txt`: Test resume content
-- `sample_job_ad.txt`: Test job description
-- `sample_skills.json`: Structured skills data
-- `sample_insights.json`: Domain insights data
-
-### Performance Benchmarks
-
-Typical test results (based on recent runs):
-- **Test Duration**: 11-18 seconds per test case
-- **Memory Usage**: 0-16.3 MB peak consumption
-- **Token Usage**: 3,600-4,000 tokens per complete test
-- **API Cost**: $0.0029-$0.0034 per test execution
-- **Success Rate**: 100% (all test cases passing)
-
-### Adding New Tests
-
-To extend the test suite:
-
-1. Add test cases to `test/system_io_test.py`
-2. Update input variations in the `test_cases` list
-3. Run tests to validate new scenarios
-4. Update `test/README.md` with new test documentation
-
-estimated_cost = run_metrics.get("estimated_cost_usd", 0.0)
-
-1. **Analysis Stage**```
-
-   - Parses resume text and extracts experiences
-
-   - Processes skills using confidence-based filtering## 🔄 Core Functionality
-
-   - Generates gap analysis using LLM
-
-1. **Skill Processing**: Filters and prioritizes skills by confidence scores
-
-2. **Generation Stage**2. **Domain Integration**: Incorporates industry-specific insights and market data
-
-   - Creates targeted improvement suggestions3. **Creative Analysis**: Generates personalized, actionable development plans
-
-   - Focuses on gap bridging and metric improvements4. **Confidence Weighting**: Prioritizes high-confidence skills for recommendations
-
-
-
-3. **Criticism Stage**## 🧪 Testing
-
-   - Applies adversarial review to suggestions
-
-   - Refines wording and improves specificityTest with sample data:
-
-```bash
-
-### Error Handlingpython imaginator_flow.py \
-
-  --parsed_resume_text "Senior developer with Python, AWS experience" \
-
-- **API Failures**: Automatic provider fallback (OpenAI → Anthropic)  --extracted_skills_json sample_skills.json \
-
-- **Network Issues**: Exponential backoff retry logic  --domain_insights_json sample_insights.json \
-
-- **Data Issues**: Graceful degradation with safe default structures  --target_job_ad "Full-stack developer role with React, Node.js, cloud experience"
-
-- **Validation**: JSON schema validation ensures output consistency```
-
-
 ## 📈 Metrics & Monitoring
 
 The system tracks comprehensive usage metrics:
@@ -766,9 +615,6 @@ The system tracks comprehensive usage metrics:
 
 This project is open source. See individual files for license information.
 
-**Key Management**
-
-Provider keys are managed server-side. BYOK headers are deprecated and not supported.
 ## 🧭 Data Flow Diagram
 
 ```

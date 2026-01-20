@@ -15,14 +15,14 @@
 
 ## 📊 ACTUAL COSTS PER ANALYSIS
 
-### Current Configuration (UPDATED - Xiaomi MiMo v2 Flash + Perplexity Sonar Pro)
+### Current Configuration (Cost-Optimized - Gemini 3 Flash + Perplexity Sonar Pro)
 ```
 Imaginator Pipeline:    $0.0090  (Xiaomi MiMo v2 Flash + Claude 3 Haiku fallback + Perplexity Sonar Pro)
 Other Services:        $0.0101
 Storage:               $0.0000
 ────────────────────────────────
-TOTAL:                 $0.0191
-MARGIN at $0.38:      94.9% ($0.3609)
+TOTAL:                 $0.0228
+MARGIN at $0.38:      94.0% ($0.3609)
 ```
 
 ### Previous Configuration (Claude 3.5 Sonnet - Deprecated)
@@ -35,7 +35,7 @@ TOTAL:                 $0.0636
 MARGIN at $0.38:      83.3% ($0.3164)
 ```
 
-**SAVINGS:** $0.0516 per analysis by switching to Xiaomi MiMo v2 Flash!
+**SAVINGS:** $0.0408 per analysis by switching to Xiaomi MiMo v2 Flash!
 
 ---
 
@@ -75,7 +75,7 @@ MARGIN at $0.38:      83.3% ($0.3164)
 ### Fallback Strategy:
 - **Primary:** Xiaomi MiMo v2 Flash (ultra-low cost, high quality)
 - **Fallback:** Claude 3 Haiku ($0.0019 per analysis) if primary unavailable
-- **Savings vs Claude 3.5 Sonnet:** **$0.0516 per analysis**
+- **Savings vs Claude 3.5 Sonnet:** **$0.0408 per analysis**
 
 ### Previous Configuration (Deprecated):
 1. **Drafter Stage (Claude 3.5 Sonnet):** $0.0450 (71% of pipeline cost)

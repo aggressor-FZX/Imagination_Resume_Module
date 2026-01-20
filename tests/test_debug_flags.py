@@ -1,7 +1,13 @@
 """
 Tests for the /debug/flags endpoint returning current feature flag values
 """
+import os
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("OPENROUTER_API_KEY_1", "test-openrouter-key-1")
+os.environ.setdefault("OPENROUTER_API_KEY_2", "test-openrouter-key-2")
+os.environ.setdefault("IMAGINATOR_AUTH_TOKEN", "test-api-key")
+
 from app import app
 from config import settings
 

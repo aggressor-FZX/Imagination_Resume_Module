@@ -104,15 +104,15 @@ TIMEOUTS = {
 
 # Temperature settings
 TEMPERATURES = {
-    "researcher": 0.1,    # Low for consistent metric extraction
-    "drafter": 0.3,       # Moderate for creative but consistent drafting
-    "star_editor": 0.1    # Low for consistent formatting
+    "researcher": 0.1,
+    "drafter": 0.4,
+    "star_editor": 0.1
 }
 
 CREATIVITY_TEMPERATURES = {
-    "conservative": {"researcher": 0.1, "drafter": 0.2, "star_editor": 0.1},
-    "balanced": {"researcher": 0.1, "drafter": 0.3, "star_editor": 0.1},
-    "bold": {"researcher": 0.15, "drafter": 0.45, "star_editor": 0.2}
+    "conservative": {"drafter": 0.2},
+    "balanced": {"drafter": 0.4},
+    "bold": {"drafter": 0.65}
 }
 
 # ============================================================================
@@ -122,7 +122,21 @@ CREATIVITY_TEMPERATURES = {
 def get_temperatures(creativity_mode: Optional[str] = None) -> Dict[str, float]:
     mode = (creativity_mode or "balanced").lower()
     preset = CREATIVITY_TEMPERATURES.get(mode, CREATIVITY_TEMPERATURES["balanced"])
-    return {**TEMPERATURES, **preset}
+    drafter_temp = preset.get("drafter", TEMPERATURES["drafter"])
+    drafter_temp = min(drafter_temp, 0.7)
+    return {
+        "researcher": TEMPERATURES["researcher"],
+        "drafter": drafter_temp,
+        "star_editor": TEMPERATURES["star_editor"],
+    }
+
+def get_tone_instruction(creativity_mode: Optional[str] = None) -> str:
+    mode = (creativity_mode or "balanced").lower()
+    if mode == "bold":
+        return "Use dynamic, evocative language. Be bold. Use varied sentence structures to capture attention."
+    if mode == "conservative":
+        return "Use strict, formal, and concise language. Prioritize factual accuracy over flair."
+    return "Maintain a standard, professional corporate tone."
 
 def get_seniority_config(job_ad: str) -> Tuple[str, Dict]:
     """

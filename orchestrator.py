@@ -17,7 +17,7 @@ from stages.researcher import Researcher
 from stages.drafter import Drafter
 from stages.star_editor import StarEditor
 from seniority_detector import SeniorityDetector
-from pipeline_config import estimate_cost, TIMEOUTS, get_temperatures
+from pipeline_config import estimate_cost, TIMEOUTS, get_temperatures, get_tone_instruction
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,7 @@ class PipelineOrchestrator:
                     job_ad,
                     research_data,
                     golden_bullets=golden_bullets,
+                    tone_instruction=get_tone_instruction(creativity_mode),
                     temperature_override=temperatures["drafter"],
                 )
                 if draft_data.get("fallback"):

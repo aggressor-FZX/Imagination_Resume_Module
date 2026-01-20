@@ -4,10 +4,16 @@ Based on Context7 research findings for pytest-asyncio and httpx
 """
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+os.environ.setdefault("OPENROUTER_API_KEY_1", "test-openrouter-key-1")
+os.environ.setdefault("OPENROUTER_API_KEY_2", "test-openrouter-key-2")
+os.environ.setdefault("IMAGINATOR_AUTH_TOKEN", "test-api-key")
+
 from app import app
 from config import settings
 from models import AnalysisRequest, ProcessingStatus
