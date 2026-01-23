@@ -18,8 +18,9 @@ load_dotenv()
 
 # Correct OpenRouter Slugs for the 3-Stage Pipeline
 OR_SLUG_RESEARCHER = "perplexity/sonar-pro"       # Grounded search capability (Optimized)
-OR_SLUG_DRAFTER = "google/gemini-3-flash-preview"   # High-quality STAR reasoning
+#OR_SLUG_DRAFTER = "google/gemini-3-flash-preview"   # High-quality STAR reasoning
 OR_SLUG_STAR_EDITOR = "google/gemini-2.0-flash-001" # High speed, clean Markdown
+OR_SLUG_DRAFTER = "anthropic/claude-3-haiku"   # Switched to Haiku to prevent hallucinations
 
 # Fallback models (in case primary models are unavailable)
 FALLBACK_MODELS = {
