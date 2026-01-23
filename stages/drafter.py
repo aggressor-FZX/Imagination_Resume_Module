@@ -76,6 +76,11 @@ TONE INSTRUCTION: {tone_instruction}
 
 3. **TECHNOLOGY:** Only use technologies the user explicitly mentioned or strongly implied by the specific task. Do not copy tech stacks from the Golden Bullets.
 
+4. **NO PLAGIARISM FROM JOB DESCRIPTION:**
+   - The Job Description is provided ONLY for context on what is relevant.
+   - DO NOT copy sentences, requirements, or specific projects from the Job Description into the resume.
+   - DO NOT claim to have done the specific tasks listed as "Responsibilities" in the Job Ad unless the user's notes explicitly support it.
+
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
 2. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
@@ -85,6 +90,7 @@ TONE INSTRUCTION: {tone_instruction}
 BAD VS GOOD:
 ✗ Weak: "Strategized deployment of models." (Vague, passive)
 ✓ Strong: "Deployed deep learning models to 1,000+ edge devices, reducing latency by 90% via quantization." (Specific, metric-driven)
+✗ Hallucinated (BAD): Copying "Must have 5 years of Python" from Job Ad as "I have 5 years of Python". (DO NOT DO THIS)
 
 Output JSON Schema:
 {{
@@ -153,6 +159,15 @@ class Drafter:
         seniority_level, seniority_config = get_seniority_config(job_ad)
         allowed_verbs = seniority_config["verbs"]
         
+        # Check for sparse input to encourage safe expansion
+        total_input_words = sum(len(str(exp).split()) for exp in experiences)
+        is_sparse_input = total_input_words < 50
+        
+        sparse_instruction = ""
+        if is_sparse_input:
+             logger.info("[DRAFTER] Sparse input detected, adding expansion instruction")
+             sparse_instruction = "\nNOTE: The user's notes are very brief. You must EXPAND them into full bullets by inferring standard industry tasks associated with these roles/skills. Focus on HOW the work was likely done, but DO NOT invent specific metrics or projects found in the Job Description."
+
         # Create prompt
         system_prompt = create_drafter_prompt(
             experiences=experiences,
@@ -162,13 +177,13 @@ class Drafter:
             allowed_verbs=allowed_verbs,
             golden_bullets=golden_bullets,
             tone_instruction=tone_instruction or "Maintain a standard, professional corporate tone."
-        )
+        ) + sparse_instruction
         
         user_prompt = f"""
-User Experiences (JSON):
+User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
 {json.dumps(experiences, indent=2)}
 
-Job Description:
+Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
 {job_ad[:1000]}
 
 Research Insights:
