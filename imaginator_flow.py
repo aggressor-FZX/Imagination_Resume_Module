@@ -2020,6 +2020,7 @@ CRITICAL RULES - MUST FOLLOW:
 4. NO made-up contact information
 5. Use bullet points with action verbs and metrics
 6. Return VALID JSON only (no control characters in strings)
+7. DO NOT HALLUCINATE. DO NOT use "Example Tech Corp", "Acme Corp", or any placeholder company names. Use ONLY the company names provided in the input.
 
 RESUME STRUCTURE:
 1. PROFESSIONAL SUMMARY (2-4 sentences, third-person)
@@ -2030,8 +2031,8 @@ RESUME STRUCTURE:
 
 EXAMPLE OUTPUT FORMAT:
 {
-  "final_written_section_markdown": "## Professional Summary\\n\\nExperienced developer...\\n\\n## Work Experience\\n\\n**Title at Company (Dates)**\\n- Built system serving 5M users...\\n- Reduced latency by 40%...",
-  "final_written_section": "PROFESSIONAL SUMMARY\\n\\nExperienced developer...\\n\\nWORK EXPERIENCE\\n\\nTitle at Company (Dates)\\n• Built system serving 5M users...\\n• Reduced latency by 40%...",
+  "final_written_section_markdown": "## Professional Summary\\n\\nExperienced developer...\\n\\n## Work Experience\\n\\n**<Actual Job Title> at <Actual Company>** (Dates)\\n- Built system serving 5M users...\\n- Reduced latency by 40%...",
+  "final_written_section": "PROFESSIONAL SUMMARY\\n\\nExperienced developer...\\n\\nWORK EXPERIENCE\\n\\n<Actual Job Title> at <Actual Company> (Dates)\\n• Built system serving 5M users...\\n• Reduced latency by 40%...",
   "editorial_notes": "ATS-optimized with metrics"
 }
 
@@ -2044,11 +2045,22 @@ IMPORTANT:
     # Extract candidate info for professional summary
     years_experience = analysis.get("seniority", {}).get("level", "").replace("_", " ").replace("-", " ")
     job_titles = [exp.get("title_line", "").split("|")[0].strip() for exp in experiences[:3] if isinstance(exp, dict)]
+    
+    # Extract verified companies to prevent hallucination
+    companies = []
+    for exp in experiences:
+        if isinstance(exp, dict) and "title_line" in exp:
+             parts = exp["title_line"].split("|")
+             if len(parts) > 1:
+                 companies.append(parts[1].strip())
+    verified_companies_str = ", ".join(sorted(list(set(companies)))) if companies else "None"
+
     primary_title = job_titles[0] if job_titles else "Professional"
     aggregate_skills = analysis.get("aggregate_skills", [])
     
     user_prompt = f"""CANDIDATE BACKGROUND:
 - Primary Title: {primary_title}
+- Verified Companies: {verified_companies_str}
 - Experience Level: {years_experience}
 - Key Skills: {', '.join(aggregate_skills[:12]) if aggregate_skills else 'Not specified'}
 
@@ -2810,6 +2822,12 @@ async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, ope
     """
     RUN_METRICS["stages"]["generation"]["start"] = time.time()
     analysis = _load_json_payload(analysis_json, "analysis_json")
+
+    # Validation: Ensure experiences exist to prevent hallucination
+    if not analysis.get("experiences"):
+        logger.warning("🚨 [GENERATION] No experiences found in analysis! Aborting generation to prevent hallucination.")
+        return "Error: No work experience found in input analysis. Cannot generate resume."
+
     system_prompt = f"""
     You are a professional resume writer. Generate a new "Work Experience" section that aligns to the target job.
     Use CAR (Challenge–Action–Result), quantify impact with metrics, apply domain-specific vocabulary, and keep tone consistent with seniority.
@@ -2961,7 +2979,7 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
               "John Doe", "Jane Doe", "Acme Web Solutions", "Acme Inc", "Tech Corp", "TechCorp",
               "Macy's", "Best Buy", "Target", "Walmart",  # Common retail hallucinations
               "Retail Sales Associate at", "Technical Support Specialist at", "Web Developer at Acme",
-              "Generic Company", "Sample Corp", "Test Inc", "Demo Company"
+              "Generic Company", "Sample Corp", "Test Inc", "Demo Company", "Example Tech Corp", "Senior AI Engineer | Example Tech Corp"
           ]
           
           if any(phrase in combined_text for phrase in forbidden_phrases):
