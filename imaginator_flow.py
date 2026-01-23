@@ -2999,7 +2999,7 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
         except Exception as e:
           logger.error("🚨 [SYNTHESIS] JSON PARSE FAILED: %s. Raw: %s", e, result[:200])
           logger.error("🚨 [SYNTHESIS] LLM returned non-JSON output. Attempting to use raw text.")
-          forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company"]
+          forbidden_phrases = ["ABC Tech", "XYZ Corp", "Software Engineer at ABC", "ABC Corp", "Acme Corp", "Example Company", "Example Tech Corp"]
           if isinstance(result, str) and result.strip() and not any(phrase in result for phrase in forbidden_phrases):
               logger.warning("[SYNTHESIS] Using raw LLM output as final section (appears to be custom content)")
               return result.strip()
