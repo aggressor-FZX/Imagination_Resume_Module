@@ -58,6 +58,7 @@ class PipelineOrchestrator:
         experiences: List[Dict],
         openrouter_api_keys: Optional[List[str]] = None,
         creativity_mode: Optional[str] = None,
+        extracted_job_title: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -136,6 +137,7 @@ class PipelineOrchestrator:
                     golden_bullets=golden_bullets,
                     tone_instruction=get_tone_instruction(creativity_mode),
                     temperature_override=temperatures["drafter"],
+                    extracted_job_title=extracted_job_title,
                 )
                 if draft_data.get("fallback"):
                     logger.warning("[ORCHESTRATOR] Stage 2 used fallback logic")

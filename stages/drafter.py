@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict,
                          seniority_level: str, allowed_verbs: List[str],
                          golden_bullets: Optional[List[str]] = None,
-                         tone_instruction: str = "Maintain a standard, professional corporate tone.") -> str:
+                         tone_instruction: str = "Maintain a standard, professional corporate tone.",
+                         extracted_job_title: Optional[str] = None) -> str:
     """
     Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
     """
@@ -54,13 +55,17 @@ REFERENCE PATTERNS:
    - Result: "Reduced [processing time] by [optimizing Python scripts] using [multithreading]."
 3. **Kill the Fluff:** Delete weak verbs like "Strategized," "Participated," "Pioneered," "Worked on." Use hard technical verbs (e.g., "Deployed," "Engineered," "Refactored").
 """
+    
+    title_context = ""
+    if extracted_job_title:
+        title_context = f"\nTARGET JOB TITLE: {extracted_job_title}\nOptimize the resume to target this specific role."
 
     system_prompt = f"""You are an elite Technical Resume Writer. Your goal is to rewrite the user's raw notes into high-impact, metric-driven STAR bullets.
 You are NOT allowed to invent new jobs or change the user's employment history.
 
 SENIORITY LEVEL: {seniority_level.upper()}
 STRICT ACTION VERBS: {', '.join(allowed_verbs)}
-TONE INSTRUCTION: {tone_instruction}
+TONE INSTRUCTION: {tone_instruction}{title_context}
 
 {golden_section}
 
@@ -140,6 +145,7 @@ class Drafter:
         golden_bullets: Optional[List[str]] = None,
         tone_instruction: Optional[str] = None,
         temperature_override: Optional[float] = None,
+        extracted_job_title: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
@@ -176,7 +182,8 @@ class Drafter:
             seniority_level=seniority_level,
             allowed_verbs=allowed_verbs,
             golden_bullets=golden_bullets,
-            tone_instruction=tone_instruction or "Maintain a standard, professional corporate tone."
+            tone_instruction=tone_instruction or "Maintain a standard, professional corporate tone.",
+            extracted_job_title=extracted_job_title,
         ) + sparse_instruction
         
         user_prompt = f"""

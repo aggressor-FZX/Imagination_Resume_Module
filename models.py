@@ -163,6 +163,7 @@ class AnalysisResponse(BaseModel):
         default_factory=list, description="Claim-to-source mapping for trust and verification"
     )
     critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
+    extracted_job_title: Optional[str] = Field(None, description="Job title extracted from job ad via LLM")
     run_metrics: Optional[RunMetrics] = Field(None, description="Usage metrics and costs")
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"

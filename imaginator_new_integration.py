@@ -63,6 +63,28 @@ async def run_new_pipeline_async(
         
         llm_client = LLMClientAdapter(api_key=openrouter_api_keys[0])
         
+        # Extract Job Title (GPT-4o) - High Priority for Frontend Display
+        logger.info("[NEW_PIPELINE] Extracting job title via GPT-4o...")
+        extracted_job_title = None
+        try:
+            title_sys_prompt = "You are a precise job data extractor. Extract the official Job Title from the provided text. Return JSON: {\"job_title\": \"...\"}"
+            title_user_prompt = f"Job Description Segment:\n{job_ad[:400]}\n\nExtract the Job Title:"
+            
+            title_response = await llm_client.call_llm_async(
+                system_prompt=title_sys_prompt,
+                user_prompt=title_user_prompt,
+                model=OR_SLUG_JOB_TITLE_EXTRACTOR,
+                temperature=0.1,
+                response_format={"type": "json_object"},
+                max_tokens=50
+            )
+            title_data = json.loads(title_response) if title_response else {}
+            extracted_job_title = title_data.get("job_title")
+            if extracted_job_title:
+                logger.info(f"[NEW_PIPELINE] Extracted Job Title: {extracted_job_title}")
+        except Exception as e:
+            logger.warning(f"[NEW_PIPELINE] Job title extraction failed: {e}")
+
         # Run orchestrator
         orchestrator = PipelineOrchestrator(llm_client)
         result = await orchestrator.run_pipeline(
@@ -71,6 +93,7 @@ async def run_new_pipeline_async(
             experiences=experiences,
             openrouter_api_keys=openrouter_api_keys,
             creativity_mode=creativity_mode,
+            extracted_job_title=extracted_job_title,
         )
         
         # Extract final output
@@ -155,6 +178,7 @@ Rate the alignment (0.0-1.0):"""
             "quantification_analysis": final_output.get("quantification_analysis", {}),
             "hallucination_checked": final_output.get("hallucination_checked", False),
             "critique_score": critique_score,  # ATS Score from criticism stage
+            "extracted_job_title": extracted_job_title,  # Extracted by GPT-4o
             
             # Backward-compatible fields for frontend
             "experiences": experiences,
