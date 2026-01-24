@@ -599,10 +599,30 @@ def parse_experiences(text: str) -> List[Dict]:
             
         # Check if this block contains narrative content
         b_lower = b.lower()
-        has_narrative_in_block = any(indicator in b_lower for indicator in narrative_indicators)
+        
+        # FIX: Only skip blocks that START with narrative indicators (cover letter style)
+        # This prevents dropping legitimate experience blocks that contain phrases like
+        # "worked as a software engineer" or "I have 5 years of experience"
+        # Original logic skipped ANY block containing ANY indicator anywhere, which was too aggressive
+        narrative_start_patterns = [
+            "as a", "i am", "i have", "i'm", "i've", "my name is", "i am seeking",
+            "i am looking", "i am a", "i am an", "i am the", "i am motivated",
+            "i am experienced", "i am seeking", "i am looking for", "i want to",
+            "i would like to", "i aim to", "i strive to", "i seek to",
+            "a motivated", "an experienced", "the candidate", "the professional",
+            "this professional", "this candidate", "this individual",
+            "is seeking", "is looking", "wants to", "would like to", "aims to",
+            "strives to", "seeks to"
+        ]
+        
+        # Only skip if block starts with narrative pattern (cover letter style)
+        # OR if it contains multiple narrative indicators (3+) suggesting it's narrative-heavy
+        has_narrative_start = any(b_lower.strip().startswith(pattern) for pattern in narrative_start_patterns)
+        narrative_count = sum(1 for indicator in narrative_indicators if indicator in b_lower)
         
         # Skip blocks that look like narrative/cover letter content
-        if has_narrative_in_block:
+        # More conservative: require start pattern OR high narrative density
+        if has_narrative_start or narrative_count >= 3:
             continue
             
         # Skip education sections
@@ -2500,8 +2520,8 @@ async def run_analysis_async(
         logger.info(f"[ANALYZE_RESUME] Using extracted_skills_json from backend (count: {len(structured_input.get('skills', []))})")
     if not structured_input:
         structured_input = _structured_from_fastsvm(fastsvm_output)
-        print(f"DEBUG: fastsvm_output keys: {list(fastsvm_output.keys()) if isinstance(fastsvm_output, dict) else 'NOT DICT'}")
-        print(f"DEBUG: structured_input: {structured_input}")
+        logger.debug(f"[ANALYZE_RESUME] fastsvm_output keys: {list(fastsvm_output.keys()) if isinstance(fastsvm_output, dict) else 'NOT DICT'}")
+        logger.debug(f"[ANALYZE_RESUME] structured_input: {structured_input}")
         if structured_input:
           logger.info(f"[ANALYZE_RESUME] Using structured data from FastSVM (count: {len(structured_input.get('skills', []))})")
     fallback_used = False
@@ -2715,7 +2735,7 @@ Seniority analysis: {seniority}
     # 🚀 CRITICAL FIX: Call 4-stage pipeline to get final enhanced resume output
     if not kwargs.get("skip_enhancement", False):
         try:
-            print("🚀 run_analysis_async: Calling 4-stage pipeline for final enhancement...", flush=True)
+            logger.info("[ANALYZE_RESUME] Calling 4-stage pipeline for final enhancement...")
             four_stage_result = await run_full_analysis_async(
                 resume_text=processed_text,
                 job_ad=job_ad or "",
@@ -2741,9 +2761,9 @@ Seniority analysis: {seniority}
                     if stage_name not in RUN_METRICS["stages"]:
                         RUN_METRICS["stages"][stage_name] = stage_data
             
-            print("✅ 4-stage pipeline completed successfully", flush=True)
+            logger.info("[ANALYZE_RESUME] 4-stage pipeline completed successfully")
         except Exception as e:
-            print(f"❌ 4-stage pipeline failed: {e}", flush=True)
+            logger.error(f"[ANALYZE_RESUME] 4-stage pipeline failed: {e}", exc_info=True)
             RUN_METRICS["failures"].append({"stage": "4_stage_pipeline", "error": str(e)})
     
     # Redis cache disabled per project decision
@@ -2899,14 +2919,22 @@ async def run_synthesis_async(
         logger.info("[SYNTHESIS] Preparing to synthesize %d experiences", len(experiences))
         if not experiences or len(experiences_str) < 50:
             fallback_text = None
-            if isinstance(generated_text, dict):
+            fallback_source = generated_text
+            if fallback_source is None and isinstance(analysis_result, dict):
+                fallback_source = (
+                    analysis_result.get("generated_text")
+                    or analysis_result.get("final_written_section")
+                    or analysis_result.get("text")
+                    or analysis_result.get("content")
+                )
+            if isinstance(fallback_source, dict):
                 for key in ("generated_text", "final_written_section", "text", "content"):
-                    value = generated_text.get(key)
+                    value = fallback_source.get(key)
                     if isinstance(value, str) and value.strip():
                         fallback_text = value.strip()
                         break
-            elif isinstance(generated_text, str) and generated_text.strip():
-                fallback_text = generated_text.strip()
+            elif isinstance(fallback_source, str) and fallback_source.strip():
+                fallback_text = fallback_source.strip()
             if fallback_text:
                 experiences_str = f"• Generated Draft\n  Body: {fallback_text[:2000]}"
             else:
