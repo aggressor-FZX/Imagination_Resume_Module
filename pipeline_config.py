@@ -37,6 +37,7 @@ FALLBACK_MODELS = {
 PRICING = {
     "perplexity/sonar-pro": {"input": 0.003, "output": 0.015}, # Verified via OpenRouter API
     "perplexity/sonar": {"input": 0.001, "output": 0.001},
+    "openai/gpt-4o": {"input": 0.005, "output": 0.015},
     "google/gemini-2.0-flash-001": {"input": 0.0001, "output": 0.0004}, # Corrected: was 2.5x too high
     "google/gemini-2.0-pro": {"input": 0.00125, "output": 0.0025}, # Needs verification
     "google/gemini-3-flash-preview": {"input": 0.0005, "output": 0.003}, # New high-quality drafter
