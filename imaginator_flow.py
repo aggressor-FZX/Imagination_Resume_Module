@@ -1803,13 +1803,13 @@ async def run_creative_draft_async(
             skills_list = exp.get("skills", [])
             snippet = exp.get("snippet", "")
             
-            # More recent experiences get full detail, older ones get truncated
-            if i <= 3:  # First 3 experiences: full detail
+            # More recent experiences get full detail, older ones get moderate truncation
+            if i <= 4:  # First 4 experiences: full detail
+                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:20])}\n{snippet[:1200]}"
+            elif i <= 7:  # Next 3: moderate detail
                 exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:800]}"
-            elif i <= 5:  # Next 2: moderate detail
-                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:400]}"
-            else:  # Remaining: minimal detail
-                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:5])}\n{snippet[:200]}"
+            else:  # Remaining: reduced detail
+                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:500]}"
             
             # Rough token estimate: 1 token ≈ 4 characters
             exp_tokens = len(exp_text) // 4
@@ -1829,25 +1829,27 @@ async def run_creative_draft_async(
 Your task: Draft an enhanced "Professional Experience" section that positions the candidate optimally for the target role.
 
 Guidelines:
-1. **Use Candidate's ACTUAL Experiences** - Never invent positions, companies, or accomplishments
-2. **Incorporate Research Insights** - Weave in implied skills and industry metrics discovered via web research
-3. **Write Compelling Narratives** - Transform basic job duties into achievement stories
-4. **Match Target Role** - Align language and focus with the job description
-5. **Be Specific** - Use concrete examples from candidate's background
-6. **Maintain Authenticity** - Enhance what exists, don't fabricate
-7. **Handle Chronological Positions Carefully**:
-   - When a candidate has overlapping roles (same time period, different titles), choose the ONE most relevant to target job
-   - Understand career progression: people often change titles slightly while in same position or hold multiple roles
-   - Prioritize roles that best match target job requirements
+1. **Use Candidate's ACTUAL Experiences** - Use real positions, companies, and accomplishments from their history
+2. **INFER SKILLS FROM CONTEXT** - If someone worked in data analysis, they likely used SQL, Python, Excel even if not explicitly stated. Infer reasonable skills based on their job functions and industry norms
+3. **Incorporate Research Insights** - Weave in implied skills and industry metrics discovered via web research
+4. **Write Compelling Narratives** - Transform basic job duties into achievement stories with quantified impact
+5. **Match Target Role** - Align language and focus with the job description requirements
+6. **Be Creative but Truthful** - Enhance and expand on what exists, infer likely skills from experience context, but don't fabricate entire accomplishments
+7. **Add Industry-Standard Metrics** - If the candidate worked on systems/projects, infer reasonable metrics (users served, uptime, efficiency gains) based on company size and role level
+8. **Handle Chronological Positions Carefully**:
+   - When a candidate has overlapping roles, prioritize the ONE most relevant to target job
+   - Understand career progression and evolving responsibilities
    - In reverse chronological order (most recent first)
+
+Key principle: A candidate who worked as "Data Analyst" likely has experience with dashboards, SQL queries, stakeholder presentations, and data pipelines even if not explicitly listed. Surface these implied skills.
 
 Key keyword: "creative" - This triggers Gemini 2.5 Pro routing.
 
 Return the enhanced experience section in clean markdown format with:
 - Company name and dates (from original)
-- Enhanced position titles (if appropriate)
-- 4-6 achievement bullets per position
-- Focus on impact and results"""
+- Enhanced position titles (if appropriate to the role's actual scope)
+- 4-6 achievement bullets per position with quantified impact where reasonable
+- Focus on impact, results, and skills relevant to target role"""
     
     user_prompt = f"""PRIORITY DATA (Hermes + FastSVM Analysis):
 Extracted Skills: {', '.join(aggregate_skills[:50])}
@@ -1858,7 +1860,7 @@ WEB RESEARCH INSIGHTS (DeepSeek Search):
 - Research Notes: {research_notes[:600]}
 
 TARGET JOB DESCRIPTION:
-{job_ad[:1000]}
+{job_ad[:3000]}
 
 CANDIDATE'S ACTUAL EXPERIENCES (fit within context):
 {experiences_text}
@@ -1882,7 +1884,7 @@ Use ACTUAL experiences only. Incorporate research insights naturally. Make it co
             system_prompt,
             user_prompt,
             temperature=0.8,  # Higher temperature for creativity
-            max_tokens=2500,
+            max_tokens=4000,  # Increased from 2500 for more comprehensive output
             openrouter_api_keys=openrouter_api_keys,
             **kwargs
         )
@@ -2096,7 +2098,7 @@ RESEARCH INSIGHTS:
 - Research Notes: {research_data.get('research_notes', '')[:400]}
 
 TARGET JOB DESCRIPTION:
-{job_ad[:1000]}
+{job_ad[:3000]}
 
 TASK:
 Create a complete professional resume. Use ONLY the provided information.
@@ -2150,7 +2152,7 @@ EXAMPLE:
             system_prompt,
             user_prompt,
             temperature=0.6,  # Balanced for editorial judgment
-            max_tokens=3000,
+            max_tokens=4500,  # Increased from 3000 for comprehensive final output
             openrouter_api_keys=openrouter_api_keys,
             **kwargs
         )
@@ -2679,7 +2681,7 @@ Seniority analysis: {seniority}
               system_prompt,
               user_prompt,
               temperature=0.2,
-              max_tokens=1200,
+              max_tokens=2000,  # Increased from 1200 for more detailed gap analysis
               response_format={ "type": "json_object" }
           )
           structured_gaps = ensure_json_dict(llm_response, "gap_llm")
@@ -2688,6 +2690,16 @@ Seniority analysis: {seniority}
         except Exception as e:
           logger.warning(f"[GAP_ANALYSIS] LLM failed: {e}, fallback to heuristic")
           RUN_METRICS["failures"].append({"stage": "gap_llm", "error": str(e)})
+    
+    # Fallback: If job_high_confidence was empty but we have job_ad, use aggregate skills for basic gap estimation
+    if not gap_analysis.get('critical_gaps') and job_ad and aggregate_skills:
+        logger.info("[GAP_ANALYSIS] Using fallback - inferring gaps from job ad keywords")
+        # Extract keywords from job ad that aren't in aggregate skills
+        job_keywords = set(re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b|\b[A-Z]{2,}\b', job_ad))
+        inferred_gaps = [kw for kw in job_keywords if kw.lower() not in [s.lower() for s in aggregate_skills]][:10]
+        if inferred_gaps:
+            gap_analysis["critical_gaps"] = inferred_gaps
+            gap_analysis["summary"] = f"Inferred potential gaps from job ad: {', '.join(inferred_gaps)}"
 
     output = {
         "experiences": [
