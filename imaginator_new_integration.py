@@ -189,11 +189,45 @@ Rate the alignment (0.0-1.0):"""
         domain_insights.setdefault("work_archetypes", work_archetypes)
         
         # Add insights field from researcher data for frontend display (must be a list per Pydantic schema)
+        def _normalize_research_items(items, limit):
+            if not items or not isinstance(items, list):
+                return []
+            normalized = []
+            for item in items:
+                if item is None:
+                    continue
+                if isinstance(item, str):
+                    value = item.strip()
+                elif isinstance(item, (int, float, bool)):
+                    value = str(item)
+                elif isinstance(item, dict):
+                    value = (
+                        item.get("metric")
+                        or item.get("skill")
+                        or item.get("name")
+                        or item.get("label")
+                        or item.get("title")
+                    )
+                    value = str(value).strip() if value else ""
+                    if not value:
+                        value = str(item)
+                else:
+                    value = str(item)
+                if value:
+                    normalized.append(value)
+            return normalized[:limit]
+
+        implied_metrics_normalized = _normalize_research_items(implied_metrics, 3)
+        implied_skills_normalized = _normalize_research_items(implied_skills, 5)
         insights_list = []
         if insider_tips:
             insights_list.append(insider_tips)
-        if implied_metrics:
-            insights_list.append(f"Key metrics to target: {', '.join(implied_metrics[:3])}")
+        if implied_metrics_normalized:
+            # Ensure all items are strings before joining to prevent TypeError
+            metrics_str = ', '.join(str(item) for item in implied_metrics_normalized if item)
+            insights_list.append(
+                f"Key metrics to target: {metrics_str}"
+            )
         if not insights_list:
             insights_list.append("Focus on quantifiable achievements and relevant technologies.")
         domain_insights["insights"] = insights_list
@@ -208,10 +242,18 @@ Rate the alignment (0.0-1.0):"""
         gap_analysis = ""
         if implied_skills or implied_metrics:
             gap_parts = []
-            if implied_skills:
-                gap_parts.append(f"Consider highlighting these implied skills: {', '.join(implied_skills[:5])}")
-            if implied_metrics:
-                gap_parts.append(f"Target these benchmarks: {', '.join(implied_metrics[:3])}")
+        if implied_skills_normalized:
+            # Ensure all items are strings before joining to prevent TypeError
+            skills_str = ', '.join(str(item) for item in implied_skills_normalized if item)
+            gap_parts.append(
+                f"Consider highlighting these implied skills: {skills_str}"
+            )
+        if implied_metrics_normalized:
+            # Ensure all items are strings before joining to prevent TypeError
+            metrics_str = ', '.join(str(item) for item in implied_metrics_normalized if item)
+            gap_parts.append(
+                f"Target these benchmarks: {metrics_str}"
+            )
             if insider_tips:
                 gap_parts.append(insider_tips)
             gap_analysis = ". ".join(gap_parts)
