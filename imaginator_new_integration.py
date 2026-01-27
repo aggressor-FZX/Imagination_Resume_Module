@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List
 from orchestrator import PipelineOrchestrator
 from llm_client_adapter import LLMClientAdapter
 from imaginator_flow import parse_experiences
-from pipeline_config import OR_SLUG_STAR_EDITOR  # Use STAR editor for quick ATS scoring
+from pipeline_config import OR_SLUG_STAR_EDITOR, OR_SLUG_JOB_TITLE_EXTRACTOR  # Use STAR editor for quick ATS scoring
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,15 @@ Rate the alignment (0.0-1.0):"""
         if errors:
             logger.error(f"[NEW_PIPELINE] Pipeline encountered {len(errors)} errors: {errors}")
 
-        # Extract skills from upstream data (Hermes/FastSVM) or use defaults
+        # Extract researcher data for domain insights
+        researcher_data = result.get("stages", {}).get("researcher", {}).get("data", {})
+        implied_skills = researcher_data.get("implied_skills", [])
+        domain_vocab = researcher_data.get("domain_vocab", [])
+        implied_metrics = researcher_data.get("implied_metrics", [])
+        insider_tips = researcher_data.get("insider_tips", "")
+        work_archetypes = researcher_data.get("work_archetypes", [])
+        
+        # Extract skills from upstream data (Hermes/FastSVM) or use researcher's implied skills
         aggregate_skills = []
         if extracted_skills_json:
             if isinstance(extracted_skills_json, list):
@@ -147,26 +155,67 @@ Rate the alignment (0.0-1.0):"""
                 aggregate_skills = [s.get("skill", s) if isinstance(s, dict) else str(s) 
                                   for s in skills_list[:15]]
         
-        # Build domain_insights from upstream data or use intelligent defaults
+        # Supplement with researcher's implied skills if not enough from upstream
+        if len(aggregate_skills) < 5 and implied_skills:
+            for skill in implied_skills:
+                if skill not in aggregate_skills:
+                    aggregate_skills.append(skill)
+                if len(aggregate_skills) >= 15:
+                    break
+        
+        # Build domain_insights from upstream data, researcher data, or intelligent defaults
         domain_insights = {}
         if domain_insights_json and isinstance(domain_insights_json, dict):
-            domain_insights = domain_insights_json
+            domain_insights = domain_insights_json.copy()
         else:
-            # Create intelligent defaults based on job ad
+            # Create intelligent defaults based on researcher output
             domain_insights = {
                 "domain": "Technology",
                 "market_demand": "High",
                 "salary_range": "$80,000 - $150,000",
-                "top_skills": aggregate_skills[:5] if aggregate_skills else ["Python", "AWS", "Docker"],
+                "top_skills": domain_vocab[:5] if domain_vocab else aggregate_skills[:5] if aggregate_skills else ["Python", "AWS", "Docker"],
                 "certifications": [],
                 "career_path": ["Entry Level", "Mid Level", "Senior", "Lead"],
-                "skill_gap_priority": "Focus on cloud and containerization technologies"
+                "skill_gap_priority": insider_tips if insider_tips else "Focus on demonstrating quantifiable achievements"
             }
         
-        # Ensure all required fields exist in domain_insights
-        domain_insights.setdefault("top_skills", aggregate_skills[:5] if aggregate_skills else [])
+        # Enrich domain_insights with researcher data
+        domain_insights.setdefault("top_skills", domain_vocab[:5] if domain_vocab else aggregate_skills[:5] if aggregate_skills else [])
         domain_insights.setdefault("certifications", [])
         domain_insights.setdefault("career_path", [])
+        domain_insights.setdefault("skill_gap_priority", insider_tips if insider_tips else "")
+        domain_insights.setdefault("domain_vocab", domain_vocab)
+        domain_insights.setdefault("implied_metrics", implied_metrics)
+        domain_insights.setdefault("work_archetypes", work_archetypes)
+        
+        # Add insights field from researcher data for frontend display
+        if insider_tips or implied_metrics:
+            insights_text = ""
+            if insider_tips:
+                insights_text = insider_tips
+            if implied_metrics:
+                insights_text += f" Key metrics to target: {', '.join(implied_metrics[:3])}."
+            domain_insights["insights"] = insights_text.strip()
+        else:
+            domain_insights["insights"] = "Focus on quantifiable achievements and relevant technologies."
+        
+        # Add emerging_trends from work_archetypes
+        if work_archetypes:
+            domain_insights["emerging_trends"] = work_archetypes
+        else:
+            domain_insights["emerging_trends"] = []
+        
+        # Build gap_analysis from researcher data
+        gap_analysis = ""
+        if implied_skills or implied_metrics:
+            gap_parts = []
+            if implied_skills:
+                gap_parts.append(f"Consider highlighting these implied skills: {', '.join(implied_skills[:5])}")
+            if implied_metrics:
+                gap_parts.append(f"Target these benchmarks: {', '.join(implied_metrics[:3])}")
+            if insider_tips:
+                gap_parts.append(insider_tips)
+            gap_analysis = ". ".join(gap_parts)
         
         response = {
             # Core fields from new pipeline
@@ -185,9 +234,15 @@ Rate the alignment (0.0-1.0):"""
             "aggregate_skills": aggregate_skills,
             "processed_skills": {"all": aggregate_skills},
             "domain_insights": domain_insights,
-            "gap_analysis": "",  # No longer generated in new pipeline
+            "gap_analysis": gap_analysis,  # Generated from researcher insights
             "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
             "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
+            
+            # Backward compatibility: rewritten_resume = final_written_section (for frontend)
+            "rewritten_resume": final_output.get("final_written_section", ""),
+            
+            # Suggestions field for frontend
+            "suggestions": [],
             
             # Metadata
             "pipeline_version": "3.0",

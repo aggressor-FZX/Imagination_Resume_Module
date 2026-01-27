@@ -134,19 +134,41 @@ OPENROUTER_MODEL_BALANCED = "anthropic/claude-3-haiku"             # Balanced ta
 
 
 def _estimate_openrouter_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    """Estimate per-call cost based on model-specific OpenRouter pricing."""
+    """Estimate per-call cost based on model-specific OpenRouter pricing.
+    
+    Uses pipeline_config.estimate_cost if available (more accurate), otherwise falls back
+    to hardcoded pricing constants.
+    """
+    # Try to use pipeline_config pricing first (more accurate)
+    try:
+        from pipeline_config import estimate_cost
+        return estimate_cost(model, prompt_tokens, completion_tokens)
+    except (ImportError, AttributeError):
+        # Fallback to hardcoded pricing
+        pass
+    
+    # Fallback: Use hardcoded pricing constants
     prompt_rate = OPENROUTER_PRICE_IN_K
     completion_rate = OPENROUTER_PRICE_OUT_K
 
-    if "qwen/qwen3-30b-a3b" in model:
+    if "qwen/qwen3-30b-a3b" in model or "qwen" in model.lower():
         prompt_rate = QWEN_PRICE_IN_K
         completion_rate = QWEN_PRICE_OUT_K
-    elif "deepseek/deepseek-chat-v3.1" in model:
+    elif "deepseek/deepseek-chat-v3.1" in model or "deepseek" in model.lower():
         prompt_rate = DEEPSEEK_PRICE_IN_K
         completion_rate = DEEPSEEK_PRICE_OUT_K
-    elif "claude-3" in model:
+    elif "claude-3" in model or "anthropic/claude" in model:
         prompt_rate = ANTHROPIC_PRICE_IN_K
         completion_rate = ANTHROPIC_PRICE_OUT_K
+    elif "perplexity/sonar-pro" in model:
+        prompt_rate = 0.003  # $3 per 1M tokens = $0.003 per 1K tokens
+        completion_rate = 0.015  # $15 per 1M tokens = $0.015 per 1K tokens
+    elif "google/gemini-2.0-flash-001" in model:
+        prompt_rate = 0.0001  # $0.1 per 1M tokens = $0.0001 per 1K tokens
+        completion_rate = 0.0004  # $0.4 per 1M tokens = $0.0004 per 1K tokens
+    elif "openai/gpt-4o-mini" in model:
+        prompt_rate = 0.00015  # $0.15 per 1M tokens = $0.00015 per 1K tokens
+        completion_rate = 0.00060  # $0.60 per 1M tokens = $0.00060 per 1K tokens
 
     return (prompt_tokens / 1000.0) * prompt_rate + (completion_tokens / 1000.0) * completion_rate
 
