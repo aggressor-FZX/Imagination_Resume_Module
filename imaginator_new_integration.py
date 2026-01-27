@@ -188,16 +188,15 @@ Rate the alignment (0.0-1.0):"""
         domain_insights.setdefault("implied_metrics", implied_metrics)
         domain_insights.setdefault("work_archetypes", work_archetypes)
         
-        # Add insights field from researcher data for frontend display
-        if insider_tips or implied_metrics:
-            insights_text = ""
-            if insider_tips:
-                insights_text = insider_tips
-            if implied_metrics:
-                insights_text += f" Key metrics to target: {', '.join(implied_metrics[:3])}."
-            domain_insights["insights"] = insights_text.strip()
-        else:
-            domain_insights["insights"] = "Focus on quantifiable achievements and relevant technologies."
+        # Add insights field from researcher data for frontend display (must be a list per Pydantic schema)
+        insights_list = []
+        if insider_tips:
+            insights_list.append(insider_tips)
+        if implied_metrics:
+            insights_list.append(f"Key metrics to target: {', '.join(implied_metrics[:3])}")
+        if not insights_list:
+            insights_list.append("Focus on quantifiable achievements and relevant technologies.")
+        domain_insights["insights"] = insights_list
         
         # Add emerging_trends from work_archetypes
         if work_archetypes:
