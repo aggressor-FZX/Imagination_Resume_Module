@@ -696,7 +696,7 @@ def extract_skills_from_experience(text: str) -> Set[str]:
         ("python", "Python"), ("java", "Java"), ("javascript", "JavaScript"),
         ("typescript", "TypeScript"), ("c++", "C++"), ("c#", "C#"),
         ("ruby", "Ruby"), ("go", "Go"), ("rust", "Rust"), ("scala", "Scala"),
-        ("kotlin", "Kotlin"), ("swift", "Swift"), ("php", "PHP"), ("r", "R"),
+        ("kotlin", "Kotlin"), ("swift", "Swift"), ("php", "PHP"),
         # Frameworks
         ("react", "React"), ("angular", "Angular"), ("vue", "Vue"),
         ("django", "Django"), ("flask", "Flask"), ("fastapi", "FastAPI"),

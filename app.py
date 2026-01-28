@@ -281,7 +281,15 @@ async def analyze_resume(
             # Prefer run_metrics from analysis_result if it has actual data (from LLMClientAdapter)
             # Otherwise fall back to global RUN_METRICS (for legacy pipeline paths)
             pipeline_metrics = analysis_result.get("run_metrics", {})
-            if pipeline_metrics.get("total_tokens", 0) > 0 or pipeline_metrics.get("calls"):
+            # Check if pipeline_metrics is a valid dict with useful data
+            # Note: calls list can be legitimately empty [], so check total_tokens or if dict is non-empty
+            has_valid_metrics = (
+                isinstance(pipeline_metrics, dict) and 
+                (pipeline_metrics.get("total_tokens", 0) > 0 or 
+                 pipeline_metrics.get("calls") is not None or
+                 len(pipeline_metrics) > 0)
+            )
+            if has_valid_metrics and pipeline_metrics.get("total_tokens", 0) > 0:
                 merged_metrics = pipeline_metrics
                 logger.info(f"[METRICS] Using pipeline run_metrics: {pipeline_metrics.get('total_tokens', 0)} tokens")
             else:
