@@ -260,6 +260,9 @@ Rate the alignment (0.0-1.0):"""
         if gap_parts:
             gap_analysis = ". ".join(gap_parts)
         
+        # Get token usage stats from LLM client
+        llm_usage = llm_client.get_usage_stats()
+        
         response = {
             # Core fields from new pipeline
             "final_written_section_markdown": final_output.get("final_written_section_markdown", ""),
@@ -286,6 +289,16 @@ Rate the alignment (0.0-1.0):"""
             
             # Suggestions field for frontend
             "suggestions": [],
+            
+            # Token usage metrics (from LLM client)
+            "run_metrics": {
+                "calls": llm_usage.get("calls", []),
+                "total_prompt_tokens": llm_usage.get("total_prompt_tokens", 0),
+                "total_completion_tokens": llm_usage.get("total_completion_tokens", 0),
+                "total_tokens": llm_usage.get("total_tokens", 0),
+                "estimated_cost_usd": llm_usage.get("estimated_cost_usd", 0.0),
+                "failures": [],
+            },
             
             # Metadata
             "pipeline_version": "3.0",

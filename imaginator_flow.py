@@ -594,6 +594,17 @@ _ROLE_MAP = {
 
 
 def parse_experiences(text: str) -> List[Dict]:
+    """
+    Parse experience blocks from resume text.
+    
+    Returns experiences with fields compatible with creative drafter:
+    - title_line: Job title/company header
+    - skills: List of skills extracted from the experience
+    - snippet: Full text content of the experience (for context)
+    - body: Same as snippet (backward compatibility)
+    - duration: Extracted date/duration info
+    - raw: Original block text
+    """
     # Narrative indicators to detect cover letter/narrative content
     narrative_indicators = [
         "as a", "i am", "i have", "i'm", "i've", "my", "me", "myself",
@@ -657,16 +668,140 @@ def parse_experiences(text: str) -> List[Dict]:
 
         # Extract duration information for seniority detection
         duration = extract_duration_from_text(b)
+        
+        # Extract skills from the experience text using keyword matching
+        extracted_skills = list(extract_skills_from_experience(b))
 
         experiences.append({
           "raw": b,
           "title_line": title_line,
           "body": body,
+          "snippet": body,  # Alias for creative drafter compatibility
+          "skills": extracted_skills,  # Skills extracted from this experience
           "duration": duration,
           "description": f"{title_line} {body}"
         })
     
     return experiences
+
+
+def extract_skills_from_experience(text: str) -> Set[str]:
+    """Extract skills mentioned in an experience block using keyword matching."""
+    text_lower = text.lower()
+    found_skills = set()
+    
+    # Common tech skills to look for
+    skill_patterns = [
+        # Programming Languages
+        ("python", "Python"), ("java", "Java"), ("javascript", "JavaScript"),
+        ("typescript", "TypeScript"), ("c++", "C++"), ("c#", "C#"),
+        ("ruby", "Ruby"), ("go", "Go"), ("rust", "Rust"), ("scala", "Scala"),
+        ("kotlin", "Kotlin"), ("swift", "Swift"), ("php", "PHP"), ("r", "R"),
+        # Frameworks
+        ("react", "React"), ("angular", "Angular"), ("vue", "Vue"),
+        ("django", "Django"), ("flask", "Flask"), ("fastapi", "FastAPI"),
+        ("node.js", "Node.js"), ("nodejs", "Node.js"), ("express", "Express"),
+        ("spring", "Spring"), (".net", ".NET"), ("rails", "Rails"),
+        # Cloud & DevOps
+        ("aws", "AWS"), ("azure", "Azure"), ("gcp", "GCP"), ("google cloud", "GCP"),
+        ("docker", "Docker"), ("kubernetes", "Kubernetes"), ("k8s", "Kubernetes"),
+        ("terraform", "Terraform"), ("ansible", "Ansible"), ("jenkins", "Jenkins"),
+        ("ci/cd", "CI/CD"), ("cicd", "CI/CD"), ("devops", "DevOps"),
+        # Data & ML
+        ("sql", "SQL"), ("postgresql", "PostgreSQL"), ("mysql", "MySQL"),
+        ("mongodb", "MongoDB"), ("redis", "Redis"), ("elasticsearch", "Elasticsearch"),
+        ("spark", "Apache Spark"), ("kafka", "Kafka"), ("hadoop", "Hadoop"),
+        ("tensorflow", "TensorFlow"), ("pytorch", "PyTorch"), ("scikit-learn", "Scikit-learn"),
+        ("machine learning", "Machine Learning"), ("deep learning", "Deep Learning"),
+        ("data science", "Data Science"), ("data analysis", "Data Analysis"),
+        # Soft Skills
+        ("leadership", "Leadership"), ("team lead", "Team Leadership"),
+        ("project management", "Project Management"), ("agile", "Agile"),
+        ("scrum", "Scrum"), ("cross-functional", "Cross-functional Teams"),
+    ]
+    
+    for pattern, skill_name in skill_patterns:
+        if pattern in text_lower:
+            found_skills.add(skill_name)
+    
+    return found_skills
+
+
+def compute_relevance_score(experience_text: str, job_ad_text: str, extracted_skills: List[str] = None) -> float:
+    """
+    Compute relevance score between an experience and job ad using multiple signals.
+    
+    Uses a combination of:
+    1. Keyword overlap (simple but effective)
+    2. Skill matching against extracted skills
+    3. Important term frequency (TF-IDF-like weighting)
+    
+    Returns a score between 0.0 and 1.0
+    """
+    if not experience_text or not job_ad_text:
+        return 0.0
+    
+    exp_lower = experience_text.lower()
+    job_lower = job_ad_text.lower()
+    
+    # Extract words (simple tokenization)
+    exp_words = set(re.findall(r'\b[a-z]{3,}\b', exp_lower))
+    job_words = set(re.findall(r'\b[a-z]{3,}\b', job_lower))
+    
+    # Common stopwords to ignore
+    stopwords = {
+        'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'has',
+        'been', 'will', 'are', 'was', 'were', 'been', 'being', 'had', 'does',
+        'did', 'doing', 'would', 'could', 'should', 'may', 'might', 'must',
+        'shall', 'can', 'need', 'about', 'into', 'through', 'during', 'before',
+        'after', 'above', 'below', 'between', 'under', 'over', 'such', 'while',
+        'where', 'which', 'who', 'whom', 'what', 'when', 'why', 'how', 'each',
+        'some', 'any', 'all', 'both', 'few', 'more', 'most', 'other', 'than',
+        'only', 'very', 'also', 'just', 'well', 'even', 'work', 'working',
+        'experience', 'years', 'year', 'including', 'include', 'ability',
+    }
+    
+    exp_words -= stopwords
+    job_words -= stopwords
+    
+    # 1. Keyword overlap score (Jaccard-like)
+    if not job_words:
+        keyword_score = 0.0
+    else:
+        overlap = len(exp_words & job_words)
+        keyword_score = overlap / len(job_words) if job_words else 0.0
+    
+    # 2. Skill matching score
+    skill_score = 0.0
+    if extracted_skills:
+        skills_lower = [s.lower() for s in extracted_skills if s]
+        matched_skills = sum(1 for skill in skills_lower if skill in exp_lower)
+        skill_score = matched_skills / len(extracted_skills) if extracted_skills else 0.0
+    
+    # 3. Important tech term matching (weighted higher)
+    tech_terms = [
+        'python', 'java', 'javascript', 'typescript', 'react', 'angular', 'vue',
+        'aws', 'azure', 'gcp', 'cloud', 'docker', 'kubernetes', 'devops',
+        'machine learning', 'deep learning', 'data science', 'sql', 'database',
+        'api', 'microservices', 'agile', 'scrum', 'lead', 'senior', 'architect',
+        'engineer', 'developer', 'manager', 'director', 'principal', 'staff',
+        'tensorflow', 'pytorch', 'spark', 'kafka', 'redis', 'mongodb', 'postgresql',
+    ]
+    
+    exp_tech = sum(1 for term in tech_terms if term in exp_lower)
+    job_tech = sum(1 for term in tech_terms if term in job_lower)
+    tech_overlap = sum(1 for term in tech_terms if term in exp_lower and term in job_lower)
+    tech_score = tech_overlap / max(job_tech, 1) if job_tech > 0 else 0.0
+    
+    # Combine scores with weights
+    # Tech match is most important, then skill match, then general keywords
+    combined_score = (
+        0.5 * tech_score +      # 50% weight on tech term overlap
+        0.3 * skill_score +     # 30% weight on skill matching
+        0.2 * keyword_score     # 20% weight on general keyword overlap
+    )
+    
+    return min(combined_score, 1.0)
 
 
 def extract_duration_from_text(text: str) -> str:
@@ -1789,62 +1924,82 @@ async def run_creative_draft_async(
     research_notes = research_data.get("research_notes", "")       # From researcher
     
     # Build experiences summary - FIT AS MUCH AS POSSIBLE within context limits
-    # Priority: Recent experiences get more detail
+    # Priority: Use semantic relevance to job ad to select most important content
     exp_details = []
     estimated_tokens = 0
-    max_context_tokens = 16000  # Conservative estimate for Skyfall 36B context window
     
-    # Reserve tokens for: system prompt (~300), skills (~200), job ad (~400), research (~500) = ~1400 tokens
-    # This leaves ~14,600 tokens for experiences
-    # WARNING: Stage 3 (Phi-4) has a 16k context window, and its prompt includes the OUTPUT of this stage.
-    # To be safe, we must ensure Stage 2 input + output fits easily within limits.
-    # But Stage 3 INPUT is Stage 2 OUTPUT.
-    # Stage 2 INPUT can be large (Skyfall/Gemini have large context).
-    # But Stage 2 OUTPUT (the draft) needs to be reasonable length.
-    # The output length is limited by `max_tokens=2500` in the call_llm_async below.
-    # So Stage 3 INPUT will be roughly 2500 tokens (draft) + Star Prompt (~1000).
-    # That should fit easily in 16k.
-    # So why did we get 18k requested? 
-    # Maybe `experiences_text` was huge and it somehow got echoed? 
-    # Or maybe the error came from THIS stage (Creative Drafter)?
-    # "Context Window exceeded" in Imaginator usually comes from the model we are calling.
-    # If the user saw "Requested 18k, Limit 16k", and it was Phi-4, then Phi-4 received 18k tokens.
-    # Phi-4 is used in Stage 3.
-    # Stage 3 prompt: creative_draft + star_suggestions.
-    # If creative_draft is 15k tokens, that explains it.
-    # Does Gemini/Skyfall produce 15k output? No, max_tokens=2500.
-    # Wait, did the user confuse the stage?
-    # If the error was at Stage 2, maybe Skyfall/Gemini has a limit?
-    # Skyfall 36B might have a smaller context than we think?
-    # Let's reduce available_tokens_for_exp just in case.
-    available_tokens_for_exp = 8000  # Reduced from 14000 to be safe
+    # INCREASED LIMITS (user request):
+    # - Experiences: 10,000 tokens (up from 8,000)
+    # - Modern models support 100k+ context, so we can be more generous
+    available_tokens_for_exp = 10000  # Increased from 8000
     
-    for i, exp in enumerate(experiences, 1):
+    # Calculate relevance scores for each experience against job ad
+    # This allows us to prioritize the most relevant experiences
+    relevance_scores = []
+    job_ad_lower = job_ad.lower() if job_ad else ""
+    
+    for i, exp in enumerate(experiences):
         if isinstance(exp, dict):
-            title = exp.get("title_line", "Position")
-            skills_list = exp.get("skills", [])
-            snippet = exp.get("snippet", "")
-            
-            # More recent experiences get full detail, older ones get moderate truncation
-            if i <= 5:  # First 5 experiences (indices 0-4): full detail
-                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:20])}\n{snippet[:1200]}"
-            elif i <= 8:  # Next 3 experiences (indices 5-7): moderate detail
-                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:800]}"
-            else:  # Remaining experiences: reduced detail
-                exp_text = f"**Experience {i}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:500]}"
-            
-            # Rough token estimate: 1 token ≈ 4 characters
-            exp_tokens = len(exp_text) // 4
-            
-            if estimated_tokens + exp_tokens > available_tokens_for_exp:
-                logger.info(f"[CREATIVE DRAFTER] Reached context limit at experience {i}/{len(experiences)}")
-                break
-            
-            exp_details.append(exp_text)
-            estimated_tokens += exp_tokens
+            exp_text = f"{exp.get('title_line', '')} {exp.get('snippet', '')} {exp.get('body', '')}"
+            score = compute_relevance_score(exp_text, job_ad_lower, aggregate_skills)
+            relevance_scores.append((i, exp, score))
     
-    experiences_text = "\n\n".join(exp_details) or "No detailed experiences"
-    logger.info(f"[CREATIVE DRAFTER] Included {len(exp_details)}/{len(experiences)} experiences (~{estimated_tokens} tokens)")
+    # Sort by relevance (highest first), but keep original order for ties
+    # This ensures most relevant experiences get full detail
+    relevance_scores.sort(key=lambda x: (-x[2], x[0]))
+    
+    # Track which experiences we've included and in what detail level
+    included_indices = set()
+    
+    # First pass: Include highly relevant experiences with full detail
+    for idx, exp, score in relevance_scores:
+        if estimated_tokens >= available_tokens_for_exp:
+            break
+            
+        title = exp.get("title_line", "Position")
+        skills_list = exp.get("skills", []) or []
+        snippet = exp.get("snippet", "") or exp.get("body", "")
+        
+        # Determine detail level based on relevance score and position
+        if score > 0.3 or len(included_indices) < 3:  # High relevance or first 3
+            # INCREASED: Full detail - 2000 chars (up from 1200)
+            exp_text = f"**Experience {idx+1}: {title}** (relevance: {score:.2f})\nSkills: {', '.join(skills_list[:25])}\n{snippet[:2000]}"
+        elif score > 0.15 or len(included_indices) < 6:  # Medium relevance
+            # INCREASED: Moderate detail - 1200 chars (up from 800)
+            exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:1200]}"
+        else:  # Lower relevance
+            # INCREASED: Brief detail - 800 chars (up from 500)
+            exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:800]}"
+        
+        # Rough token estimate: 1 token ≈ 4 characters
+        exp_tokens = len(exp_text) // 4
+        
+        if estimated_tokens + exp_tokens > available_tokens_for_exp:
+            logger.info(f"[CREATIVE DRAFTER] Reached context limit at experience {idx+1}/{len(experiences)}")
+            break
+        
+        exp_details.append(exp_text)
+        estimated_tokens += exp_tokens
+        included_indices.add(idx)
+    
+    # Re-sort by original order for coherent output
+    exp_details_ordered = []
+    for idx, exp, score in sorted(relevance_scores, key=lambda x: x[0]):
+        if idx in included_indices:
+            title = exp.get("title_line", "Position")
+            skills_list = exp.get("skills", []) or []
+            snippet = exp.get("snippet", "") or exp.get("body", "")
+            
+            if score > 0.3 or idx < 3:
+                exp_text = f"**Experience {idx+1}: {title}** (relevance: {score:.2f})\nSkills: {', '.join(skills_list[:25])}\n{snippet[:2000]}"
+            elif score > 0.15 or idx < 6:
+                exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:1200]}"
+            else:
+                exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:800]}"
+            exp_details_ordered.append(exp_text)
+    
+    experiences_text = "\n\n".join(exp_details_ordered) or "No detailed experiences"
+    logger.info(f"[CREATIVE DRAFTER] Included {len(included_indices)}/{len(experiences)} experiences (~{estimated_tokens} tokens, relevance-sorted)")
     
     system_prompt = """You are an expert resume writer specializing in creating compelling, achievement-focused narratives.
 
@@ -1876,12 +2031,12 @@ Return the enhanced experience section in clean markdown format with:
 Extracted Skills: {', '.join(aggregate_skills[:50])}
 
 WEB RESEARCH INSIGHTS (DeepSeek Search):
-- Implied Skills: {', '.join(implied_skills[:25])}
-- Industry Metrics: {', '.join(industry_metrics[:15])}
-- Research Notes: {research_notes[:600]}
+- Implied Skills: {', '.join(implied_skills[:30])}
+- Industry Metrics: {', '.join(industry_metrics[:20])}
+- Research Notes: {research_notes[:1000]}
 
 TARGET JOB DESCRIPTION:
-{job_ad[:1000]}
+{job_ad[:3000]}
 
 CANDIDATE'S ACTUAL EXPERIENCES (fit within context):
 {experiences_text}
