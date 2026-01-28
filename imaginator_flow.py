@@ -1948,10 +1948,10 @@ async def run_creative_draft_async(
     # This ensures most relevant experiences get full detail
     relevance_scores.sort(key=lambda x: (-x[2], x[0]))
     
-    # Track which experiences we've included and in what detail level
-    included_indices = set()
+    # Track which experiences we've included and their formatted text
+    included_experiences = {}  # Maps idx -> exp_text
     
-    # First pass: Include highly relevant experiences with full detail
+    # Single pass: Include highly relevant experiences with appropriate detail level
     for idx, exp, score in relevance_scores:
         if estimated_tokens >= available_tokens_for_exp:
             break
@@ -1960,11 +1960,12 @@ async def run_creative_draft_async(
         skills_list = exp.get("skills", []) or []
         snippet = exp.get("snippet", "") or exp.get("body", "")
         
-        # Determine detail level based on relevance score and position
-        if score > 0.3 or len(included_indices) < 3:  # High relevance or first 3
+        # Determine detail level based on relevance score and how many we've included
+        num_included = len(included_experiences)
+        if score > 0.3 or num_included < 3:  # High relevance or first 3
             # INCREASED: Full detail - 2000 chars (up from 1200)
             exp_text = f"**Experience {idx+1}: {title}** (relevance: {score:.2f})\nSkills: {', '.join(skills_list[:25])}\n{snippet[:2000]}"
-        elif score > 0.15 or len(included_indices) < 6:  # Medium relevance
+        elif score > 0.15 or num_included < 6:  # Medium relevance
             # INCREASED: Moderate detail - 1200 chars (up from 800)
             exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:1200]}"
         else:  # Lower relevance
@@ -1978,28 +1979,18 @@ async def run_creative_draft_async(
             logger.info(f"[CREATIVE DRAFTER] Reached context limit at experience {idx+1}/{len(experiences)}")
             break
         
+        included_experiences[idx] = exp_text
         exp_details.append(exp_text)
         estimated_tokens += exp_tokens
-        included_indices.add(idx)
     
     # Re-sort by original order for coherent output
     exp_details_ordered = []
     for idx, exp, score in sorted(relevance_scores, key=lambda x: x[0]):
-        if idx in included_indices:
-            title = exp.get("title_line", "Position")
-            skills_list = exp.get("skills", []) or []
-            snippet = exp.get("snippet", "") or exp.get("body", "")
-            
-            if score > 0.3 or idx < 3:
-                exp_text = f"**Experience {idx+1}: {title}** (relevance: {score:.2f})\nSkills: {', '.join(skills_list[:25])}\n{snippet[:2000]}"
-            elif score > 0.15 or idx < 6:
-                exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:15])}\n{snippet[:1200]}"
-            else:
-                exp_text = f"**Experience {idx+1}: {title}**\nSkills: {', '.join(skills_list[:10])}\n{snippet[:800]}"
-            exp_details_ordered.append(exp_text)
+        if idx in included_experiences:
+            exp_details_ordered.append(included_experiences[idx])
     
     experiences_text = "\n\n".join(exp_details_ordered) or "No detailed experiences"
-    logger.info(f"[CREATIVE DRAFTER] Included {len(included_indices)}/{len(experiences)} experiences (~{estimated_tokens} tokens, relevance-sorted)")
+    logger.info(f"[CREATIVE DRAFTER] Included {len(included_experiences)}/{len(experiences)} experiences (~{estimated_tokens} tokens, relevance-sorted)")
     
     system_prompt = """You are an expert resume writer specializing in creating compelling, achievement-focused narratives.
 
