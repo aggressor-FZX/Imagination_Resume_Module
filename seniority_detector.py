@@ -51,12 +51,28 @@ class SeniorityDetector:
         }
     }
 
-    # Leadership indicators
+    # Leadership indicators (expanded to catch more patterns)
     LEADERSHIP_KEYWORDS = {
-        'team_leadership': ['led team', 'managed team', 'supervised', 'directed', 'oversaw'],
-        'project_leadership': ['project lead', 'project manager', 'coordinated', 'orchestrated'],
-        'mentorship': ['mentored', 'coached', 'trained', 'guided', 'onboarded'],
-        'strategic': ['strategic', 'vision', 'roadmap', 'planning', 'initiated']
+        'team_leadership': [
+            'led team', 'managed team', 'supervised', 'directed', 'oversaw',
+            'team lead', 'leading team', 'led a team', 'managed a team',
+            'head of', 'led development', 'led engineering',
+            'led the', 'managed the', 'leading the'
+        ],
+        'project_leadership': [
+            'project lead', 'project manager', 'coordinated', 'orchestrated',
+            'spearheaded', 'drove', 'championed', 'owned',
+            'led the project', 'managing project', 'led project'
+        ],
+        'mentorship': [
+            'mentored', 'coached', 'trained', 'guided', 'onboarded',
+            'mentoring', 'coaching', 'training', 'guiding',
+            'helped junior', 'supported junior', 'grew the team'
+        ],
+        'strategic': [
+            'strategic', 'vision', 'roadmap', 'planning', 'initiated',
+            'architecture', 'designed system', 'designed the'
+        ]
     }
 
     # Technical achievement complexity indicators
@@ -69,6 +85,27 @@ class SeniorityDetector:
     def __init__(self):
         """Initialize the seniority detector with default configurations."""
         self.experience_parser = ExperienceParser()
+    
+    def _get_exp_text(self, exp: Dict) -> str:
+        """
+        Get text content from experience, handling both old and new field names.
+        
+        Old style: title, description
+        New style: title_line, body, snippet, raw
+        """
+        # Get title (try multiple field names)
+        title = exp.get('title') or exp.get('title_line') or exp.get('role') or ''
+        
+        # Get description (try multiple field names)
+        description = (
+            exp.get('description') or 
+            exp.get('body') or 
+            exp.get('snippet') or 
+            exp.get('raw') or 
+            ''
+        )
+        
+        return f"{title} {description}".lower()
 
     def detect_seniority(self, experiences: List[Dict], skills: Set[str],
                         education: Optional[List[Dict]] = None) -> Dict[str, any]:
@@ -154,10 +191,13 @@ class SeniorityDetector:
         complexity_indicators = []
 
         for exp in experiences:
-            description = f"{exp.get('title', '')} {exp.get('description', '')}".lower()
+            description = self._get_exp_text(exp)
+            
+            # Get title for seniority detection (try multiple field names)
+            title_raw = exp.get('title') or exp.get('title_line') or exp.get('role') or ''
 
             # Check for seniority indicators in titles
-            title_seniority = self._detect_title_seniority(exp.get('title', ''))
+            title_seniority = self._detect_title_seniority(title_raw)
 
             # Analyze description complexity
             desc_complexity = self._analyze_description_complexity(description)
@@ -198,7 +238,7 @@ class SeniorityDetector:
         }
 
         for exp in experiences:
-            description = f"{exp.get('title', '')} {exp.get('description', '')}".lower()
+            description = self._get_exp_text(exp)
 
             # Check for team leadership
             for indicator in self.LEADERSHIP_KEYWORDS['team_leadership']:
@@ -254,7 +294,7 @@ class SeniorityDetector:
         complexity_scores = []
 
         for exp in experiences:
-            description = exp.get('description', '').lower()
+            description = self._get_exp_text(exp)
             score = 0
 
             # Check for scale indicators (millions, billions, etc.)
@@ -294,29 +334,44 @@ class SeniorityDetector:
         """Determine the seniority level based on all signals."""
         # Calculate weighted composite score
         weights = {
-            'years_experience': 0.25,
+            'years_experience': 0.35,  # Increased weight for years
             'experience_quality': 0.2,
-            'leadership': 0.25,
+            'leadership': 0.2,  # Reduced from 0.25
             'skill_depth': 0.15,
-            'achievement_complexity': 0.15
+            'achievement_complexity': 0.1  # Reduced from 0.15
         }
 
         composite_score = (
-            min(total_years / 15.0, 1.0) * weights['years_experience'] +
+            min(total_years / 12.0, 1.0) * weights['years_experience'] +  # Scaled to 12 years instead of 15
             experience_quality['overall_score'] * weights['experience_quality'] +
             leadership_score * weights['leadership'] +
             skill_depth_score * weights['skill_depth'] +
             achievement_complexity['overall_score'] * weights['achievement_complexity']
         )
+        
+        # Apply years-based floor to prevent obvious misclassifications
+        # Someone with 5+ years should NEVER be classified as junior
+        # Someone with 8+ years should at minimum be mid-level
+        if total_years >= 10:
+            min_level = 'senior'
+        elif total_years >= 5:
+            min_level = 'mid-level'
+        else:
+            min_level = 'junior'
 
         # Map composite score to seniority level
-        if composite_score >= 0.8:
+        if composite_score >= 0.7:
             return 'principal'
-        elif composite_score >= 0.6:
+        elif composite_score >= 0.5:
             return 'senior'
-        elif composite_score >= 0.35:
-            return 'mid-level'
+        elif composite_score >= 0.3:
+            return 'mid-level' if min_level in ['junior', 'mid-level'] else min_level
         else:
+            # Apply floor based on years
+            if min_level == 'senior':
+                return 'senior'
+            elif min_level == 'mid-level':
+                return 'mid-level'
             return 'junior'
 
     def _calculate_confidence(self, total_years: float, data_completeness: float,
@@ -337,10 +392,13 @@ class SeniorityDetector:
         """Assess the completeness of available data."""
         score = 0.0
 
-        # Experience completeness
+        # Experience completeness (check both old and new field names)
         if experiences:
-            exp_completeness = sum(1 for exp in experiences
-                                 if exp.get('title') and exp.get('description')) / len(experiences)
+            exp_completeness = sum(
+                1 for exp in experiences
+                if (exp.get('title') or exp.get('title_line') or exp.get('role')) and 
+                   (exp.get('description') or exp.get('body') or exp.get('snippet') or exp.get('raw'))
+            ) / len(experiences)
             score += exp_completeness * 0.6
 
         # Skills completeness
