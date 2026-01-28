@@ -314,10 +314,21 @@ Rate the alignment (0.0-1.0):"""
                 "total_duration_seconds": result.get("metrics", {}).get("total_duration_seconds", 0),
                 "stage_durations": result.get("metrics", {}).get("stage_durations", {}),
                 "errors": errors
+            },
+            
+            # Token usage metrics from LLM client (critical for app.py detection)
+            "run_metrics": llm_client.get_usage_stats() if hasattr(llm_client, 'get_usage_stats') else {
+                "calls": [],
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_tokens": 0,
+                "estimated_cost_usd": 0.0,
+                "failures": []
             }
         }
         
-        logger.info(f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}, Critique Score: {critique_score}")
+        llm_usage = response.get("run_metrics", {})
+        logger.info(f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}, Critique Score: {critique_score}, Tokens: {llm_usage.get('total_tokens', 0)}")
         return response
         
     except Exception as e:
@@ -358,5 +369,15 @@ Rate the alignment (0.0-1.0):"""
                 "total_duration_seconds": 0,
                 "stage_durations": {},
                 "errors": [str(e)]
+            },
+            
+            # Empty run_metrics for consistency
+            "run_metrics": {
+                "calls": [],
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_tokens": 0,
+                "estimated_cost_usd": 0.0,
+                "failures": [str(e)]
             }
         }
