@@ -201,14 +201,32 @@ Rate the alignment (0.0-1.0):"""
                 "skill_gap_priority": insider_tips if insider_tips else "Focus on demonstrating quantifiable achievements"
             }
         
-        # Enrich domain_insights with researcher data
+        # Enrich domain_insights with researcher data (use direct assignment to override empty values)
         domain_insights.setdefault("top_skills", domain_vocab[:5] if domain_vocab else aggregate_skills[:5] if aggregate_skills else [])
         domain_insights.setdefault("certifications", [])
         domain_insights.setdefault("career_path", [])
-        domain_insights.setdefault("skill_gap_priority", insider_tips if insider_tips else "")
-        domain_insights.setdefault("domain_vocab", domain_vocab)
-        domain_insights.setdefault("implied_metrics", implied_metrics)
-        domain_insights.setdefault("work_archetypes", work_archetypes)
+        
+        # Always include researcher data - these come from Imaginator's Researcher stage, not Hermes
+        if insider_tips:
+            domain_insights["skill_gap_priority"] = insider_tips
+        elif not domain_insights.get("skill_gap_priority"):
+            domain_insights["skill_gap_priority"] = ""
+            
+        # Always add researcher stage data (overwrite empty values from Hermes)
+        if domain_vocab:
+            domain_insights["domain_vocab"] = domain_vocab
+        elif "domain_vocab" not in domain_insights:
+            domain_insights["domain_vocab"] = []
+            
+        if implied_metrics:
+            domain_insights["implied_metrics"] = implied_metrics
+        elif "implied_metrics" not in domain_insights:
+            domain_insights["implied_metrics"] = []
+            
+        if work_archetypes:
+            domain_insights["work_archetypes"] = work_archetypes
+        elif "work_archetypes" not in domain_insights:
+            domain_insights["work_archetypes"] = []
         
         # Add insights field from researcher data for frontend display (must be a list per Pydantic schema)
         def _normalize_research_items(items, limit):
