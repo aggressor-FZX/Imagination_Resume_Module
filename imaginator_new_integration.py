@@ -240,8 +240,7 @@ Rate the alignment (0.0-1.0):"""
         
         # Build gap_analysis from researcher data
         gap_analysis = ""
-        if implied_skills or implied_metrics:
-            gap_parts = []
+        gap_parts = []
         if implied_skills_normalized:
             # Ensure all items are strings before joining to prevent TypeError
             skills_str = ', '.join(str(item) for item in implied_skills_normalized if item)
@@ -254,8 +253,9 @@ Rate the alignment (0.0-1.0):"""
             gap_parts.append(
                 f"Target these benchmarks: {metrics_str}"
             )
-            if insider_tips:
-                gap_parts.append(insider_tips)
+        if insider_tips:
+            gap_parts.append(insider_tips)
+        if gap_parts:
             gap_analysis = ". ".join(gap_parts)
         
         response = {
