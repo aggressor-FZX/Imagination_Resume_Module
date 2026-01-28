@@ -177,8 +177,14 @@ class SeniorityDetector:
         for exp in experiences:
             duration = exp.get('duration', '')
             if not duration:
-                # Try to extract from date ranges in description
-                duration = self.experience_parser.extract_duration_from_text(exp.get('description', ''))
+                # Try to extract from title_line (e.g., "TechCorp | Software Engineer | Jan 2020 - Present")
+                title_line = exp.get('title_line') or exp.get('title') or ''
+                duration = self.experience_parser.extract_duration_from_text(title_line)
+            
+            if not duration:
+                # Try to extract from raw/body/snippet/description
+                text_content = self._get_exp_text(exp)
+                duration = self.experience_parser.extract_duration_from_text(text_content)
 
             months = self.experience_parser.parse_duration_to_months(duration)
             total_months += months
@@ -617,16 +623,28 @@ class ExperienceParser:
 
     def _calculate_years_from_date_range(self, date_range: str) -> int:
         """Calculate years from a date range string."""
+        from datetime import datetime
+        
         try:
-            # Extract start and end dates
+            date_range_lower = date_range.lower()
+            
+            # Extract all years from the string
             dates = re.findall(r'\d{4}', date_range)
+            
             if len(dates) >= 2:
+                # Two explicit years: "2016 - 2019"
                 start_year = int(dates[0])
                 end_year = int(dates[1])
-                return end_year - start_year
+                return max(0, end_year - start_year)
             elif len(dates) == 1:
-                # Single date, assume 1 year
-                return 1
+                start_year = int(dates[0])
+                # Check if it ends with "present" or "current"
+                if 'present' in date_range_lower or 'current' in date_range_lower:
+                    current_year = datetime.now().year
+                    return max(0, current_year - start_year)
+                else:
+                    # Single date with no "present", assume it's a 1-year role
+                    return 1
         except (ValueError, IndexError):
             pass
 
