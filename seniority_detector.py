@@ -358,6 +358,7 @@ class SeniorityDetector:
         # Apply years-based floor to prevent obvious misclassifications
         # Someone with 5+ years should NEVER be classified as junior
         # Someone with 8+ years should at minimum be mid-level
+        # Principal level requires 10+ years minimum
         if total_years >= 10:
             min_level = 'senior'
         elif total_years >= 5:
@@ -366,10 +367,17 @@ class SeniorityDetector:
             min_level = 'junior'
 
         # Map composite score to seniority level
+        # Principal requires both high score (>=0.7) AND minimum 10 years experience
         if composite_score >= 0.7:
-            return 'principal'
+            # Apply floor: principal requires 10+ years
+            if total_years >= 10:
+                return 'principal'
+            elif min_level == 'senior':
+                return 'senior'
+            else:
+                return min_level
         elif composite_score >= 0.5:
-            return 'senior'
+            return 'senior' if min_level == 'senior' else min_level
         elif composite_score >= 0.3:
             return 'mid-level' if min_level in ['junior', 'mid-level'] else min_level
         else:

@@ -283,13 +283,12 @@ async def analyze_resume(
             pipeline_metrics = analysis_result.get("run_metrics", {})
             # Check if pipeline_metrics is a valid dict with useful data
             # Note: calls list can be legitimately empty [], so check total_tokens or if dict is non-empty
+            # Use consistent condition: require total_tokens > 0 to ensure metrics have actual usage data
             has_valid_metrics = (
                 isinstance(pipeline_metrics, dict) and 
-                (pipeline_metrics.get("total_tokens", 0) > 0 or 
-                 pipeline_metrics.get("calls") is not None or
-                 len(pipeline_metrics) > 0)
+                pipeline_metrics.get("total_tokens", 0) > 0
             )
-            if has_valid_metrics and pipeline_metrics.get("total_tokens", 0) > 0:
+            if has_valid_metrics:
                 merged_metrics = pipeline_metrics
                 logger.info(f"[METRICS] Using pipeline run_metrics: {pipeline_metrics.get('total_tokens', 0)} tokens")
             else:

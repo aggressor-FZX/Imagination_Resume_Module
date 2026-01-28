@@ -774,9 +774,10 @@ def compute_relevance_score(experience_text: str, job_ad_text: str, extracted_sk
     # 2. Skill matching score
     skill_score = 0.0
     if extracted_skills:
-        skills_lower = [s.lower() for s in extracted_skills if s]
+        skills_lower = [s.lower() for s in extracted_skills if s]  # Filter out empty/None skills
         matched_skills = sum(1 for skill in skills_lower if skill in exp_lower)
-        skill_score = matched_skills / len(extracted_skills) if extracted_skills else 0.0
+        # Use filtered list length as denominator to avoid inflating denominator with empty values
+        skill_score = matched_skills / len(skills_lower) if skills_lower else 0.0
     
     # 3. Important tech term matching (weighted higher)
     tech_terms = [

@@ -181,8 +181,8 @@ Rate the alignment (0.0-1.0):"""
                 if skill.strip() not in all_skills_set:
                     all_skills_set.add(skill.strip())
         
-        # Convert to list and limit to reasonable size
-        aggregate_skills = list(all_skills_set)[:30]
+        # Convert to list with deterministic ordering (sorted alphabetically) and limit to reasonable size
+        aggregate_skills = sorted(list(all_skills_set))[:30]
         logger.info(f"[NEW_PIPELINE] Aggregated {len(aggregate_skills)} skills from all sources")
         
         # Build domain_insights from upstream data, researcher data, or intelligent defaults
