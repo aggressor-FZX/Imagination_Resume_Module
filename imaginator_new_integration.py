@@ -253,6 +253,8 @@ Rate the alignment (0.0-1.0):"""
             gap_parts.append(
                 f"Target these benchmarks: {metrics_str}"
             )
+        # Append insider_tips independently - valuable tips should be shown regardless of skills/metrics
+        # This matches the pattern used in domain_insights["insights"] (lines 223-233)
         if insider_tips:
             gap_parts.append(insider_tips)
         if gap_parts:
