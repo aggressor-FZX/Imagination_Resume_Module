@@ -144,24 +144,46 @@ Rate the alignment (0.0-1.0):"""
         insider_tips = researcher_data.get("insider_tips", "")
         work_archetypes = researcher_data.get("work_archetypes", [])
         
-        # Extract skills from upstream data (Hermes/FastSVM) or use researcher's implied skills
-        aggregate_skills = []
+        # Extract skills from multiple sources with deduplication
+        all_skills_set = set()
+        
+        # 1. Skills from upstream (Hermes/FastSVM via extracted_skills_json)
         if extracted_skills_json:
             if isinstance(extracted_skills_json, list):
-                aggregate_skills = [s.get("skill", s) if isinstance(s, dict) else str(s) 
-                                  for s in extracted_skills_json[:15]]
+                for s in extracted_skills_json:
+                    skill_name = s.get("skill", s) if isinstance(s, dict) else str(s)
+                    if skill_name:
+                        all_skills_set.add(skill_name.strip())
             elif isinstance(extracted_skills_json, dict) and "skills" in extracted_skills_json:
-                skills_list = extracted_skills_json["skills"]
-                aggregate_skills = [s.get("skill", s) if isinstance(s, dict) else str(s) 
-                                  for s in skills_list[:15]]
+                for s in extracted_skills_json["skills"]:
+                    skill_name = s.get("skill", s) if isinstance(s, dict) else str(s)
+                    if skill_name:
+                        all_skills_set.add(skill_name.strip())
         
-        # Supplement with researcher's implied skills if not enough from upstream
-        if len(aggregate_skills) < 5 and implied_skills:
-            for skill in implied_skills:
-                if skill not in aggregate_skills:
-                    aggregate_skills.append(skill)
-                if len(aggregate_skills) >= 15:
-                    break
+        # 2. Skills extracted from parsed experiences (from parse_experiences)
+        for exp in experiences:
+            exp_skills = exp.get("skills", [])
+            if exp_skills and isinstance(exp_skills, list):
+                for skill in exp_skills:
+                    if skill and isinstance(skill, str):
+                        all_skills_set.add(skill.strip())
+        
+        # 3. Skills from researcher's implied skills (add missing ones)
+        for skill in implied_skills:
+            if skill and isinstance(skill, str):
+                # Only add if not already present (avoid duplicates)
+                if skill.strip() not in all_skills_set:
+                    all_skills_set.add(skill.strip())
+        
+        # 4. Skills from domain_vocab (add missing ones)
+        for skill in domain_vocab:
+            if skill and isinstance(skill, str):
+                if skill.strip() not in all_skills_set:
+                    all_skills_set.add(skill.strip())
+        
+        # Convert to list and limit to reasonable size
+        aggregate_skills = list(all_skills_set)[:30]
+        logger.info(f"[NEW_PIPELINE] Aggregated {len(aggregate_skills)} skills from all sources")
         
         # Build domain_insights from upstream data, researcher data, or intelligent defaults
         domain_insights = {}
@@ -253,15 +275,10 @@ Rate the alignment (0.0-1.0):"""
             gap_parts.append(
                 f"Target these benchmarks: {metrics_str}"
             )
-        # Append insider_tips independently - valuable tips should be shown regardless of skills/metrics
-        # This matches the pattern used in domain_insights["insights"] (lines 223-233)
         if insider_tips:
             gap_parts.append(insider_tips)
         if gap_parts:
             gap_analysis = ". ".join(gap_parts)
-        
-        # Get token usage stats from LLM client
-        llm_usage = llm_client.get_usage_stats()
         
         response = {
             # Core fields from new pipeline
@@ -278,27 +295,17 @@ Rate the alignment (0.0-1.0):"""
             # Backward-compatible fields for frontend
             "experiences": experiences,
             "aggregate_skills": aggregate_skills,
-            "processed_skills": {"all": aggregate_skills},
+            "processed_skills": result.get("processed_skills", {"all": aggregate_skills}),
             "domain_insights": domain_insights,
             "gap_analysis": gap_analysis,  # Generated from researcher insights
             "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
-            "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
+            "seniority_analysis": result.get("seniority_analysis", {"level": final_output.get("seniority_level", "mid")}),
             
             # Backward compatibility: rewritten_resume = final_written_section (for frontend)
             "rewritten_resume": final_output.get("final_written_section", ""),
             
             # Suggestions field for frontend
             "suggestions": [],
-            
-            # Token usage metrics (from LLM client)
-            "run_metrics": {
-                "calls": llm_usage.get("calls", []),
-                "total_prompt_tokens": llm_usage.get("total_prompt_tokens", 0),
-                "total_completion_tokens": llm_usage.get("total_completion_tokens", 0),
-                "total_tokens": llm_usage.get("total_tokens", 0),
-                "estimated_cost_usd": llm_usage.get("estimated_cost_usd", 0.0),
-                "failures": [],
-            },
             
             # Metadata
             "pipeline_version": "3.0",
