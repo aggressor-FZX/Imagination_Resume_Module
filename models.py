@@ -45,6 +45,21 @@ class DomainInsights(BaseModel):
     insights: Optional[List[str]] = Field(
         None, description="Additional domain insights"
     )
+    # Fields from Imaginator's Researcher stage
+    implied_metrics: Optional[List[str]] = Field(
+        None, description="Implied metrics/benchmarks from job ad (e.g., '40% reduction', '1M+ requests/day')"
+    )
+    domain_vocab: Optional[List[str]] = Field(
+        None, description="Domain-specific vocabulary from job ad (e.g., 'Kubernetes', 'PyTorch')"
+    )
+    work_archetypes: Optional[List[str]] = Field(
+        None, description="Work archetypes identified from job ad (e.g., 'Scaling', 'Optimization')"
+    )
+    # Optional fields from Hermes
+    top_skills: Optional[List[str]] = Field(None, description="Top skills from market data")
+    certifications: Optional[List[str]] = Field(None, description="Recommended certifications")
+    career_path: Optional[List[str]] = Field(None, description="Typical career progression")
+    salary_range: Optional[str] = Field(None, description="Expected salary range")
 
 
 class ExperienceEntry(BaseModel):
