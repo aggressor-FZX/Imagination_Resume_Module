@@ -44,6 +44,198 @@ class HeroClass(Enum):
     RESEARCHER = "The Researcher"    # ARC/INT - R&D and math problems
 
 
+# =============================================================================
+# CIP CODE EDUCATION MAPPING (Degree → Stat Boosts)
+# =============================================================================
+# The gold standard for mapping degrees to stats is the CIP (Classification of 
+# Instructional Programs) code. O*NET provides direct mapping from CIP to SOC.
+
+# CIP Family Code → (Primary Stat, Secondary Stat, Primary Boost, Secondary Boost)
+CIP_STAT_MAPPING = {
+    # Computer Science / Engineering (CIP 11, 14, 15)
+    "11": {"primary": "INT", "secondary": "DEX", "primary_boost": 15, "secondary_boost": 8, 
+           "name": "Computer Science", "justification": "High algorithmic and structural requirements"},
+    "14": {"primary": "INT", "secondary": "DEX", "primary_boost": 15, "secondary_boost": 10,
+           "name": "Engineering", "justification": "Technical precision and system design"},
+    "15": {"primary": "INT", "secondary": "DEX", "primary_boost": 12, "secondary_boost": 8,
+           "name": "Engineering Technology", "justification": "Applied technical skills"},
+    
+    # Business / MBA (CIP 52)
+    "52": {"primary": "WIS", "secondary": "CHA", "primary_boost": 12, "secondary_boost": 10,
+           "name": "Business/MBA", "justification": "Strategic decision making and networking"},
+    
+    # Fine Arts / Design (CIP 50)
+    "50": {"primary": "ARC", "secondary": "CHA", "primary_boost": 12, "secondary_boost": 8,
+           "name": "Fine Arts/Design", "justification": "Aesthetic synthesis and persuasion"},
+    
+    # Physical Sciences (CIP 40, 41)
+    "40": {"primary": "DEX", "secondary": "INT", "primary_boost": 12, "secondary_boost": 10,
+           "name": "Physical Sciences", "justification": "Laboratory precision and data calculation"},
+    "41": {"primary": "DEX", "secondary": "INT", "primary_boost": 10, "secondary_boost": 8,
+           "name": "Science Technologies", "justification": "Technical laboratory work"},
+    
+    # Mathematics / Statistics (CIP 27)
+    "27": {"primary": "INT", "secondary": "ARC", "primary_boost": 18, "secondary_boost": 10,
+           "name": "Mathematics/Statistics", "justification": "Pure logical reasoning and pattern recognition"},
+    
+    # Liberal Arts / Psychology (CIP 42, 45)
+    "42": {"primary": "CHA", "secondary": "ARC", "primary_boost": 10, "secondary_boost": 8,
+           "name": "Psychology", "justification": "Human behavior understanding"},
+    "45": {"primary": "CHA", "secondary": "ARC", "primary_boost": 8, "secondary_boost": 6,
+           "name": "Social Sciences", "justification": "Multidisciplinary synthesis"},
+    
+    # Health / Nursing (CIP 51)
+    "51": {"primary": "VIT", "secondary": "DEX", "primary_boost": 12, "secondary_boost": 10,
+           "name": "Health/Nursing", "justification": "Physical stamina and precise execution"},
+    
+    # Philosophy / History (CIP 38, 54)
+    "38": {"primary": "ARC", "secondary": "WIS", "primary_boost": 12, "secondary_boost": 10,
+           "name": "Philosophy", "justification": "Pure pattern recognition and wisdom"},
+    "54": {"primary": "ARC", "secondary": "WIS", "primary_boost": 10, "secondary_boost": 8,
+           "name": "History", "justification": "Long-term wisdom and synthesis"},
+    
+    # Education (CIP 13)
+    "13": {"primary": "CHA", "secondary": "ARC", "primary_boost": 10, "secondary_boost": 8,
+           "name": "Education", "justification": "Communication and knowledge transfer"},
+    
+    # Communications / Journalism (CIP 09)
+    "09": {"primary": "CHA", "secondary": "ARC", "primary_boost": 12, "secondary_boost": 6,
+           "name": "Communications", "justification": "Persuasion and storytelling"},
+    
+    # Law (CIP 22)
+    "22": {"primary": "WIS", "secondary": "CHA", "primary_boost": 14, "secondary_boost": 10,
+           "name": "Law", "justification": "Strategic argumentation and influence"},
+    
+    # Economics (CIP 45.06 mapped to 45)
+    "4506": {"primary": "INT", "secondary": "WIS", "primary_boost": 12, "secondary_boost": 10,
+             "name": "Economics", "justification": "Quantitative analysis and strategic thinking"},
+    
+    # Biology / Life Sciences (CIP 26)
+    "26": {"primary": "ARC", "secondary": "DEX", "primary_boost": 10, "secondary_boost": 8,
+           "name": "Biology/Life Sciences", "justification": "Research and laboratory precision"},
+    
+    # Agriculture (CIP 01)
+    "01": {"primary": "VIT", "secondary": "DEX", "primary_boost": 8, "secondary_boost": 6,
+           "name": "Agriculture", "justification": "Durability and practical skills"},
+}
+
+# Degree level multipliers (applied to CIP boosts)
+DEGREE_LEVEL_MULTIPLIERS = {
+    "high_school": 0.3,
+    "some_college": 0.5,
+    "associate": 0.6,
+    "bachelor": 1.0,
+    "master": 1.4,
+    "mba": 1.5,  # Special case for MBA
+    "phd": 1.8,
+    "doctorate": 1.8,
+    "professional": 1.6,  # JD, MD, etc.
+    "default": 0.8
+}
+
+# Keyword to CIP mapping for fuzzy matching
+# NOTE: Order matters! More specific terms should come FIRST in this list
+# Use a list of tuples for guaranteed ordering
+DEGREE_KEYWORD_TO_CIP_ORDERED = [
+    # Most specific multi-word terms FIRST
+    ("computer science", "11"),
+    ("data science", "11"),
+    ("information technology", "11"),
+    ("applied mathematics", "27"),
+    ("pure mathematics", "27"),
+    ("life science", "26"),
+    ("public health", "51"),
+    
+    # Mathematics/Statistics (specific, must come before generic matches)
+    ("mathematics", "27"),
+    ("mathematical", "27"),
+    ("statistics", "27"),
+    ("actuarial", "27"),
+    ("math", "27"),
+    
+    # Computer Science family
+    ("computing", "11"),
+    ("informatics", "11"),
+    ("software", "11"),
+    ("cs", "11"),
+    
+    # Engineering family
+    ("mechanical engineering", "14"),
+    ("electrical engineering", "14"),
+    ("civil engineering", "14"),
+    ("chemical engineering", "14"),
+    ("aerospace", "14"),
+    ("biomedical", "14"),
+    ("industrial engineering", "14"),
+    ("engineering", "14"),
+    
+    # Business family
+    ("mba", "52"),
+    ("business", "52"),
+    ("management", "52"),
+    ("finance", "52"),
+    ("accounting", "52"),
+    ("marketing", "52"),
+    ("economics", "52"),
+    ("administration", "52"),
+    
+    # Arts family
+    ("graphic design", "50"),
+    ("visual arts", "50"),
+    ("design", "50"),
+    ("art", "50"),
+    ("music", "50"),
+    ("film", "50"),
+    ("photography", "50"),
+    ("animation", "50"),
+    ("ux", "50"),
+    ("ui", "50"),
+    
+    # Sciences
+    ("physics", "40"),
+    ("chemistry", "40"),
+    ("biology", "26"),
+    
+    # Psychology / Social
+    ("psychology", "42"),
+    ("sociology", "45"),
+    ("anthropology", "45"),
+    ("political", "45"),
+    
+    # Health
+    ("nursing", "51"),
+    ("health", "51"),
+    ("medical", "51"),
+    ("pharmacy", "51"),
+    ("healthcare", "51"),
+    
+    # Humanities
+    ("philosophy", "38"),
+    ("history", "54"),
+    ("english", "23"),
+    ("literature", "23"),
+    ("communications", "09"),
+    ("journalism", "09"),
+    ("media", "09"),
+    
+    # Law
+    ("law", "22"),
+    ("legal", "22"),
+    ("jd", "22"),
+    
+    # Education
+    ("education", "13"),
+    ("teaching", "13"),
+    ("pedagogy", "13"),
+]
+
+# Create dict for backward compatibility
+DEGREE_KEYWORD_TO_CIP = {k: v for k, v in DEGREE_KEYWORD_TO_CIP_ORDERED}
+
+# =============================================================================
+# SKILL-BASED STAT MAPPING
+# =============================================================================
+
 # Stat mapping: which characteristics contribute to each stat
 STAT_SKILL_MAPPING = {
     PrimaryStat.INT: {
@@ -231,6 +423,12 @@ class CareerAlchemyProfile:
     certifications: List[str]
     cert_enchantments: List[Dict[str, Any]]
     
+    # Education
+    education_entries: List[Dict[str, Any]]
+    education_stat_boosts: Dict[str, float]
+    highest_degree: str
+    degree_field: str
+    
     # Rarity
     rarity_score: float
     rarity_percentile: str
@@ -305,7 +503,12 @@ class CareerAlchemyEngine:
         certs = characteristics.get("certifications", [])
         cert_enchantments = self._process_cert_enchantments(certs)
         
-        # Step 9: Calculate Rarity Score
+        # Step 9: Process Education (CIP-based)
+        education = characteristics.get("education", [])
+        edu_boosts = self._calculate_education_stat_boosts(education)
+        edu_entries, highest_degree, degree_field = self._process_education_entries(education)
+        
+        # Step 10: Calculate Rarity Score
         rarity_score, rarity_percentile = self._calculate_rarity(primary_stats)
         
         # Build profile
@@ -328,6 +531,10 @@ class CareerAlchemyEngine:
             aura=aura,
             certifications=[c if isinstance(c, str) else c.get("name", str(c)) for c in certs[:5]],
             cert_enchantments=cert_enchantments,
+            education_entries=edu_entries,
+            education_stat_boosts=edu_boosts,
+            highest_degree=highest_degree,
+            degree_field=degree_field,
             rarity_score=rarity_score,
             rarity_percentile=rarity_percentile,
             location=location,
@@ -402,13 +609,14 @@ class CareerAlchemyEngine:
         cert_bonus = min(len(certifications) * 8, 24)  # Max 24 points from certs
         stats.synthesis = min(stats.synthesis + cert_bonus, 100)
         
-        # Apply education bonus to INT and ARC
-        if education:
-            edu_bonus = 10
-            if any("master" in str(e).lower() or "phd" in str(e).lower() for e in education):
-                edu_bonus = 20
-            stats.logic = min(stats.logic + edu_bonus, 100)
-            stats.synthesis = min(stats.synthesis + edu_bonus * 0.5, 100)
+        # Apply CIP-based education stat boosts
+        edu_boosts = self._calculate_education_stat_boosts(education)
+        stats.logic = min(stats.logic + edu_boosts.get("INT", 0), 100)
+        stats.precision = min(stats.precision + edu_boosts.get("DEX", 0), 100)
+        stats.strategy = min(stats.strategy + edu_boosts.get("WIS", 0), 100)
+        stats.influence = min(stats.influence + edu_boosts.get("CHA", 0), 100)
+        stats.durability = min(stats.durability + edu_boosts.get("VIT", 0), 100)
+        stats.synthesis = min(stats.synthesis + edu_boosts.get("ARC", 0), 100)
         
         # Apply seniority bonus
         seniority_level = seniority.get("level", "").lower()
@@ -489,6 +697,183 @@ class CareerAlchemyEngine:
             return 4
         else:
             return 2
+    
+    def _calculate_education_stat_boosts(
+        self, 
+        education: List[Any]
+    ) -> Dict[str, float]:
+        """
+        Calculate stat boosts from education using CIP code mapping
+        
+        Uses the Classification of Instructional Programs (CIP) to determine
+        which stats get boosted based on degree field and level.
+        
+        Args:
+            education: List of education entries from characteristics
+            
+        Returns:
+            Dict mapping stat abbreviations to boost values
+        """
+        stat_boosts = {"INT": 0, "DEX": 0, "WIS": 0, "CHA": 0, "VIT": 0, "ARC": 0}
+        
+        if not education:
+            return stat_boosts
+        
+        # Process each degree
+        for edu in education:
+            if isinstance(edu, dict):
+                degree_type = edu.get("degree", "").lower()
+                field = edu.get("field", edu.get("field_of_study", edu.get("major", ""))).lower()
+                institution = edu.get("institution", "").lower()
+            elif isinstance(edu, str):
+                degree_type = edu.lower()
+                field = edu.lower()
+                institution = ""
+            else:
+                continue
+            
+            # Determine degree level multiplier
+            level_multiplier = DEGREE_LEVEL_MULTIPLIERS["default"]
+            
+            if any(kw in degree_type for kw in ["phd", "ph.d", "doctorate", "doctoral"]):
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["phd"]
+            elif "mba" in degree_type or "mba" in field:
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["mba"]
+            elif any(kw in degree_type for kw in ["master", "m.s.", "m.a.", "ms ", "ma "]):
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["master"]
+            elif any(kw in degree_type for kw in ["jd", "j.d.", "md", "m.d."]):
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["professional"]
+            elif any(kw in degree_type for kw in ["bachelor", "b.s.", "b.a.", "bs ", "ba "]):
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["bachelor"]
+            elif any(kw in degree_type for kw in ["associate", "a.s.", "a.a."]):
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["associate"]
+            elif "some college" in degree_type or "attended" in degree_type:
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["some_college"]
+            elif "high school" in degree_type or "ged" in degree_type:
+                level_multiplier = DEGREE_LEVEL_MULTIPLIERS["high_school"]
+            
+            # Find CIP mapping from degree field
+            cip_code = None
+            
+            # Priority 1: Match field of study specifically (most accurate)
+            # Use ordered list for guaranteed priority matching
+            for keyword, cip in DEGREE_KEYWORD_TO_CIP_ORDERED:
+                if keyword in field:
+                    cip_code = cip
+                    break
+            
+            # Priority 2: If no field match, try combined text
+            if not cip_code:
+                combined_text = f"{degree_type} {field}".lower()
+                for keyword, cip in DEGREE_KEYWORD_TO_CIP_ORDERED:
+                    if keyword in combined_text:
+                        cip_code = cip
+                        break
+            
+            # Apply CIP-based stat boosts
+            if cip_code and cip_code in CIP_STAT_MAPPING:
+                cip_data = CIP_STAT_MAPPING[cip_code]
+                
+                # Primary stat boost
+                primary_stat = cip_data["primary"]
+                primary_boost = cip_data["primary_boost"] * level_multiplier
+                stat_boosts[primary_stat] = max(stat_boosts[primary_stat], primary_boost)
+                
+                # Secondary stat boost
+                secondary_stat = cip_data["secondary"]
+                secondary_boost = cip_data["secondary_boost"] * level_multiplier
+                stat_boosts[secondary_stat] = max(stat_boosts[secondary_stat], secondary_boost)
+            else:
+                # Default: Any degree gives a small boost to ARC (learning ability)
+                base_boost = 8 * level_multiplier
+                stat_boosts["ARC"] = max(stat_boosts["ARC"], base_boost)
+                stat_boosts["INT"] = max(stat_boosts["INT"], base_boost * 0.5)
+        
+        # Round all boosts
+        return {k: round(v, 1) for k, v in stat_boosts.items()}
+    
+    def _process_education_entries(
+        self, 
+        education: List[Any]
+    ) -> Tuple[List[Dict[str, Any]], str, str]:
+        """
+        Process education entries for display and extract highest degree
+        
+        Returns:
+            Tuple of (education_entries, highest_degree, degree_field)
+        """
+        if not education:
+            return [], "Unknown", "General"
+        
+        entries = []
+        highest_degree = "Unknown"
+        highest_degree_rank = 0
+        degree_field = "General"
+        
+        degree_ranks = {
+            "phd": 6, "doctorate": 6, "ph.d": 6,
+            "professional": 5, "jd": 5, "md": 5,
+            "master": 4, "mba": 4, "m.s.": 4, "m.a.": 4,
+            "bachelor": 3, "b.s.": 3, "b.a.": 3,
+            "associate": 2, "a.s.": 2, "a.a.": 2,
+            "certificate": 1, "diploma": 1,
+            "high school": 0, "ged": 0
+        }
+        
+        for edu in education:
+            entry = {}
+            
+            if isinstance(edu, dict):
+                entry["degree"] = edu.get("degree", "Degree")
+                entry["field"] = edu.get("field", edu.get("field_of_study", 
+                                edu.get("major", "General Studies")))
+                entry["institution"] = edu.get("institution", "")
+                entry["year"] = edu.get("graduation_date", edu.get("year", ""))
+            elif isinstance(edu, str):
+                entry["degree"] = edu
+                entry["field"] = "General"
+                entry["institution"] = ""
+                entry["year"] = ""
+            else:
+                continue
+            
+            # Find CIP mapping for display (prioritize field over degree name)
+            field_lower = entry['field'].lower()
+            cip_found = None
+            
+            # First try to match field specifically (using ordered list for priority)
+            for keyword, cip in DEGREE_KEYWORD_TO_CIP_ORDERED:
+                if keyword in field_lower and cip in CIP_STAT_MAPPING:
+                    cip_found = cip
+                    break
+            
+            # If no field match, try combined
+            if not cip_found:
+                combined = f"{entry['degree']} {entry['field']}".lower()
+                for keyword, cip in DEGREE_KEYWORD_TO_CIP_ORDERED:
+                    if keyword in combined and cip in CIP_STAT_MAPPING:
+                        cip_found = cip
+                        break
+            
+            if cip_found and cip_found in CIP_STAT_MAPPING:
+                entry["cip_family"] = CIP_STAT_MAPPING[cip_found]["name"]
+                entry["stat_bonus"] = f"+{CIP_STAT_MAPPING[cip_found]['primary_boost']} {CIP_STAT_MAPPING[cip_found]['primary']}"
+            else:
+                entry["cip_family"] = "General Studies"
+                entry["stat_bonus"] = "+8 ARC"
+            
+            entries.append(entry)
+            
+            # Track highest degree
+            degree_lower = entry["degree"].lower()
+            for degree_kw, rank in degree_ranks.items():
+                if degree_kw in degree_lower and rank > highest_degree_rank:
+                    highest_degree_rank = rank
+                    highest_degree = entry["degree"]
+                    degree_field = entry["field"]
+                    break
+        
+        return entries, highest_degree, degree_field
     
     def _determine_hero_class(self, stats: PrimaryStats) -> str:
         """Determine the Hero Class based on top 2 stats"""
