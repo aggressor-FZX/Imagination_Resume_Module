@@ -278,10 +278,20 @@ async def analyze_resume(
         if isinstance(analysis_result, dict) and analysis_result.get("final_written_section"):
             logger.info("analyze.pipeline.fast_track", extra={"request_id": request_id, "msg_text": "4-Stage Pipeline completed in analysis step. Skipping legacy steps."})
             
+            # Prefer run_metrics from analysis_result if it has actual data (from LLMClientAdapter)
+            # Otherwise fall back to global RUN_METRICS (for legacy pipeline paths)
+            pipeline_metrics = analysis_result.get("run_metrics", {})
+            if pipeline_metrics.get("total_tokens", 0) > 0 or pipeline_metrics.get("calls"):
+                merged_metrics = pipeline_metrics
+                logger.info(f"[METRICS] Using pipeline run_metrics: {pipeline_metrics.get('total_tokens', 0)} tokens")
+            else:
+                merged_metrics = RUN_METRICS.copy()
+                logger.info(f"[METRICS] Using global RUN_METRICS: {merged_metrics.get('total_tokens', 0)} tokens")
+            
             # Construct final output from analysis_result
             output = {
                 **analysis_result,
-                "run_metrics": RUN_METRICS.copy(),
+                "run_metrics": merged_metrics,
                 "processing_status": ProcessingStatus.COMPLETED,
                 "processing_time_seconds": time.time() - start_time
             }
