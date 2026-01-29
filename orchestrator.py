@@ -193,19 +193,15 @@ class PipelineOrchestrator:
             
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
             # Aggregate skills ONLY from user's actual resume experiences
-            # NOTE: Do NOT include implied_skills from job ad - those are job requirements, not user skills
+            # NOTE: Do NOT include implied_skills or domain_vocab - those come from JOB AD analysis
             resume_skills = set()
             for exp in experiences:
                 if "skills" in exp and isinstance(exp["skills"], list):
                     resume_skills.update(exp["skills"])
             
-            # Also include domain_vocab items that appear in the user's resume text
-            # These are actual technologies/skills mentioned in their background
-            domain_vocab = research_data.get("domain_vocab", [])
-            resume_text_lower = resume_text.lower() if resume_text else ""
-            for vocab in domain_vocab:
-                if isinstance(vocab, str) and vocab.lower() in resume_text_lower:
-                    resume_skills.add(vocab)
+            # REMOVED: domain_vocab matching - it comes from job ad analysis, not resume
+            # The substring matching (e.g., "Go" in "Google") caused job ad skills to leak
+            # into Key Strengths. Only use skills explicitly extracted from experiences.
             
             # implied_skills are from the JOB AD, not the user - keep them separate
             job_implied_skills = research_data.get("implied_skills", [])
