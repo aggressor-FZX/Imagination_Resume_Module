@@ -605,181 +605,161 @@ def parse_experiences(text: str) -> List[Dict]:
     - duration: Extracted date/duration info
     - raw: Original block text
     
-    IMPROVED LOGIC (v2): Recognizes that job titles followed by location/dates and bullet points
-    are ONE experience, not separate blocks. Handles:
-    1. Resumes with double-newlines between title, location, and bullets (Boeing format)
-    2. Resumes with inline dates in parentheses (AI Analyst format)
-    3. Skips education entries like "B.S. in Computer Science"
+    IMPROVED LOGIC (v3): Works line-by-line to handle PDFs that have single newlines
+    between experiences. Detects new experiences by job title patterns, not newlines.
+    Handles:
+    1. PDF format with single newlines between experiences
+    2. Text format with double newlines between experiences  
+    3. Inline dates in parentheses (AI Analyst format)
+    4. Skips education entries, section headers, and narrative content
     """
-    # Narrative indicators to detect cover letter/narrative content
-    narrative_indicators = [
-        "as a", "i am", "i have", "i'm", "i've", "my", "me", "myself",
-        "he is", "she is", "they are", "he has", "she has", "they have",
-        "he was", "she was", "they were", "he will", "she will", "they will",
-        "he can", "she can", "they can", "he should", "she should", "they should",
-        "he would", "she would", "they would", "he could", "she could", "they could",
-        "a motivated", "an experienced", "the candidate", "the professional",
-        "this professional", "this candidate", "this individual",
-        "is seeking", "is looking", "he is seeking", "she is seeking",
-        "they are seeking", "wants to", "would like to", "aims to",
-        "strives to", "seeks to",
-        "is a", "is an", "are a", "are an", "was a", "was an", "were a", "were an"
-    ]
-    
-    narrative_start_patterns = [
-        "as a", "i am", "i have", "i'm", "i've", "my name is", "i am seeking",
-        "i am looking", "i am a", "i am an", "i am the", "i am motivated",
-        "i am experienced", "i am seeking", "i am looking for", "i want to",
-        "i would like to", "i aim to", "i strive to", "i seek to",
-        "a motivated", "an experienced", "the candidate", "the professional",
-        "this professional", "this candidate", "this individual",
-        "is seeking", "is looking", "wants to", "would like to", "aims to",
-        "strives to", "seeks to"
-    ]
-    
-    # Enhanced job title patterns - includes inline dates
-    job_title_patterns = [
-        r'\(.*(?:inc|llc|corp|company|organization|administration|laboratory|university|force|navy|army|air force|marine|noaa|nasa|department|office|group|team|services|solutions|technologies|college|club|internship)\)',
-        r'\|.*\|',
-        r'(?:senior|junior|lead|principal|staff|chief|head|director|manager|engineer|developer|analyst|scientist|specialist|coordinator|administrator|officer|technician|mechanic|craftsman|assistant|associate|intern|president|operations)',
-        r'\(\d{1,2}/\d{2,4}\s*[-–]\s*(?:present|\d{1,2}/\d{2,4})\)',  # (04/2025 – Present)
-    ]
-    
-    # Education detection pattern - skip degree entries
-    education_pattern = re.compile(
-        r'^(?:B\.?S\.?|M\.?S\.?|Ph\.?D\.?|Bachelor|Master|Associate|A\.?A\.?S\.?|M\.?B\.?A\.?|B\.?A\.?|M\.?A\.?)\s+(?:in|of)',
+    # Job title patterns - line must match one of these to be a job title
+    job_title_pattern = re.compile(
+        r'(?:'
+        r'.*\(.*(?:inc|llc|corp|company|organization|administration|laboratory|university|'
+        r'force|navy|army|air\s*force|marine|noaa|nasa|department|office|group|team|'
+        r'services|solutions|technologies|college|club|internship|researcher|research)\)|'  # Company in parens
+        r'.*\|.*\||'  # Pipe separators
+        r'^(?:senior|junior|lead|principal|staff|chief|head|director|manager|engineer|'
+        r'developer|analyst|scientist|specialist|coordinator|administrator|officer|'
+        r'technician|mechanic|craftsman|assistant|associate|intern|president|operations|'
+        r'faculty|commissioned|research\s*physicist|data\s*analyst|software|machine\s*learning|'
+        r'ml\s*engineer|ai\s*engineer|devops|sre|product|program|project|consultant|'
+        r'architect|designer|writer|editor|teacher|professor|instructor|coach|trainer)'
+        r')',
         re.IGNORECASE
     )
     
-    # Patterns that indicate location/date lines (should merge with previous title)
+    # Location/date pattern - identifies location lines
     location_date_pattern = re.compile(
-        r'^[A-Za-z\s,]+,?\s*[A-Z]{2}[\s,]*\d{1,2}[/\-]\d{2,4}|'  # "City, ST MM/YYYY"
-        r'^\d{1,2}[/\-]\d{2,4}\s*[-–]\s*\d{1,2}[/\-]\d{2,4}|'  # "01/2014 - 06/2016"
-        r'^[A-Za-z]+\s+\d{4}\s*[-–]|'  # "January 2020 -"
-        r'^[A-Za-z\s,]+,?\s*[A-Z]{2}\s*$|'  # Just "City, ST"
-        r'^\d{4}\s*[-–]\s*(present|\d{4}|current)',  # "2020 - Present"
+        r'^[A-Za-z\s,]+,?\s*[A-Z]{2}\s+\d{1,2}/\d{2,4}\s*[-–]\s*(?:\d{1,2}/\d{2,4}|present|current)|'  # "City, ST 06/2016 - 05/2023"
+        r'^[A-Za-z\s,]+,?\s*[A-Z]{2}\s+\d{4}\s*[-–]|'  # "City, ST 2016 -"
+        r'^[A-Za-z\s]+\s+\d{4}\s*[-–]\s*(?:\d{4}|present|current)|'  # "World Wide 05/2002 - 01/2010"
+        r'^\d{1,2}/\d{2,4}\s*[-–]\s*(?:\d{1,2}/\d{2,4}|present|current)',  # "01/2014 - 06/2016"
         re.IGNORECASE
     )
     
-    # Patterns that indicate bullet points (should merge with previous experience)
+    # Bullet pattern
     bullet_pattern = re.compile(r'^[\s]*[•\-\*\–\—\►\◦\▪\●]|^[\s]*\d+[\.\)]\s')
     
-    # Split on double newlines first
-    blocks = re.split(r'\n{2,}', text)
+    # Section headers to skip
+    skip_sections = [
+        'education', 'academic', 'degree', 'certification', 'skills', 'summary',
+        'objective', 'profile', 'about', 'contact', 'references', 'projects',
+        'certifications', 'professional experience', 'work experience', 'experience',
+        'awards', 'honors', 'publications', 'languages', 'interests', 'hobbies',
+        'skills and technologies', 'technical skills', 'core competencies',
+        'certifications and publications'
+    ]
     
-    # First pass: classify each block
-    classified_blocks = []
-    for b in blocks:
-        b = b.strip()
-        if not b:
-            continue
-        
-        b_lower = b.lower()
-        first_line = b.split('\n')[0].strip() if b else ""
-        first_line_lower = first_line.lower()
-        
-        # Skip section headers and non-experience sections
-        skip_sections = ['education', 'academic', 'degree', 'certification', 'skills', 
-                        'summary', 'objective', 'profile', 'about', 'contact', 'references',
-                        'projects', 'certifications', 'professional experience', 'work experience',
-                        'experience', 'awards', 'honors', 'publications', 'languages', 
-                        'interests', 'hobbies']
-        if any(first_line_lower.startswith(s) or first_line_lower == s for s in skip_sections):
-            classified_blocks.append({'type': 'skip', 'text': b})
-            continue
-        
-        # Skip education entries (B.S., M.S., etc.)
-        if education_pattern.match(first_line):
-            classified_blocks.append({'type': 'skip', 'text': b})
-            continue
-        
-        # Check for narrative content
-        has_narrative_start = any(b_lower.strip().startswith(pattern) for pattern in narrative_start_patterns)
-        narrative_count = sum(1 for indicator in narrative_indicators if indicator in b_lower)
-        if has_narrative_start or narrative_count >= 3:
-            classified_blocks.append({'type': 'skip', 'text': b})
-            continue
-        
-        # Check if this looks like a job title
-        is_job_title = any(re.search(p, first_line, re.IGNORECASE) for p in job_title_patterns)
-        
-        # Check if this looks like location/date
-        is_location_date = bool(location_date_pattern.match(first_line))
-        
-        # Check if this is bullet points
-        is_bullets = bool(bullet_pattern.match(first_line))
-        
-        if is_job_title and len(first_line) >= 20:
-            classified_blocks.append({'type': 'title', 'text': b})
-        elif is_location_date:
-            classified_blocks.append({'type': 'location', 'text': b})
-        elif is_bullets:
-            classified_blocks.append({'type': 'bullets', 'text': b})
-        elif len(b) < 40:
-            classified_blocks.append({'type': 'skip', 'text': b})
-        else:
-            # Default: could be content or a title without clear markers
-            # If it contains bullets anywhere, treat as bullets
-            if bullet_pattern.search(b):
-                classified_blocks.append({'type': 'bullets', 'text': b})
-            else:
-                classified_blocks.append({'type': 'content', 'text': b})
+    # Education entry pattern
+    education_pattern = re.compile(
+        r'^(?:B\.?S\.?|M\.?S\.?|Ph\.?D\.?|Bachelor|Master|Associate|A\.?A\.?S\.?|'
+        r'M\.?B\.?A\.?|B\.?A\.?|M\.?A\.?|AAS|BS|MS|BA|MA)\s+(?:in\s+|of\s+)?[A-Za-z]',
+        re.IGNORECASE
+    )
     
-    # Second pass: merge location/date and bullets with their preceding title
+    # File separator pattern (frontend combines files with ---)
+    file_separator_pattern = re.compile(r'^-{3,}$')
+    
+    # Split into lines and process
+    lines = text.split('\n')
+    
     experiences = []
     current_exp = None
+    in_experience_section = False
+    skip_until_next_section = False
     
-    for block in classified_blocks:
-        if block['type'] == 'skip':
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        i += 1
+        
+        # Skip empty lines
+        if not line:
             continue
-        elif block['type'] == 'title':
-            # Save previous experience if exists
-            if current_exp:
-                experiences.append(current_exp)
-            # Start new experience
-            lines = [l.strip() for l in block['text'].splitlines() if l.strip()]
-            current_exp = {
-                'title_line': lines[0] if lines else "",
-                'parts': [block['text']]
-            }
-        elif block['type'] in ('location', 'bullets') and current_exp:
-            # Merge with current experience
-            current_exp['parts'].append(block['text'])
-        elif block['type'] == 'content':
-            # Could be a title without clear markers, or content
-            # Check if it looks like it could be a job title (has company-like content)
-            first_line = block['text'].split('\n')[0].strip()
-            if len(first_line) >= 15 and not bullet_pattern.match(first_line):
-                # Treat as new experience title
-                if current_exp:
+        
+        # Skip file separators
+        if file_separator_pattern.match(line):
+            continue
+        
+        line_lower = line.lower()
+        
+        # Check for section headers
+        is_section_header = any(line_lower == s or line_lower.startswith(s + ' ') or 
+                                line_lower.startswith(s + ':') for s in skip_sections)
+        
+        if is_section_header:
+            # If we hit "professional experience" or "work experience", start capturing
+            if 'experience' in line_lower and ('professional' in line_lower or 'work' in line_lower):
+                in_experience_section = True
+                skip_until_next_section = False
+            # If we hit education/skills/etc, stop capturing experiences
+            elif any(s in line_lower for s in ['education', 'skill', 'certification', 'project', 'publication']):
+                skip_until_next_section = True
+                in_experience_section = False
+                # Save current experience before stopping
+                if current_exp and current_exp.get('lines'):
                     experiences.append(current_exp)
-                lines = [l.strip() for l in block['text'].splitlines() if l.strip()]
-                current_exp = {
-                    'title_line': lines[0] if lines else "",
-                    'parts': [block['text']]
-                }
-            elif current_exp:
-                # Merge with current experience
-                current_exp['parts'].append(block['text'])
-            else:
-                # No current experience, create one
-                lines = [l.strip() for l in block['text'].splitlines() if l.strip()]
-                current_exp = {
-                    'title_line': lines[0] if lines else "",
-                    'parts': [block['text']]
-                }
+                    current_exp = None
+            continue
+        
+        # Skip if we're in a non-experience section
+        if skip_until_next_section:
+            continue
+        
+        # Skip education entries
+        if education_pattern.match(line):
+            continue
+        
+        # Check if this line is a job title (starts a new experience)
+        is_job_title = (
+            job_title_pattern.search(line) and 
+            len(line) >= 15 and
+            not bullet_pattern.match(line) and
+            not location_date_pattern.match(line) and
+            not education_pattern.match(line)
+        )
+        
+        # Check if this is a location/date line
+        is_location = location_date_pattern.match(line)
+        
+        # Check if this is a bullet point
+        is_bullet = bullet_pattern.match(line)
+        
+        if is_job_title:
+            # Save previous experience
+            if current_exp and current_exp.get('lines'):
+                experiences.append(current_exp)
+            
+            # Start new experience
+            current_exp = {
+                'title_line': line,
+                'lines': [line]
+            }
+            in_experience_section = True
+            
+        elif current_exp is not None:
+            # Add to current experience
+            if is_location or is_bullet or (in_experience_section and not is_section_header):
+                current_exp['lines'].append(line)
     
     # Don't forget the last experience
-    if current_exp:
+    if current_exp and current_exp.get('lines'):
         experiences.append(current_exp)
     
-    # Third pass: convert to final format
+    # Convert to final format
     result = []
     for exp in experiences:
-        full_text = '\n\n'.join(exp['parts'])
-        lines = [l.strip() for l in full_text.splitlines() if l.strip()]
+        exp_lines = exp.get('lines', [])
+        if not exp_lines:
+            continue
+        
+        full_text = '\n'.join(exp_lines)
         title_line = exp['title_line']
-        body = " ".join(lines[1:]) if len(lines) > 1 else " ".join(lines)
+        # Body is everything after the title line
+        body_lines = [l for l in exp_lines[1:] if l.strip()]
+        body = " ".join(body_lines) if body_lines else ""
         
         # Extract duration information for seniority detection
         duration = extract_duration_from_text(full_text)
