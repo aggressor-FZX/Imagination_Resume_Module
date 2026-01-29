@@ -192,27 +192,45 @@ class PipelineOrchestrator:
             logger.info(f"[ORCHESTRATOR] StarEditor produced {len(editor_data.get('final_markdown', '').split())} word resume")
             
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
-            # Aggregate skills for analysis
-            all_skills = set(research_data.get("implied_skills", []))
+            # Aggregate skills ONLY from user's actual resume experiences
+            # NOTE: Do NOT include implied_skills from job ad - those are job requirements, not user skills
+            resume_skills = set()
             for exp in experiences:
                 if "skills" in exp and isinstance(exp["skills"], list):
-                    all_skills.update(exp["skills"])
+                    resume_skills.update(exp["skills"])
+            
+            # Also include domain_vocab items that appear in the user's resume text
+            # These are actual technologies/skills mentioned in their background
+            domain_vocab = research_data.get("domain_vocab", [])
+            resume_text_lower = resume_text.lower() if resume_text else ""
+            for vocab in domain_vocab:
+                if isinstance(vocab, str) and vocab.lower() in resume_text_lower:
+                    resume_skills.add(vocab)
+            
+            # implied_skills are from the JOB AD, not the user - keep them separate
+            job_implied_skills = research_data.get("implied_skills", [])
+            
+            # For seniority detection, use all available skills (resume + implied context)
+            all_skills_for_seniority = resume_skills | set(job_implied_skills)
             
             # Run Seniority Analysis
             try:
-                seniority_result = self.seniority_detector.detect_seniority(experiences, all_skills)
+                seniority_result = self.seniority_detector.detect_seniority(experiences, all_skills_for_seniority)
                 logger.info(f"[ORCHESTRATOR] Detected seniority: {seniority_result.get('level')} ({seniority_result.get('confidence'):.2f})")
             except Exception as e:
                 logger.error(f"[ORCHESTRATOR] Seniority detection failed: {e}")
                 seniority_result = {"level": "mid-level", "confidence": 0.5, "reasoning": "Fallback due to error"}
 
             # Construct Processed Skills
+            # CRITICAL: high_confidence = ONLY skills from user's resume, NOT from job ad
+            # inferred_skills = skills from job ad that user MIGHT have (for gap analysis)
             processed_skills = {
-                "high_confidence": list(all_skills), # Treat all found skills as high confidence for now
+                "high_confidence": list(resume_skills),  # User's actual skills from resume
                 "medium_confidence": [],
                 "low_confidence": [],
-                "inferred_skills": research_data.get("implied_skills", [])
+                "inferred_skills": job_implied_skills  # Job ad requirements (NOT user's confirmed skills)
             }
+            logger.info(f"[ORCHESTRATOR] Skills - Resume: {len(resume_skills)}, Job Implied: {len(job_implied_skills)}")
 
             # Combine results
             total_duration = time.time() - start_time
