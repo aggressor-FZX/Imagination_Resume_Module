@@ -15,6 +15,42 @@ from pipeline_config import OR_SLUG_STAR_EDITOR, OR_SLUG_JOB_TITLE_EXTRACTOR  # 
 
 logger = logging.getLogger(__name__)
 
+# Import career alchemy generator
+try:
+    from career_alchemy import generate_career_alchemy
+    CAREER_ALCHEMY_AVAILABLE = True
+except ImportError:
+    logger.warning("[NEW_PIPELINE] career_alchemy module not available, Career Alchemy feature disabled")
+    CAREER_ALCHEMY_AVAILABLE = False
+
+
+def _extract_experience_years(experiences: List[Dict[str, Any]]) -> float:
+    """Extract total years of experience from experiences list"""
+    if not experiences:
+        return 0.0
+    
+    total_years = 0.0
+    for exp in experiences:
+        if isinstance(exp, dict):
+            # Try to extract duration from various fields
+            duration = exp.get("duration", "")
+            if duration:
+                # Parse "2 years" or "24 months" format
+                import re
+                years_match = re.search(r'(\d+)\s*(?:year|yr)', duration, re.IGNORECASE)
+                if years_match:
+                    total_years += float(years_match.group(1))
+                else:
+                    months_match = re.search(r'(\d+)\s*(?:month|mo)', duration, re.IGNORECASE)
+                    if months_match:
+                        total_years += float(months_match.group(1)) / 12.0
+    
+    # If no duration found, estimate from number of experiences (assume 2-3 years each)
+    if total_years == 0.0 and len(experiences) > 0:
+        total_years = len(experiences) * 2.5
+    
+    return total_years
+
 
 async def run_new_pipeline_async(
     resume_text: str,
@@ -344,6 +380,56 @@ Rate the alignment (0.0-1.0):"""
                 "failures": []
             }
         }
+        
+        # Generate Career Alchemy if available
+        career_alchemy_data = None
+        if CAREER_ALCHEMY_AVAILABLE:
+            try:
+                logger.info("[NEW_PIPELINE] Generating Career Alchemy profile...")
+                
+                # Extract seniority_analysis from result
+                seniority_analysis = result.get("seniority_analysis", {})
+                
+                # Build characteristics dict from analysis result
+                characteristics = {
+                    "canonical_title": extracted_job_title or domain_insights.get("domain", "Professional"),
+                    "job_title": extracted_job_title or domain_insights.get("domain", "Professional"),
+                    "domain": domain_insights.get("domain", "Technology"),
+                    "seniority": {
+                        "level": final_output.get("seniority_level", "mid"),
+                        "job_zone": seniority_analysis.get("job_zone", "4") if isinstance(seniority_analysis, dict) else "4",
+                        "experience_required": seniority_analysis.get("experience_required", "5-10 years") if isinstance(seniority_analysis, dict) else "5-10 years"
+                    },
+                    "skills": [
+                        {"skill": skill, "confidence": 0.85} if isinstance(skill, str) else skill
+                        for skill in aggregate_skills[:30]
+                    ],
+                    "experience_years": _extract_experience_years(experiences),
+                    "certifications": domain_insights.get("certifications", []),
+                    "education": domain_insights.get("education", []),
+                    "achievements": [exp.get("snippet", "")[:100] for exp in experiences[:5] if isinstance(exp, dict) and exp.get("snippet")]
+                }
+                
+                # Extract location from kwargs or use default
+                location = kwargs.get("location", "United States")
+                
+                # Generate career alchemy
+                career_alchemy_data = generate_career_alchemy(
+                    characteristics=characteristics,
+                    location=location,
+                    pivot_data=None,  # Can be enhanced later
+                    salary_data=None  # Can be enhanced later
+                )
+                
+                logger.info("[NEW_PIPELINE] Career Alchemy generated successfully")
+                
+            except Exception as e:
+                logger.warning(f"[NEW_PIPELINE] Career Alchemy generation failed: {e}", exc_info=True)
+                career_alchemy_data = None
+        
+        # Add career_alchemy to response if generated
+        if career_alchemy_data:
+            response["career_alchemy"] = career_alchemy_data
         
         llm_usage = response.get("run_metrics", {})
         logger.info(f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}, Critique Score: {critique_score}, Tokens: {llm_usage.get('total_tokens', 0)}")

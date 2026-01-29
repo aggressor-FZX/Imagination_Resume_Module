@@ -186,6 +186,7 @@ class AnalysisResponse(BaseModel):
         ProcessingStatus.COMPLETED, description="Processing status"
     )
     processing_time_seconds: float = Field(..., description="Total processing time")
+    career_alchemy: Optional[Dict[str, Any]] = Field(None, description="Career Alchemy profile (Spotify Wrapped style career identity)")
 
     @field_validator("final_written_section_provenance", mode="before")
     @classmethod
