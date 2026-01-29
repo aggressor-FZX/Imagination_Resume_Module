@@ -30,11 +30,14 @@ def _extract_experience_years(experiences: List[Dict[str, Any]]) -> float:
         return 0.0
     
     total_years = 0.0
+    parsing_attempted = False
+    
     for exp in experiences:
         if isinstance(exp, dict):
             # Try to extract duration from various fields
             duration = exp.get("duration", "")
             if duration:
+                parsing_attempted = True
                 # Parse "2 years" or "24 months" format
                 import re
                 years_match = re.search(r'(\d+)\s*(?:year|yr)', duration, re.IGNORECASE)
@@ -45,9 +48,11 @@ def _extract_experience_years(experiences: List[Dict[str, Any]]) -> float:
                     if months_match:
                         total_years += float(months_match.group(1)) / 12.0
     
-    # If no duration found, estimate from number of experiences (assume 2-3 years each)
-    if total_years == 0.0 and len(experiences) > 0:
-        total_years = len(experiences) * 2.5
+    # Only use fallback estimate if no parsing was attempted (all durations were missing/empty)
+    # This prevents inflating estimates when parsing occurred but found no valid durations
+    if total_years == 0.0 and len(experiences) > 0 and not parsing_attempted:
+        # Conservative estimate: assume 1.5-2 years per experience (reduced from 2.5)
+        total_years = len(experiences) * 1.75
     
     return total_years
 
