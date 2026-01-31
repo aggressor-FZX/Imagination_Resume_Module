@@ -2850,6 +2850,96 @@ async def run_analysis_async(
         domain_insights.setdefault("skill_gap_priority", "Medium")
         domain_insights.setdefault("emerging_trends", [])
         domain_insights.setdefault("insights", [])
+    
+    # Enrich domain insights with Data USA market intel if location is provided
+    location = kwargs.get("location") or kwargs.get("job_location") or kwargs.get("preferred_location")
+    if location:
+        try:
+            from career_progression_enricher import CareerProgressionEnricher
+            from city_geo_mapper import get_geo_id
+            
+            # Extract job title from experiences or domain insights
+            job_title = None
+            if experiences and len(experiences) > 0:
+                first_exp = experiences[0]
+                if isinstance(first_exp, dict):
+                    job_title = first_exp.get("title_line", "").split("|")[0].strip()
+                    if not job_title:
+                        job_title = first_exp.get("title", "")
+            
+            # Fallback: try to extract from job_ad
+            if not job_title and job_ad:
+                import re
+                title_patterns = [
+                    r"(?:position|role|title):\s*([A-Z][A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Manager|Designer|Architect|Specialist))",
+                    r"^([A-Z][A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Manager|Designer|Architect|Specialist))",
+                ]
+                for pattern in title_patterns:
+                    match = re.search(pattern, job_ad[:500], re.MULTILINE | re.IGNORECASE)
+                    if match:
+                        job_title = match.group(1).strip()
+                        break
+            
+            if job_title:
+                logger.info(f"[MARKET_INTEL] Enriching with location: {location}, job_title: {job_title}")
+                
+                # Get geo ID for location
+                geo_id = get_geo_id(location)
+                if not geo_id:
+                    logger.warning(f"[MARKET_INTEL] No geo ID found for location: {location}, using national data")
+                
+                # Search O*NET for job title to get O*NET code
+                onet_code = None
+                try:
+                    import requests
+                    onet_auth = os.getenv("ONET_API_AUTH", "Y29naXRvbWV0cmljOjI4Mzd5cGQ=")
+                    onet_url = "https://services.onetcenter.org/ws/online/search"
+                    onet_headers = {
+                        "Authorization": f"Basic {onet_auth}",
+                        "Accept": "application/json"
+                    }
+                    search_response = requests.get(
+                        onet_url,
+                        headers=onet_headers,
+                        params={"keyword": job_title, "end": 1},
+                        timeout=10
+                    )
+                    if search_response.status_code == 200:
+                        search_data = search_response.json()
+                        if search_data.get("occupation"):
+                            onet_code = search_data["occupation"][0]["code"]
+                            logger.info(f"[MARKET_INTEL] Found O*NET code: {onet_code} for {job_title}")
+                except Exception as e:
+                    logger.warning(f"[MARKET_INTEL] O*NET search failed: {e}")
+                
+                # If we have O*NET code, enrich with market data
+                if onet_code:
+                    enricher = CareerProgressionEnricher()
+                    career_data = enricher.get_full_career_insights(
+                        job_title=job_title,
+                        onet_code=onet_code,
+                        location=location,
+                        city_geo_id=geo_id
+                    )
+                    
+                    # Get O*NET summary for Bright Outlook check
+                    onet_summary = enricher._get_onet_summary(onet_code)
+                    
+                    # Calculate market intel
+                    market_intel = enricher.calculate_market_intel(
+                        career_data.get("workforce", {}),
+                        onet_summary,
+                        job_title=job_title,
+                        location=location
+                    )
+                    
+                    # Add market intel to domain insights
+                    domain_insights["market_intel"] = market_intel
+                    logger.info(f"[MARKET_INTEL] Added market intel: {market_intel.get('status')}")
+                else:
+                    logger.warning(f"[MARKET_INTEL] No O*NET code found for job title: {job_title}")
+        except Exception as e:
+            logger.error(f"[MARKET_INTEL] Failed to enrich domain insights: {e}", exc_info=True)
 
     ats_summary: Optional[str] = None
 

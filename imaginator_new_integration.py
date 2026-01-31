@@ -66,6 +66,7 @@ async def run_new_pipeline_async(
     domain_insights_json: Optional[Dict] = None,
     openrouter_api_keys: Optional[List[str]] = None,
     creativity_mode: Optional[str] = None,
+    location: Optional[str] = None,
     **kwargs
 ) -> Dict[str, Any]:
     """
@@ -77,12 +78,15 @@ async def run_new_pipeline_async(
         extracted_skills_json: Skills from Hermes/FastSVM (unused in new pipeline)
         domain_insights_json: Domain insights (unused in new pipeline)
         openrouter_api_keys: OpenRouter API keys
+        location: Job location for market intel enrichment
         **kwargs: Additional arguments
         
     Returns:
         Dictionary with final_written_section_markdown and metadata
     """
     logger.info("[NEW_PIPELINE] Starting 3-stage orchestrator")
+    if location:
+        logger.info(f"[NEW_PIPELINE] Location provided for market intel: {location}")
     
     try:
         # Parse experiences from resume text
@@ -320,6 +324,75 @@ Rate the alignment (0.0-1.0):"""
             domain_insights["emerging_trends"] = work_archetypes
         else:
             domain_insights["emerging_trends"] = []
+        
+        # Enrich domain insights with Data USA market intel if location is provided
+        if location and extracted_job_title:
+            try:
+                from career_progression_enricher import CareerProgressionEnricher
+                from city_geo_mapper import get_geo_id
+                import os
+                
+                logger.info(f"[NEW_PIPELINE] Enriching with market intel for {extracted_job_title} in {location}")
+                
+                # Get geo ID for location
+                geo_id = get_geo_id(location)
+                if not geo_id:
+                    logger.warning(f"[NEW_PIPELINE] No geo ID found for location: {location}, using national data")
+                
+                # Search O*NET for job title to get O*NET code
+                onet_code = None
+                try:
+                    import requests
+                    onet_auth = os.getenv("ONET_API_AUTH", "Y29naXRvbWV0cmljOjI4Mzd5cGQ=")
+                    onet_url = "https://services.onetcenter.org/ws/online/search"
+                    onet_headers = {
+                        "Authorization": f"Basic {onet_auth}",
+                        "Accept": "application/json"
+                    }
+                    search_response = requests.get(
+                        onet_url,
+                        headers=onet_headers,
+                        params={"keyword": extracted_job_title, "end": 1},
+                        timeout=10
+                    )
+                    if search_response.status_code == 200:
+                        search_data = search_response.json()
+                        if search_data.get("occupation"):
+                            onet_code = search_data["occupation"][0]["code"]
+                            logger.info(f"[NEW_PIPELINE] Found O*NET code: {onet_code} for {extracted_job_title}")
+                except Exception as e:
+                    logger.warning(f"[NEW_PIPELINE] O*NET search failed: {e}")
+                
+                # If we have O*NET code, enrich with market data
+                if onet_code:
+                    enricher = CareerProgressionEnricher()
+                    career_data = enricher.get_full_career_insights(
+                        job_title=extracted_job_title,
+                        onet_code=onet_code,
+                        location=location,
+                        city_geo_id=geo_id
+                    )
+                    
+                    # Get O*NET summary for Bright Outlook check
+                    onet_summary = enricher._get_onet_summary(onet_code)
+                    
+                    # Calculate market intel
+                    market_intel = enricher.calculate_market_intel(
+                        career_data.get("workforce", {}),
+                        onet_summary,
+                        job_title=extracted_job_title,
+                        location=location
+                    )
+                    
+                    # Add market intel to domain insights
+                    domain_insights["market_intel"] = market_intel
+                    logger.info(f"[NEW_PIPELINE] Added market intel: {market_intel.get('status')}")
+                else:
+                    logger.warning(f"[NEW_PIPELINE] No O*NET code found for job title: {extracted_job_title}")
+            except Exception as e:
+                logger.error(f"[NEW_PIPELINE] Failed to enrich domain insights with market intel: {e}", exc_info=True)
+        elif location:
+            logger.warning(f"[NEW_PIPELINE] Location provided ({location}) but no job title extracted, skipping market intel")
         
         # Build gap_analysis from researcher data
         gap_analysis = ""

@@ -172,6 +172,7 @@ async def analyze_resume(
     logger.info("[IMAGINATOR ENDPOINT] === Received analyze request ===")
     logger.info(f"[IMAGINATOR ENDPOINT] Resume length: {len(payload.resume_text)}")
     logger.info(f"[IMAGINATOR ENDPOINT] Job ad length: {len(payload.job_ad) if payload.job_ad else 0}")
+    logger.info(f"[IMAGINATOR ENDPOINT] Location: {payload.location if payload.location else 'None'}")
     logger.info(f"[IMAGINATOR ENDPOINT] Confidence threshold: {payload.confidence_threshold}")
     logger.info(f"[IMAGINATOR ENDPOINT] Feature Flags:")
     logger.info(f"[IMAGINATOR ENDPOINT]   - ENABLE_LOADER: {settings.ENABLE_LOADER}")
@@ -254,6 +255,7 @@ async def analyze_resume(
             domain_insights_json=insights_data,
             openrouter_api_keys=api_keys,
             creativity_mode=payload.creativity_mode,
+            location=payload.location,  # Pass location for market intel enrichment
         )
         if settings.VERBOSE_PIPELINE_LOGS:
             logger.info(
@@ -476,7 +478,8 @@ async def analyze_multi_file(
             extracted_skills_json=None,
             domain_insights_json=None,
             confidence_threshold=settings.confidence_threshold,
-            openrouter_api_keys=api_keys
+            openrouter_api_keys=api_keys,
+            location=payload.location  # Pass location for market intel enrichment
         )
         analysis_duration_ms = int((time.time() - t0) * 1000)
         logger.info("run_analysis.end", extra={"request_id": request_id, "duration_ms": analysis_duration_ms})

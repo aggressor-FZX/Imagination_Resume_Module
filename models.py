@@ -129,6 +129,11 @@ class AnalysisRequest(BaseModel):
         validation_alias=AliasChoices("creativity_mode", "creativityMode"),
         description="Creativity preset for generation"
     )
+    location: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("location", "job_location", "preferred_location", "city"),
+        description="Job location/city for market data enrichment (e.g., 'Los Angeles', 'New York')"
+    )
 
     @field_validator('extracted_skills_json')
     @classmethod

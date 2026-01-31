@@ -214,15 +214,16 @@ class CareerProgressionEnricher:
         Get workforce size & wage trends from Data USA
         
         Returns YoY growth by comparing latest 2 years (uses drilldowns/measures)
+        Also includes time-series data for trend analysis (5 years)
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
             url = "https://datausa.io/api/data"
+            # Request time-series data (5 years) for trend analysis
             params = {
-                "drilldowns": "Occupation",
+                "drilldowns": "Year,Occupation",
                 "measures": "Average Wage,Workforce",
                 "occupation": soc_code,
-                "year": "latest"
             }
             if geo_id:
                 params["geo"] = geo_id
@@ -240,6 +241,8 @@ class CareerProgressionEnricher:
                 return self._empty_workforce_data()
             rows.sort(key=lambda x: int(x.get("Year", 0)), reverse=True)
             latest = rows[0]
+            
+            # Calculate YoY growth (latest vs previous year)
             if len(rows) >= 2:
                 previous = rows[1]
                 latest_workforce = int(latest.get("Workforce", 0))
@@ -254,13 +257,26 @@ class CareerProgressionEnricher:
                     ((latest_wage - prev_wage) / prev_wage * 100)
                     if prev_wage > 0 else 0
                 )
+                
+                # Calculate 3-year workforce delta for demand score
+                workforce_delta_3yr = None
+                if len(rows) >= 3:
+                    older = rows[2]  # 3 years ago
+                    older_workforce = int(older.get("Workforce", 0))
+                    if older_workforce > 0:
+                        workforce_delta_3yr = (
+                            ((latest_workforce - older_workforce) / older_workforce * 100)
+                        )
+                
                 return {
                     "workforce_size": latest_workforce,
                     "average_wage": latest_wage,
                     "yoy_growth_workforce": round(workforce_growth, 1),
                     "yoy_growth_wage": round(wage_growth, 1),
+                    "workforce_delta_3yr": round(workforce_delta_3yr, 1) if workforce_delta_3yr is not None else None,
                     "year_latest": latest.get("Year", "Unknown"),
                     "year_previous": previous.get("Year", "Unknown"),
+                    "time_series": rows[:5],  # Keep last 5 years for trend analysis
                     "data_source": "Data USA (time series)"
                 }
             return {
@@ -268,7 +284,9 @@ class CareerProgressionEnricher:
                 "average_wage": int(latest.get("Average Wage", 0)),
                 "yoy_growth_workforce": None,
                 "yoy_growth_wage": None,
+                "workforce_delta_3yr": None,
                 "year": latest.get("Year", "Unknown"),
+                "time_series": rows[:5] if rows else [],
                 "data_source": "Data USA (single year)"
             }
         except Exception as e:
@@ -282,8 +300,169 @@ class CareerProgressionEnricher:
             "average_wage": None,
             "yoy_growth_workforce": None,
             "yoy_growth_wage": None,
+            "workforce_delta_3yr": None,
+            "time_series": [],
             "data_source": "Data unavailable"
         }
+    
+    def calculate_market_intel(
+        self, 
+        workforce_data: Dict[str, Any], 
+        onet_summary: Dict[str, Any],
+        job_title: str = "",
+        location: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Calculate the 3 Market Insight Markers:
+        A. Demand Score (Workforce Delta) - 3-year growth
+        B. Shortage Indicator (Wage vs. Workforce growth)
+        C. Bright Outlook Calibration (O*NET + Local trends)
+        
+        Args:
+            workforce_data: Output from _get_workforce_trends()
+            onet_summary: Output from _get_onet_summary()
+            job_title: Job title for narrative generation
+            location: Location name for narrative generation
+            
+        Returns:
+            Market intel dict with status, labels, and narrative
+        """
+        # Extract workforce growth metrics
+        workforce_delta_3yr = workforce_data.get("workforce_delta_3yr")
+        workforce_growth = workforce_data.get("yoy_growth_workforce", 0) or 0
+        wage_growth = workforce_data.get("yoy_growth_wage", 0) or 0
+        
+        # Use 3-year delta if available, otherwise fall back to YoY
+        workforce_growth_pct = workforce_delta_3yr if workforce_delta_3yr is not None else workforce_growth
+        
+        # Check for Bright Outlook in O*NET summary
+        has_bright_outlook = False
+        bright_outlook_tags = []
+        if onet_summary:
+            summary_str = json.dumps(onet_summary).lower()
+            # Look for Bright Outlook indicators
+            bright_outlook_keywords = [
+                "bright outlook",
+                "rapid growth",
+                "numerous openings",
+                "green occupation",
+                "projected growth"
+            ]
+            for keyword in bright_outlook_keywords:
+                if keyword in summary_str:
+                    has_bright_outlook = True
+                    bright_outlook_tags.append(keyword)
+            
+            # Also check for explicit bright_outlook field
+            if onet_summary.get("bright_outlook") or onet_summary.get("bright_outlook_category"):
+                has_bright_outlook = True
+        
+        # A. Demand Score (Workforce Delta) - 3-year comparison
+        if workforce_growth_pct > 10:
+            demand_label = "High Demand"
+        elif workforce_growth_pct > 0:
+            demand_label = "Stable Market"
+        else:
+            demand_label = "Market Saturation"
+        
+        # B. Shortage Indicator (Wages outpace workforce growth)
+        # If workforce is growing slowly but wages spike > 7% YoY, it's a shortage
+        is_shortage = False
+        if wage_growth > 7 and (workforce_growth < 5 or workforce_growth_pct < 5):
+            # Wages growing faster than workforce suggests shortage
+            if wage_growth > (workforce_growth * 1.5) or wage_growth > (workforce_growth_pct * 1.5):
+                is_shortage = True
+        
+        # C. Bright Outlook Calibration
+        if has_bright_outlook and workforce_growth_pct > 10:
+            status_label = "Career Rocket Ship 🚀"
+        elif has_bright_outlook and workforce_growth_pct < 0:
+            status_label = "Regional Pivot Required"
+        elif is_shortage:
+            status_label = "Critical Shortage"
+        elif has_bright_outlook:
+            status_label = f"Bright Outlook - {demand_label}"
+        else:
+            status_label = demand_label
+        
+        # Generate narrative
+        narrative = self._generate_market_narrative(
+            job_title, location, status_label, demand_label, 
+            workforce_growth_pct, wage_growth, has_bright_outlook, is_shortage
+        )
+        
+        return {
+            "status": status_label,
+            "demand_label": demand_label,
+            "is_shortage": is_shortage,
+            "workforce_growth_pct": round(workforce_growth_pct, 1) if workforce_growth_pct is not None else 0,
+            "wage_growth_pct": round(wage_growth, 1),
+            "has_bright_outlook": has_bright_outlook,
+            "bright_outlook_tags": bright_outlook_tags,
+            "average_wage": workforce_data.get("average_wage"),
+            "workforce_size": workforce_data.get("workforce_size"),
+            "data_year": workforce_data.get("year_latest") or workforce_data.get("year", "Unknown"),
+            "narrative": narrative
+        }
+    
+    def _generate_market_narrative(
+        self,
+        job_title: str,
+        location: str,
+        status_label: str,
+        demand_label: str,
+        workforce_growth_pct: float,
+        wage_growth_pct: float,
+        has_bright_outlook: bool,
+        is_shortage: bool
+    ) -> str:
+        """Generate human-readable market narrative"""
+        location_display = location if location and location != "United States" else "your area"
+        job_display = job_title if job_title else "this role"
+        
+        parts = []
+        
+        # Opening: Bright Outlook status
+        if has_bright_outlook:
+            parts.append(
+                f"Your chosen pivot into {job_display} aligns with a Bright Outlook status nationally."
+            )
+        else:
+            parts.append(f"Market analysis for {job_display} in {location_display}:")
+        
+        # Local trend analysis
+        if workforce_growth_pct > 10:
+            parts.append(
+                f"Locally, in {location_display}, our analysis of Data USA trends shows "
+                f"a {workforce_growth_pct:.1f}% workforce expansion over the past 3 years—"
+                f"indicating strong market growth."
+            )
+        elif workforce_growth_pct > 0:
+            parts.append(
+                f"Locally, in {location_display}, workforce growth has been steady "
+                f"({workforce_growth_pct:.1f}% over 3 years), suggesting a stable market."
+            )
+        elif workforce_growth_pct < 0:
+            parts.append(
+                f"Locally, in {location_display}, workforce has declined "
+                f"({abs(workforce_growth_pct):.1f}% over 3 years), indicating market saturation."
+            )
+        
+        # Shortage indicator
+        if is_shortage:
+            parts.append(
+                f"Notably, wages are rising {wage_growth_pct:.1f}% year-over-year—"
+                f"signaling that companies are fighting for talent with your specific skill architecture. "
+                f"This suggests a critical shortage of qualified professionals in this metro area."
+            )
+        elif wage_growth_pct > 5:
+            parts.append(
+                f"Wage growth of {wage_growth_pct:.1f}% year-over-year indicates "
+                f"healthy demand for skilled professionals."
+            )
+        
+        # Combine parts
+        return " ".join(parts) if parts else f"Market data for {job_display} in {location_display}."
     
     def _get_education_progression(
         self, 
