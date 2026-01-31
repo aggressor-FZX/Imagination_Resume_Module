@@ -414,6 +414,14 @@ Rate the alignment (0.0-1.0):"""
         if gap_parts:
             gap_analysis = ". ".join(gap_parts)
         
+        gap_analysis_payload = {
+            "summary": gap_analysis or "No additional gap analysis generated.",
+            "critical_gaps": implied_skills_normalized,
+            "benchmarks": implied_metrics_normalized,
+            "insider_tips": insider_tips or ""
+        }
+        gap_analysis_json = json.dumps(gap_analysis_payload)
+
         response = {
             # Core fields from new pipeline
             "final_written_section_markdown": final_output.get("final_written_section_markdown", ""),
@@ -431,7 +439,7 @@ Rate the alignment (0.0-1.0):"""
             "aggregate_skills": aggregate_skills,
             "processed_skills": result.get("processed_skills", {"all": aggregate_skills}),
             "domain_insights": domain_insights,
-            "gap_analysis": gap_analysis,  # Generated from researcher insights
+            "gap_analysis": gap_analysis_json,  # Generated from researcher insights (JSON string)
             "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
             "seniority_analysis": result.get("seniority_analysis", {"level": final_output.get("seniority_level", "mid")}),
             
