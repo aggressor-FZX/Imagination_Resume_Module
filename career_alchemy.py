@@ -1425,7 +1425,7 @@ class WrappedSequenceGenerator:
         slides.append({
             "slide_number": 3,
             "title": "THE CLASS REVEAL",
-            "graphic_type": "character_avatar",
+            "graphic_type": "character_card",
             "archetype_name": profile.dynamic_title,
             "hero_class": profile.hero_class,
             "hybrid_archetype": profile.hybrid_archetype,
