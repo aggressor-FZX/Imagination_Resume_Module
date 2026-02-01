@@ -36,12 +36,18 @@ class PrimaryStat(Enum):
 
 
 class HeroClass(Enum):
-    """The 5 Career Hero Classes"""
+    """The 5 Career Hero Classes (Soul Classes)"""
     ARCHITECT = "The Architect"      # WIS/INT - Big picture + code
     SPECIALIST = "The Specialist"    # INT/DEX - Deep technical expert
     VANGUARD = "The Vanguard"        # CHA/WIS - Leadership + strategy
     ARTISAN = "The Artisan"          # DEX/ARC - Design + execution
     RESEARCHER = "The Researcher"    # ARC/INT - R&D and math problems
+    ALCHEMIST = "The Alchemist"      # Pure INT
+    SUMMONER = "The Summoner"        # Pure WIS
+    CLERIC = "The Cleric"            # Pure CHA
+    KNIGHT = "The Knight"            # Pure VIT
+    MONK = "The Monk"                # Pure DEX
+    BARD = "The Bard"                # Pure ARC
 
 
 # =============================================================================
@@ -281,46 +287,92 @@ STAT_SKILL_MAPPING = {
     }
 }
 
-# Hero Class determination based on peak stats
-HERO_CLASS_MAPPING = {
-    (PrimaryStat.WIS, PrimaryStat.INT): HeroClass.ARCHITECT,
-    (PrimaryStat.INT, PrimaryStat.WIS): HeroClass.ARCHITECT,
-    (PrimaryStat.INT, PrimaryStat.DEX): HeroClass.SPECIALIST,
-    (PrimaryStat.DEX, PrimaryStat.INT): HeroClass.SPECIALIST,
-    (PrimaryStat.CHA, PrimaryStat.WIS): HeroClass.VANGUARD,
-    (PrimaryStat.WIS, PrimaryStat.CHA): HeroClass.VANGUARD,
-    (PrimaryStat.DEX, PrimaryStat.ARC): HeroClass.ARTISAN,
-    (PrimaryStat.ARC, PrimaryStat.DEX): HeroClass.ARTISAN,
-    (PrimaryStat.ARC, PrimaryStat.INT): HeroClass.RESEARCHER,
-    (PrimaryStat.INT, PrimaryStat.ARC): HeroClass.RESEARCHER,
+# Prime Classes (Single Stat Dominance > 20% difference)
+PRIME_CLASS_MAPPING = {
+    PrimaryStat.INT: HeroClass.ALCHEMIST,
+    PrimaryStat.WIS: HeroClass.SUMMONER,
+    PrimaryStat.CHA: HeroClass.CLERIC,
+    PrimaryStat.VIT: HeroClass.KNIGHT,
+    PrimaryStat.DEX: HeroClass.MONK,
+    PrimaryStat.ARC: HeroClass.BARD,
 }
 
-# Hybrid Archetypes when two stats are within 10% of each other
-HYBRID_ARCHETYPES = {
-    ("INT", "DEX"): {"name": "The Code Virtuoso", "vibe": "You write elegant, performant code with surgical precision."},
-    ("INT", "WIS"): {"name": "The Systems Architect", "vibe": "You see both the code and the cathedral it builds."},
-    ("INT", "CHA"): {"name": "The Tech Evangelist", "vibe": "You translate complexity into clarity for any audience."},
-    ("INT", "VIT"): {"name": "The Reliable Engine", "vibe": "You ship production-grade code, every single time."},
-    ("INT", "ARC"): {"name": "The Polymath Coder", "vibe": "You master new paradigms while others are still reading docs."},
-    ("DEX", "WIS"): {"name": "The Pragmatic Architect", "vibe": "You balance speed and scalability with rare precision."},
-    ("DEX", "CHA"): {"name": "The DevRel Champion", "vibe": "You build tools that people actually want to use."},
-    ("DEX", "VIT"): {"name": "The Infrastructure Titan", "vibe": "Your systems run for years without incident."},
-    ("DEX", "ARC"): {"name": "The Toolsmith", "vibe": "You forge new frameworks from raw innovation."},
-    ("WIS", "CHA"): {"name": "The Strategic Commander", "vibe": "You move the people who move the code."},
-    ("WIS", "VIT"): {"name": "The Seasoned Sage", "vibe": "Your experience is measured in battle scars and wins."},
-    ("WIS", "ARC"): {"name": "The Systems Alchemist", "vibe": "You turn messy workflows into gold-standard pipelines."},
-    ("CHA", "VIT"): {"name": "The Trusted Leader", "vibe": "Teams follow you because you've earned every ounce of respect."},
-    ("CHA", "ARC"): {"name": "The Innovation Catalyst", "vibe": "You inspire teams to build what hasn't been imagined yet."},
-    ("VIT", "ARC"): {"name": "The Adaptive Veteran", "vibe": "You've reinvented yourself across tech generations."},
-    # Special creative hybrids
-    ("aesthetics", "math"): {"name": "The Geometric Artist", "vibe": "You use geometry and logic to create visual perfection."},
-    ("engineering", "empathy"): {"name": "The Humanist Engineer", "vibe": "You build tools specifically for human accessibility."},
-    ("data", "storytelling"): {"name": "The Data Oracle", "vibe": "You turn raw numbers into compelling narratives."},
+# The Hybrid Matrix (Prestige Classes)
+# Maps (PrimaryStat, SecondaryStat) -> Name
+HYBRID_MATRIX = {
+    # INT Primary
+    (PrimaryStat.INT, PrimaryStat.WIS): "Technomancer",
+    (PrimaryStat.INT, PrimaryStat.CHA): "Arcane Advisor",
+    (PrimaryStat.INT, PrimaryStat.VIT): "Iron Golem",
+    (PrimaryStat.INT, PrimaryStat.DEX): "Code Weaver",
+    (PrimaryStat.INT, PrimaryStat.ARC): "Voxel Artist",
+    
+    # WIS Primary
+    (PrimaryStat.WIS, PrimaryStat.INT): "Deep Architect",
+    (PrimaryStat.WIS, PrimaryStat.CHA): "Grand Marshal",
+    (PrimaryStat.WIS, PrimaryStat.VIT): "Fortress Cmdr.",
+    (PrimaryStat.WIS, PrimaryStat.DEX): "Clockwork Mage",
+    (PrimaryStat.WIS, PrimaryStat.ARC): "Oracle",
+    
+    # CHA Primary
+    (PrimaryStat.CHA, PrimaryStat.INT): "Diplomat",
+    (PrimaryStat.CHA, PrimaryStat.WIS): "High Priest",
+    (PrimaryStat.CHA, PrimaryStat.VIT): "Paladin",
+    (PrimaryStat.CHA, PrimaryStat.DEX): "Shadow Broker",
+    (PrimaryStat.CHA, PrimaryStat.ARC): "The Enchantment",
+    
+    # VIT Primary
+    (PrimaryStat.VIT, PrimaryStat.INT): "Artificer",
+    (PrimaryStat.VIT, PrimaryStat.WIS): "Warlord",
+    (PrimaryStat.VIT, PrimaryStat.CHA): "Guardian",
+    (PrimaryStat.VIT, PrimaryStat.DEX): "Forge Warden",
+    (PrimaryStat.VIT, PrimaryStat.ARC): "Rune Smith",
+    
+    # DEX Primary
+    (PrimaryStat.DEX, PrimaryStat.INT): "Cyber Ninja",
+    (PrimaryStat.DEX, PrimaryStat.WIS): "Zen Master",
+    (PrimaryStat.DEX, PrimaryStat.CHA): "Rogue",
+    (PrimaryStat.DEX, PrimaryStat.VIT): "Sentinel",
+    (PrimaryStat.DEX, PrimaryStat.ARC): "Glass Cannon",
+    
+    # ARC Primary
+    (PrimaryStat.ARC, PrimaryStat.INT): "Weaver",
+    (PrimaryStat.ARC, PrimaryStat.WIS): "Visionary",
+    (PrimaryStat.ARC, PrimaryStat.CHA): "Minstrel",
+    (PrimaryStat.ARC, PrimaryStat.VIT): "Dancer",
+    (PrimaryStat.ARC, PrimaryStat.DEX): "Trickster",
 }
 
-# Seniority Prefix tiers
+# Job Crystals (Title Keywords)
+JOB_CRYSTALS = [
+    (["devops", "platform"], "Platform Paladin"),
+    (["sre", "reliability"], "Reliability Cleric"),
+    (["security", "cyber"], "Threat Hunter Rogue"),
+    (["data eng", "etl", "data pipeline"], "Pipeline Artificer"),
+    (["ml", "ai", "machine learning"], "Model Summoner"),
+    (["frontend", "ui", "ux", "interface"], "Pixel Bard"),
+    (["backend", "api", "server"], "Logic Smith"),
+    (["full stack", "fullstack"], "End-to-End Warrior"),
+    (["product", "pm", "owner"], "Quest Designer"),
+    (["qa", "test", "automation", "quality"], "Time Mage (Automancer)"),
+    (["manager", "lead", "head of", "director", "vp", "chief"], "Guild Master"),
+    (["finance", "fintech", "banking", "trading"], "Grid Sorcerer"),
+    (["embedded", "hardware", "iot", "firmware"], "Silicon Druid"),
+]
+
+# Fallback Generic Suffixes
+GENERIC_SUFFIXES = {
+    PrimaryStat.INT: "Engineer",
+    PrimaryStat.WIS: "Architect",
+    PrimaryStat.CHA: "Lead",
+    PrimaryStat.VIT: "Veteran",
+    PrimaryStat.ARC: "Creative",
+    PrimaryStat.DEX: "Specialist",
+}
+
+# Seniority Prefix tiers (Ranks)
 SENIORITY_TIERS = [
-    (1, 3, "Initiate"),
+    (0, 3, "Initiate"),
     (4, 7, "Adept"),
     (8, 12, "Master"),
     (13, 99, "Grandmaster")
@@ -394,6 +446,16 @@ class PrimaryStats:
         sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
         return (sorted_stats[0][0], sorted_stats[1][0])
 
+    def get_highest_stat(self) -> PrimaryStat:
+        """Returns the Enum of the highest stat"""
+        d = self.to_dict()
+        highest_name = sorted(d.items(), key=lambda x: x[1], reverse=True)[0][0]
+        mapping = {
+            "INT": PrimaryStat.INT, "DEX": PrimaryStat.DEX, "WIS": PrimaryStat.WIS,
+            "CHA": PrimaryStat.CHA, "VIT": PrimaryStat.VIT, "ARC": PrimaryStat.ARC
+        }
+        return mapping[highest_name]
+
 
 @dataclass
 class CareerAlchemyProfile:
@@ -454,8 +516,9 @@ class CareerAlchemyEngine:
     
     def __init__(self):
         self.stat_mapping = STAT_SKILL_MAPPING
-        self.hero_class_mapping = HERO_CLASS_MAPPING
-        self.hybrid_archetypes = HYBRID_ARCHETYPES
+        self.prime_class_mapping = PRIME_CLASS_MAPPING
+        self.hybrid_matrix = HYBRID_MATRIX
+        self.job_crystals = JOB_CRYSTALS
     
     def generate_profile(
         self,
@@ -475,24 +538,25 @@ class CareerAlchemyEngine:
         # Step 1: Calculate Primary Stats
         primary_stats = self._calculate_primary_stats(characteristics)
         
-        # Step 2: Determine Hero Class
-        hero_class = self._determine_hero_class(primary_stats)
+        # Step 2: Determine Soul Class
+        soul_class = self._determine_soul_class(primary_stats)
         
-        # Step 3: Calculate Hybrid Archetype
-        hybrid_archetype, hybrid_vibe = self._calculate_hybrid_archetype(primary_stats)
+        # Step 3: Determine Job Crystal
+        job_crystal = self._determine_job_crystal(characteristics)
         
-        # Step 4: Calculate Seniority
+        # Step 4: Calculate Seniority (XP and Rank)
         xp_points, seniority_tier, level = self._calculate_seniority(characteristics)
         
-        # Step 5: Determine Leadership Modifier
+        # Step 5: Determine Leadership Modifier (Prefix)
         leadership_modifier = self._determine_leadership_modifier(characteristics)
         
         # Step 6: Generate Dynamic Title
-        base_class = hybrid_archetype if hybrid_archetype else hero_class
         dynamic_title = self._generate_dynamic_title(
             seniority_tier=seniority_tier,
             leadership_modifier=leadership_modifier,
-            base_class=base_class
+            soul_class=soul_class,
+            job_crystal=job_crystal,
+            primary_stat=primary_stats.get_highest_stat()
         )
         
         # Step 7: Determine Domain Aura
@@ -518,9 +582,9 @@ class CareerAlchemyEngine:
             canonical_title=characteristics.get("canonical_title", 
                            characteristics.get("job_title", "Professional")),
             dynamic_title=dynamic_title,
-            hero_class=hero_class,
-            hybrid_archetype=hybrid_archetype,
-            hybrid_vibe=hybrid_vibe,
+            hero_class=soul_class,
+            hybrid_archetype=job_crystal or "Freelancer",
+            hybrid_vibe=f"A {soul_class} mastering the {job_crystal or 'market'}.",
             primary_stats=stats_dict,
             peak_stats=primary_stats.get_peaks(0.75),
             level=level,
@@ -875,65 +939,60 @@ class CareerAlchemyEngine:
         
         return entries, highest_degree, degree_field
     
-    def _determine_hero_class(self, stats: PrimaryStats) -> str:
-        """Determine the Hero Class based on top 2 stats"""
-        top_two = stats.get_top_two()
-        
-        # Map stat abbreviations to enums
-        stat_enum_map = {
-            "INT": PrimaryStat.INT,
-            "DEX": PrimaryStat.DEX,
-            "WIS": PrimaryStat.WIS,
-            "CHA": PrimaryStat.CHA,
-            "VIT": PrimaryStat.VIT,
-            "ARC": PrimaryStat.ARC
-        }
-        
-        stat1 = stat_enum_map.get(top_two[0])
-        stat2 = stat_enum_map.get(top_two[1])
-        
-        # Check mapping
-        hero_class = self.hero_class_mapping.get((stat1, stat2))
-        if hero_class:
-            return hero_class.value
-        
-        # Default based on highest stat
-        highest = top_two[0]
-        defaults = {
-            "INT": HeroClass.SPECIALIST.value,
-            "DEX": HeroClass.ARTISAN.value,
-            "WIS": HeroClass.ARCHITECT.value,
-            "CHA": HeroClass.VANGUARD.value,
-            "VIT": HeroClass.ARCHITECT.value,
-            "ARC": HeroClass.RESEARCHER.value
-        }
-        return defaults.get(highest, HeroClass.SPECIALIST.value)
-    
-    def _calculate_hybrid_archetype(
-        self, 
+    def _determine_soul_class(
+        self,
         stats: PrimaryStats
-    ) -> Tuple[Optional[str], Optional[str]]:
+    ) -> str:
         """
-        Calculate Hybrid Archetype if two stats are within 10% of each other
+        Determine Soul Class based on Prime or Hybrid logic
         """
         stats_dict = stats.to_dict()
         sorted_stats = sorted(stats_dict.items(), key=lambda x: x[1], reverse=True)
         
-        top_stat, top_value = sorted_stats[0]
-        second_stat, second_value = sorted_stats[1]
+        top_stat_name, top_value = sorted_stats[0]
+        second_stat_name, second_value = sorted_stats[1]
         
-        # Check if within 10% of each other
+        stat_enum_map = {
+            "INT": PrimaryStat.INT, "DEX": PrimaryStat.DEX, "WIS": PrimaryStat.WIS,
+            "CHA": PrimaryStat.CHA, "VIT": PrimaryStat.VIT, "ARC": PrimaryStat.ARC
+        }
+        
+        top_stat = stat_enum_map[top_stat_name]
+        second_stat = stat_enum_map[second_stat_name]
+
+        # 1. Check for Prime Class (Dominance > 20% relative difference)
         if top_value > 0:
-            difference = (top_value - second_value) / top_value
-            if difference <= 0.15:  # 15% threshold for more variety
-                # Create key for lookup (alphabetically sorted)
-                key = tuple(sorted([top_stat, second_stat]))
-                
-                archetype = self.hybrid_archetypes.get(key)
-                if archetype:
-                    return archetype["name"], archetype["vibe"]
+            rel_diff = (top_value - second_value) / top_value
+            if rel_diff > 0.20:
+                prime_class = self.prime_class_mapping.get(top_stat)
+                if prime_class:
+                    return prime_class.value.replace("The ", "")
+
+        # 2. Check Hybrid Matrix (Top 2 Synergy)
+        hybrid_name = self.hybrid_matrix.get((top_stat, second_stat))
+        if hybrid_name:
+            return hybrid_name
+
+        # 3. Fallback to Prime Class name if no hybrid exists
+        prime_class = self.prime_class_mapping.get(top_stat)
+        return prime_class.value.replace("The ", "") if prime_class else "Adventurer"
+
+    def _determine_job_crystal(
+        self,
+        characteristics: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Determine Job Crystal based on job title keywords
+        """
+        title = characteristics.get("canonical_title", "").lower()
+        job_title = characteristics.get("job_title", "").lower()
+        full_text = f"{title} {job_title}"
         
-        return None, None
+        for keywords, crystal_name in self.job_crystals:
+            if any(kw in full_text for kw in keywords):
+                return crystal_name
+        
+        return None
     
     def _calculate_seniority(
         self, 
@@ -1021,13 +1080,15 @@ class CareerAlchemyEngine:
         self,
         seniority_tier: str,
         leadership_modifier: str,
-        base_class: str
+        soul_class: str,
+        job_crystal: Optional[str] = None,
+        primary_stat: Optional[PrimaryStat] = None
     ) -> str:
         """
         Generate the shareable dynamic title
         
-        Format: [Leadership Modifier] [Seniority Tier] [Base Class]
-        Example: "Exarch Grandmaster Systems Alchemist"
+        Format: [Leadership Modifier] [Rank] [Soul Class] [Job Crystal/Suffix]
+        Example: "Exarch Grandmaster Technomancer Model Summoner"
         """
         parts = []
         
@@ -1035,10 +1096,14 @@ class CareerAlchemyEngine:
             parts.append(leadership_modifier)
         
         parts.append(seniority_tier)
+        parts.append(soul_class)
         
-        # Clean base class (remove "The " prefix if present)
-        clean_class = base_class.replace("The ", "")
-        parts.append(clean_class)
+        if job_crystal:
+            parts.append(job_crystal)
+        elif primary_stat:
+            # Apply refinement fallback
+            suffix = GENERIC_SUFFIXES.get(primary_stat, "Specialist")
+            parts.append(suffix)
         
         return " ".join(parts)
     
