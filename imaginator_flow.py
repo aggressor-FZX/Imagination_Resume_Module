@@ -2850,6 +2850,14 @@ async def run_analysis_async(
         domain_insights.setdefault("skill_gap_priority", "Medium")
         domain_insights.setdefault("emerging_trends", [])
         domain_insights.setdefault("insights", [])
+        
+        # [COMPLIANCE] Check for O*NET data integration
+        if "onet" in domain_insights:
+            onet_data = domain_insights["onet"]
+            if isinstance(onet_data, dict):
+                logger.info(f"[MARKET_INTEL] O*NET data found in Hermes output: code={onet_data.get('code')}, title={onet_data.get('title')}")
+            else:
+                logger.warning(f"[MARKET_INTEL] O*NET field present but invalid format: {type(onet_data)}")
     
     # Enrich domain insights with Data USA market intel if location is provided
     location = kwargs.get("location") or kwargs.get("job_location") or kwargs.get("preferred_location")
