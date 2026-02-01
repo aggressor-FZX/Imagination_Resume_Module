@@ -23,27 +23,27 @@
 ## 🔍 PIPELINE TOKEN USAGE (CURRENT ESTIMATES)
 
 ### **Phase 1: Researcher**
-- **Input:** 1,200 tokens
-- **Output:** 300 tokens
+- **Input:** 1,900 tokens (system + job ad + experiences)
+- **Output:** 500 tokens (JSON research summary)
 
 ### **Phase 2: Drafter**
-- **Input:** 3,500 tokens
-- **Output:** 800 tokens
+- **Input:** 4,800 tokens (system + context + golden bullets)
+- **Output:** 1,000 tokens (JSON response with rewritten bullets)
 
 ### **Phase 3: StarEditor**
-- **Input:** 2,500 tokens
-- **Output:** 600 tokens
+- **Input:** 3,400 tokens (system prompt + generated content + instructions)
+- **Output:** 800 tokens (final markdown resume)
 
 ---
 
 ## 💵 COST PER ANALYSIS (CURRENT PIPELINE)
 
 ```
-Researcher (sonar-pro):  1,200 in × $0.003  + 300 out × $0.015  = $0.00810
-Drafter (haiku):         3,500 in × $0.00025 + 800 out × $0.00125 = $0.00188
-StarEditor (gemini):     2,500 in × $0.00010 + 600 out × $0.00040 = $0.00049
+Researcher (sonar-pro):  1,900 in × $0.003  + 500 out × $0.015  = $0.01320
+Drafter (haiku):         4,800 in × $0.00025 + 1,000 out × $0.00125 = $0.00245
+StarEditor (gemini):     3,400 in × $0.00010 + 800 out × $0.00040 = $0.00066
 ────────────────────────────────────────────────────────────────────────
-Total per analysis:                                            $0.01047
+Total per analysis:                                            $0.01631
 ```
 
 ---
@@ -82,14 +82,14 @@ Total per analysis:                                            $0.01047
 ## 🎯 FINAL COST ANALYSIS SUMMARY
 
 ### **Current State (January 2026)**
-- **Cost per analysis:** $0.01047
-- **Monthly cost (1,000 analyses):** $10.47
-- **Annual cost (12,000 analyses):** $125.64
+- **Cost per analysis:** $0.01631
+- **Monthly cost (1,000 analyses):** $16.31
+- **Annual cost (12,000 analyses):** $195.72
 
 ### **With 45% Caching**
-- **Effective cost per analysis:** $0.00576
-- **Monthly cost (1,000 analyses):** $5.76
-- **Annual cost (12,000 analyses):** $69.12
+- **Effective cost per analysis:** $0.00897
+- **Monthly cost (1,000 analyses):** $8.97
+- **Annual cost (12,000 analyses):** $107.64
 
 ### **Key Insights**
 1. **Pricing is now aligned to live OpenRouter rates** and displayed per 1K tokens.
