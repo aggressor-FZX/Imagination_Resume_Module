@@ -342,24 +342,27 @@ Rate the alignment (0.0-1.0):"""
                 # Search O*NET for job title to get O*NET code
                 onet_code = None
                 try:
-                    import requests
-                    onet_auth = os.getenv("ONET_API_AUTH", "Y29naXRvbWV0cmljOjI4Mzd5cGQ=")
-                    onet_url = "https://services.onetcenter.org/ws/online/search"
-                    onet_headers = {
-                        "Authorization": f"Basic {onet_auth}",
-                        "Accept": "application/json"
-                    }
-                    search_response = requests.get(
-                        onet_url,
-                        headers=onet_headers,
-                        params={"keyword": extracted_job_title, "end": 1},
-                        timeout=10
-                    )
-                    if search_response.status_code == 200:
-                        search_data = search_response.json()
-                        if search_data.get("occupation"):
-                            onet_code = search_data["occupation"][0]["code"]
-                            logger.info(f"[NEW_PIPELINE] Found O*NET code: {onet_code} for {extracted_job_title}")
+                    import httpx
+                    onet_auth = os.getenv("ONET_API_AUTH")
+                    if not onet_auth:
+                        logger.error("[NEW_PIPELINE] ONET_API_AUTH not set; skipping O*NET lookup to avoid using default credentials")
+                    else:
+                        onet_url = "https://services.onetcenter.org/ws/online/search"
+                        onet_headers = {
+                            "Authorization": f"Basic {onet_auth}",
+                            "Accept": "application/json"
+                        }
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            search_response = await client.get(
+                                onet_url,
+                                headers=onet_headers,
+                                params={"keyword": extracted_job_title, "end": 1},
+                            )
+                        if search_response.status_code == 200:
+                            search_data = search_response.json()
+                            if search_data.get("occupation"):
+                                onet_code = search_data["occupation"][0]["code"]
+                                logger.info(f"[NEW_PIPELINE] Found O*NET code: {onet_code} for {extracted_job_title}")
                 except Exception as e:
                     logger.warning(f"[NEW_PIPELINE] O*NET search failed: {e}")
                 

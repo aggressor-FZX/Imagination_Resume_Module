@@ -423,6 +423,16 @@ CITY_GEO_MAP = {
     "douglas az": "31000US43420",
 }
 
+# Deduplicate entries while preserving first occurrence
+def _dedupe_city_geo_map(city_map: dict) -> dict:
+    deduped = {}
+    for key, value in city_map.items():
+        if key not in deduped:
+            deduped[key] = value
+    return deduped
+
+CITY_GEO_MAP = _dedupe_city_geo_map(CITY_GEO_MAP)
+
 def get_geo_id(city: str) -> Optional[str]:
     """
     Convert city name to Data USA geo ID (MSA code).
