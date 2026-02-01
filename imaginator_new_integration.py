@@ -502,14 +502,53 @@ Rate the alignment (0.0-1.0):"""
                 }
                 
                 # Extract location from kwargs or use default
-                location = kwargs.get("location", "United States")
+                current_location = location or kwargs.get("location", "United States")
+                
+                # Pivot Analysis Integration
+                pivot_data = None
+                salary_data = None
+                
+                try:
+                    from career_progression_enricher import CareerProgressionEnricher
+                    from city_geo_mapper import get_geo_id
+                    
+                    enricher = CareerProgressionEnricher()
+                    
+                    # Try to get O*NET code from previous enrichment steps or use a default
+                    # In a real run, onet_code was calculated around line 343
+                    # For alchemy, we can re-extract or pass it down.
+                    # For now, let's use the market_intel if available
+                    market_intel = domain_insights.get("market_intel", {})
+                    
+                    # Extract salary data from market intel
+                    if market_intel:
+                        salary_data = {
+                            "median_salary": market_intel.get("average_wage", 0),
+                            "yoy_growth": market_intel.get("wage_growth_pct", 0)
+                        }
+                    
+                    # Generate Pivot Data if we have enough info
+                    # We'll use a placeholder O*NET code if none found to at least get related roles
+                    target_onet = onet_code if 'onet_code' in locals() else "15-1252.00"
+                    
+                    logger.info(f"[NEW_PIPELINE] Generating Pivot Analysis for Alchemy using code: {target_onet}")
+                    pivot_data = enricher.generate_career_pivot_analysis(
+                        current_onet_code=target_onet,
+                        current_job_title=extracted_job_title or "Software Engineer",
+                        resume_skills=[s if isinstance(s, str) else s.get("skill", "") for s in aggregate_skills],
+                        resume_tech=aggregate_skills, # Use same list for now
+                        location=current_location,
+                        max_pivots=3
+                    )
+                except Exception as pivot_err:
+                    logger.warning(f"[NEW_PIPELINE] Alchemy pivot enrichment failed: {pivot_err}")
                 
                 # Generate career alchemy
                 career_alchemy_data = generate_career_alchemy(
                     characteristics=characteristics,
-                    location=location,
-                    pivot_data=None,  # Can be enhanced later
-                    salary_data=None  # Can be enhanced later
+                    location=current_location,
+                    pivot_data=pivot_data,
+                    salary_data=salary_data
                 )
                 
                 logger.info("[NEW_PIPELINE] Career Alchemy generated successfully")
