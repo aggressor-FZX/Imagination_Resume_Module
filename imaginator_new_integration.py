@@ -423,8 +423,7 @@ Rate the alignment (0.0-1.0):"""
             "benchmarks": implied_metrics_normalized,
             "insider_tips": insider_tips or ""
         }
-        # Return gap_analysis as a dict for better frontend compatibility
-        gap_analysis_final = gap_analysis_payload
+        gap_analysis_json = json.dumps(gap_analysis_payload)
 
         response = {
             # Core fields from new pipeline
@@ -443,7 +442,7 @@ Rate the alignment (0.0-1.0):"""
             "aggregate_skills": aggregate_skills,
             "processed_skills": result.get("processed_skills", {"all": aggregate_skills}),
             "domain_insights": domain_insights,
-            "gap_analysis": gap_analysis_final,  # Generated from researcher insights (dict)
+            "gap_analysis": gap_analysis_json,  # Generated from researcher insights (JSON string)
             "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
             "seniority_analysis": result.get("seniority_analysis", {"level": final_output.get("seniority_level", "mid")}),
             
