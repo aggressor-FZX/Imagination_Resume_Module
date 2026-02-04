@@ -88,6 +88,32 @@ OPENROUTER_PRICE_IN_K = float(os.getenv("OPENROUTER_PRICE_INPUT_PER_1K", "0.0005
 OPENROUTER_PRICE_OUT_K = float(os.getenv("OPENROUTER_PRICE_OUTPUT_PER_1K", "0.0015"))
 
 ENABLE_SEMANTIC_GAPS = os.getenv("ENABLE_SEMANTIC_GAPS", "true").lower() == "true"
+ENABLE_MARKET_INTEL = os.getenv("ENABLE_MARKET_INTEL", "true").lower() == "true"
+MARKET_INTEL_CACHE_TTL_SEC = int(os.getenv("MARKET_INTEL_CACHE_TTL_SEC", "43200"))
+
+_market_intel_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_market_intel_lock = Lock()
+
+
+def _get_market_intel_cache(key: str) -> Optional[Dict[str, Any]]:
+    now = time.time()
+    with _market_intel_lock:
+        entry = _market_intel_cache.get(key)
+        if not entry:
+            return None
+        expires_at, payload = entry
+        if now > expires_at:
+            _market_intel_cache.pop(key, None)
+            return None
+        return payload
+
+
+def _set_market_intel_cache(key: str, payload: Dict[str, Any]) -> None:
+    if not payload:
+        return
+    expires_at = time.time() + MARKET_INTEL_CACHE_TTL_SEC
+    with _market_intel_lock:
+        _market_intel_cache[key] = (expires_at, payload)
 
 # ============================================================================
 # OpenRouter Model Configuration - 4-Stage Resume Enhancement Pipeline (COST-OPTIMIZED)
@@ -2861,23 +2887,28 @@ async def run_analysis_async(
     
     # Enrich domain insights with Data USA market intel if location is provided
     location = kwargs.get("location") or kwargs.get("job_location") or kwargs.get("preferred_location")
-    if location:
+    if location and ENABLE_MARKET_INTEL:
         try:
             from career_progression_enricher import CareerProgressionEnricher
             from city_geo_mapper import get_geo_id
-            
-            # Extract job title from experiences or domain insights
-            job_title = None
-            if experiences and len(experiences) > 0:
-                first_exp = experiences[0]
+
+            onet_source = domain_insights.get("onet") if isinstance(domain_insights.get("onet"), dict) else {}
+            soc_like_code = (
+                onet_source.get("code")
+                or domain_insights.get("onet_code")
+                or domain_insights.get("soc_code")
+            )
+
+            # Extract job title from domain insights, experiences, or job_ad
+            job_title = onet_source.get("title") if isinstance(onet_source, dict) else None
+            if not job_title and experiences:
+                first_exp = experiences[0] if experiences else None
                 if isinstance(first_exp, dict):
                     job_title = first_exp.get("title_line", "").split("|")[0].strip()
                     if not job_title:
                         job_title = first_exp.get("title", "")
-            
-            # Fallback: try to extract from job_ad
+
             if not job_title and job_ad:
-                import re
                 title_patterns = [
                     r"(?:position|role|title):\s*([A-Z][A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Manager|Designer|Architect|Specialist))",
                     r"^([A-Z][A-Za-z\s]+(?:Engineer|Developer|Scientist|Analyst|Manager|Designer|Architect|Specialist))",
@@ -2887,12 +2918,42 @@ async def run_analysis_async(
                     if match:
                         job_title = match.group(1).strip()
                         break
-            
-            if job_title:
-                logger.info(f"[MARKET_INTEL] Job title found: {job_title}, location: {location}")
-                logger.info(f"[MARKET_INTEL] O*NET enrichment now handled by Hermes service - skipping duplicate API calls")
-                # Note: O*NET enrichment moved to Hermes for architectural simplicity
-                # Imaginator focuses on resume rewriting, Hermes handles domain + O*NET insights
+
+            if soc_like_code:
+                geo_id = get_geo_id(location)
+                cache_key = f"{soc_like_code}|{geo_id or 'US'}"
+                market_intel = _get_market_intel_cache(cache_key)
+                if market_intel:
+                    logger.info(f"[MARKET_INTEL] Cache hit for {cache_key}")
+                else:
+                    logger.info(
+                        f"[MARKET_INTEL] Enriching for code={soc_like_code}, location={location}, geo_id={geo_id or 'US'}"
+                    )
+                    enricher = CareerProgressionEnricher()
+                    workforce_data = enricher._get_workforce_trends(str(soc_like_code), geo_id)
+                    market_intel = enricher.calculate_market_intel(
+                        workforce_data,
+                        onet_summary={},
+                        job_title=job_title or "",
+                        location=location,
+                    )
+                    if isinstance(market_intel, dict) and market_intel:
+                        _set_market_intel_cache(cache_key, market_intel)
+
+                if isinstance(market_intel, dict) and market_intel:
+                    domain_insights["market_intel"] = market_intel
+                    if market_intel.get("demand_label"):
+                        domain_insights["market_demand"] = market_intel["demand_label"]
+                    if market_intel.get("average_wage"):
+                        wage = market_intel["average_wage"]
+                        if isinstance(wage, (int, float)):
+                            domain_insights["salary_range"] = f"${int(wage):,}+"
+                        else:
+                            domain_insights["salary_range"] = str(wage)
+            else:
+                logger.warning(
+                    f"[MARKET_INTEL] Location provided ({location}) but no O*NET/SOC code available; skipping market intel"
+                )
         except Exception as e:
             logger.error(f"[MARKET_INTEL] Failed to process market intel: {e}", exc_info=True)
 
