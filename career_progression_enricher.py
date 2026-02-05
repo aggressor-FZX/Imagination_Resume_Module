@@ -204,6 +204,49 @@ class CareerProgressionEnricher:
             "typical_education": zone_info["education"],
             "description": onet_data.get("job_zone", {}).get("name", "")
         }
+
+    def _query_datausa_with_fallback(
+        self,
+        soc_code: str,
+        geo_id: Optional[str],
+        params: Dict[str, Any],
+        context: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Query Data USA with correct filter keys.
+
+        Data USA filters use the exact column names (e.g., Occupation, ID Occupation,
+        Geography, ID Geography). We try common variants to avoid 404s/empty data.
+        """
+        url = DATA_USA_BASE
+        headers = {
+            "User-Agent": "Cogitometric-Career-Insights/1.0 (careers@cogitometric.org)"
+        }
+
+        filter_sets = [
+            {"Occupation": soc_code, "Geography": geo_id} if geo_id else {"Occupation": soc_code},
+            {"ID Occupation": soc_code, "ID Geography": geo_id} if geo_id else {"ID Occupation": soc_code},
+            {"occupation": soc_code, "geo": geo_id} if geo_id else {"occupation": soc_code},
+        ]
+
+        last_error = None
+        for filters in filter_sets:
+            request_params = {**params, **{k: v for k, v in filters.items() if v}}
+            try:
+                response = httpx.get(url, params=request_params, headers=headers, timeout=15)
+                response.raise_for_status()
+                if "application/json" not in response.headers.get("content-type", ""):
+                    raise ValueError("Data USA returned non-JSON content")
+                data = response.json()
+                if data.get("data"):
+                    return data
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
+        return {}
     
     def _get_workforce_trends(
         self, 
@@ -218,24 +261,18 @@ class CareerProgressionEnricher:
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
-            url = "https://datausa.io/api/data"
             # Request time-series data (5 years) for trend analysis
-            params = {
+            base_params = {
                 "drilldowns": "Year,Occupation",
                 "measures": "Average Wage,Workforce",
-                "occupation": soc_code,
-            }
-            if geo_id:
-                params["geo"] = geo_id
-            headers = {
-                "User-Agent": "Cogitometric-Career-Insights/1.0 (careers@cogitometric.org)"
             }
             print(f"   Querying Data USA (Tesseract) for SOC {soc_code}...")
-            response = httpx.get(url, params=params, headers=headers, timeout=15)
-            response.raise_for_status()
-            if "application/json" not in response.headers.get("content-type", ""):
-                raise ValueError("Data USA returned non-JSON content")
-            data = response.json()
+            data = self._query_datausa_with_fallback(
+                soc_code=soc_code,
+                geo_id=geo_id,
+                params=base_params,
+                context="workforce_trends",
+            )
             rows = data.get("data", [])
             if not rows:
                 return self._empty_workforce_data()
@@ -474,24 +511,18 @@ class CareerProgressionEnricher:
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
-            url = "https://datausa.io/api/data"
-            params = {
+            base_params = {
                 "drilldowns": "Education Level",
                 "measures": "Average Wage",
-                "occupation": soc_code,
                 "year": "latest"
             }
-            if geo_id:
-                params["geo"] = geo_id
-            headers = {
-                "User-Agent": "Cogitometric-Career-Insights/1.0 (careers@cogitometric.org)"
-            }
             print(f"   Querying education data for SOC {soc_code}...")
-            response = httpx.get(url, params=params, headers=headers, timeout=15)
-            response.raise_for_status()
-            if "application/json" not in response.headers.get("content-type", ""):
-                raise ValueError("Data USA returned non-JSON content")
-            data = response.json()
+            data = self._query_datausa_with_fallback(
+                soc_code=soc_code,
+                geo_id=geo_id,
+                params=base_params,
+                context="education_progression",
+            )
             rows = data.get("data", [])
             if not rows:
                 return []
