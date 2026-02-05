@@ -10,6 +10,7 @@ Combines O*NET + Data USA APIs to provide:
 """
 
 import os
+import re
 import json
 import requests
 import httpx
@@ -20,8 +21,17 @@ import time
 # API Configuration
 ONET_API_BASE = "https://services.onetcenter.org/ws"
 ONET_API_AUTH = os.getenv("ONET_API_AUTH", "Y29naXRvbWV0cmljOjI4Mzd5cGQ=")
-DATA_USA_BASE = os.getenv("DATA_USA_BASE", "https://datausa.io/api/data")
+DATA_USA_BASE = os.getenv("DATA_USA_BASE", "https://api.datausa.io/tesseract/data.jsonrecords")
+DATA_USA_CUBE_WAGE = os.getenv("DATA_USA_CUBE_WAGE", "acs_ygo_occupation_for_median_earnings_5")
+DATA_USA_CUBE_WORKFORCE = os.getenv("DATA_USA_CUBE_WORKFORCE", "acs_ygso_gender_by_occupation_c_5")
+DATA_USA_CUBE_GROWTH = os.getenv("DATA_USA_CUBE_GROWTH", "bls_growth_occupation")
+DATA_USA_CUBE_EDU = os.getenv("DATA_USA_CUBE_EDU")
 DATA_USA_FORCE = os.getenv("DATA_USA_FORCE")
+DATA_USA_GEO_LEVEL = os.getenv("DATA_USA_GEO_LEVEL", "MSA")
+DATA_USA_NATION_KEY = os.getenv("DATA_USA_NATION_KEY", "01000US")
+
+_DATAUSA_CUBE_CACHE: Dict[str, Dict[str, Any]] = {}
+_DATAUSA_MEMBERS_CACHE: Dict[tuple, List[Dict[str, Any]]] = {}
 
 
 class CareerProgressionEnricher:
@@ -79,7 +89,7 @@ class CareerProgressionEnricher:
         
         # 3. Data USA: Get workforce trends (national or local)
         print(f"💰 Fetching Data USA workforce trends...")
-        workforce_data = self._get_workforce_trends(onet_code, city_geo_id)
+        workforce_data = self._get_workforce_trends(onet_code, city_geo_id, job_title=job_title)
         insights["workforce"] = workforce_data
         
         # 4. Data USA: Get education-based salary progression
@@ -206,6 +216,106 @@ class CareerProgressionEnricher:
             "description": onet_data.get("job_zone", {}).get("name", "")
         }
 
+    def _normalize_text(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+    def _get_cube_schema(self, cube: str) -> Dict[str, Any]:
+        if cube in _DATAUSA_CUBE_CACHE:
+            return _DATAUSA_CUBE_CACHE[cube]
+        url = f"https://api.datausa.io/tesseract/cubes/{cube}"
+        response = httpx.get(url, headers={"User-Agent": "Cogitometric-Career-Insights/1.0"}, timeout=20)
+        response.raise_for_status()
+        data = response.json()
+        _DATAUSA_CUBE_CACHE[cube] = data
+        return data
+
+    def _get_level_names(self, cube: str, dimension_name: str) -> List[str]:
+        schema = self._get_cube_schema(cube)
+        for dim in schema.get("dimensions", []):
+            if dim.get("name") == dimension_name:
+                levels = []
+                for hierarchy in dim.get("hierarchies", []):
+                    for level in hierarchy.get("levels", []):
+                        level_name = level.get("name")
+                        if level_name and level_name not in levels:
+                            levels.append(level_name)
+                return levels
+        return []
+
+    def _get_members(self, cube: str, level: str) -> List[Dict[str, Any]]:
+        cache_key = (cube, level)
+        if cache_key in _DATAUSA_MEMBERS_CACHE:
+            return _DATAUSA_MEMBERS_CACHE[cache_key]
+        url = f"https://api.datausa.io/tesseract/members?cube={cube}&level={level}"
+        response = httpx.get(url, headers={"User-Agent": "Cogitometric-Career-Insights/1.0"}, timeout=25)
+        response.raise_for_status()
+        data = response.json()
+        members = data.get("members") or []
+        _DATAUSA_MEMBERS_CACHE[cache_key] = members
+        return members
+
+    def _find_member_key(self, cube: str, level: str, target: str) -> Optional[str]:
+        if not target:
+            return None
+        target_norm = self._normalize_text(target)
+        members = self._get_members(cube, level)
+        best_key = None
+        best_score = 0
+        for member in members:
+            caption = member.get("caption") or ""
+            caption_norm = self._normalize_text(caption)
+            if not caption_norm:
+                continue
+            if target_norm in caption_norm:
+                score = len(target_norm) / max(len(caption_norm), 1)
+            else:
+                target_tokens = set(target_norm.split())
+                caption_tokens = set(caption_norm.split())
+                overlap = len(target_tokens & caption_tokens)
+                score = overlap / max(len(target_tokens), 1)
+            if score > best_score:
+                best_score = score
+                best_key = member.get("key")
+        return str(best_key) if best_key is not None else None
+
+    def _pick_measure(self, cube: str, preferred: List[str], contains: Optional[str] = None) -> Optional[str]:
+        schema = self._get_cube_schema(cube)
+        measures = [m.get("name") for m in schema.get("measures", []) if m.get("name")]
+        for name in preferred:
+            if name in measures:
+                return name
+        if contains:
+            for name in measures:
+                if contains.lower() in name.lower():
+                    return name
+        return measures[0] if measures else None
+
+    def _query_tesseract(
+        self,
+        cube: str,
+        drilldowns: str,
+        measures: str,
+        include: Optional[str] = None,
+        time_param: Optional[str] = None,
+        limit: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params = {
+            "cube": cube,
+            "drilldowns": drilldowns,
+            "measures": measures,
+        }
+        if include:
+            params["include"] = include
+        if time_param:
+            params["time"] = time_param
+        if limit:
+            params["limit"] = limit
+        if DATA_USA_FORCE:
+            params["force"] = DATA_USA_FORCE
+        response = httpx.get(DATA_USA_BASE, params=params, headers={"User-Agent": "Cogitometric-Career-Insights/1.0"}, timeout=25)
+        response.raise_for_status()
+        return response.json()
+
     def _query_datausa_with_fallback(
         self,
         soc_code: str,
@@ -247,9 +357,21 @@ class CareerProgressionEnricher:
 
         last_error = None
         for filters in filter_sets:
-            request_params = {**params, **{k: v for k, v in filters.items() if v}}
+            request_params = {**params}
+            if DATA_USA_CUBE:
+                request_params["cube"] = DATA_USA_CUBE
             if DATA_USA_FORCE:
                 request_params["force"] = DATA_USA_FORCE
+
+            # Convert year=latest to time=Year.latest for Tesseract
+            if request_params.get("year") == "latest" and "time" not in request_params:
+                request_params.pop("year", None)
+                request_params["time"] = "Year.latest"
+
+            # Prefer include filters for Tesseract
+            include_pairs = [f"{k}:{v}" for k, v in filters.items() if v]
+            if include_pairs:
+                request_params["include"] = ";".join(include_pairs)
             try:
                 response = httpx.get(url, params=request_params, headers=headers, timeout=15)
                 response.raise_for_status()
@@ -267,9 +389,10 @@ class CareerProgressionEnricher:
         return {}
     
     def _get_workforce_trends(
-        self, 
-        onet_code: str, 
-        geo_id: Optional[str] = None
+        self,
+        onet_code: str,
+        geo_id: Optional[str] = None,
+        job_title: str = "",
     ) -> Dict[str, Any]:
         """
         Get workforce size & wage trends from Data USA
@@ -279,82 +402,132 @@ class CareerProgressionEnricher:
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
-            param_variants = [
-                {"drilldowns": "Year,Occupation", "measures": "Average Wage,Workforce"},
-                {"drilldowns": "Year,Detailed Occupation", "measures": "avg_wage,num_ppl"},
-                {"drilldowns": "Year,SOC", "measures": "avg_wage,num_ppl"},
-                {"drilldowns": "Year,Occupation", "measures": "avg_wage,num_ppl"},
+
+            occ_key_wage = self._find_member_key(
+                DATA_USA_CUBE_WAGE,
+                "Occupation",
+                job_title or soc_code,
+            )
+            occ_key_workforce = self._find_member_key(
+                DATA_USA_CUBE_WORKFORCE,
+                "Occupation",
+                job_title or soc_code,
+            )
+            occ_key_growth = self._find_member_key(
+                DATA_USA_CUBE_GROWTH,
+                "Occupation",
+                job_title or soc_code,
+            )
+
+            include_geo = f"{DATA_USA_GEO_LEVEL}:{geo_id}" if geo_id else f"Nation:{DATA_USA_NATION_KEY}"
+            include_wage_parts = [include_geo, f"Occupation:{occ_key_wage}" if occ_key_wage else ""]
+            include_workforce_parts = [include_geo, f"Occupation:{occ_key_workforce}" if occ_key_workforce else ""]
+            include_growth_parts = [f"Occupation:{occ_key_growth}" if occ_key_growth else ""]
+
+            include_wage = ";".join([p for p in include_wage_parts if p])
+            include_workforce = ";".join([p for p in include_workforce_parts if p])
+            include_growth = ";".join([p for p in include_growth_parts if p])
+
+            wage_measure = self._pick_measure(
+                DATA_USA_CUBE_WAGE,
+                [
+                    "Median Earings by Occupation: Occupation",
+                    "Median Earnings by Occupation: Occupation",
+                ],
+                contains="Median"
+            )
+            workforce_measure = self._pick_measure(
+                DATA_USA_CUBE_WORKFORCE,
+                ["Workforce by Occupation and Gender"],
+                contains="Workforce"
+            )
+            growth_measures = [
+                m for m in [
+                    "Occupation Employment Change Percent",
+                    "Occupation Employment",
+                    "Occupation Employment Openings",
+                ] if self._pick_measure(DATA_USA_CUBE_GROWTH, [m], contains=m)
             ]
 
-            data = {}
-            last_error = None
-            for base_params in param_variants:
-                try:
-                    data = self._query_datausa_with_fallback(
-                        soc_code=soc_code,
-                        geo_id=geo_id,
-                        params=base_params,
-                        context="workforce_trends",
-                    )
-                    if data.get("data"):
-                        break
-                except Exception as e:
-                    last_error = e
-                    continue
-            if not data.get("data") and last_error:
-                raise last_error
-            rows = data.get("data", [])
-            if not rows:
+            wage_rows = []
+            workforce_rows = []
+            growth_rows = []
+
+            if wage_measure:
+                wage_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_WAGE,
+                    drilldowns="Year",
+                    measures=wage_measure,
+                    include=include_wage or None,
+                    time_param="Year.trailing.3",
+                )
+                wage_rows = wage_data.get("data", [])
+
+            if workforce_measure:
+                workforce_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_WORKFORCE,
+                    drilldowns="Year",
+                    measures=workforce_measure,
+                    include=include_workforce or None,
+                    time_param="Year.trailing.3",
+                )
+                workforce_rows = workforce_data.get("data", [])
+
+            if growth_measures:
+                growth_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_GROWTH,
+                    drilldowns="Year",
+                    measures=",".join(growth_measures),
+                    include=include_growth or None,
+                    time_param="Year.latest",
+                )
+                growth_rows = growth_data.get("data", [])
+
+            if not wage_rows and not workforce_rows and not growth_rows:
                 return self._empty_workforce_data()
-            rows.sort(key=lambda x: int(x.get("Year", 0)), reverse=True)
-            latest = rows[0]
-            
-            # Calculate YoY growth (latest vs previous year)
-            if len(rows) >= 2:
-                previous = rows[1]
-                latest_workforce = int(latest.get("Workforce", 0))
-                prev_workforce = int(previous.get("Workforce", 0))
-                latest_wage = int(latest.get("Average Wage", 0))
-                prev_wage = int(previous.get("Average Wage", 0))
-                workforce_growth = (
-                    ((latest_workforce - prev_workforce) / prev_workforce * 100)
-                    if prev_workforce > 0 else 0
-                )
-                wage_growth = (
-                    ((latest_wage - prev_wage) / prev_wage * 100)
-                    if prev_wage > 0 else 0
-                )
-                
-                # Calculate 3-year workforce delta for demand score
-                workforce_delta_3yr = None
-                if len(rows) >= 3:
-                    older = rows[2]  # 3 years ago
-                    older_workforce = int(older.get("Workforce", 0))
-                    if older_workforce > 0:
-                        workforce_delta_3yr = (
-                            ((latest_workforce - older_workforce) / older_workforce * 100)
-                        )
-                
-                return {
-                    "workforce_size": latest_workforce,
-                    "average_wage": latest_wage,
-                    "yoy_growth_workforce": round(workforce_growth, 1),
-                    "yoy_growth_wage": round(wage_growth, 1),
-                    "workforce_delta_3yr": round(workforce_delta_3yr, 1) if workforce_delta_3yr is not None else None,
-                    "year_latest": latest.get("Year", "Unknown"),
-                    "year_previous": previous.get("Year", "Unknown"),
-                    "time_series": rows[:5],  # Keep last 5 years for trend analysis
-                    "data_source": "Data USA (time series)"
-                }
+
+            def _sort_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                return sorted(rows, key=lambda x: int(x.get("Year", 0)), reverse=True)
+
+            wage_rows = _sort_rows(wage_rows)
+            workforce_rows = _sort_rows(workforce_rows)
+
+            latest_wage = wage_rows[0].get(wage_measure) if wage_rows and wage_measure else None
+            prev_wage = wage_rows[1].get(wage_measure) if len(wage_rows) > 1 and wage_measure else None
+
+            latest_workforce = workforce_rows[0].get(workforce_measure) if workforce_rows and workforce_measure else None
+            prev_workforce = workforce_rows[1].get(workforce_measure) if len(workforce_rows) > 1 and workforce_measure else None
+
+            wage_growth = (
+                ((latest_wage - prev_wage) / prev_wage * 100)
+                if latest_wage is not None and prev_wage
+                else 0
+            )
+            workforce_growth = (
+                ((latest_workforce - prev_workforce) / prev_workforce * 100)
+                if latest_workforce is not None and prev_workforce
+                else 0
+            )
+
+            bls_growth_pct = None
+            if growth_rows and growth_measures:
+                for measure in growth_measures:
+                    if "Change Percent" in measure:
+                        bls_growth_pct = growth_rows[0].get(measure)
+                        break
+
+            workforce_growth_final = bls_growth_pct if bls_growth_pct is not None else workforce_growth
+
             return {
-                "workforce_size": int(latest.get("Workforce", latest.get("Workforce", 0))),
-                "average_wage": int(latest.get("Average Wage", 0)),
-                "yoy_growth_workforce": None,
-                "yoy_growth_wage": None,
+                "workforce_size": int(latest_workforce) if latest_workforce is not None else None,
+                "average_wage": int(latest_wage) if latest_wage is not None else None,
+                "yoy_growth_workforce": round(workforce_growth_final, 1) if workforce_growth_final is not None else None,
+                "yoy_growth_wage": round(wage_growth, 1) if wage_growth is not None else None,
                 "workforce_delta_3yr": None,
-                "year": latest.get("Year", "Unknown"),
-                "time_series": rows[:5] if rows else [],
-                "data_source": "Data USA (single year)"
+                "year_latest": wage_rows[0].get("Year") if wage_rows else (workforce_rows[0].get("Year") if workforce_rows else "Unknown"),
+                "year_previous": wage_rows[1].get("Year") if len(wage_rows) > 1 else (workforce_rows[1].get("Year") if len(workforce_rows) > 1 else "Unknown"),
+                "time_series": (workforce_rows or wage_rows)[:5],
+                "data_source": "Data USA (Tesseract: ACS + BLS)"
             }
         except Exception as e:
             print(f"⚠️  Data USA workforce trends failed: {e}")
@@ -539,22 +712,26 @@ class CareerProgressionEnricher:
         """
         Get salary by education level from Data USA using drilldowns/measures.
         """
+        if not DATA_USA_CUBE_EDU:
+            return []
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
             param_variants = [
-                {"drilldowns": "Education Level", "measures": "Average Wage", "year": "latest"},
-                {"drilldowns": "Education Level", "measures": "avg_wage", "year": "latest"},
+                {"drilldowns": "Education Level", "measures": "Average Wage"},
+                {"drilldowns": "Education Level", "measures": "avg_wage"},
             ]
 
             data = {}
             last_error = None
+            include_geo = f"{DATA_USA_GEO_LEVEL}:{geo_id}" if geo_id else f"Nation:{DATA_USA_NATION_KEY}"
             for base_params in param_variants:
                 try:
-                    data = self._query_datausa_with_fallback(
-                        soc_code=soc_code,
-                        geo_id=geo_id,
-                        params=base_params,
-                        context="education_progression",
+                    data = self._query_tesseract(
+                        cube=DATA_USA_CUBE_EDU,
+                        drilldowns=base_params["drilldowns"],
+                        measures=base_params["measures"],
+                        include=include_geo,
+                        time_param="Year.latest",
                     )
                     if data.get("data"):
                         break
@@ -655,47 +832,180 @@ class CareerProgressionEnricher:
             }
         ]
         
-        return ladder
-    
-    def _get_edu_wage(
-        self, 
-        education_data: List[Dict[str, Any]], 
-        education_level: str,
-        multiplier: float = 1.0
-    ) -> str:
-        """Get wage for education level with optional multiplier"""
-        for edu in education_data:
-            if education_level.lower() in edu["education"].lower():
-                wage = int(edu["average_wage"] * multiplier)
-                return f"${wage:,}"
-        return "Data unavailable"
-    
+        try:
+            soc_code = onet_code.replace("-", "").replace(".", "")[:6]
+
+            # Resolve member keys for occupation and geography
+            occ_key_wage = self._find_member_key(
+                DATA_USA_CUBE_WAGE,
+                "Occupation",
+                job_title or soc_code,
+            )
+            occ_key_workforce = self._find_member_key(
+                DATA_USA_CUBE_WORKFORCE,
+                "Occupation",
+                job_title or soc_code,
+            )
+            occ_key_growth = self._find_member_key(
+                DATA_USA_CUBE_GROWTH,
+                "Occupation",
+                job_title or soc_code,
+            )
+
+            include_geo = None
+            if geo_id:
+                include_geo = f"{DATA_USA_GEO_LEVEL}:{geo_id}"
+            else:
+                include_geo = f"Nation:{DATA_USA_NATION_KEY}"
+
+            include_wage = ";".join([
+                include_geo,
+                f"Occupation:{occ_key_wage}" if occ_key_wage else "",
+            ]).strip(";")
+            include_workforce = ";".join([
+                include_geo,
+                f"Occupation:{occ_key_workforce}" if occ_key_workforce else "",
+            ]).strip(";")
+            include_growth = ";".join([
+                f"Occupation:{occ_key_growth}" if occ_key_growth else "",
+            ]).strip(";")
+
+            wage_measure = self._pick_measure(
+                DATA_USA_CUBE_WAGE,
+                [
+                    "Median Earings by Occupation: Occupation",
+                    "Median Earnings by Occupation: Occupation",
+                ],
+                contains="Median"
+            )
+            workforce_measure = self._pick_measure(
+                DATA_USA_CUBE_WORKFORCE,
+                ["Workforce by Occupation and Gender"],
+                contains="Workforce"
+            )
+            growth_measure = self._pick_measure(
+                DATA_USA_CUBE_GROWTH,
+                [
+                    "Occupation Employment Change Percent",
+                    "Occupation Employment",
+                ],
+                contains="Change Percent"
+            )
+
+            wage_rows = []
+            workforce_rows = []
+            growth_rows = []
+
+            if wage_measure:
+                wage_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_WAGE,
+                    drilldowns="Year",
+                    measures=wage_measure,
+                    include=include_wage or None,
+                    time_param="Year.trailing.3",
+                )
+                wage_rows = wage_data.get("data", [])
+
+            if workforce_measure:
+                workforce_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_WORKFORCE,
+                    drilldowns="Year",
+                    measures=workforce_measure,
+                    include=include_workforce or None,
+                    time_param="Year.trailing.3",
+                )
+                workforce_rows = workforce_data.get("data", [])
+
+            if growth_measure:
+                growth_data = self._query_tesseract(
+                    cube=DATA_USA_CUBE_GROWTH,
+                    drilldowns="Year",
+                    measures=growth_measure,
+                    include=include_growth or None,
+                    time_param="Year.latest",
+                )
+                growth_rows = growth_data.get("data", [])
+
+            if not wage_rows and not workforce_rows and not growth_rows:
+                return self._empty_workforce_data()
+
+            def _sort_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+                return sorted(rows, key=lambda x: int(x.get("Year", 0)), reverse=True)
+
+            wage_rows = _sort_rows(wage_rows)
+            workforce_rows = _sort_rows(workforce_rows)
+
+            latest_wage = None
+            prev_wage = None
+            if wage_measure and wage_rows:
+                latest_wage = wage_rows[0].get(wage_measure)
+                if len(wage_rows) >= 2:
+                    prev_wage = wage_rows[1].get(wage_measure)
+
+            latest_workforce = None
+            prev_workforce = None
+            if workforce_measure and workforce_rows:
+                latest_workforce = workforce_rows[0].get(workforce_measure)
+                if len(workforce_rows) >= 2:
+                    prev_workforce = workforce_rows[1].get(workforce_measure)
+
+            wage_growth = (
+                ((latest_wage - prev_wage) / prev_wage * 100)
+                if latest_wage is not None and prev_wage
+                else 0
+            )
+            workforce_growth = (
+                ((latest_workforce - prev_workforce) / prev_workforce * 100)
+                if latest_workforce is not None and prev_workforce
+                else 0
+            )
+
+            # Use BLS growth percent if available
+            bls_growth_pct = None
+            if growth_measure and growth_rows:
+                bls_growth_pct = growth_rows[0].get(growth_measure)
+
+            workforce_growth_final = bls_growth_pct if bls_growth_pct is not None else workforce_growth
+
+            return {
+                "workforce_size": int(latest_workforce) if latest_workforce is not None else None,
+                "average_wage": int(latest_wage) if latest_wage is not None else None,
+                "yoy_growth_workforce": round(workforce_growth_final, 1) if workforce_growth_final is not None else None,
+                "yoy_growth_wage": round(wage_growth, 1) if wage_growth is not None else None,
+                "workforce_delta_3yr": None,
+                "year_latest": wage_rows[0].get("Year") if wage_rows else (workforce_rows[0].get("Year") if workforce_rows else "Unknown"),
+                "year_previous": wage_rows[1].get("Year") if len(wage_rows) > 1 else (workforce_rows[1].get("Year") if len(workforce_rows) > 1 else "Unknown"),
+                "time_series": (workforce_rows or wage_rows)[:5],
+                "data_source": "Data USA (Tesseract: ACS + BLS)"
+            }
+        except Exception as e:
+            print(f"⚠️  Data USA workforce trends failed: {e}")
+            return self._empty_workforce_data()
+
     def _analyze_skill_impact(
         self,
         onet_code: str,
-        core_skills: List[Dict[str, Any]],
-        workforce_data: Dict[str, Any]
+        onet_skills: List[Dict[str, Any]],
+        workforce_data: Dict[str, Any],
+        current_wage: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Analyze which skills have highest salary impact
-        
-        Strategy: Compare this job's wage to related jobs with/without key skills
+        Analyze which high-importance skills influence wage outcomes.
         """
-        # This would ideally compare multiple related O*NET codes
-        # For now, we'll identify high-value skills based on importance
-        
-        current_wage = workforce_data.get("average_wage", 0)
-        
+        core_skills = onet_skills or []
+        inferred_wage = workforce_data.get("average_wage") if workforce_data else None
+        current_wage = current_wage or inferred_wage
+
         high_value_skills = [
-            skill for skill in core_skills[:5]  # Top 5
-            if skill["importance"] >= 75  # High importance threshold
+            skill for skill in core_skills[:5]
+            if skill.get("importance", 0) >= 75
         ]
-        
+
         return {
             "current_role_wage": current_wage,
-            "high_value_skills": [s["name"] for s in high_value_skills],
+            "high_value_skills": [s.get("name") for s in high_value_skills if s.get("name")],
             "recommendation": (
-                f"Mastering {', '.join([s['name'] for s in high_value_skills[:3]])} "
+                f"Mastering {', '.join([s.get('name') for s in high_value_skills[:3] if s.get('name')])} "
                 f"is critical for advancing to senior roles in this field."
             )
         }

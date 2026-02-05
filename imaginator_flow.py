@@ -2930,7 +2930,7 @@ async def run_analysis_async(
                         f"[MARKET_INTEL] Enriching for code={soc_like_code}, location={location}, geo_id={geo_id or 'US'}"
                     )
                     enricher = CareerProgressionEnricher()
-                    workforce_data = enricher._get_workforce_trends(str(soc_like_code), geo_id)
+                    workforce_data = enricher._get_workforce_trends(str(soc_like_code), geo_id, job_title=job_title or "")
                     market_intel = enricher.calculate_market_intel(
                         workforce_data,
                         onet_summary={},
