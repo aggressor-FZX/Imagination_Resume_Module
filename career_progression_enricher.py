@@ -20,7 +20,8 @@ import time
 # API Configuration
 ONET_API_BASE = "https://services.onetcenter.org/ws"
 ONET_API_AUTH = os.getenv("ONET_API_AUTH", "Y29naXRvbWV0cmljOjI4Mzd5cGQ=")
-DATA_USA_BASE = "https://datausa.io/api/data"
+DATA_USA_BASE = os.getenv("DATA_USA_BASE", "https://datausa.io/api/data")
+DATA_USA_FORCE = os.getenv("DATA_USA_FORCE")
 
 
 class CareerProgressionEnricher:
@@ -223,15 +224,32 @@ class CareerProgressionEnricher:
             "User-Agent": "Cogitometric-Career-Insights/1.0 (careers@cogitometric.org)"
         }
 
-        filter_sets = [
-            {"Occupation": soc_code, "Geography": geo_id} if geo_id else {"Occupation": soc_code},
-            {"ID Occupation": soc_code, "ID Geography": geo_id} if geo_id else {"ID Occupation": soc_code},
-            {"occupation": soc_code, "geo": geo_id} if geo_id else {"occupation": soc_code},
-        ]
+        drilldowns = str(params.get("drilldowns", ""))
+        if "Detailed Occupation" in drilldowns:
+            occ_keys = ["Detailed Occupation", "ID Detailed Occupation"]
+        elif "SOC" in drilldowns:
+            occ_keys = ["SOC", "ID SOC"]
+        else:
+            occ_keys = ["Occupation", "ID Occupation"]
+
+        geo_keys = ["Geography", "ID Geography"]
+
+        filter_sets = []
+        for occ_key in occ_keys:
+            if geo_id:
+                for geo_key in geo_keys:
+                    filter_sets.append({occ_key: soc_code, geo_key: geo_id})
+            else:
+                filter_sets.append({occ_key: soc_code})
+
+        # Legacy fallbacks
+        filter_sets.append({"occupation": soc_code, "geo": geo_id} if geo_id else {"occupation": soc_code})
 
         last_error = None
         for filters in filter_sets:
             request_params = {**params, **{k: v for k, v in filters.items() if v}}
+            if DATA_USA_FORCE:
+                request_params["force"] = DATA_USA_FORCE
             try:
                 response = httpx.get(url, params=request_params, headers=headers, timeout=15)
                 response.raise_for_status()
@@ -261,18 +279,30 @@ class CareerProgressionEnricher:
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
-            # Request time-series data (5 years) for trend analysis
-            base_params = {
-                "drilldowns": "Year,Occupation",
-                "measures": "Average Wage,Workforce",
-            }
-            print(f"   Querying Data USA (Tesseract) for SOC {soc_code}...")
-            data = self._query_datausa_with_fallback(
-                soc_code=soc_code,
-                geo_id=geo_id,
-                params=base_params,
-                context="workforce_trends",
-            )
+            param_variants = [
+                {"drilldowns": "Year,Occupation", "measures": "Average Wage,Workforce"},
+                {"drilldowns": "Year,Detailed Occupation", "measures": "avg_wage,num_ppl"},
+                {"drilldowns": "Year,SOC", "measures": "avg_wage,num_ppl"},
+                {"drilldowns": "Year,Occupation", "measures": "avg_wage,num_ppl"},
+            ]
+
+            data = {}
+            last_error = None
+            for base_params in param_variants:
+                try:
+                    data = self._query_datausa_with_fallback(
+                        soc_code=soc_code,
+                        geo_id=geo_id,
+                        params=base_params,
+                        context="workforce_trends",
+                    )
+                    if data.get("data"):
+                        break
+                except Exception as e:
+                    last_error = e
+                    continue
+            if not data.get("data") and last_error:
+                raise last_error
             rows = data.get("data", [])
             if not rows:
                 return self._empty_workforce_data()
@@ -511,18 +541,28 @@ class CareerProgressionEnricher:
         """
         try:
             soc_code = onet_code.replace("-", "").replace(".", "")[:6]
-            base_params = {
-                "drilldowns": "Education Level",
-                "measures": "Average Wage",
-                "year": "latest"
-            }
-            print(f"   Querying education data for SOC {soc_code}...")
-            data = self._query_datausa_with_fallback(
-                soc_code=soc_code,
-                geo_id=geo_id,
-                params=base_params,
-                context="education_progression",
-            )
+            param_variants = [
+                {"drilldowns": "Education Level", "measures": "Average Wage", "year": "latest"},
+                {"drilldowns": "Education Level", "measures": "avg_wage", "year": "latest"},
+            ]
+
+            data = {}
+            last_error = None
+            for base_params in param_variants:
+                try:
+                    data = self._query_datausa_with_fallback(
+                        soc_code=soc_code,
+                        geo_id=geo_id,
+                        params=base_params,
+                        context="education_progression",
+                    )
+                    if data.get("data"):
+                        break
+                except Exception as e:
+                    last_error = e
+                    continue
+            if not data.get("data") and last_error:
+                raise last_error
             rows = data.get("data", [])
             if not rows:
                 return []
