@@ -339,13 +339,30 @@ Rate the alignment (0.0-1.0):"""
             domain_insights["emerging_trends"] = []
         
         # Enrich domain insights with Data USA market intel if location is provided
-        if location and extracted_job_title:
+        job_title_for_market = extracted_job_title
+        onet_code = None
+        if not job_title_for_market and domain_insights_json and isinstance(domain_insights_json, dict):
+            onet_info = domain_insights_json.get("onet")
+            if isinstance(onet_info, dict):
+                job_title_for_market = onet_info.get("title") or job_title_for_market
+                onet_code = onet_info.get("code") or onet_code
+
+        if not job_title_for_market and experiences:
+            first_exp = experiences[0] if isinstance(experiences[0], dict) else {}
+            job_title_for_market = (
+                first_exp.get("title_line", "").split("|")[0].strip()
+                or first_exp.get("title", "").strip()
+            ) or job_title_for_market
+
+        if location and (job_title_for_market or onet_code):
             try:
                 from career_progression_enricher import CareerProgressionEnricher
                 from city_geo_mapper import get_geo_id
                 import os
                 
-                logger.info(f"[NEW_PIPELINE] Enriching with market intel for {extracted_job_title} in {location}")
+                logger.info(
+                    f"[NEW_PIPELINE] Enriching with market intel for {job_title_for_market or 'O*NET role'} in {location}"
+                )
                 
                 # Get geo ID for location
                 geo_id = get_geo_id(location)
@@ -353,37 +370,37 @@ Rate the alignment (0.0-1.0):"""
                     logger.warning(f"[NEW_PIPELINE] No geo ID found for location: {location}, using national data")
                 
                 # Search O*NET for job title to get O*NET code
-                onet_code = None
-                try:
-                    import httpx
-                    onet_auth = os.getenv("ONET_API_AUTH")
-                    if not onet_auth:
-                        logger.error("[NEW_PIPELINE] ONET_API_AUTH not set; skipping O*NET lookup to avoid using default credentials")
-                    else:
-                        onet_url = "https://services.onetcenter.org/ws/online/search"
-                        onet_headers = {
-                            "Authorization": f"Basic {onet_auth}",
-                            "Accept": "application/json"
-                        }
-                        async with httpx.AsyncClient(timeout=10.0) as client:
-                            search_response = await client.get(
-                                onet_url,
-                                headers=onet_headers,
-                                params={"keyword": extracted_job_title, "end": 1},
-                            )
-                        if search_response.status_code == 200:
-                            search_data = search_response.json()
-                            if search_data.get("occupation"):
-                                onet_code = search_data["occupation"][0]["code"]
-                                logger.info(f"[NEW_PIPELINE] Found O*NET code: {onet_code} for {extracted_job_title}")
-                except Exception as e:
-                    logger.warning(f"[NEW_PIPELINE] O*NET search failed: {e}")
+                if not onet_code:
+                    try:
+                        import httpx
+                        onet_auth = os.getenv("ONET_API_AUTH")
+                        if not onet_auth:
+                            logger.error("[NEW_PIPELINE] ONET_API_AUTH not set; skipping O*NET lookup to avoid using default credentials")
+                        elif job_title_for_market:
+                            onet_url = "https://services.onetcenter.org/ws/online/search"
+                            onet_headers = {
+                                "Authorization": f"Basic {onet_auth}",
+                                "Accept": "application/json"
+                            }
+                            async with httpx.AsyncClient(timeout=10.0) as client:
+                                search_response = await client.get(
+                                    onet_url,
+                                    headers=onet_headers,
+                                    params={"keyword": job_title_for_market, "end": 1},
+                                )
+                            if search_response.status_code == 200:
+                                search_data = search_response.json()
+                                if search_data.get("occupation"):
+                                    onet_code = search_data["occupation"][0]["code"]
+                                    logger.info(f"[NEW_PIPELINE] Found O*NET code: {onet_code} for {job_title_for_market}")
+                    except Exception as e:
+                        logger.warning(f"[NEW_PIPELINE] O*NET search failed: {e}")
                 
                 # If we have O*NET code, enrich with market data
                 if onet_code:
                     enricher = CareerProgressionEnricher()
                     career_data = enricher.get_full_career_insights(
-                        job_title=extracted_job_title,
+                        job_title=job_title_for_market or "",
                         onet_code=onet_code,
                         location=location,
                         city_geo_id=geo_id
@@ -396,7 +413,7 @@ Rate the alignment (0.0-1.0):"""
                     market_intel = enricher.calculate_market_intel(
                         career_data.get("workforce", {}),
                         onet_summary,
-                        job_title=extracted_job_title,
+                        job_title=job_title_for_market or "",
                         location=location
                     )
                     
@@ -417,7 +434,9 @@ Rate the alignment (0.0-1.0):"""
                             
                     logger.info(f"[NEW_PIPELINE] Added market intel: {market_intel.get('status')}")
                 else:
-                    logger.warning(f"[NEW_PIPELINE] No O*NET code found for job title: {extracted_job_title}")
+                    logger.warning(
+                        f"[NEW_PIPELINE] No O*NET code found for job title: {job_title_for_market or 'unknown'}"
+                    )
             except Exception as e:
                 logger.error(f"[NEW_PIPELINE] Failed to enrich domain insights with market intel: {e}", exc_info=True)
         elif location:

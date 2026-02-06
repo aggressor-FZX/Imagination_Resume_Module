@@ -1512,9 +1512,10 @@ class CareerProgressionEnricher:
         # Seniority note
         job_zone = target_seniority.get("job_zone", 3)
         if int(job_zone) >= 4:
+            typical_education = target_seniority.get("typical_education") or "a Bachelor's degree"
             insight_parts.append(
                 f"Seniority: This role typically requires {target_seniority.get('experience_required', '4+ years')} "
-                f"of experience with {target_seniority.get('typical_education', 'a Bachelor\'s degree')}."
+                f"of experience with {typical_education}."
             )
         
         # Effort summary
