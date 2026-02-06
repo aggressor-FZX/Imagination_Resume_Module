@@ -782,6 +782,35 @@ class CareerProgressionEnricher:
             print(f"⚠️  Data USA education progression failed: {e}")
             return []
     
+    def _get_edu_wage(
+        self,
+        education_data: List[Dict[str, Any]],
+        degree: str,
+        multiplier: float = 1.0
+    ) -> str:
+        """
+        Look up average wage for a given education level from Data USA education progression data.
+        Returns a formatted salary string like '$85,000' or 'N/A' if not found.
+        """
+        if not education_data:
+            return "N/A"
+        for entry in education_data:
+            if not isinstance(entry, dict):
+                continue
+            edu_level = entry.get("education", "")
+            if degree.lower() in edu_level.lower() or edu_level.lower() in degree.lower():
+                wage = entry.get("average_wage", 0)
+                if wage and isinstance(wage, (int, float)) and wage > 0:
+                    adjusted = int(wage * multiplier)
+                    return f"${adjusted:,}"
+        # Fallback: use highest available wage with multiplier
+        valid = [e for e in education_data if isinstance(e, dict) and isinstance(e.get("average_wage"), (int, float)) and e["average_wage"] > 0]
+        if valid:
+            best = max(valid, key=lambda x: x["average_wage"])
+            adjusted = int(best["average_wage"] * multiplier)
+            return f"${adjusted:,}"
+        return "N/A"
+
     def _build_career_ladder(
         self,
         job_title: str,

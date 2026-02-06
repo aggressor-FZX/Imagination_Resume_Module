@@ -60,6 +60,8 @@ class DomainInsights(BaseModel):
     certifications: Optional[List[str]] = Field(None, description="Recommended certifications")
     career_path: Optional[List[str]] = Field(None, description="Typical career progression")
     salary_range: Optional[str] = Field(None, description="Expected salary range")
+    onet: Optional[Dict[str, Any]] = Field(None, description="O*NET occupation insights (code, title, skills, outlook, growth, wage)")
+    market_intel: Optional[Dict[str, Any]] = Field(None, description="Data USA market intelligence (demand, wages, workforce trends)")
 
 
 class ExperienceEntry(BaseModel):
