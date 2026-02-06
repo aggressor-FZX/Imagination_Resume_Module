@@ -3317,8 +3317,6 @@ async def run_synthesis_async(
                     value = fallback_source.get(key)
                     if isinstance(value, str) and value.strip():
                         fallback_text = value.strip()
-            elif isinstance(fallback_source, str) and fallback_source.strip():
-                fallback_text = fallback_source.strip()
                         break
             elif isinstance(fallback_source, str) and fallback_source.strip():
                 fallback_text = fallback_source.strip()
