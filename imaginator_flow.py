@@ -770,8 +770,8 @@ def parse_experiences(text: str) -> List[Dict]:
             if is_location or is_bullet or (in_experience_section and not is_section_header):
                 current_exp['lines'].append(line)
     
-    # Don't forget the last experience
-    if current_exp and current_exp.get('lines'):
+    # Don't forget the last experience - with null safety
+    if current_exp and isinstance(current_exp, dict) and current_exp.get('lines'):
         experiences.append(current_exp)
     
     # Convert to final format
@@ -2747,7 +2747,10 @@ async def run_analysis_async(
         RUN_METRICS["stages"]["analysis"]["cache_hit"] = True
         RUN_METRICS["stages"]["analysis"]["end"] = time.time()
         s = RUN_METRICS["stages"]["analysis"]
-        s["duration_ms"] = int((s["end"] - s["start"]) * 1000) if s["start"] and s["end"] else None
+        if s.get("start") and s.get("end"):
+            s["duration_ms"] = int((s["end"] - s["start"]) * 1000)
+        else:
+            s["duration_ms"] = None
         return cached
 
         # Orchestration check: Only call external modules if data is missing
@@ -3314,6 +3317,8 @@ async def run_synthesis_async(
                     value = fallback_source.get(key)
                     if isinstance(value, str) and value.strip():
                         fallback_text = value.strip()
+            elif isinstance(fallback_source, str) and fallback_source.strip():
+                fallback_text = fallback_source.strip()
                         break
             elif isinstance(fallback_source, str) and fallback_source.strip():
                 fallback_text = fallback_source.strip()
@@ -3334,6 +3339,8 @@ async def run_synthesis_async(
         if critique_json is not None:
             if isinstance(critique_json, (dict, list)):
                 critique_payload = json.dumps(critique_json, indent=2)
+            elif isinstance(critique_json, str):
+                critique_payload = critique_json
             else:
                 critique_payload = str(critique_json)
         critique_block = f"\n\nCritique Feedback:\n{critique_payload}\n" if critique_payload else ""
