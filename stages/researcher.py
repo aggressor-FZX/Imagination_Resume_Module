@@ -136,6 +136,17 @@ class Researcher:
             Parsed and validated research data
         """
         try:
+            # Handle empty, whitespace-only, or empty JSON responses
+            if not response or not response.strip() or response.strip() == "{}":
+                logger.warning("[RESEARCHER] Empty response from LLM, using defaults")
+                return {
+                    "implied_metrics": ["Improve system performance", "Scale to handle increased load"],
+                    "domain_vocab": ["Technical skills relevant to the role"],
+                    "implied_skills": ["Problem Solving", "Communication"],
+                    "work_archetypes": [],
+                    "insider_tips": "Focus on quantifiable achievements and relevant technologies."
+                }
+
             data = json.loads(response)
             
             # Ensure required fields exist

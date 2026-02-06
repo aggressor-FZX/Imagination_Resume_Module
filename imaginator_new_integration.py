@@ -6,6 +6,7 @@ Provides backward-compatible interface for app.py
 import asyncio
 import json
 import logging
+import re
 from typing import Dict, Any, Optional, List
 
 from orchestrator import PipelineOrchestrator
@@ -125,9 +126,29 @@ async def run_new_pipeline_async(
                 response_format={"type": "json_object"},
                 max_tokens=50
             )
-            title_data = json.loads(title_response) if title_response else {}
+            title_response_clean = (title_response or "").strip()
+            title_data = {}
+            if title_response_clean:
+                try:
+                    title_data = json.loads(title_response_clean)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "[NEW_PIPELINE] Job title response was not valid JSON. Falling back to text parsing."
+                    )
+                    json_match = re.search(r"\{.*\}", title_response_clean, re.DOTALL)
+                    if json_match:
+                        try:
+                            title_data = json.loads(json_match.group(0))
+                        except json.JSONDecodeError:
+                            title_data = {}
+                    if not title_data:
+                        title_data = {"job_title": title_response_clean.strip().strip('"')}
+            else:
+                logger.warning("[NEW_PIPELINE] Job title extraction returned an empty response")
+
             extracted_job_title = title_data.get("job_title")
             if extracted_job_title:
+                extracted_job_title = extracted_job_title.strip()
                 logger.info(f"[NEW_PIPELINE] Extracted Job Title: {extracted_job_title}")
         except Exception as e:
             logger.warning(f"[NEW_PIPELINE] Job title extraction failed: {e}")
@@ -170,7 +191,9 @@ Rate the alignment (0.0-1.0):"""
                 max_tokens=100
             )
             
-            score_data = json.loads(response) if response else {}
+            # Handle empty, whitespace-only, or empty JSON responses
+            response_clean = (response or "").strip()
+            score_data = json.loads(response_clean) if response_clean and response_clean != "{}" else {}
             critique_score = score_data.get("score", 0.85)  # Default to 0.85 if parsing fails
             logger.info(f"[NEW_PIPELINE] ATS score calculated: {critique_score}")
             

@@ -251,7 +251,8 @@ Research Insights:
             Parsed and validated draft data
         """
         try:
-            if not response or response == "{}":
+            # Handle empty, whitespace-only, or empty JSON responses
+            if not response or not response.strip() or response.strip() == "{}":
                 logger.warning("[DRAFTER] Empty response from LLM")
                 return self._create_fallback_output(original_experiences, "mid")
 

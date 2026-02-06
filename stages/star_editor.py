@@ -201,6 +201,11 @@ class StarEditor:
             Parsed and validated editor data
         """
         try:
+            # Handle empty, whitespace-only, or empty JSON responses
+            if not response or not response.strip() or response.strip() == "{}":
+                logger.warning("[STAR_EDITOR] Empty response from LLM")
+                return self._create_fallback_output([])
+
             data = json.loads(response)
             
             # Ensure required fields exist
