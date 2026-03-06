@@ -389,15 +389,18 @@ class StarEditor:
             return result
             
         except json.JSONDecodeError as e:
-            logger.error(f"[STAR_EDITOR] Failed to parse JSON response: {e}")
-            logger.error(f"[STAR_EDITOR] Raw response length: {len(response) if response else 0}")
-            logger.error(f"[STAR_EDITOR] Raw response preview: {(response or '')[:500]}")
-            
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)
             if json_match:
-                logger.info("[STAR_EDITOR] Successfully extracted JSON from text")
+                logger.warning(
+                    "[STAR_EDITOR] Direct JSON parse failed but markdown JSON extraction succeeded: %s",
+                    e,
+                )
                 return self._parse_response(json_match)
+
+            logger.error(f"[STAR_EDITOR] Failed to parse JSON response: {e}")
+            logger.error(f"[STAR_EDITOR] Raw response length: {len(response) if response else 0}")
+            logger.error(f"[STAR_EDITOR] Raw response preview: {(response or '')[:500]}")
             
             # Check if response looks like markdown directly
             if response and ("## " in response or "**" in response or "- " in response):

@@ -202,6 +202,10 @@ class AnalysisResponse(BaseModel):
         default_factory=list, description="Claim-to-source mapping for trust and verification"
     )
     rewritten_resume: Optional[str] = Field(None, description="Backward-compatible alias for final_written_section")
+    sectionCompleteness: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Section coverage checks for education/projects/certifications/experience"
+    )
     suggestions: Optional[List[str]] = Field(default_factory=list, description="Frontend suggestions list")
     critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
     extracted_job_title: Optional[str] = Field(None, description="Job title extracted from job ad via LLM")
