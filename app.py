@@ -258,6 +258,8 @@ async def analyze_resume(
             location=payload.location,  # Pass location for market intel enrichment
             job_title=payload.job_title,  # Pass user-provided job title for O*NET
             projects=payload.projects,  # Pass projects for students/career changers
+            education=payload.education,  # Pass education entries when provided
+            certifications=payload.certifications,  # Pass certifications when provided
         )
         if settings.VERBOSE_PIPELINE_LOGS:
             logger.info(

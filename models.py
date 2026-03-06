@@ -145,6 +145,14 @@ class AnalysisRequest(BaseModel):
         None,
         description="Projects from resume (for students/career changers to be treated as experience)"
     )
+    education: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Education entries from resume (degree, institution, dates)"
+    )
+    certifications: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Certification entries from resume"
+    )
 
     @field_validator('extracted_skills_json')
     @classmethod

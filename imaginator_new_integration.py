@@ -474,6 +474,108 @@ def _get_domain_fallback_occupation(job_title: str, inferred_domain: str = "") -
     return fallback_by_domain["default"]
 
 
+def _extract_structured_sections_from_resume(
+    resume_text: str,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Best-effort extraction for structured sections when frontend payload omits them.
+    Keeps parsing conservative to avoid injecting noisy data.
+    """
+    parsed: Dict[str, List[Dict[str, Any]]] = {
+        "education": [],
+        "projects": [],
+        "certifications": [],
+    }
+    if not resume_text:
+        return parsed
+
+    lines = [line.strip() for line in resume_text.splitlines()]
+    current_section = ""
+
+    section_headers = {
+        "education": "education",
+        "academic": "education",
+        "projects": "projects",
+        "project": "projects",
+        "certifications": "certifications",
+        "certification": "certifications",
+        "licenses": "certifications",
+        "licenses & certifications": "certifications",
+    }
+
+    header_regex = re.compile(r"^[A-Za-z][A-Za-z\s&/]+:?$")
+    year_regex = re.compile(r"(19|20)\d{2}")
+
+    for raw_line in lines:
+        if not raw_line:
+            continue
+
+        line = raw_line.strip("-•* \t")
+        lowered = line.lower().strip(":")
+
+        if header_regex.match(line) and lowered in section_headers:
+            current_section = section_headers[lowered]
+            continue
+
+        if header_regex.match(line) and lowered not in section_headers:
+            current_section = ""
+            continue
+
+        if not current_section:
+            continue
+
+        if current_section == "education":
+            dates = ""
+            year_match = year_regex.search(line)
+            if year_match:
+                dates = year_match.group(0)
+
+            parts = [p.strip() for p in re.split(r"\s+-\s+|,", line, maxsplit=1)]
+            degree = parts[0] if parts else line
+            institution = parts[1] if len(parts) > 1 else ""
+
+            if degree:
+                parsed["education"].append(
+                    {
+                        "degree": degree,
+                        "institution": institution,
+                        "dates": dates,
+                    }
+                )
+
+        elif current_section == "projects":
+            name = line
+            description = ""
+            if " - " in line:
+                split = line.split(" - ", 1)
+                name = split[0].strip()
+                description = split[1].strip()
+
+            parsed["projects"].append(
+                {
+                    "name": name,
+                    "description": description or line,
+                    "technologies": [],
+                    "duration": "",
+                }
+            )
+
+        elif current_section == "certifications":
+            parsed["certifications"].append(
+                {
+                    "name": line,
+                    "issuer": "",
+                    "year": year_regex.search(line).group(0) if year_regex.search(line) else "",
+                }
+            )
+
+    # Remove trivial noise entries.
+    for key in ("education", "projects", "certifications"):
+        parsed[key] = [item for item in parsed[key] if any(str(v).strip() for v in item.values())]
+
+    return parsed
+
+
 async def run_new_pipeline_async(
     resume_text: str,
     job_ad: str,
@@ -511,6 +613,29 @@ async def run_new_pipeline_async(
         # Parse experiences from resume text
         experiences = parse_experiences(resume_text)
         logger.info(f"[NEW_PIPELINE] Parsed {len(experiences)} experiences from resume")
+
+        provided_projects = kwargs.get("projects", [])
+        provided_education = kwargs.get("education", [])
+        provided_certifications = kwargs.get("certifications", [])
+
+        projects_input = provided_projects if isinstance(provided_projects, list) else []
+        education_input = provided_education if isinstance(provided_education, list) else []
+        certifications_input = provided_certifications if isinstance(provided_certifications, list) else []
+
+        inferred_sections = _extract_structured_sections_from_resume(resume_text)
+        effective_projects = projects_input or inferred_sections.get("projects", [])
+        effective_education = education_input or inferred_sections.get("education", [])
+        effective_certifications = certifications_input or inferred_sections.get("certifications", [])
+
+        logger.info(
+            "[NEW_PIPELINE] Section inputs - projects: %s (%s), education: %s (%s), certifications: %s (%s)",
+            len(effective_projects),
+            "payload" if projects_input else ("resume_text" if effective_projects else "none"),
+            len(effective_education),
+            "payload" if education_input else ("resume_text" if effective_education else "none"),
+            len(effective_certifications),
+            "payload" if certifications_input else ("resume_text" if effective_certifications else "none"),
+        )
         
         # Initialize LLM client
         if not openrouter_api_keys:
@@ -589,9 +714,9 @@ async def run_new_pipeline_async(
             openrouter_api_keys=openrouter_api_keys,
             creativity_mode=creativity_mode,
             extracted_job_title=extracted_job_title,
-            projects=kwargs.get("projects", []),  # Pass projects for students/career changers
-            education=kwargs.get("education", []),  # Pass education
-            certifications=kwargs.get("certifications", []),  # Pass certifications
+            projects=effective_projects,  # Pass projects for students/career changers
+            education=effective_education,  # Pass education
+            certifications=effective_certifications,  # Pass certifications
             location=kwargs.get("location", ""),  # Pass location
         )
         
@@ -1033,9 +1158,9 @@ Rate the alignment (0.0-1.0):"""
 
         rewritten_text = final_output.get("final_written_section", "") or ""
         rewritten_lower = rewritten_text.lower()
-        source_education = kwargs.get("education", []) if isinstance(kwargs.get("education", []), list) else []
-        source_projects = kwargs.get("projects", []) if isinstance(kwargs.get("projects", []), list) else []
-        source_certifications = kwargs.get("certifications", []) if isinstance(kwargs.get("certifications", []), list) else []
+        source_education = effective_education
+        source_projects = effective_projects
+        source_certifications = effective_certifications
 
         section_completeness = {
             "has_experience": bool(experiences) and ("experience" in rewritten_lower),
@@ -1128,9 +1253,12 @@ Rate the alignment (0.0-1.0):"""
                     ],
                     "experience_years": _extract_experience_years(experiences),
                     "certifications": domain_insights.get("certifications", []),
-                    "education": domain_insights.get("education", []),
+                    "education": effective_education or domain_insights.get("education", []),
                     "achievements": [exp.get("snippet", "")[:100] for exp in experiences[:5] if isinstance(exp, dict) and exp.get("snippet")]
                 }
+
+                if effective_certifications:
+                    characteristics["certifications"] = effective_certifications
                 
                 # Extract location from kwargs or use default
                 current_location = location or kwargs.get("location", "United States")
