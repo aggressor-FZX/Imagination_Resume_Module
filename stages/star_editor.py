@@ -437,8 +437,8 @@ class StarEditor:
         # First, try to find markdown code blocks
         import re
         
-        # Try ```json {...}``` pattern
-        json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL | re.IGNORECASE)
+        # Try ```json {...}``` pattern (greedy match for full JSON)
+        json_block_match = re.search(r'```json\s*(\{.*\})\s*```', text, re.DOTALL | re.IGNORECASE)
         if json_block_match:
             candidate = json_block_match.group(1)
             try:
@@ -447,10 +447,20 @@ class StarEditor:
             except json.JSONDecodeError:
                 pass
         
-        # Try ```{...}``` pattern (no explicit json)
-        code_block_match = re.search(r'```\s*(\{.*?\})\s*```', text, re.DOTALL | re.IGNORECASE)
+        # Try ```{...}``` pattern (no explicit json, greedy match)
+        code_block_match = re.search(r'```\s*(\{.*\})\s*```', text, re.DOTALL | re.IGNORECASE)
         if code_block_match:
             candidate = code_block_match.group(1)
+            try:
+                json.loads(candidate)
+                return candidate
+            except json.JSONDecodeError:
+                pass
+        
+        # Try to find JSON after "Here's the JSON output:" or similar
+        json_after_colon = re.search(r'(?:Here\'s the JSON output:|JSON output:|```json)\s*(\{.*\})', text, re.DOTALL | re.IGNORECASE)
+        if json_after_colon:
+            candidate = json_after_colon.group(1)
             try:
                 json.loads(candidate)
                 return candidate

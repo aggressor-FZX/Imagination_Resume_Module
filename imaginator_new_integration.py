@@ -547,12 +547,12 @@ async def run_new_pipeline_async(
                 if title_response_clean:
                     # Extract JSON from markdown if needed
                     # Try ```json {...}``` pattern
-                    json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', title_response_clean, re.DOTALL | re.IGNORECASE)
+                    json_block_match = re.search(r'```json\s*(\{.*\})\s*```', title_response_clean, re.DOTALL | re.IGNORECASE)
                     if json_block_match:
                         title_response_clean = json_block_match.group(1)
                     else:
                         # Try ```{...}``` pattern
-                        code_block_match = re.search(r'```\s*(\{.*?\})\s*```', title_response_clean, re.DOTALL | re.IGNORECASE)
+                        code_block_match = re.search(r'```\s*(\{.*\})\s*```', title_response_clean, re.DOTALL | re.IGNORECASE)
                         if code_block_match:
                             title_response_clean = code_block_match.group(1)
                     
@@ -628,12 +628,12 @@ Rate the alignment (0.0-1.0):"""
             # Extract JSON from markdown if needed
             if response_clean:
                 # Try ```json {...}``` pattern
-                json_block_match = re.search(r'```json\s*(\{.*?\})\s*```', response_clean, re.DOTALL | re.IGNORECASE)
+                json_block_match = re.search(r'```json\s*(\{.*\})\s*```', response_clean, re.DOTALL | re.IGNORECASE)
                 if json_block_match:
                     response_clean = json_block_match.group(1)
                 else:
                     # Try ```{...}``` pattern
-                    code_block_match = re.search(r'```\s*(\{.*?\})\s*```', response_clean, re.DOTALL | re.IGNORECASE)
+                    code_block_match = re.search(r'```\s*(\{.*\})\s*```', response_clean, re.DOTALL | re.IGNORECASE)
                     if code_block_match:
                         response_clean = code_block_match.group(1)
             
