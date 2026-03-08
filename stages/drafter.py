@@ -10,6 +10,7 @@ Based on Alternate_flow_proposal.md recommendations:
 
 import json
 import logging
+import re
 from typing import Dict, Any, List, Optional
 from pipeline_config import OR_SLUG_DRAFTER, FALLBACK_MODELS, TEMPERATURES, TIMEOUTS, get_seniority_config
 
@@ -295,8 +296,38 @@ Research Insights:
             quantified_bullets = sum(
                 1 for exp in validated_experiences 
                 for bullet in exp.get("bullets", []) 
-                if any(char in bullet for char in ['%', '$', 'x', '+', '>', '<', '='])
+                if any(char in bullet for char in ['%', '$', ' x ', '+', '>', '<', '=', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
             )
+            # Refined check for quantification: must have a number or specific symbols
+            quantified_bullets_refined = 0
+            placeholder_regex = re.compile(r"\[.*?\]|\{.*?\}", re.IGNORECASE)
+            has_placeholders = False
+
+            for exp in validated_experiences:
+                payload_bullets = exp.get("bullets", [])
+                for bullet in payload_bullets:
+                    # Check for placeholders
+                    if placeholder_regex.search(bullet):
+                        has_placeholders = True
+                    
+                    # More robust quantification check
+                    # Look for numbers (excluding years like 2024) or symbols
+                    if re.search(r"\d+(?!\d{3})|[%$x+><=]", bullet):
+                        quantified_bullets_refined += 1
+
+            quantification_score = (
+                quantified_bullets_refined / total_bullets if total_bullets > 0 else 0.0
+            )
+
+            return {
+                "rewritten_experiences": validated_experiences,
+                "seniority_applied": data.get("seniority_applied", ""),
+                "total_bullets": total_bullets,
+                "quantified_bullets": quantified_bullets_refined,
+                "quantification_score": round(quantification_score, 3),
+                "has_placeholders": has_placeholders,
+                "fallback": False
+            }
             
             quantification_score = quantified_bullets / max(total_bullets, 1)
             

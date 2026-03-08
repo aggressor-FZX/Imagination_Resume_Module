@@ -12,6 +12,7 @@ import json
 
 class ProcessingStatus(str, Enum):
     """Status of processing operations"""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -26,6 +27,7 @@ class CreativityMode(str, Enum):
 
 class SkillData(BaseModel):
     """Structured skill data with confidence scores"""
+
     title: str = Field(..., description="Job title or role")
     canonical_title: str = Field(..., description="Normalized job title")
     skills: List[str] = Field(..., description="List of skills")
@@ -36,6 +38,7 @@ class SkillData(BaseModel):
 
 class DomainInsights(BaseModel):
     """Domain-specific insights and market intelligence"""
+
     domain: str = Field(..., description="Primary domain/industry")
     market_demand: Optional[str] = Field(None, description="Market demand level")
     skill_gap_priority: str = Field(..., description="Priority level for skill gaps")
@@ -47,35 +50,60 @@ class DomainInsights(BaseModel):
     )
     # Fields from Imaginator's Researcher stage
     implied_metrics: Optional[List[str]] = Field(
-        None, description="Implied metrics/benchmarks from job ad (e.g., '40% reduction', '1M+ requests/day')"
+        None,
+        description="Implied metrics/benchmarks from job ad (e.g., '40% reduction', '1M+ requests/day')",
     )
     domain_vocab: Optional[List[str]] = Field(
-        None, description="Domain-specific vocabulary from job ad (e.g., 'Kubernetes', 'PyTorch')"
+        None,
+        description="Domain-specific vocabulary from job ad (e.g., 'Kubernetes', 'PyTorch')",
     )
     work_archetypes: Optional[List[str]] = Field(
-        None, description="Work archetypes identified from job ad (e.g., 'Scaling', 'Optimization')"
+        None,
+        description="Work archetypes identified from job ad (e.g., 'Scaling', 'Optimization')",
     )
     # Optional fields from Hermes
-    top_skills: Optional[List[str]] = Field(None, description="Top skills from market data")
-    certifications: Optional[List[str]] = Field(None, description="Recommended certifications")
-    career_path: Optional[List[str]] = Field(None, description="Typical career progression")
+    top_skills: Optional[List[str]] = Field(
+        None, description="Top skills from market data"
+    )
+    certifications: Optional[List[str]] = Field(
+        None, description="Recommended certifications"
+    )
+    career_path: Optional[List[str]] = Field(
+        None, description="Typical career progression"
+    )
     salary_range: Optional[str] = Field(None, description="Expected salary range")
-    onet: Optional[Dict[str, Any]] = Field(None, description="O*NET occupation insights (code, title, skills, outlook, growth, wage)")
-    market_intel: Optional[Dict[str, Any]] = Field(None, description="Data USA market intelligence (demand, wages, workforce trends)")
+    onet: Optional[Dict[str, Any]] = Field(
+        None,
+        description="O*NET occupation insights (code, title, skills, outlook, growth, wage)",
+    )
+    market_intel: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Data USA market intelligence (demand, wages, workforce trends)",
+    )
 
 
 class ExperienceEntry(BaseModel):
     """Parsed work experience entry"""
+
     title_line: Optional[str] = Field(None, description="Job title and company")
-    skills: Optional[List[str]] = Field(None, description="Skills associated with this experience")
+    skills: Optional[List[str]] = Field(
+        None, description="Skills associated with this experience"
+    )
     snippet: Optional[str] = Field(None, description="Relevant experience description")
 
 
 class ProcessedSkills(BaseModel):
     """Processed skills with categorization and confidence"""
-    high_confidence: Optional[List[str]] = Field(None, description="High confidence skills")
-    medium_confidence: Optional[List[str]] = Field(None, description="Medium confidence skills")
-    low_confidence: Optional[List[str]] = Field(None, description="Low confidence skills")
+
+    high_confidence: Optional[List[str]] = Field(
+        None, description="High confidence skills"
+    )
+    medium_confidence: Optional[List[str]] = Field(
+        None, description="Medium confidence skills"
+    )
+    low_confidence: Optional[List[str]] = Field(
+        None, description="Low confidence skills"
+    )
     inferred_skills: Optional[List[str]] = Field(
         None, description="Skills inferred from skill adjacency"
     )
@@ -83,22 +111,38 @@ class ProcessedSkills(BaseModel):
 
 class SeniorityAnalysis(BaseModel):
     """Seniority level analysis results"""
+
     level: Optional[str] = Field(None, description="Detected seniority level")
     confidence: Optional[float] = Field(None, description="Confidence score (0-1)")
-    total_years_experience: Optional[float] = Field(None, description="Total years of experience")
-    experience_quality_score: Optional[float] = Field(None, description="Experience quality score")
-    leadership_score: Optional[float] = Field(None, description="Leadership experience score")
-    skill_depth_score: Optional[float] = Field(None, description="Technical skill depth score")
-    achievement_complexity_score: Optional[float] = Field(None, description="Achievement complexity score")
+    total_years_experience: Optional[float] = Field(
+        None, description="Total years of experience"
+    )
+    experience_quality_score: Optional[float] = Field(
+        None, description="Experience quality score"
+    )
+    leadership_score: Optional[float] = Field(
+        None, description="Leadership experience score"
+    )
+    skill_depth_score: Optional[float] = Field(
+        None, description="Technical skill depth score"
+    )
+    achievement_complexity_score: Optional[float] = Field(
+        None, description="Achievement complexity score"
+    )
     reasoning: Optional[str] = Field(None, description="Human-readable reasoning")
-    recommendations: Optional[List[str]] = Field(None, description="Career development recommendations")
+    recommendations: Optional[List[str]] = Field(
+        None, description="Career development recommendations"
+    )
 
 
 class RunMetrics(BaseModel):
     """Usage metrics and cost tracking"""
+
     calls: List[Dict[str, Any]] = Field(..., description="Individual API calls")
     total_prompt_tokens: int = Field(..., description="Total prompt tokens used")
-    total_completion_tokens: int = Field(..., description="Total completion tokens used")
+    total_completion_tokens: int = Field(
+        ..., description="Total completion tokens used"
+    )
     total_tokens: int = Field(..., description="Total tokens used")
     estimated_cost_usd: float = Field(..., description="Estimated cost in USD")
     failures: List[Dict[str, Any]] = Field(
@@ -108,6 +152,7 @@ class RunMetrics(BaseModel):
 
 class AnalysisRequest(BaseModel):
     """Request model for resume analysis"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     resume_text: str = Field(..., min_length=0, description="Raw resume text content")
@@ -129,32 +174,60 @@ class AnalysisRequest(BaseModel):
     creativity_mode: Optional[CreativityMode] = Field(
         CreativityMode.BALANCED,
         validation_alias=AliasChoices("creativity_mode", "creativityMode"),
-        description="Creativity preset for generation"
+        description="Creativity preset for generation",
     )
     location: Optional[str] = Field(
         None,
-        validation_alias=AliasChoices("location", "job_location", "preferred_location", "city"),
-        description="Job location/city for market data enrichment (e.g., 'Los Angeles', 'New York')"
+        validation_alias=AliasChoices(
+            "location", "job_location", "preferred_location", "city"
+        ),
+        description="Job location/city for market data enrichment (e.g., 'Los Angeles', 'New York')",
     )
     job_title: Optional[str] = Field(
         None,
         validation_alias=AliasChoices("job_title", "jobTitle", "target_job_title"),
-        description="User-provided job title for O*NET market intel (takes priority over LLM extraction)"
+        description="User-provided job title for O*NET market intel (takes priority over LLM extraction)",
     )
     projects: Optional[List[Dict[str, Any]]] = Field(
         None,
-        description="Projects from resume (for students/career changers to be treated as experience)"
+        description="Projects from resume (for students/career changers to be treated as experience)",
     )
     education: Optional[List[Dict[str, Any]]] = Field(
-        None,
-        description="Education entries from resume (degree, institution, dates)"
+        None, description="Education entries from resume (degree, institution, dates)"
     )
     certifications: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Certification entries from resume"
+    )
+    golden_bullets: Optional[List[str]] = Field(
+        None, description="Style reference bullets from Pinecone (for drafter style transfer)"
+    )
+    onet_code: Optional[str] = Field(
         None,
-        description="Certification entries from resume"
+        validation_alias=AliasChoices("onet_code", "onetCode"),
+        description="Upstream O*NET occupation code (format: XX-XXXX.XX). If provided and valid, it will be used instead of recomputing.",
+    )
+    experience: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        validation_alias=AliasChoices("experience", "professional_experience"),
+        description="Structured work experience from profile (company, role, duration, description, skills)",
+    )
+    skills: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("skills", "user_skills"),
+        description="Flat list of skills from user profile",
+    )
+    classified_skills: Optional[Dict[str, Any]] = Field(
+        None,
+        validation_alias=AliasChoices("classified_skills", "classifiedSkills"),
+        description="Structured skills already classified by FastSVM/Hermes",
+    )
+    job_titles: Optional[List[str]] = Field(
+        None,
+        validation_alias=AliasChoices("job_titles", "jobTitles", "target_job_titles"),
+        description="List of possible matching job titles for the user",
     )
 
-    @field_validator('extracted_skills_json')
+    @field_validator("extracted_skills_json")
     @classmethod
     def validate_skills_json(cls, v):
         """Validate that skills JSON can be parsed"""
@@ -165,7 +238,7 @@ class AnalysisRequest(BaseModel):
                 raise ValueError("extracted_skills_json must be valid JSON")
         return v
 
-    @field_validator('domain_insights_json')
+    @field_validator("domain_insights_json")
     @classmethod
     def validate_insights_json(cls, v):
         """Validate that insights JSON can be parsed"""
@@ -176,45 +249,105 @@ class AnalysisRequest(BaseModel):
                 raise ValueError("domain_insights_json must be valid JSON")
         return v
 
+    @field_validator("onet_code")
+    @classmethod
+    def validate_onet_code_format(cls, v):
+        """Validate O*NET code format (XX-XXXX.XX) if provided"""
+        if v is not None:
+            import re
+            if not re.fullmatch(r"\d{2}-\d{4}\.\d{2}", v.strip()):
+                raise ValueError("onet_code must match format XX-XXXX.XX")
+        return v
+
+    @field_validator("golden_bullets")
+    @classmethod
+    def validate_golden_bullets(cls, v):
+        """Ensure golden_bullets is a list of non-empty strings if provided"""
+        if v is not None:
+            if not isinstance(v, list):
+                raise ValueError("golden_bullets must be a list")
+            for item in v:
+                if not isinstance(item, str) or not item.strip():
+                    raise ValueError("golden_bullets items must be non-empty strings")
+        return v
+
 
 class ProvenanceEntry(BaseModel):
     """Provenance tracking for a claim in the final resume"""
+
     claim: str = Field(..., description="The specific claim or sentence")
-    experience_index: Optional[int] = Field(None, description="Index in experiences array")
-    skill_references: List[str] = Field(default_factory=list, description="Skills cited in this claim")
-    is_synthetic: bool = Field(False, description="Whether this claim is inferred vs directly from resume")
+    experience_index: Optional[int] = Field(
+        None, description="Index in experiences array"
+    )
+    skill_references: List[str] = Field(
+        default_factory=list, description="Skills cited in this claim"
+    )
+    is_synthetic: bool = Field(
+        False, description="Whether this claim is inferred vs directly from resume"
+    )
 
 
 class AnalysisResponse(BaseModel):
     """Response model for resume analysis results"""
-    experiences: Optional[List[ExperienceEntry]] = Field(None, description="Parsed work experiences")
-    aggregate_skills: Optional[List[str]] = Field(None, description="All unique skills found")
-    processed_skills: Optional[ProcessedSkills] = Field(None, description="Categorized skills")
-    domain_insights: Optional[DomainInsights] = Field(None, description="Domain intelligence")
-    gap_analysis: Optional[Union[str, Dict[str, Any]]] = Field(None, description="Gap analysis (string or structured object)")
+
+    experiences: Optional[List[ExperienceEntry]] = Field(
+        None, description="Parsed work experiences"
+    )
+    aggregate_skills: Optional[List[str]] = Field(
+        None, description="All unique skills found"
+    )
+    processed_skills: Optional[ProcessedSkills] = Field(
+        None, description="Categorized skills"
+    )
+    domain_insights: Optional[DomainInsights] = Field(
+        None, description="Domain intelligence"
+    )
+    gap_analysis: Optional[Union[str, Dict[str, Any]]] = Field(
+        None, description="Gap analysis (string or structured object)"
+    )
     suggested_experiences: Optional[Dict[str, Any]] = Field(
         None, description="Refined improvement suggestions"
     )
-    seniority_analysis: Optional[SeniorityAnalysis] = Field(None, description="Seniority level analysis")
-    final_written_section: Optional[str] = Field(None, description="Generated resume section text")
-    final_written_section_markdown: Optional[str] = Field(None, description="Markdown-formatted resume section")
-    final_written_section_provenance: List[ProvenanceEntry] = Field(
-        default_factory=list, description="Claim-to-source mapping for trust and verification"
+    seniority_analysis: Optional[SeniorityAnalysis] = Field(
+        None, description="Seniority level analysis"
     )
-    rewritten_resume: Optional[str] = Field(None, description="Backward-compatible alias for final_written_section")
+    final_written_section: Optional[str] = Field(
+        None, description="Generated resume section text"
+    )
+    final_written_section_markdown: Optional[str] = Field(
+        None, description="Markdown-formatted resume section"
+    )
+    final_written_section_provenance: List[ProvenanceEntry] = Field(
+        default_factory=list,
+        description="Claim-to-source mapping for trust and verification",
+    )
+    rewritten_resume: Optional[str] = Field(
+        None, description="Backward-compatible alias for final_written_section"
+    )
     sectionCompleteness: Optional[Dict[str, Any]] = Field(
         None,
-        description="Section coverage checks for education/projects/certifications/experience"
+        description="Section coverage checks for education/projects/certifications/experience",
     )
-    suggestions: Optional[List[str]] = Field(default_factory=list, description="Frontend suggestions list")
-    critique_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Quality score from critique phase")
-    extracted_job_title: Optional[str] = Field(None, description="Job title extracted from job ad via LLM")
-    run_metrics: Optional[RunMetrics] = Field(None, description="Usage metrics and costs")
+    suggestions: Optional[List[str]] = Field(
+        default_factory=list, description="Frontend suggestions list"
+    )
+    critique_score: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Quality score from critique phase"
+    )
+    extracted_job_title: Optional[str] = Field(
+        None, description="Job title extracted from job ad via LLM"
+    )
+    run_metrics: Optional[RunMetrics] = Field(
+        None, description="Usage metrics and costs"
+    )
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
     )
     processing_time_seconds: float = Field(..., description="Total processing time")
-    career_alchemy: Optional[Dict[str, Any]] = Field(None, description="Career Alchemy profile (Spotify Wrapped style career identity)")
+    career_alchemy: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Career Alchemy profile (Spotify Wrapped style career identity)",
+    )
 
     @field_validator("final_written_section_provenance", mode="before")
     @classmethod
@@ -245,21 +378,26 @@ class AnalysisResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response"""
+
     status: str = Field(..., description="Service health status")
     version: str = Field(..., description="Application version")
     environment: str = Field(..., description="Deployment environment")
     timestamp: str = Field(..., description="Timestamp of health check")
-    has_openrouter_key: bool = Field(..., description="Whether OpenRouter API key is configured")
+    has_openrouter_key: bool = Field(
+        ..., description="Whether OpenRouter API key is configured"
+    )
 
 
 class Context7DocsRequest(BaseModel):
     """Request model for Context7 documentation"""
+
     library: str = Field(..., min_length=1, description="Library name")
     version: str = Field("latest", description="Version to get docs for")
 
 
 class Context7DocsResponse(BaseModel):
     """Response model for Context7 documentation"""
+
     library: str = Field(..., description="Library name")
     version: str = Field(..., description="Version requested")
     documentation: Dict[str, Any] = Field(..., description="Documentation content")
@@ -268,6 +406,9 @@ class Context7DocsResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response"""
+
     error: str = Field(..., description="Error message")
     error_code: str = Field(..., description="Error code")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    details: Optional[Dict[str, Any]] = Field(
+        None, description="Additional error details"
+    )
