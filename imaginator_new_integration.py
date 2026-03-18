@@ -1269,6 +1269,115 @@ Rate the alignment (0.0-1.0):"""
                         job_title=job_title_for_market or "",
                         location=location,
                     )
+                    
+                    # Add market intel to domain insights
+                    domain_insights["market_intel"] = market_intel
+
+                    # Map market intel to top-level fields for frontend consumption
+                    # Preserve high-quality upstream values; only fill missing or weak placeholders.
+                    if market_intel.get("demand_label") and (
+                        not safe_market_fallback
+                        or _is_missing_or_weak(domain_insights.get("market_demand"))
+                    ):
+                        domain_insights["market_demand"] = market_intel["demand_label"]
+
+                    if market_intel.get("average_wage") and (
+                        not safe_market_fallback
+                        or _is_missing_or_weak(domain_insights.get("salary_range"))
+                    ):
+                        # Prefer COS range (pct25–pct75) when available
+                        pct25 = market_intel.get("pct25")
+                        pct75 = market_intel.get("pct75")
+                        if isinstance(pct25, (int, float)) and isinstance(
+                            pct75, (int, float)
+                        ):
+                            domain_insights["salary_range"] = (
+                                f"${int(pct25):,} - ${int(pct75):,}"
+                            )
+                        else:
+                            wage = market_intel["average_wage"]
+                            if isinstance(wage, (int, float)):
+                                domain_insights["salary_range"] = f"${int(wage):,}+"
+                            else:
+                                domain_insights["salary_range"] = str(wage)
+
+                    logger.info(
+                        f"[NEW_PIPELINE] Added market intel: {market_intel.get('status')}"
+                    )
+                    
+                    # ENRICH WITH CAREER PROGRESSION DATA (NEW IMPROVEMENT)
+                    # Add career ladder data if available
+                    if career_data.get("career_ladder"):
+                        domain_insights["career_ladder"] = career_data["career_ladder"]
+                        logger.info(f"[NEW_PIPELINE] Added career ladder with {len(career_data['career_ladder'])} levels")
+                    
+                    # Add education progression data if available
+                    if career_data.get("education_progression"):
+                        domain_insights["education_progression"] = career_data["education_progression"]
+                        logger.info(f"[NEW_PIPELINE] Added education progression with {len(career_data['education_progression'])} levels")
+                    
+                    # Add skill impact analysis if available
+                    if career_data.get("skill_impact"):
+                        domain_insights["skill_impact"] = career_data["skill_impact"]
+                        logger.info(f"[NEW_PIPELINE] Added skill impact analysis")
+                    
+                    # Add seniority information if available
+                    if career_data.get("seniority"):
+                        domain_insights["seniority"] = career_data["seniority"]
+                        logger.info(f"[NEW_PIPELINE] Added seniority: {career_data['seniority'].get('level', 'Unknown')}")
+                    
+                    # Add top skills from O*NET (more accurate than domain vocab)
+                    if career_data.get("core_skills"):
+                        onet_skills = [skill.get("name", "") for skill in career_data["core_skills"][:10] if skill.get("name")]
+                        if onet_skills:
+                            # Merge with existing top_skills, prioritizing O*NET data
+                            existing_skills = domain_insights.get("top_skills", [])
+                            if not existing_skills or len(existing_skills) < 3:
+                                domain_insights["top_skills"] = onet_skills[:5]
+                            else:
+                                # Combine, removing duplicates
+                                combined = list(dict.fromkeys(existing_skills + onet_skills))
+                                domain_insights["top_skills"] = combined[:5]
+                            logger.info(f"[NEW_PIPELINE] Enriched top skills with O*NET data")
+                    
+                    # OPTIONAL: ADD CAREER PIVOT ANALYSIS (NEW FEATURE)
+                    # Only run if we have enough skills data and O*NET code
+                    if onet_code and aggregate_skills and len(aggregate_skills) >= 5:
+                        try:
+                            logger.info(f"[NEW_PIPELINE] Generating career pivot analysis...")
+                            
+                            # Extract tech skills from aggregate_skills (simple heuristic)
+                            tech_keywords = ["python", "javascript", "java", "sql", "aws", "docker", "react", "node", "git", "linux"]
+                            resume_tech = [skill for skill in aggregate_skills 
+                                         if any(keyword in skill.lower() for keyword in tech_keywords)]
+                            
+                            # Generate pivot analysis
+                            pivot_analysis = enricher.generate_career_pivot_analysis(
+                                current_onet_code=onet_code,
+                                current_job_title=job_title_for_market or extracted_job_title or "",
+                                resume_skills=aggregate_skills[:20],  # Top 20 skills
+                                resume_tech=resume_tech[:15],  # Top 15 tech skills
+                                current_wage=market_intel.get("average_wage"),
+                                location=location,
+                                geo_id=geo_id,
+                                max_pivots=3  # Limit to top 3 pivots for performance
+                            )
+                            
+                            if pivot_analysis.get("pivot_opportunities"):
+                                domain_insights["career_pivot_analysis"] = pivot_analysis
+                                logger.info(f"[NEW_PIPELINE] Added career pivot analysis with {len(pivot_analysis['pivot_opportunities'])} opportunities")
+                                
+                                # Add summary to insights list for frontend
+                                summary = pivot_analysis.get("summary", {})
+                                if summary.get("headline"):
+                                    insights_list.append(f"Career Pivot Insights: {summary['headline']}")
+                                    if summary.get("best_match"):
+                                        best = summary["best_match"]
+                                        insights_list.append(f"Best match: {best.get('title')} ({best.get('match', 0):.0f}% qualified)")
+                        except Exception as e:
+                            logger.warning(f"[NEW_PIPELINE] Career pivot analysis failed: {e}")
+                            # Non-critical feature, continue without it
+                    
                 except Exception as e:
                     logger.warning(
                         f"[NEW_PIPELINE] Market intel calculation failed: {e}"
@@ -1314,7 +1423,7 @@ Rate the alignment (0.0-1.0):"""
                                 domain_insights["salary_range"] = str(wage)
 
                     logger.info(
-                        f"[NEW_PIPELINE] Added market intel: {market_intel.get('status')}"
+                        f"[NEW_PIPELINE] Added fallback market intel: {market_intel.get('status')}"
                     )
                 else:
                     logger.warning(
