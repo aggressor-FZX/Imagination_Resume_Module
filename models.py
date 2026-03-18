@@ -80,6 +80,26 @@ class DomainInsights(BaseModel):
         None,
         description="Data USA market intelligence (demand, wages, workforce trends)",
     )
+    career_ladder: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Structured career progression ladder from entry to principal roles",
+    )
+    education_progression: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Education-to-salary progression insights",
+    )
+    skill_impact: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Skill-to-salary and high-value skill impact analysis",
+    )
+    seniority: Optional[Dict[str, Any]] = Field(
+        None,
+        description="O*NET-derived seniority/job-zone information",
+    )
+    career_pivot_analysis: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Lateral career pivot opportunities with match percentages",
+    )
 
 
 class ExperienceEntry(BaseModel):
