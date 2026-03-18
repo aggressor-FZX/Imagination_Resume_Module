@@ -96,6 +96,21 @@ class StarEditor:
         self.model = OR_SLUG_STAR_EDITOR
         self.temperature = TEMPERATURES["star_editor"]
         self.timeout = TIMEOUTS["star_editor"]
+
+    def _is_placeholder_duration(self, value: str) -> bool:
+        """Return True when duration is a known placeholder string."""
+        if not value:
+            return True
+        normalized = value.strip().lower()
+        return normalized in {
+            "duration not specified",
+            "durtion not specified",
+            "not specified",
+            "n/a",
+            "na",
+            "unknown",
+            "tbd",
+        }
         
     async def polish(self, draft_data: Dict[str, Any], 
                     research_data: Dict[str, Any],
@@ -264,7 +279,7 @@ class StarEditor:
                 details = name
                 if technologies:
                     details += f" - {', '.join(technologies[:3])}"
-                if duration:
+                if duration and not self._is_placeholder_duration(duration):
                     details += f" ({duration})"
                 prompt_parts.append(f"- {details}")
                 if description:
@@ -287,13 +302,15 @@ class StarEditor:
                         duration = match.group(1)
             
             # Extract just years from duration (e.g., "2020 - Present" or "Jan 2020 - Dec 2023")
-            if duration:
+            if duration and not self._is_placeholder_duration(duration):
                 # Find all 4-digit years
                 years = re.findall(r'\b(19|20)\d{2}\b', duration)
                 if len(years) >= 2:
                     duration = f"{years[0]} - {years[-1]}"  # "2020 - 2024"
                 elif len(years) == 1:
                     duration = years[0]  # "2020" or "Present"
+            else:
+                duration = ""
             
             # Extract location from multiple possible sources
             location_exp = exp.get("location", "")
@@ -385,6 +402,8 @@ class StarEditor:
             
             # CRITICAL: Remove any remaining placeholders
             result["final_markdown"] = self._remove_placeholders(result["final_markdown"])
+            # Normalize section spacing so section starts are easy to scan
+            result["final_markdown"] = self._normalize_section_boundaries(result["final_markdown"])
             
             return result
             
@@ -561,17 +580,47 @@ class StarEditor:
             (r'\*Unknown \| Unknown\*', ''),  # Unknown placeholder
             (r'\*Dates \| [A-Za-z\s]+\*', ''),  # Partial placeholder
             (r'\*[A-Za-z\s]+ \| Location\*', ''),  # Partial placeholder
+            (r'\s*\((?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\)', ''),
+            (r'\|\s*(?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\b', ''),
         ]
         
         result = markdown
         for pattern, replacement in placeholder_patterns:
             result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+        # Clean up separators left behind after placeholder removal.
+        result = re.sub(r'\|\s*\|', '|', result)
+        result = re.sub(r'\*\s*\|\s*', '*', result)
+        result = re.sub(r'\s{2,}', ' ', result)
         
         # Log if we removed placeholders
         if result != markdown:
             logger.warning("[STAR_EDITOR] Removed placeholder text from output")
         
         return result
+
+    def _normalize_section_boundaries(self, markdown: str) -> str:
+        """Ensure resume section headings are clearly separated by blank lines."""
+        if not markdown:
+            return markdown
+
+        result = markdown
+
+        # If model returned plain labels, promote them to markdown headers.
+        if "##" not in result:
+            for section in ["Education", "Certifications", "Projects", "Professional Experience"]:
+                pattern = rf'(?<!#)\b{re.escape(section)}\b\s*:?'
+                result = re.sub(pattern, f"\n\n## {section}\n", result, flags=re.IGNORECASE)
+
+        # Ensure known section headers start on a fresh block.
+        result = re.sub(
+            r'\s*(##\s*(Education|Certifications|Projects|Professional Experience)\b)',
+            r'\n\n\1',
+            result,
+            flags=re.IGNORECASE,
+        )
+        result = re.sub(r'\n{3,}', '\n\n', result)
+        return result.strip()
     
     def _apply_hallucination_guard(self, result: Dict[str, Any], 
                                   original_experiences: List[Dict],
