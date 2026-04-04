@@ -27,6 +27,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 from config import settings
+from role_title_sanitizer import is_valid_extracted_job_title, sanitize_experience_record
+
+
 def _structured_from_fastsvm(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not isinstance(data, dict):
         return None
@@ -754,6 +757,10 @@ def parse_experiences(text: str) -> List[Dict]:
         is_bullet = bullet_pattern.match(line)
         
         if is_job_title:
+            if not is_valid_extracted_job_title(line):
+                if current_exp and current_exp.get('lines'):
+                    current_exp['lines'].append(line)
+                continue
             # Save previous experience
             if current_exp and current_exp.get('lines'):
                 experiences.append(current_exp)
@@ -824,8 +831,8 @@ def parse_experiences(text: str) -> List[Dict]:
             "location": location,
             "description": f"{title_line} {body}"
         })
-    
-    return result
+
+    return [sanitize_experience_record(dict(e)) for e in result]
 
 
 def extract_skills_from_experience(text: str) -> Set[str]:

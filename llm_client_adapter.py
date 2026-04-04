@@ -79,19 +79,19 @@ class LLMClientAdapter:
             # Researcher: ~1100, Drafter: ~3000, Editor: ~3000
             requested_max = kwargs.get("max_tokens", 3000)
             
-            # Define hard cap - increased to support larger context windows
-            # Modern models (Gemini, GPT-4, Claude) support 100k+ context
-            # We use 20k as a reasonable ceiling for single-stage output
-            hard_cap = 20000 
-            safe_max_tokens = min(requested_max, hard_cap)
+            # Hard cap for max_tokens (callers e.g. Drafter tests may pass 32k+).
+            hard_cap = 65536
+            safe_max_tokens = min(max(requested_max, 1), hard_cap)
             
             # Call synchronous method (OpenRouterSafeClient is sync)
+            http_timeout = timeout if timeout is not None else 90
             result = self.client.call_model(
                 messages=messages,
                 model=model,
                 temperature=temperature,
                 max_tokens=safe_max_tokens,
-                fallback_models=fallback_models
+                fallback_models=fallback_models,
+                timeout=http_timeout,
             )
             
             # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)
@@ -132,11 +132,18 @@ class LLMClientAdapter:
                 
                 if choices:
                     message = choices[0].get("message", {})
-                    content = message.get("content", "")
+                    content = message.get("content") or ""
+                    if not str(content).strip():
+                        reasoning = message.get("reasoning")
+                        if isinstance(reasoning, str) and reasoning.strip():
+                            content = reasoning
                     
                     # SAFETY CHECK: Truncate if response exceeds character-based safety cap
-                    # (Roughly 4 chars per token)
+                    # JSON-object stages may receive long `reasoning` payloads (e.g. MiniMax);
+                    # allow a higher ceiling so `_extract_json_from_text` can run downstream.
                     char_limit = safe_max_tokens * 4
+                    if response_format and response_format.get("type") == "json_object":
+                        char_limit = max(char_limit, min(450_000, len(content)))
                     if len(content) > char_limit:
                         logger.warning(f"[TOKEN_GUARD] Response truncated: {len(content)} chars exceeded {char_limit} limit")
                         content = content[:char_limit]

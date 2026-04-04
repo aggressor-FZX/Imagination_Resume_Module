@@ -16,6 +16,26 @@ from pipeline_config import OR_SLUG_DRAFTER, FALLBACK_MODELS, TEMPERATURES, TIME
 
 logger = logging.getLogger(__name__)
 
+
+def _unwrap_markdown_json_fence(text: str) -> str:
+    """Strip ``` / ```json fences when providers wrap JSON despite instructions."""
+    if not text:
+        return text
+    s = text.strip()
+    if not s.startswith("```"):
+        return s
+    lines = s.splitlines()
+    body: List[str] = []
+    for i, line in enumerate(lines):
+        if i == 0 and line.strip().startswith("```"):
+            continue
+        body.append(line)
+    s = "\n".join(body).strip()
+    if "```" in s:
+        s = s[: s.rfind("```")].strip()
+    return s
+
+
 # ============================================================================
 # PROMPT TEMPLATES
 # ============================================================================
@@ -252,6 +272,7 @@ Research Insights:
             Parsed and validated draft data
         """
         try:
+            response = _unwrap_markdown_json_fence(response)
             # Handle empty, whitespace-only, or empty JSON responses
             if not response or not response.strip() or response.strip() == "{}":
                 logger.warning("[DRAFTER] Empty response from LLM")

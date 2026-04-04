@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from orchestrator import PipelineOrchestrator
 from llm_client_adapter import LLMClientAdapter
 from imaginator_flow import parse_experiences
+from role_title_sanitizer import sanitize_experience_list
 from pipeline_config import (
     OR_SLUG_STAR_EDITOR,
     OR_SLUG_JOB_TITLE_EXTRACTOR,
@@ -711,7 +712,7 @@ async def run_new_pipeline_async(
     try:
         # Use provided experience if available, otherwise parse from text
         if experience:
-            experiences = experience
+            experiences = sanitize_experience_list(experience)
             logger.info(f"[NEW_PIPELINE] Using {len(experiences)} provided professional experience entries")
         else:
             experiences = parse_experiences(resume_text)

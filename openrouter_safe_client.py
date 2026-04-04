@@ -160,7 +160,8 @@ class OpenRouterSafeClient:
         model: Optional[str] = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
-        fallback_models: Optional[List[str]] = None
+        fallback_models: Optional[List[str]] = None,
+        timeout: int = 90,
     ) -> Dict[str, Any]:
         """
         Call OpenRouter with proper request formatting and failsafe fallback.
@@ -171,6 +172,7 @@ class OpenRouterSafeClient:
             max_tokens: Max tokens in response
             temperature: Sampling temperature (0-2)
             fallback_models: Optional list of models to try if primary fails
+            timeout: HTTP read timeout in seconds for each attempt
 
         Returns:
             Response dict with 'success', 'data', 'error', and 'model_used'
@@ -187,8 +189,9 @@ class OpenRouterSafeClient:
         models_to_try = []
         if model:
             models_to_try.append(model)
-        
-        if fallback_models:
+
+        # None → use global failsafe chain; [] → primary model only (fair A/B tests)
+        if fallback_models is not None:
             models_to_try.extend(fallback_models)
         else:
             models_to_try.extend(self.FALLBACK_CHAIN)
@@ -237,7 +240,7 @@ class OpenRouterSafeClient:
                     f"{self.base_url}/chat/completions",
                     headers=headers,
                     json=payload,  # Let requests handle JSON encoding
-                    timeout=30
+                    timeout=timeout,
                 )
 
                 print(f"   📥 Response status: {response.status_code}")
@@ -248,7 +251,11 @@ class OpenRouterSafeClient:
                     # Validate response structure
                     if 'choices' in data and data['choices']:
                         message = data['choices'][0].get('message', {})
-                        content = message.get('content', '')
+                        content = message.get("content") or ""
+                        if not str(content).strip():
+                            reasoning = message.get("reasoning")
+                            if isinstance(reasoning, str) and reasoning.strip():
+                                content = reasoning
                         if content:
                             print(f"   ✅ Success with {model_id}")
                             return {

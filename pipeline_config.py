@@ -58,6 +58,8 @@ PRICING = {
     "xiaomi/mimo-v2-flash": {"input": 0.00015, "output": 0.0006}, # DEPRECATED: Hallucinates too much
     "anthropic/claude-3-haiku": {"input": 0.00025, "output": 0.00125}, # Fallback: Reliable & cheap
     "anthropic/claude-3.5-haiku": {"input": 0.0008, "output": 0.004}, # New high-quality fallback
+    # OpenRouter aggregate pricing (verify: https://openrouter.ai/models/x-ai/grok-4.1-fast )
+    "x-ai/grok-4.1-fast": {"input": 0.0002, "output": 0.0005},
     "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # DEPRECATED: 2x higher than estimated
     "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075} # Added: cheap alternative
 }
