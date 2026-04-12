@@ -115,10 +115,10 @@ OPENROUTER_APP_TITLE = "Imaginator Resume Co-Writer"
 
 # Timeout settings (seconds)
 TIMEOUTS = {
-    "researcher": 30,
-    "drafter": 45,
-    "star_editor": 30,
-    "total": 120
+    "researcher": 45,
+    "drafter": 70,
+    "star_editor": 45,
+    "total": 180
 }
 
 # Temperature settings

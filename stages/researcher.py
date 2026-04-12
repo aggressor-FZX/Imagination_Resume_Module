@@ -128,11 +128,11 @@ class Researcher:
         """
         logger.info(f"[RESEARCHER] Analyzing job ad ({len(job_ad)} chars)")
         
-        user_prompt = f"Job Description:\n\n{job_ad[:2000]}"
+        user_prompt = f"Job Description:\n\n{job_ad[:4000]}"
         
         if experiences:
             exp_text = json.dumps(experiences, indent=2)
-            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:2000]}"
+            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:4000]}"
             user_prompt += "\n\nBased on the user's profile and the job description, what IMPLIED skills do they likely possess?"
         
         try:
@@ -147,7 +147,7 @@ class Researcher:
                 temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
-                max_tokens=1024  # Token limit for Perplexity Sonar Pro output
+                max_tokens=2048  # Increased to preserve richer job-ad + experience context
             )
             
             # Parse and validate response

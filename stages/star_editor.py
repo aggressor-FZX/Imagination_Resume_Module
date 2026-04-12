@@ -161,7 +161,8 @@ class StarEditor:
                 model=self.model,
                 temperature=temperature,
                 response_format={"type": "json_object"},
-                timeout=self.timeout
+                timeout=self.timeout,
+                max_tokens=6000,
             )
             
             # Parse and validate response
@@ -240,7 +241,7 @@ class StarEditor:
         # Add education section
         if education:
             prompt_parts.append("\nEDUCATION TO INCLUDE:")
-            for edu in education[:5]:  # Limit to 5 entries
+            for edu in education[:10]:  # Increased context window
                 degree = edu.get("degree", "")
                 institution = edu.get("institution", "")
                 dates = edu.get("dates", "")
@@ -257,7 +258,7 @@ class StarEditor:
         # Add certifications section
         if certifications:
             prompt_parts.append("\nCERTIFICATIONS TO INCLUDE:")
-            for cert in certifications[:5]:  # Limit to 5 entries
+            for cert in certifications[:10]:  # Increased context window
                 name = cert.get("name", "")
                 issuer = cert.get("issuer", "")
                 year = cert.get("year", "")
@@ -271,7 +272,7 @@ class StarEditor:
         # Add projects section (for students/career changers)
         if projects:
             prompt_parts.append("\nPROJECTS TO INCLUDE:")
-            for proj in projects[:5]:  # Limit to 5 entries
+            for proj in projects[:10]:  # Increased context window
                 name = proj.get("name", "")
                 description = proj.get("description", "")
                 technologies = proj.get("technologies", [])
@@ -287,7 +288,7 @@ class StarEditor:
         
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
-        for i, exp in enumerate(experiences[:10], 1):  # Limit to 10 experiences
+        for i, exp in enumerate(experiences[:20], 1):  # Increased context window
             company = exp.get("company", "Company")
             role = exp.get("role") or exp.get("title", "Role")
             
@@ -344,7 +345,7 @@ class StarEditor:
                     header += f" | {location}"
             
             prompt_parts.append(f"\n{header}")
-            for bullet in bullets[:6]:  # Limit to 6 bullets per experience
+            for bullet in bullets[:12]:  # Increased context window
                 prompt_parts.append(f"   - {bullet}")
         
         # Add formatting instructions
@@ -593,6 +594,9 @@ class StarEditor:
             (r'\*Unknown \| Unknown\*', ''),  # Unknown placeholder
             (r'\*Dates \| [A-Za-z\s]+\*', ''),  # Partial placeholder
             (r'\*[A-Za-z\s]+ \| Location\*', ''),  # Partial placeholder
+            (r'\b20XX\b', ''),  # Placeholder year tokens
+            (r'\bXX/XX\b', ''),  # Placeholder date fragments
+            (r'\bLocation\b', ''),  # Placeholder location tokens
             (r'\s*\((?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\)', ''),
             (r'\|\s*(?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\b', ''),
         ]

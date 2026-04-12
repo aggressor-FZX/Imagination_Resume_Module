@@ -123,7 +123,7 @@ class PipelineOrchestrator:
                 )
                 # Merge projects into experiences for students/career changers
                 # Each project should have: name, description, technologies, duration
-                for proj in projects[:3]:  # Limit to 3 projects
+                for proj in projects[:6]:  # Increased context window
                     if isinstance(proj, dict):
                         # Skip if already in experiences (deduplication)
                         proj_name = proj.get("name", "Personal Project")
@@ -455,7 +455,7 @@ class PipelineOrchestrator:
         # Simple markdown generation from experiences
         markdown_lines = ["## Professional Experience"]
 
-        for exp in experiences[:3]:  # Limit to 3 experiences
+        for exp in experiences[:6]:  # Increased fallback coverage
             company = (
                 exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
             )

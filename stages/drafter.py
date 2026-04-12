@@ -212,7 +212,7 @@ User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
 {json.dumps(experiences, indent=2)}
 
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
-{job_ad[:1000]}
+{job_ad[:2000]}
 
 Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
@@ -232,7 +232,8 @@ Research Insights:
                 temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
-                fallback_models=self.fallback_models
+                fallback_models=self.fallback_models,
+                max_tokens=6000,
             )
             
             # Parse and validate response
