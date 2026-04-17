@@ -128,7 +128,7 @@ class Researcher:
         """
         logger.info(f"[RESEARCHER] Analyzing job ad ({len(job_ad)} chars)")
         
-        user_prompt = f"Job Description:\n\n{job_ad[:4000]}"
+        user_prompt = f"Job Description:\n\n{job_ad[:9000]}"
         
         if experiences:
             exp_text = json.dumps(experiences, indent=2)

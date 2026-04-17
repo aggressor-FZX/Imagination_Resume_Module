@@ -1960,7 +1960,7 @@ Candidate Job Titles: {job_titles_text}
 Extracted Skills: {skills_text}
 
 Target Job Description:
-{job_ad[:1000]}
+{job_ad[:9000]}
 
 Find: implied skills, typical metrics, STAR pattern examples."""  # Minimal prompt for cost
     
@@ -2178,7 +2178,7 @@ WEB RESEARCH INSIGHTS (DeepSeek Search):
 - Research Notes: {research_notes[:1000]}
 
 TARGET JOB DESCRIPTION:
-{job_ad[:3000]}
+{job_ad[:9000]}
 
 CANDIDATE'S ACTUAL EXPERIENCES (fit within context):
 {experiences_text}
@@ -2416,7 +2416,7 @@ RESEARCH INSIGHTS:
 - Research Notes: {research_data.get('research_notes', '')[:400]}
 
 TARGET JOB DESCRIPTION:
-{job_ad[:1000]}
+{job_ad[:9000]}
 
 TASK:
 Create a complete professional resume. Use ONLY the provided information.
