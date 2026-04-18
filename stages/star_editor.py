@@ -185,6 +185,9 @@ class StarEditor:
                 "quantification_check": self._check_quantification(result.get("final_markdown", ""))
             })
             
+            # Validate metrics - remove any that weren't in the original input
+            result = self._validate_metrics_against_input(result, experiences)
+            
             # Ensure we have at least some data
             if not result.get("final_markdown"):
                 result["final_markdown"] = "## Professional Experience\n\nNo resume content generated."
@@ -766,6 +769,51 @@ class StarEditor:
             "quantification_score": score,
             "needs_improvement": score < 0.8 and total_bullets > 0
         }
+    
+    def _validate_metrics_against_input(self, result: Dict[str, Any], experiences: List[Dict]) -> Dict[str, Any]:
+        """
+        Remove fabricated metrics that weren't in the original input.
+        
+        Looks for percentage/dollar/time metrics in output and validates they exist in input.
+        """
+        markdown = result.get("final_markdown", "")
+        original_text = " ".join([exp.get("snippet", "") + " " + exp.get("body", "") for exp in experiences])
+        original_text_lower = original_text.lower()
+        
+        # Find all metrics in the output
+        metric_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(%|percent|\$\d+|k|thousand|million|billion|hours|days|weeks|months|years)', re.IGNORECASE)
+        
+        def is_metric_in_original(match):
+            value = match.group(1)
+            unit = match.group(2).lower()
+            # Check if this exact value appears near similar context in original
+            # Simple check: does "value" appear within reasonable distance of unit words?
+            search_str = f"{value} {unit}"
+            search_str_alt = f"{value}{unit}"
+            return search_str in original_text_lower or search_str_alt in original_text_lower
+        
+        # Remove metrics not in original
+        new_lines = []
+        for line in markdown.split('\n'):
+            if line.strip().startswith('-'):
+                # Check each metric in this line
+                new_line = line
+                for match in metric_pattern.finditer(line):
+                    if not is_metric_in_original(match):
+                        # Remove this metric (replace with nothing, or keep just the number if it makes sense)
+                        metric_str = match.group(0)
+                        # Remove the metric but keep context if possible
+                        new_line = new_line.replace(metric_str, "").replace("  ", " ").strip()
+                        logger.warning(f"[STAR_EDITOR] Removed fabricated metric: {metric_str}")
+                new_lines.append(new_line)
+            else:
+                new_lines.append(line)
+        
+        result["final_markdown"] = "\n".join(new_lines)
+        result["final_plain_text"] = re.sub(r'\*\*|\*|##|- ', '', result["final_markdown"])
+        result["hallucination_checked"] = True
+        
+        return result
     
     def _create_fallback_output(self, experiences: List[Dict], seniority: str) -> Dict[str, Any]:
         """
