@@ -128,11 +128,11 @@ class Researcher:
         """
         logger.info(f"[RESEARCHER] Analyzing job ad ({len(job_ad)} chars)")
         
-        user_prompt = f"Job Description:\n\n{job_ad[:9000]}"
+        user_prompt = f"Job Description:\n\n{job_ad[:1500]}"
         
         if experiences:
             exp_text = json.dumps(experiences, indent=2)
-            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:4000]}"
+            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:1000]}"
             user_prompt += "\n\nBased on the user's profile and the job description, what IMPLIED skills do they likely possess?"
         
         try:

@@ -871,7 +871,7 @@ async def run_new_pipeline_async(
             )
             try:
                 title_sys_prompt = 'You are a precise job data extractor. Extract the official Job Title from the provided text. Return JSON: {"job_title": "..."}'
-                title_user_prompt = f"Job Description Segment:\n{job_ad[:9000]}\n\nExtract the Job Title:"
+                title_user_prompt = f"Job Description Segment:\n{job_ad[:400]}\n\nExtract the Job Title:"
 
                 title_response = await llm_client.call_llm_async(
                     system_prompt=title_sys_prompt,
@@ -966,10 +966,10 @@ async def run_new_pipeline_async(
             system_prompt = """You are an ATS (Applicant Tracking System) scorer. Review the resume section and provide a JSON object with a single key "score" (float 0.0-1.0) indicating alignment with the job description. Higher scores mean better alignment."""
 
             user_prompt = f"""Job Description:
-{job_ad[:9000]}
+{job_ad[:1500]}
 
 Generated Resume Section:
-{final_output.get("final_written_section_markdown", "")[:6000]}
+{final_output.get("final_written_section_markdown", "")[:2000]}
 
 Rate the alignment (0.0-1.0):"""
 

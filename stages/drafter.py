@@ -212,7 +212,7 @@ User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
 {json.dumps(experiences, indent=2)}
 
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
-{job_ad[:9000]}
+{job_ad[:500]}
 
 Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}

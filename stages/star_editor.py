@@ -241,7 +241,7 @@ class StarEditor:
         # Add education section
         if education:
             prompt_parts.append("\nEDUCATION TO INCLUDE:")
-            for edu in education[:10]:  # Increased context window
+            for edu in education[:5]:  # Limit education entries
                 degree = edu.get("degree", "")
                 institution = edu.get("institution", "")
                 dates = edu.get("dates", "")
@@ -258,7 +258,7 @@ class StarEditor:
         # Add certifications section
         if certifications:
             prompt_parts.append("\nCERTIFICATIONS TO INCLUDE:")
-            for cert in certifications[:10]:  # Increased context window
+            for cert in certifications[:5]:  # Limit certification entries
                 name = cert.get("name", "")
                 issuer = cert.get("issuer", "")
                 year = cert.get("year", "")
@@ -272,7 +272,7 @@ class StarEditor:
         # Add projects section (for students/career changers)
         if projects:
             prompt_parts.append("\nPROJECTS TO INCLUDE:")
-            for proj in projects[:10]:  # Increased context window
+            for proj in projects[:5]:  # Limit project entries
                 name = proj.get("name", "")
                 description = proj.get("description", "")
                 technologies = proj.get("technologies", [])
@@ -288,7 +288,7 @@ class StarEditor:
         
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
-        for i, exp in enumerate(experiences[:20], 1):  # Increased context window
+        for i, exp in enumerate(experiences[:10], 1):  # Limit to 10 most relevant experiences
             company = exp.get("company", "Company")
             role = exp.get("role") or exp.get("title", "Role")
             
@@ -345,7 +345,7 @@ class StarEditor:
                     header += f" | {location}"
             
             prompt_parts.append(f"\n{header}")
-            for bullet in bullets[:12]:  # Increased context window
+            for bullet in bullets[:6]:  # Limit to 6 bullets per experience
                 prompt_parts.append(f"   - {bullet}")
         
         # Add formatting instructions
@@ -787,7 +787,7 @@ class StarEditor:
             
             markdown_lines.append(f"\n**{role}** at *{company}*")
             
-            for bullet in bullets[:2]:  # Limit to 2 bullets per experience
+            for bullet in bullets[:6]:  # Limit to 6 bullets per experience
                 markdown_lines.append(f"- {bullet}")
         
         markdown = "\n".join(markdown_lines)

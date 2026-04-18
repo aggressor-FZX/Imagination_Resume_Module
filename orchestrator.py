@@ -123,7 +123,7 @@ class PipelineOrchestrator:
                 )
                 # Merge projects into experiences for students/career changers
                 # Each project should have: name, description, technologies, duration
-                for proj in projects[:6]:  # Increased context window
+                for proj in projects[:3]:  # Limit projects
                     if isinstance(proj, dict):
                         # Skip if already in experiences (deduplication)
                         proj_name = proj.get("name", "Personal Project")

@@ -1,0 +1,1008 @@
+{
+  "meta": {
+    "generated_at": "2026-04-04T04:06:10.235034+00:00",
+    "resume_path": "/mnt/c/Users/jeffd/latexRoot/My_resume_tests/combined_resumes.txt",
+    "parsed_count": 17,
+    "drafter_input_roles": 10,
+    "models": [
+      "anthropic/claude-3.5-haiku",
+      "x-ai/grok-4.1-fast",
+      "xiaomi/mimo-v2-flash",
+      "qwen/qwen-3.6-plus-preview",
+      "qwen/qwen3.6-plus:free",
+      "minimax/minimax-m2.1"
+    ],
+    "job_title_context": "Senior Analytics Engineer",
+    "drafter_max_tokens": 32768
+  },
+  "job_ad": "SkyHarbor Analytics \u2014 Senior Analytics Engineer (Remote, US)\n\nWe ingest 4B+ events/day into NebulaForge, our real-time lakehouse. You will own\npipelines (Python, SQL, Spark), QuantMesh metric stores, and sub-40ms p99 dashboards\nfor executive KPIs. Partner with ML on feature stores; enforce data contracts;\nmentor two junior engineers. Requires AWS or GCP, Airflow or Dagster, and a track\nrecord of measurable reliability wins \u2014 not slide decks.\n\nNice-to-have: experience with government or regulated telemetry, on-call rotation,\nand cost guardrails for big batch + streaming stacks.",
+  "upstream_simulation": {
+    "hermes_style": {
+      "note": "Simulated structured extraction from document text",
+      "aggregate_entities": {
+        "organizations": [
+          "University of Maryland College Park",
+          "Washington State Data Exchange for Public SafetyInternship",
+          "Naval Research Laboratory",
+          "APIs databases and Smartsheet Project",
+          "National Oceanic and Atmospheric Administration (NOAA)",
+          "Connect AI Club, Everett Community College"
+        ],
+        "roles": [
+          "Operations Analyst",
+          "President",
+          "Operations Manager",
+          "Research Physicist",
+          "Commissioned Officer (National Oceanic & Atmospheric Administration) Newport",
+          "Research Physicist (Naval Research Laboratory) Washington",
+          "Faculty Assistant Researcher (University of Maryland College Park) College Park",
+          "Aerospace Ground Equipment Mechanic (United States Air Force) World Wide 05/2002 - 01/2010",
+          "Director for shore-side support of 13 oceanographic research. Used Python",
+          "Faculty Assistant Researcher"
+        ],
+        "skills_flat": [
+          "AWS",
+          "Azure",
+          "C++",
+          "Cross-functional Teams",
+          "Data Analysis",
+          "Deep Learning",
+          "Docker",
+          "Go",
+          "Hadoop",
+          "Java",
+          "JavaScript",
+          "Kubernetes",
+          "Leadership",
+          "Machine Learning",
+          "MongoDB",
+          "Project Management",
+          "PyTorch",
+          "Python",
+          "Ruby",
+          "Rust",
+          "SQL",
+          "Scikit-learn",
+          "TensorFlow"
+        ]
+      }
+    },
+    "fastsvm_style": {
+      "title": "Analytics / Data Engineering",
+      "canonical_title": "Senior Analytics Engineer",
+      "overall_confidence": 0.86,
+      "skills": [
+        {
+          "skill": "aws",
+          "confidence": 0.75
+        },
+        {
+          "skill": "azure",
+          "confidence": 0.77
+        },
+        {
+          "skill": "c++",
+          "confidence": 0.79
+        },
+        {
+          "skill": "cross-functional_teams",
+          "confidence": 0.81
+        },
+        {
+          "skill": "data_analysis",
+          "confidence": 0.83
+        },
+        {
+          "skill": "deep_learning",
+          "confidence": 0.75
+        },
+        {
+          "skill": "docker",
+          "confidence": 0.77
+        },
+        {
+          "skill": "go",
+          "confidence": 0.79
+        },
+        {
+          "skill": "hadoop",
+          "confidence": 0.81
+        },
+        {
+          "skill": "java",
+          "confidence": 0.83
+        },
+        {
+          "skill": "javascript",
+          "confidence": 0.75
+        },
+        {
+          "skill": "kubernetes",
+          "confidence": 0.77
+        },
+        {
+          "skill": "leadership",
+          "confidence": 0.79
+        },
+        {
+          "skill": "machine_learning",
+          "confidence": 0.81
+        },
+        {
+          "skill": "mongodb",
+          "confidence": 0.83
+        },
+        {
+          "skill": "project_management",
+          "confidence": 0.75
+        },
+        {
+          "skill": "pytorch",
+          "confidence": 0.77
+        },
+        {
+          "skill": "python",
+          "confidence": 0.79
+        },
+        {
+          "skill": "ruby",
+          "confidence": 0.81
+        },
+        {
+          "skill": "rust",
+          "confidence": 0.83
+        },
+        {
+          "skill": "sql",
+          "confidence": 0.75
+        },
+        {
+          "skill": "scikit-learn",
+          "confidence": 0.77
+        },
+        {
+          "skill": "tensorflow",
+          "confidence": 0.79
+        }
+      ]
+    }
+  },
+  "researcher_output": {
+    "implied_metrics": [
+      "Must be able to handle 4B+ events/day (Context: Real-time lakehouse ingestion)",
+      "Must be able to deliver sub-40ms p99 dashboards (Context: Executive KPI reporting)",
+      "Must have a track record of measurable reliability wins (Context: General requirement for Senior Analytics Engineer)"
+    ],
+    "domain_vocab": [
+      "Python",
+      "SQL",
+      "Spark",
+      "QuantMesh",
+      "NebulaForge",
+      "AWS",
+      "GCP",
+      "Airflow",
+      "Dagster",
+      "Lakehouse",
+      "ETL",
+      "Feature Stores",
+      "Data Contracts",
+      "Telemetry",
+      "On-call rotation",
+      "Cost guardrails",
+      "LLMs",
+      "Vector Databases"
+    ],
+    "implied_skills": [
+      "Real-time Data Ingestion & Processing (Implied by 'Architect and deploy end-to-end ETL pipelines in SQL and Python, integrating diverse data sources to power real-time' and 'analyzing sensor and sonar data to proactively mitigate risks')",
+      "Data Lakehouse Management (Implied by experience with ETL pipelines, diverse data sources, and real-time processing, which are foundational to lakehouse architectures)",
+      "Metric Store Design & Implementation (Implied by 'define key performance metrics' and 'automated data pipelines for weather and oceanographic' combined with ETL experience)",
+      "Low-latency Dashboarding (Implied by 'real-time' data processing and 'decision-support tools' for operations, which often require quick data visualization)",
+      "Feature Store Collaboration (Implied by 'data-driven' solutions, 'automated data pipelines', and 'LLMs, cloud platforms, and vector databases' in projects, indicating familiarity with data preparation for ML)",
+      "Data Contract Enforcement (Implied by 'rigorous quality standards' in projects and 'translate business requirements into data-driven' solutions, which necessitate data governance)",
+      "Mentorship & Leadership (Explicitly stated 'Coach peers' and 'Facilitate client-style workshops' and 'Led cross-discipline teams')",
+      "Cloud Platform Experience (Explicitly stated 'cloud platforms' in projects, aligning with AWS/GCP requirement)",
+      "Workflow Orchestration (Implied by 'Architect and deploy end-to-end ETL pipelines' and 'automated data pipelines', which often utilize tools like Airflow/Dagster)",
+      "Data Reliability & Quality Assurance (Implied by 'rigorous quality standards', 'proactively mitigate risks', and 'reducing manual reporting overhead')",
+      "Cost Optimization for Data Stacks (Implied by 'reducing manual reporting overhead by 40%' and general operational efficiency focus, which often includes resource management)",
+      "Government/Regulated Telemetry Experience (Explicitly stated 'Partner with law-enforcement and EMS stakeholders' and 'National Oceanic and Atmospheric Administration (NOAA)' and 'Naval Research Laboratory')"
+    ],
+    "work_archetypes": [
+      "Scaling/Optimization",
+      "Greenfield Build"
+    ],
+    "has_projects_section": true,
+    "is_student_or_career_changer": true,
+    "insider_tips": "Frame past operational and research roles as direct experience in building robust, high-performance data systems. Emphasize how 'reducing manual reporting overhead' and 'proactively mitigating risks' directly translate to 'measurable reliability wins' and 'cost guardrails' in a data engineering context.",
+    "model_used": "google/gemini-2.5-flash"
+  },
+  "drafter_input_experiences": [
+    {
+      "company": "Washington State Data Exchange for Public SafetyInternship",
+      "role": "Operations Analyst",
+      "duration": "",
+      "location": "",
+      "bullets": [
+        "Partnerwithlaw -enforcementandEMSstakeholderstomapcriticalworkflows,translatebusinessrequirementsintodata -driven",
+        "Architect and deploy end -to-end ETL pipelines in SQL and Python, integrating diverse data sources to power real -time"
+      ]
+    },
+    {
+      "company": "Connect AI Club, Everett Community College",
+      "role": "President",
+      "duration": "",
+      "location": "",
+      "bullets": [
+        "Spearheadstudentconsultingprojects,employingLLMs,cloudplatforms,andvectordatabasestodeliverPoCsthatsolve",
+        "Coach peers on prompt engineering, iterative model tuning, and data storytelling to effectively communicate AI outcomes to",
+        "Facilitate client -style workshops and code reviews, ensuring rigorous quality standards and fostering collaborative innovation."
+      ]
+    },
+    {
+      "company": "National Oceanic and Atmospheric Administration (NOAA)",
+      "role": "Operations Manager",
+      "duration": "",
+      "location": "support tools, reducing manual reporting overhead by",
+      "bullets": [
+        "Directedenterpriseoperationsacross13researchvessels,analyzingsensorandsonardatatoproactivelymitigaterisksand",
+        "Led cross -discipline teams to design Python -based decision -support tools, reducing manual reporting overhead by 40% and",
+        "Launched a novel Government Official Travel database and user interface, achieving 85% administrator adoption within",
+        "Consulted with operations leads to define key performance metrics, automated data pipelines for weather and oceanographic",
+        "DevelopedPythonGUIsandreportingscriptstostreamlinevesseldataingestionandfosteredcross -teamcollaborationon"
+      ]
+    },
+    {
+      "company": "Naval Research Laboratory",
+      "role": "Research Physicist",
+      "duration": "1/2014 - 6/2016",
+      "location": "",
+      "bullets": [
+        "Collaboratedonmulti -million-dollarR&amp;Dprojects,guidingmodeloptimizationforradiationdetectionandadvising",
+        "Translated complex simulation results into executive briefings, securing $500K in incremental funding and strengthening"
+      ]
+    },
+    {
+      "company": "Unknown",
+      "role": "Commissioned Officer (National Oceanic & Atmospheric Administration) Newport",
+      "duration": "06/2016 - 05/2023",
+      "location": "Newport, OR",
+      "bullets": [
+        "Led in the acquisition of hydrographic data using remote sensing and automated systems.",
+        "Applied coding skills to automate DVD library inventory tracking, implemented GUI-based Sea Service letter generator, and spearheaded",
+        "Served as Ancillary Data Manager; configured the Science Computing System, connected/ configured sensor to SCS servers, configured"
+      ]
+    },
+    {
+      "company": "Unknown",
+      "role": "Research Physicist (Naval Research Laboratory) Washington",
+      "duration": "01/2014 - 06/2016",
+      "location": "Washington, DC",
+      "bullets": [
+        "Utilized high performance computing to conduct critical studies on radiation detection for border security applications.",
+        "Supported software development to predict active interrogation procedures and passive detection of WMD/radiological devices.",
+        "Designed graphic user interface for fast implementation of scenario-based radiation simulation software running on Linux."
+      ]
+    },
+    {
+      "company": "Unknown",
+      "role": "Faculty Assistant Researcher (University of Maryland College Park) College Park",
+      "duration": "01/2013 - 04/2015",
+      "location": "College Park, MD",
+      "bullets": [
+        "Designed software for data analysis and publication quality plots in particle physics experiments.",
+        "Co-authored publications on experiments conducted at the Large Hadron Collider, contributing to scientific knowledge.",
+        "Developed simulations for radiation studies and efficiency quantifications with programming skills in C++ and Python."
+      ]
+    },
+    {
+      "company": "Unknown",
+      "role": "Aerospace Ground Equipment Mechanic (United States Air Force) World Wide 05/2002 - 01/2010",
+      "duration": "05/2002 - 01/2010",
+      "location": "",
+      "bullets": [
+        "Administered equipment databases, supervised maintenance operations, and ensured aircraft data availability.",
+        "Maintained aircraft maintenance records supporting F-16 fighter jets and presented readiness statistics to base leadership.",
+        "Excelled in interpreting technical schematics and delivering precise information."
+      ]
+    },
+    {
+      "company": "APIs databases and Smartsheet Project",
+      "role": "Director for shore-side support of 13 oceanographic research. Used Python",
+      "duration": "12/2016 - 5/2019",
+      "location": "",
+      "bullets": [
+        "Instituted metric tracking systems and led status briefing Director to fleet leadership research vessels. Synthesized",
+        "Initiated data-driven process-improvements with cross-functional teams. Prepared presentations for senior executives",
+        "Managed databases, security and infrastructure, project management software, dashboard creation and real-time",
+        "Developed new Government Official Travel database and user interface; Managed ingestion architecture: collection,",
+        "Detected workflow inefficiencies and automated repetitive task. Conceived and presented solutions; implemented",
+        "Used Python, ArcGIS, and CARIS to visualize ocean floor; researched unsupervised learning techniques to detect"
+      ]
+    },
+    {
+      "company": "University of Maryland College Park",
+      "role": "Faculty Assistant Researcher",
+      "duration": "1/2013 - 4/2015",
+      "location": "",
+      "bullets": [
+        "Performed simulation studies and constructed gradient-based solvers using Hadoop and LHC computing grid.",
+        "Designed software and used distributed computing to analyze particle accelerator data. Generated publication quality",
+        "Co-authored publications on experiments conducted at the Large Hadron Collider."
+      ]
+    }
+  ],
+  "results": [
+    {
+      "model": "anthropic/claude-3.5-haiku",
+      "seconds": 16.94,
+      "error": null,
+      "rubric": {
+        "bullet_count": 11,
+        "quantification_score": 0.455,
+        "has_placeholders": false,
+        "fallback": false,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 0,
+        "avg_bullet_len": 148.3
+      },
+      "draft": {
+        "rewritten_experiences": [
+          {
+            "company": "National Oceanic and Atmospheric Administration (NOAA)",
+            "role": "Operations Manager",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Collaborated with cross-discipline teams to design Python-based decision-support tools, reducing manual reporting overhead by 40% and enhancing operational efficiency",
+              "Consulted with operations leads to define and automate key performance metrics for weather and oceanographic data pipelines, enabling real-time insights across 13 research vessels",
+              "Launched enterprise travel database with user interface achieving 85% administrator adoption, streamlining data management and reporting processes"
+            ],
+            "metrics_used": [
+              "40% reporting overhead reduction",
+              "85% adoption rate",
+              "13 research vessels"
+            ],
+            "style_transfer_rationale": "Mapped NOAA experience to analytics engineering requirements of pipeline design and metric tracking"
+          },
+          {
+            "company": "Washington State Data Exchange for Public SafetyInternship",
+            "role": "Operations Analyst",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Collaborated with law enforcement and EMS stakeholders to architect end-to-end ETL pipelines using SQL and Python, integrating diverse data sources for real-time operational insights",
+              "Translated complex business requirements into data-driven workflow solutions, enabling more efficient cross-agency information exchange"
+            ],
+            "metrics_used": [
+              "Multiple data source integration"
+            ],
+            "style_transfer_rationale": "Highlighted ETL and data integration skills relevant to analytics engineering"
+          },
+          {
+            "company": "APIs databases and Smartsheet Project",
+            "role": "Director for shore-side support of 13 oceanographic research",
+            "duration": "",
+            "location": "support tools, reducing manual reporting overhead by",
+            "bullets": [
+              "Developed data infrastructure using Python, ArcGIS, and CARIS to visualize ocean floor data and implement unsupervised learning techniques for advanced pattern detection",
+              "Instituted metric tracking systems and led status briefings for fleet leadership, synthesizing complex research data into actionable insights",
+              "Managed databases, security infrastructure, and project management software to support cross-functional data analysis initiatives"
+            ],
+            "metrics_used": [
+              "13 research vessels supported"
+            ],
+            "style_transfer_rationale": "Emphasized data infrastructure, visualization, and metric tracking skills"
+          },
+          {
+            "company": "Connect AI Club, Everett Community College",
+            "role": "President",
+            "duration": "1/2014 - 6/2016",
+            "location": "",
+            "bullets": [
+              "Spearheaded student consulting projects utilizing LLMs, cloud platforms, and vector databases to develop proof-of-concept solutions",
+              "Coached peers on prompt engineering and iterative model tuning, demonstrating advanced data storytelling and technical communication skills",
+              "Facilitated code reviews and client-style workshops to maintain rigorous quality standards in data and AI projects"
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Highlighted technical leadership and data engineering adjacent skills"
+          }
+        ],
+        "seniority_applied": "junior",
+        "total_bullets": 11,
+        "quantified_bullets": 5,
+        "quantification_score": 0.455,
+        "has_placeholders": false,
+        "fallback": false,
+        "model_requested": "anthropic/claude-3.5-haiku"
+      }
+    },
+    {
+      "model": "x-ai/grok-4.1-fast",
+      "seconds": 40.12,
+      "error": null,
+      "rubric": {
+        "bullet_count": 33,
+        "quantification_score": 0.364,
+        "has_placeholders": false,
+        "fallback": false,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 3,
+        "avg_bullet_len": 97.7
+      },
+      "draft": {
+        "rewritten_experiences": [
+          {
+            "company": "Washington State Data Exchange for Public SafetyInternship",
+            "role": "Operations Analyst",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Collaborated on mapping critical workflows with law-enforcement and EMS stakeholders to translate business requirements into data-driven solutions.",
+              "Built end-to-end ETL pipelines using SQL and Python, integrating diverse data sources to power real-time analytics."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Aligned ETL pipelines and real-time integration with target role's emphasis on data ingestion and processing pipelines."
+          },
+          {
+            "company": "Connect AI Club, Everett Community College",
+            "role": "President",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Built student consulting projects using LLMs, cloud platforms, and vector databases to deliver PoCs solving real-world problems.",
+              "Helped peers with prompt engineering, iterative model tuning, and data storytelling to communicate AI outcomes effectively.",
+              "Supported workshops and code reviews to enforce quality standards and foster collaborative innovation."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped AI data handling and vector databases to feature store collaboration and ML partnerships in the job context."
+          },
+          {
+            "company": "National Oceanic and Atmospheric Administration (NOAA)",
+            "role": "Operations Manager",
+            "duration": "",
+            "location": "support tools, reducing manual reporting overhead by",
+            "bullets": [
+              "Supported operations across 13 research vessels, analyzing sensor and sonar data to mitigate risks proactively.",
+              "Collaborated on Python-based decision-support tools, reducing manual reporting overhead by 40%.",
+              "Built Government Official Travel database and UI, achieving 85% administrator adoption.",
+              "Contributed to key performance metrics and automated data pipelines for weather and oceanographic data.",
+              "Built Python GUIs and reporting scripts to streamline vessel data ingestion and cross-team collaboration."
+            ],
+            "metrics_used": [
+              "13 research vessels",
+              "40% reduction in manual reporting",
+              "85% administrator adoption"
+            ],
+            "style_transfer_rationale": "Front-loaded Python tools, pipelines, and metrics to target metric stores, low-latency dashboards, and KPI reporting."
+          },
+          {
+            "company": "Naval Research Laboratory",
+            "role": "Research Physicist",
+            "duration": "1/2014 - 6/2016",
+            "location": "",
+            "bullets": [
+              "Collaborated on multi-million-dollar R&D projects, optimizing models for radiation detection simulations.",
+              "Translated simulation results into executive briefings, securing $500K in incremental funding.",
+              "Supported high-performance computing studies on radiation detection for border security applications.",
+              "Contributed to software development for predicting WMD detection procedures.",
+              "Built GUI for scenario-based radiation simulation software running on Linux."
+            ],
+            "metrics_used": [
+              "multi-million-dollar R&D",
+              "$500K funding"
+            ],
+            "style_transfer_rationale": "Emphasized simulation software and HPC to align with data processing reliability and analytics engineering tasks."
+          },
+          {
+            "company": "Unknown",
+            "role": "Commissioned Officer (National Oceanic & Atmospheric Administration) Newport",
+            "duration": "06/2016 - 05/2023",
+            "location": "Newport, OR",
+            "bullets": [
+              "Supported hydrographic data acquisition using remote sensing and automated systems.",
+              "Built automations for DVD library inventory tracking and GUI-based Sea Service letter generator.",
+              "Configured Science Computing System and sensor connections to SCS servers as Ancillary Data Manager."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Highlighted data management and sensor configuration relevant to telemetry and real-time data handling."
+          },
+          {
+            "company": "Unknown",
+            "role": "Faculty Assistant Researcher (University of Maryland College Park) College Park",
+            "duration": "01/2014 - 06/2016",
+            "location": "Washington, DC",
+            "bullets": [
+              "Built software for data analysis and publication-quality plots in particle physics experiments.",
+              "Contributed to co-authored publications on Large Hadron Collider experiments.",
+              "Developed C++ and Python simulations for radiation studies and efficiency quantifications.",
+              "Supported distributed computing analysis of particle accelerator data using Hadoop and LHC grid."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped distributed computing and data analysis software to scalable processing and analytics pipelines."
+          },
+          {
+            "company": "Unknown",
+            "role": "Aerospace Ground Equipment Mechanic (United States Air Force) World Wide 05/2002 - 01/2010",
+            "duration": "01/2013 - 04/2015",
+            "location": "College Park, MD",
+            "bullets": [
+              "Supported equipment databases and maintenance operations to ensure aircraft data availability.",
+              "Maintained F-16 maintenance records and presented readiness statistics to base leadership."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Connected database support and reporting to foundational data management skills for analytics roles."
+          },
+          {
+            "company": "APIs databases and Smartsheet Project",
+            "role": "Director for shore-side support of 13 oceanographic research. Used Python",
+            "duration": "05/2002 - 01/2010",
+            "location": "",
+            "bullets": [
+              "Contributed to metric tracking systems and status briefings for 13 research vessels.",
+              "Supported data-driven process improvements and executive presentations with cross-functional teams.",
+              "Managed databases, security, infrastructure, Smartsheet dashboards, and real-time monitoring.",
+              "Built Government Official Travel database and ingestion architecture for data collection.",
+              "Automated repetitive tasks to resolve detected workflow inefficiencies.",
+              "Built ocean floor visualizations using Python, ArcGIS, and CARIS; researched unsupervised learning detection techniques."
+            ],
+            "metrics_used": [
+              "13 research vessels"
+            ],
+            "style_transfer_rationale": "Linked Python visualizations, dashboards, and automation to executive KPIs and real-time metric stores."
+          },
+          {
+            "company": "University of Maryland College Park",
+            "role": "Faculty Assistant Researcher",
+            "duration": "12/2016 - 5/2019",
+            "location": "",
+            "bullets": [
+              "Supported simulation studies and gradient-based solvers using Hadoop and LHC computing grid.",
+              "Built software for distributed computing analysis of particle accelerator data and publication-quality plots.",
+              "Contributed to co-authored publications on Large Hadron Collider experiments."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Emphasized Hadoop and grid computing to parallel target role's high-volume data processing needs."
+          }
+        ],
+        "seniority_applied": "junior",
+        "total_bullets": 33,
+        "quantified_bullets": 12,
+        "quantification_score": 0.364,
+        "has_placeholders": false,
+        "fallback": false,
+        "model_requested": "x-ai/grok-4.1-fast"
+      }
+    },
+    {
+      "model": "xiaomi/mimo-v2-flash",
+      "seconds": 11.18,
+      "error": null,
+      "rubric": {
+        "bullet_count": 21,
+        "quantification_score": 0.381,
+        "has_placeholders": false,
+        "fallback": false,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 4,
+        "avg_bullet_len": 121.7
+      },
+      "draft": {
+        "rewritten_experiences": [
+          {
+            "company": "Washington State Data Exchange for Public SafetyInternship",
+            "role": "Operations Analyst",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Assisted in mapping critical workflows with law enforcement and EMS stakeholders, translating business requirements into data-driven solutions.",
+              "Contributed to building end-to-end ETL pipelines in SQL and Python, integrating diverse data sources to power real-time analytics."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's ETL pipeline note to the target's need for Python/SQL pipelines and real-time lakehouse ingestion context."
+          },
+          {
+            "company": "Connect AI Club, Everett Community College",
+            "role": "President",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Built student consulting projects using LLMs, cloud platforms, and vector databases to deliver proof-of-concepts that solve client problems.",
+              "Collaborated on coaching peers in prompt engineering and model tuning, effectively communicating AI outcomes to non-technical audiences."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's LLM and vector database note to the target's implied feature store collaboration and ML partnership context."
+          },
+          {
+            "company": "National Oceanic and Atmospheric Administration (NOAA)",
+            "role": "Operations Manager",
+            "duration": "",
+            "location": "support tools, reducing manual reporting overhead by",
+            "bullets": [
+              "Supported enterprise operations across 13 research vessels by analyzing sensor and sonar data to proactively mitigate risks.",
+              "Helped design Python-based decision-support tools, reducing manual reporting overhead by 40% and streamlining data ingestion.",
+              "Launched a Government Official Travel database and user interface, achieving 85% administrator adoption within the first year."
+            ],
+            "metrics_used": [
+              "40% reduction in manual reporting overhead",
+              "85% administrator adoption rate"
+            ],
+            "style_transfer_rationale": "Mapped user's Python tool and database launch notes to the target's need for metric stores and low-latency dashboarding context."
+          },
+          {
+            "company": "Naval Research Laboratory",
+            "role": "Research Physicist",
+            "duration": "1/2014 - 6/2016",
+            "location": "",
+            "bullets": [
+              "Collaborated on multi-million-dollar R&D projects, guiding model optimization for radiation detection and advising on technical strategies.",
+              "Translated complex simulation results into executive briefings, securing $500K in incremental funding and strengthening project support."
+            ],
+            "metrics_used": [
+              "$500K in incremental funding secured"
+            ],
+            "style_transfer_rationale": "Mapped user's executive briefing note to the target's need for executive KPI reporting and measurable reliability wins."
+          },
+          {
+            "company": "Unknown",
+            "role": "Commissioned Officer (National Oceanic & Atmospheric Administration) Newport",
+            "duration": "06/2016 - 05/2023",
+            "location": "Newport, OR",
+            "bullets": [
+              "Supported the acquisition of hydrographic data using remote sensing and automated systems.",
+              "Helped automate DVD library inventory tracking and implemented a GUI-based Sea Service letter generator."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's automation notes to the target's implied need for automating repetitive tasks in regulated telemetry contexts."
+          },
+          {
+            "company": "Unknown",
+            "role": "Research Physicist (Naval Research Laboratory) Washington",
+            "duration": "01/2014 - 06/2016",
+            "location": "Washington, DC",
+            "bullets": [
+              "Utilized high-performance computing to conduct critical studies on radiation detection for border security applications.",
+              "Supported software development to predict active interrogation procedures and passive detection of WMD/radiological devices."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's HPC and software development notes to the target's implied need for handling large-scale data processing."
+          },
+          {
+            "company": "Unknown",
+            "role": "Faculty Assistant Researcher (University of Maryland College Park) College Park",
+            "duration": "01/2013 - 04/2015",
+            "location": "College Park, MD",
+            "bullets": [
+              "Built software for data analysis and publication-quality plots in particle physics experiments.",
+              "Contributed to co-authoring publications on experiments conducted at the Large Hadron Collider."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's software design and publication notes to the target's implied need for rigorous data analysis and quality standards."
+          },
+          {
+            "company": "Unknown",
+            "role": "Aerospace Ground Equipment Mechanic (United States Air Force) World Wide 05/2002 - 01/2010",
+            "duration": "05/2002 - 01/2010",
+            "location": "",
+            "bullets": [
+              "Supported equipment database administration and supervised maintenance operations to ensure aircraft data availability.",
+              "Maintained aircraft maintenance records for F-16 fighter jets and presented readiness statistics to base leadership."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's database and reporting notes to the target's implied need for data reliability and metric tracking."
+          },
+          {
+            "company": "APIs databases and Smartsheet Project",
+            "role": "Director for shore-side support of 13 oceanographic research. Used Python",
+            "duration": "12/2016 - 5/2019",
+            "location": "",
+            "bullets": [
+              "Helped institute metric tracking systems and lead status briefings for fleet leadership, synthesizing data for decision-making.",
+              "Collaborated on data-driven process improvements with cross-functional teams and prepared presentations for senior executives."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's metric tracking and executive presentation notes to the target's need for executive KPI reporting and metric store design."
+          },
+          {
+            "company": "University of Maryland College Park",
+            "role": "Faculty Assistant Researcher",
+            "duration": "1/2013 - 4/2015",
+            "location": "",
+            "bullets": [
+              "Assisted in performing simulation studies and constructing gradient-based solvers using Hadoop and LHC computing grid.",
+              "Built software and used distributed computing to analyze particle accelerator data, generating publication-quality results."
+            ],
+            "metrics_used": [],
+            "style_transfer_rationale": "Mapped user's distributed computing notes to the target's implied need for handling large-scale data processing in lakehouse architectures."
+          }
+        ],
+        "seniority_applied": "junior",
+        "total_bullets": 21,
+        "quantified_bullets": 8,
+        "quantification_score": 0.381,
+        "has_placeholders": false,
+        "fallback": false,
+        "model_requested": "xiaomi/mimo-v2-flash"
+      }
+    },
+    {
+      "model": "qwen/qwen-3.6-plus-preview",
+      "seconds": 0.0,
+      "error": null,
+      "rubric": {
+        "bullet_count": 0,
+        "quantification_score": 0.0,
+        "has_placeholders": false,
+        "fallback": true,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 0,
+        "avg_bullet_len": 0.0
+      },
+      "draft": {
+        "rewritten_experiences": [],
+        "seniority_applied": "",
+        "total_bullets": 0,
+        "quantified_bullets": 0,
+        "quantification_score": 0.0,
+        "has_placeholders": false,
+        "fallback": true,
+        "model_requested": "qwen/qwen-3.6-plus-preview"
+      }
+    },
+    {
+      "model": "qwen/qwen3.6-plus:free",
+      "seconds": 132.01,
+      "error": null,
+      "rubric": {
+        "bullet_count": 21,
+        "quantification_score": 0.429,
+        "has_placeholders": false,
+        "fallback": false,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 4,
+        "avg_bullet_len": 132.7
+      },
+      "draft": {
+        "rewritten_experiences": [
+          {
+            "company": "Washington State Data Exchange for Public SafetyInternship",
+            "role": "Operations Analyst",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Built end-to-end ETL pipelines using SQL and Python, integrating diverse data sources to enable real-time operational reporting.",
+              "Collaborated on workflow mapping with law enforcement teams, translating business requirements into structured data-driven analytics solutions."
+            ],
+            "metrics_used": [
+              "real-time operational reporting",
+              "structured data-driven analytics"
+            ],
+            "style_transfer_rationale": "Mapped raw ETL and stakeholder mapping notes to core Analytics Engineering competencies: pipeline architecture, SQL/Python integration, and business-to-technical translation."
+          },
+          {
+            "company": "Connect AI Club, Everett Community College",
+            "role": "President",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Contributed to student consulting projects by deploying cloud platforms and vector databases to deliver functional AI solutions.",
+              "Supported peer development in prompt engineering and iterative tuning, improving team ability to communicate complex AI outcomes."
+            ],
+            "metrics_used": [
+              "functional AI solutions",
+              "improved communication of AI outcomes"
+            ],
+            "style_transfer_rationale": "Aligned student leadership experience with modern analytics workflows, emphasizing cloud infrastructure, vector databases, and iterative model tuning relevant to feature engineering."
+          },
+          {
+            "company": "National Oceanic and Atmospheric Administration (NOAA)",
+            "role": "Operations Manager",
+            "duration": "",
+            "location": "support tools, reducing manual reporting overhead by",
+            "bullets": [
+              "Built Python-based decision-support tools for cross-discipline teams, reducing manual reporting overhead by 40% across operations.",
+              "Assisted in defining key performance metrics and automating weather data pipelines, streamlining daily operational tracking processes.",
+              "Contributed to a new travel database and UI launch, achieving 85% administrator adoption within the quarter."
+            ],
+            "metrics_used": [
+              "40% reduction in manual reporting",
+              "85% administrator adoption"
+            ],
+            "style_transfer_rationale": "Transformed operational management notes into analytics-focused achievements, highlighting metric definition, pipeline automation, and high-adoption data product delivery."
+          },
+          {
+            "company": "Naval Research Laboratory",
+            "role": "Research Physicist",
+            "duration": "1/2014 - 6/2016",
+            "location": "",
+            "bullets": [
+              "Collaborated on multi-million-dollar R&D initiatives, optimizing radiation detection models and advising technical stakeholders on deployment.",
+              "Supported executive decision-making by translating simulation data into clear briefings, securing $500K in additional project funding."
+            ],
+            "metrics_used": [
+              "multi-million-dollar R&D initiatives",
+              "$500K secured funding"
+            ],
+            "style_transfer_rationale": "Framed physics research as data modeling and stakeholder communication, emphasizing model optimization and data-driven executive reporting."
+          },
+          {
+            "company": "Unknown",
+            "role": "Commissioned Officer (National Oceanic & Atmospheric Administration) Newport",
+            "duration": "06/2016 - 05/2023",
+            "location": "Newport, OR",
+            "bullets": [
+              "Built automated tracking scripts for inventory and documentation, eliminating manual data entry processes across administrative workflows.",
+              "Assisted in configuring the Science Computing System and connecting sensor arrays, ensuring reliable hydrographic data acquisition."
+            ],
+            "metrics_used": [
+              "eliminated manual data entry",
+              "reliable hydrographic data acquisition"
+            ],
+            "style_transfer_rationale": "Highlighted infrastructure configuration and automation scripting, directly mapping to analytics engineering responsibilities around data ingestion reliability and system configuration."
+          },
+          {
+            "company": "Unknown",
+            "role": "Research Physicist (Naval Research Laboratory) Washington",
+            "duration": "01/2014 - 06/2016",
+            "location": "Washington, DC",
+            "bullets": [
+              "Supported software development for radiation detection models, enhancing predictive accuracy for critical border security applications.",
+              "Built a Linux-based graphical interface for simulation software, accelerating scenario testing and deployment workflows for researchers."
+            ],
+            "metrics_used": [
+              "enhanced predictive accuracy",
+              "accelerated scenario testing workflows"
+            ],
+            "style_transfer_rationale": "Emphasized software development lifecycle, predictive modeling, and UI deployment, aligning with analytics tooling and data product delivery."
+          },
+          {
+            "company": "Unknown",
+            "role": "Faculty Assistant Researcher (University of Maryland College Park) College Park",
+            "duration": "01/2013 - 04/2015",
+            "location": "College Park, MD",
+            "bullets": [
+              "Contributed to particle physics data analysis by developing C++ and Python simulations for radiation efficiency studies.",
+              "Built analytical software for Large Hadron Collider experiments, generating publication-quality visualizations for peer-reviewed research."
+            ],
+            "metrics_used": [
+              "radiation efficiency studies",
+              "publication-quality visualizations"
+            ],
+            "style_transfer_rationale": "Focused on large-scale data simulation and visualization generation, demonstrating core analytics engineering skills in computational analysis and data storytelling."
+          },
+          {
+            "company": "Unknown",
+            "role": "Aerospace Ground Equipment Mechanic (United States Air Force) World Wide 05/2002 - 01/2010",
+            "duration": "05/2002 - 01/2010",
+            "location": "",
+            "bullets": [
+              "Assisted in administering maintenance databases for aircraft fleets, ensuring accurate readiness reporting for base leadership.",
+              "Supported technical operations by interpreting complex schematics and maintaining precise equipment tracking records across deployments."
+            ],
+            "metrics_used": [
+              "accurate readiness reporting",
+              "precise equipment tracking records"
+            ],
+            "style_transfer_rationale": "Reframed maintenance logistics as database administration and data integrity management, highlighting foundational data governance and reporting accuracy."
+          },
+          {
+            "company": "APIs databases and Smartsheet Project",
+            "role": "Director for shore-side support of 13 oceanographic research. Used Python",
+            "duration": "12/2016 - 5/2019",
+            "location": "",
+            "bullets": [
+              "Built real-time dashboards and managed database infrastructure, improving cross-functional team visibility into operational project metrics.",
+              "Contributed to workflow automation using Python, reducing repetitive manual tasks and streamlining executive reporting processes."
+            ],
+            "metrics_used": [
+              "improved cross-functional visibility",
+              "streamlined executive reporting"
+            ],
+            "style_transfer_rationale": "Mapped project management and API/database work to modern analytics engineering, emphasizing dashboard development, infrastructure management, and Python automation."
+          },
+          {
+            "company": "University of Maryland College Park",
+            "role": "Faculty Assistant Researcher",
+            "duration": "1/2013 - 4/2015",
+            "location": "",
+            "bullets": [
+              "Supported distributed computing workflows using Hadoop, enabling large-scale particle accelerator data analysis and simulation modeling.",
+              "Built gradient-based solvers for high-energy physics datasets, accelerating computational modeling and subsequent research publication timelines."
+            ],
+            "metrics_used": [
+              "large-scale data analysis",
+              "accelerated research publication timelines"
+            ],
+            "style_transfer_rationale": "Highlighted distributed computing and algorithm development, directly aligning with big data processing and performance optimization required for analytics engineering."
+          }
+        ],
+        "seniority_applied": "junior",
+        "total_bullets": 21,
+        "quantified_bullets": 9,
+        "quantification_score": 0.429,
+        "has_placeholders": false,
+        "fallback": false,
+        "model_requested": "qwen/qwen3.6-plus:free"
+      }
+    },
+    {
+      "model": "minimax/minimax-m2.1",
+      "seconds": 511.31,
+      "error": null,
+      "rubric": {
+        "bullet_count": 6,
+        "quantification_score": 0.3,
+        "has_placeholders": false,
+        "fallback": true,
+        "weak_verb_hits": 0,
+        "markdown_noise_lines": 0,
+        "distinctive_job_ad_leaks": 0,
+        "company_field_mismatches_vs_allowlist": 0,
+        "avg_bullet_len": 55.5
+      },
+      "draft": {
+        "rewritten_experiences": [
+          {
+            "company": "Washington State Data Exchange for Public SafetyInternship",
+            "role": "Operations Analyst",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Applied technical skills to achieve measurable results",
+              "Contributed to team success through collaborative efforts"
+            ],
+            "metrics_used": [
+              "Measurable impact",
+              "Team contribution"
+            ]
+          },
+          {
+            "company": "Connect AI Club, Everett Community College",
+            "role": "President",
+            "duration": "",
+            "location": "",
+            "bullets": [
+              "Applied technical skills to achieve measurable results",
+              "Contributed to team success through collaborative efforts"
+            ],
+            "metrics_used": [
+              "Measurable impact",
+              "Team contribution"
+            ]
+          },
+          {
+            "company": "National Oceanic and Atmospheric Administration (NOAA)",
+            "role": "Operations Manager",
+            "duration": "",
+            "location": "support tools, reducing manual reporting overhead by",
+            "bullets": [
+              "Applied technical skills to achieve measurable results",
+              "Contributed to team success through collaborative efforts"
+            ],
+            "metrics_used": [
+              "Measurable impact",
+              "Team contribution"
+            ]
+          }
+        ],
+        "seniority_applied": "mid",
+        "quantification_score": 0.3,
+        "total_bullets": 6,
+        "quantified_bullets": 0,
+        "fallback": true,
+        "fallback_used": true,
+        "parse_error": "Expecting value: line 1 column 1 (char 0)",
+        "model_requested": "minimax/minimax-m2.1"
+      }
+    }
+  ]
+}

@@ -75,8 +75,8 @@ class LLMClientAdapter:
                 messages.append({"role": "user", "content": user_prompt})
             
             # ENFORCE HARD TOKEN LIMITS TO PREVENT COST EXPLOSION
-            # Default max_tokens raised to 6000 so rewrite stages can keep richer context.
-            requested_max = kwargs.get("max_tokens", 6000)
+            # Default 3000 is sufficient for most rewrite tasks
+            requested_max = kwargs.get("max_tokens", 3000)
             
             # Hard cap for max_tokens (callers e.g. Drafter tests may pass 32k+).
             hard_cap = 65536
