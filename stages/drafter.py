@@ -53,29 +53,44 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
     
     # 2. Format Golden Bullets as "Style Reference Only"
+    # IMPORTANT: Never include more than 5 golden bullets to reduce hallucination risk
     golden_section = ""
     if golden_bullets:
-        selected_bullets = golden_bullets[:10] # Reduced to 10 to reduce context noise
+        selected_bullets = golden_bullets[:5]  # Strictly limit to 5 to minimize noise/hallucination
         bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
         
         golden_section = f"""
-### GOLDEN PATTERN LIBRARY (THE SOURCE OF TRUTH)
-WARNING: The following examples contain FAKE DATA and EXTERNAL COMPANIES.
-USE THEM FOR SYNTAX ONLY. DO NOT COPY THE CONTENT, COMPANY NAMES, OR DATES.
-You must transform the User's experience to match the *grammatical structure* and *density* of these examples.
-DO NOT COPY THE CONTENT. COPY THE SYNTAX.
+### STYLE PATTERN REFERENCE (SYNTAX ONLY - ALL DATA IS FAKE)
+WARNING: The following examples contain COMPLETELY FAKE DATA (company names, metrics, projects).
+USE THEM ONLY FOR GRAMMATICAL STRUCTURE. 
+YOU MUST NEVER COPY: company names, metrics, technologies, project names, or any factual content.
+ALL companies in these examples ARE FICTIONAL. The user did NOT work at any of these companies.
 
-REFERENCE PATTERNS:
+SYNTAX REFERENCE (copy this structure only):
+• [Action Verb] + [Technical Task] + [Specific Tool/Method] + [Measurable Outcome if available]
+• [Action Verb] + [Problem/Challenge] + [Solution Approach] + [Impact]
+
+EXAMPLE SYNTAX TRANSFORMATION:
+- User input: "I improved the database queries"
+- Your output: "Optimized SQL queries, reducing load time by 40%"
+- Notice: NO new metrics invented, NO new companies used
+
+REFERENCE PATTERNS (FICTIONAL - DO NOT COPY DATA):
 {bullets_text}
 
-### STYLE TRANSFER INSTRUCTIONS (MANDATORY):
-1. **Select a Template:** For every user bullet, find a Golden Bullet that matches the *type* of work (e.g., Migration, Optimization, Leadership).
-2. **Map the Variables:**
-   - Golden: "Reduced [Metric] by [Action] using [Tech]."
-   - User: "I made python scripts to run faster."
-   - Result: "Reduced [processing time] by [optimizing Python scripts] using [multithreading]."
-3. **Kill the Fluff:** Delete weak verbs like "Strategized," "Participated," "Pioneered," "Worked on." Use hard technical verbs (e.g., "Deployed," "Engineered," "Refactored").
+### STYLE TRANSFER RULES (MANDATORY):
+1. **Syntax Only:** Match the grammatical structure, NOT the content
+2. **Variable Mapping:**
+   - Golden: "Reduced [Latency] by [Action] using [Tech]"
+   - User: "I made scripts faster"
+   - Result: "Optimized Python scripts, improving execution speed"
+3. **Hard Verbs Only:** "Deployed," "Engineered," "Refactored," "Optimized" - NOT "Strategized," "Pioneered"
+4. **No Metric Fabrication:** If user doesn't provide %, $, or time savings, do NOT invent them
 """
+    
+    # If no companies found, we must force "Current Employer" only
+    if not original_companies:
+        original_companies = ["[UNKNOWN COMPANY - USE 'Current Employer' ONLY]"]
     
     title_context = ""
     if extracted_job_title:
@@ -92,9 +107,9 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 
 ### *** TRUTH CONSTRAINTS (VIOLATION = FAILURE) ***
 1. **COMPANY NAMES:** You must ONLY use the companies provided in the User Input.
-   - ALLOWED: {json.dumps(original_companies) if original_companies else '["Current Employer"]'}
-   - PROHIBITED: Do NOT invent company names like "Tech Innovations Inc", "Data Solutions LLC", "ABC Corp", "Acme Corp", or any company NOT in the input.
-   - If no specific company is provided, use "Current Employer" as the company name.
+   - ALLOWED COMPANIES (MUST USE EXACTLY): {json.dumps(original_companies)}
+   - PROHIBITED: Do NOT invent company names like "Tech Innovations Inc", "Data Solutions LLC", "ABC Corp", "Acme Corp", "Current Employer" (unless explicitly listed above as allowed), or any company NOT in the input.
+   - CRITICAL: If the only allowed company is "[UNKNOWN COMPANY - USE 'Current Employer' ONLY]", you MUST use "Current Employer" as the company name. Do NOT invent any other company.
 
 2. **JOB TITLES:** You must preserve the user's actual role hierarchy.
    - ALLOWED: {json.dumps(original_titles) if original_titles else '["Professional"]'}
@@ -107,7 +122,10 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - DO NOT copy sentences, requirements, or specific projects from the Job Description into the resume.
    - DO NOT claim to have done the specific tasks listed as "Responsibilities" in the Job Ad unless the user's notes explicitly support it.
 
-5. **NO FABRICATED METRICS:** Only include metrics (%, $, time) that appear in the user's input or are reasonable extrapolations. Do NOT invent "1 million users", "500K customers", "99.9% uptime" etc. unless explicitly provided.
+5. **NO FABRICATED METRICS:** 
+   - CRITICAL: Only include metrics (%, $, time) that appear EXPLICITLY in the user's input resume text.
+   - PROHIBITED METRICS: Do NOT invent "increased revenue by X%", "saved $X", "1 million users", "500K customers", "99.9% uptime" etc. unless these exact numbers appear in the user's input.
+   - If the user says "improved efficiency by 30%", you MAY use "30%". If they don't say any percentage, DO NOT add one.
 
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
