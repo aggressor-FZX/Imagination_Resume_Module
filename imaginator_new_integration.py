@@ -63,6 +63,80 @@ except ImportError:
     CAREER_ALCHEMY_AVAILABLE = False
 
 
+# =============================================================================
+# PII Sanitization - Remove personal information from resume text
+# =============================================================================
+
+# Patterns for common PII that should be removed from resumes
+_PII_PATTERNS = [
+    # Email addresses
+    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', re.IGNORECASE), '[EMAIL REDACTED]'),
+    # Phone numbers (various formats)
+    (re.compile(r'\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b'), '[PHONE REDACTED]'),
+    # Social Security Numbers
+    (re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'), '[SSN REDACTED]'),
+    # Street addresses (simplified pattern for common US formats)
+    (re.compile(r'\b\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl|Loop)\b', re.IGNORECASE), '[ADDRESS REDACTED]'),
+    # Full names at start of resume (usually the candidate's name)
+    # This pattern looks for capitalized words at the very beginning of text
+    (re.compile(r'^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*', re.MULTILINE), '[NAME REDACTED]'),
+]
+
+# Header patterns that commonly contain personal info
+_HEADER_LINE_PATTERNS = [
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}', re.MULTILINE | re.IGNORECASE),  # Name | email
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}', re.MULTILINE),  # Name | phone
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct)', re.MULTILINE | re.IGNORECASE),  # Name | address
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*(?:City|Location)', re.MULTILINE),  # Name | Company | Location (not address)
+]
+
+def sanitize_resume_pii(text: str) -> str:
+    """
+    Remove personal identifying information (PII) from resume text.
+    
+    Removes:
+    - Email addresses
+    - Phone numbers
+    - Street addresses
+    - Names at the start of the resume
+    - Header lines with personal info combinations
+    
+    Args:
+        text: Raw resume text
+        
+    Returns:
+        Resume text with PII removed
+    """
+    if not text:
+        return text
+    
+    result = text
+    
+    # First, clean up header lines that contain PII combinations
+    lines = result.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line_cleaned = False
+        for pattern in _HEADER_LINE_PATTERNS:
+            if pattern.search(line):
+                # Replace the entire line with a generic placeholder
+                cleaned_lines.append('[PERSONAL INFO REDACTED]')
+                line_cleaned = True
+                break
+        if not line_cleaned:
+            cleaned_lines.append(line)
+    result = '\n'.join(cleaned_lines)
+    
+    # Apply PII pattern replacements
+    for pattern, replacement in _PII_PATTERNS:
+        result = pattern.sub(replacement, result)
+    
+    # Clean up any double spaces or trailing/leading whitespace issues
+    result = re.sub(r'\s{2,}', ' ', result)
+    
+    return result.strip()
+
+
 def _extract_experience_years(experiences: List[Dict[str, Any]]) -> float:
     """Extract total years of experience from experiences list"""
     if not experiences:
@@ -708,6 +782,13 @@ async def run_new_pipeline_async(
         logger.info(f"[NEW_PIPELINE] Location provided for market intel: {location}")
     if job_title:
         logger.info(f"[NEW_PIPELINE] User-provided job title for O*NET: {job_title}")
+
+    # Sanitize resume_text to remove PII before processing
+    original_resume_len = len(resume_text) if resume_text else 0
+    resume_text = sanitize_resume_pii(resume_text) if resume_text else resume_text
+    if original_resume_len > 0:
+        sanitized_len = len(resume_text)
+        logger.info(f"[NEW_PIPELINE] PII sanitization: {original_resume_len} -> {sanitized_len} chars")
 
     try:
         # Use provided experience if available, otherwise parse from text
