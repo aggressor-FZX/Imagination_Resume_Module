@@ -64,7 +64,7 @@ Your output MUST include ALL sections provided in the input:
    
 3. **NO BLOCKS OF TEXT:** Every achievement must be a distinct bullet point starting with a hyphen (-).
 4. **DELETE ALL LABELS:** Remove "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" labels.
-5. **MANDATORY QUANTIFICATION:** Every bullet point must include a metric (%, $, time, count).
+5. **QUANTIFICATION ONLY IF PROVIDED:** Only include metrics (%, $, time, count) if they appear in the user's input. Do NOT fabricate metrics like "15% increase" if the user didn't say it.
 6. **STYLE TRANSFER:** Maintain punchy, technical syntax from input.
 7. **NO LEAKAGE:** No meta-commentary or editorial notes. Output ONLY resume content.
 8. **ANTI-HALLUCINATION:** NEVER list the Target Company as an employer. Use ONLY company names from input.
