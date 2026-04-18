@@ -798,6 +798,20 @@ async def run_new_pipeline_async(
         else:
             experiences = parse_experiences(resume_text)
             logger.info(f"[NEW_PIPELINE] Parsed {len(experiences)} experiences from resume text")
+            
+            # Fallback: if parsing failed, use raw resume text as a single experience
+            if not experiences:
+                logger.warning("[NEW_PIPELINE] Experience parsing returned empty, using raw text fallback")
+                experiences = [{
+                    "title_line": "Professional Experience",
+                    "company": "Current Employer",
+                    "role": "Professional",
+                    "snippet": resume_text[:3000],  # Use first 3000 chars
+                    "body": resume_text[:3000],
+                    "duration": "",
+                    "raw": resume_text[:3000]
+                }]
+                logger.info(f"[NEW_PIPELINE] Created 1 fallback experience from raw resume text")
 
         provided_projects = kwargs.get("projects", [])
         provided_education = kwargs.get("education", [])

@@ -92,12 +92,12 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 
 ### *** TRUTH CONSTRAINTS (VIOLATION = FAILURE) ***
 1. **COMPANY NAMES:** You must ONLY use the companies provided in the User Input.
-   - ALLOWED: {json.dumps(original_companies)}
-   - PROHIBITED: Do NOT use company names found in the Job Description or Golden Patterns.
-   - If the User is applying to "Armada", do NOT list "Armada" as a past job.
+   - ALLOWED: {json.dumps(original_companies) if original_companies else '["Current Employer"]'}
+   - PROHIBITED: Do NOT invent company names like "Tech Innovations Inc", "Data Solutions LLC", "ABC Corp", "Acme Corp", or any company NOT in the input.
+   - If no specific company is provided, use "Current Employer" as the company name.
 
 2. **JOB TITLES:** You must preserve the user's actual role hierarchy.
-   - ALLOWED: {json.dumps(original_titles)}
+   - ALLOWED: {json.dumps(original_titles) if original_titles else '["Professional"]'}
    - You may slightly polish titles (e.g., "Programmer" -> "Software Engineer"), but DO NOT promote a "Junior" to "VP".
 
 3. **TECHNOLOGY:** Only use technologies the user explicitly mentioned or strongly implied by the specific task. Do not copy tech stacks from the Golden Bullets.
@@ -106,6 +106,8 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - The Job Description is provided ONLY for context on what is relevant.
    - DO NOT copy sentences, requirements, or specific projects from the Job Description into the resume.
    - DO NOT claim to have done the specific tasks listed as "Responsibilities" in the Job Ad unless the user's notes explicitly support it.
+
+5. **NO FABRICATED METRICS:** Only include metrics (%, $, time) that appear in the user's input or are reasonable extrapolations. Do NOT invent "1 million users", "500K customers", "99.9% uptime" etc. unless explicitly provided.
 
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
