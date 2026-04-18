@@ -53,10 +53,10 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
     
     # 2. Format Golden Bullets as "Style Reference Only"
-    # IMPORTANT: Never include more than 5 golden bullets to reduce hallucination risk
+    # IMPORTANT: Never include more than 3 golden bullets to reduce hallucination risk
     golden_section = ""
     if golden_bullets:
-        selected_bullets = golden_bullets[:5]  # Strictly limit to 5 to minimize noise/hallucination
+        selected_bullets = golden_bullets[:3]  # Strictly limit to 3 to minimize noise/hallucination
         bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
         
         golden_section = f"""
@@ -68,24 +68,23 @@ ALL companies in these examples ARE FICTIONAL. The user did NOT work at any of t
 
 SYNTAX REFERENCE (copy this structure only):
 • [Action Verb] + [Technical Task] + [Specific Tool/Method] + [Measurable Outcome if available]
-• [Action Verb] + [Problem/Challenge] + [Solution Approach] + [Impact]
 
 EXAMPLE SYNTAX TRANSFORMATION:
-- User input: "I improved the database queries"
-- Your output: "Optimized SQL queries, reducing load time by 40%"
-- Notice: NO new metrics invented, NO new companies used
+- User input: "I improved database queries"
+- Good output: "Improved database query performance"
+- BAD output: "Optimized SQL queries, reducing load time by 40%" (if user didn't say 40%)
+
+CRITICAL: Only add technical details (SQL, Python, Tableau) if the user EXPLICITLY mentioned them.
 
 REFERENCE PATTERNS (FICTIONAL - DO NOT COPY DATA):
 {bullets_text}
 
 ### STYLE TRANSFER RULES (MANDATORY):
-1. **Syntax Only:** Match the grammatical structure, NOT the content
-2. **Variable Mapping:**
-   - Golden: "Reduced [Latency] by [Action] using [Tech]"
-   - User: "I made scripts faster"
-   - Result: "Optimized Python scripts, improving execution speed"
-3. **Hard Verbs Only:** "Deployed," "Engineered," "Refactored," "Optimized" - NOT "Strategized," "Pioneered"
-4. **No Metric Fabrication:** If user doesn't provide %, $, or time savings, do NOT invent them
+1. **MINIMAL TRANSFORMATION:** Only change weak verbs to strong verbs
+2. **NO ELABORATION:** Do NOT add words, phrases, or details not in the input
+3. **Hard Verbs Only:** "Analyzed," "Developed," "Built" - NOT "Strategized," "Pioneered"
+4. **No Metric Fabrication:** Only use metrics the user explicitly provided
+5. **Tech Only If Stated:** Only mention technologies (SQL, Python, Tableau) if user said them
 """
     
     # If no companies found, we must force "Current Employer" only
@@ -108,14 +107,18 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 ### *** TRUTH CONSTRAINTS (VIOLATION = FAILURE) ***
 1. **COMPANY NAMES:** You must ONLY use the companies provided in the User Input.
    - ALLOWED COMPANIES (MUST USE EXACTLY): {json.dumps(original_companies)}
-   - PROHIBITED: Do NOT invent company names like "Tech Innovations Inc", "Data Solutions LLC", "ABC Corp", "Acme Corp", "Current Employer" (unless explicitly listed above as allowed), or any company NOT in the input.
+   - PROHIBITED: Do NOT invent company names like "Tech Innovations Inc", "Data Solutions LLC", "ABC Corp", "Acme Corp", or any company NOT in the input.
    - CRITICAL: If the only allowed company is "[UNKNOWN COMPANY - USE 'Current Employer' ONLY]", you MUST use "Current Employer" as the company name. Do NOT invent any other company.
 
 2. **JOB TITLES:** You must preserve the user's actual role hierarchy.
    - ALLOWED: {json.dumps(original_titles) if original_titles else '["Professional"]'}
    - You may slightly polish titles (e.g., "Programmer" -> "Software Engineer"), but DO NOT promote a "Junior" to "VP".
 
-3. **TECHNOLOGY:** Only use technologies the user explicitly mentioned or strongly implied by the specific task. Do not copy tech stacks from the Golden Bullets.
+3. **TECHNOLOGY:** Only use technologies the user explicitly mentioned.
+   - If user said "SQL, Python, Tableau", you may use those exact words
+   - If user did NOT mention "ETL", do NOT say "ETL processes"
+   - If user did NOT mention "stakeholder communication", do NOT add it
+   - Do NOT infer or imply additional technologies
 
 4. **NO PLAGIARISM FROM JOB DESCRIPTION:**
    - The Job Description is provided ONLY for context on what is relevant.
@@ -126,6 +129,11 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - CRITICAL: Only include metrics (%, $, time) that appear EXPLICITLY in the user's input resume text.
    - PROHIBITED METRICS: Do NOT invent "increased revenue by X%", "saved $X", "1 million users", "500K customers", "99.9% uptime" etc. unless these exact numbers appear in the user's input.
    - If the user says "improved efficiency by 30%", you MAY use "30%". If they don't say any percentage, DO NOT add one.
+
+6. **STRICT WORD LIMITS:** 
+   - Each bullet should use WORDS FROM THE USER INPUT plus basic connecting words (the, a, to, by, for, with, using)
+   - DO NOT add technical concepts, processes, or methodologies not mentioned by the user
+   - Example: If user says "improved reporting efficiency by 30%", do NOT transform to "improving reporting efficiency by 30% through strategic data preprocessing and visualization techniques" (adds "data preprocessing" and "visualization techniques" which weren't in input)
 
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
