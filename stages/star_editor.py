@@ -786,11 +786,16 @@ class StarEditor:
         def is_metric_in_original(match):
             value = match.group(1)
             unit = match.group(2).lower()
-            # Check if this exact value appears near similar context in original
-            # Simple check: does "value" appear within reasonable distance of unit words?
-            search_str = f"{value} {unit}"
-            search_str_alt = f"{value}{unit}"
-            return search_str in original_text_lower or search_str_alt in original_text_lower
+            # Check if this exact value appears in original text with unit
+            # Original might have "30%." or "30 percent" - handle both
+            search_patterns = [
+                f"{value}%",           # "30%"
+                f"{value} percent",    # "30 percent"
+            ]
+            for pattern in search_patterns:
+                if pattern in original_text_lower:
+                    return True
+            return False
         
         # Remove metrics not in original
         new_lines = []
@@ -800,10 +805,11 @@ class StarEditor:
                 new_line = line
                 for match in metric_pattern.finditer(line):
                     if not is_metric_in_original(match):
-                        # Remove this metric (replace with nothing, or keep just the number if it makes sense)
                         metric_str = match.group(0)
-                        # Remove the metric but keep context if possible
-                        new_line = new_line.replace(metric_str, "").replace("  ", " ").strip()
+                        # Clean removal: remove metric but also " by" if it leads to nothing after
+                        new_line = new_line.replace(metric_str, "").replace(" by", "").replace("  ", " ").strip()
+                        # Remove trailing prepositions that are now orphaned
+                        new_line = re.sub(r'\b(by|,)\s*$', '', new_line).strip()
                         logger.warning(f"[STAR_EDITOR] Removed fabricated metric: {metric_str}")
                 new_lines.append(new_line)
             else:
