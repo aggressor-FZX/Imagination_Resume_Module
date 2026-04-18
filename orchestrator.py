@@ -283,6 +283,7 @@ class PipelineOrchestrator:
                 editor_data = await self.star_editor.polish(
                     draft_data,
                     research_data,
+                    original_resume_text=resume_text,
                     education=education,
                     projects=projects,
                     certifications=certifications,

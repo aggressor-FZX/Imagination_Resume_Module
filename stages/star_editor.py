@@ -114,6 +114,7 @@ class StarEditor:
         
     async def polish(self, draft_data: Dict[str, Any], 
                     research_data: Dict[str, Any],
+                    original_resume_text: str = "",
                     education: List[Dict] = None,
                     projects: List[Dict] = None,
                     certifications: List[Dict] = None,
@@ -126,6 +127,7 @@ class StarEditor:
         Args:
             draft_data: Output from Drafter stage
             research_data: Output from Researcher stage
+            original_resume_text: Original user resume text for metric validation
             education: Education entries from resume
             projects: Project entries from resume
             certifications: Certification entries from resume
@@ -186,7 +188,7 @@ class StarEditor:
             })
             
             # Validate metrics - remove any that weren't in the original input
-            result = self._validate_metrics_against_input(result, experiences)
+            result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
             
             # Ensure we have at least some data
             if not result.get("final_markdown"):
@@ -770,15 +772,14 @@ class StarEditor:
             "needs_improvement": score < 0.8 and total_bullets > 0
         }
     
-    def _validate_metrics_against_input(self, result: Dict[str, Any], experiences: List[Dict]) -> Dict[str, Any]:
+    def _validate_metrics_against_input(self, result: Dict[str, Any], original_resume_text: str = "") -> Dict[str, Any]:
         """
         Remove fabricated metrics that weren't in the original input.
         
         Looks for percentage/dollar/time metrics in output and validates they exist in input.
         """
         markdown = result.get("final_markdown", "")
-        original_text = " ".join([exp.get("snippet", "") + " " + exp.get("body", "") for exp in experiences])
-        original_text_lower = original_text.lower()
+        original_text_lower = original_resume_text.lower() if original_resume_text else ""
         
         # DEBUG
         logger.warning(f"[STAR_EDITOR] Metric validation - original_text: {original_text_lower[:200]}")
