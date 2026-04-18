@@ -781,9 +781,6 @@ class StarEditor:
         markdown = result.get("final_markdown", "")
         original_text_lower = original_resume_text.lower() if original_resume_text else ""
         
-        # DEBUG
-        logger.warning(f"[STAR_EDITOR] Metric validation - original_text: {original_text_lower[:200]}")
-        
         # Find all metrics in the output
         metric_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(%|percent|\$\d+|k|thousand|million|billion|hours|days|weeks|months|years)', re.IGNORECASE)
         
@@ -798,9 +795,7 @@ class StarEditor:
             ]
             for pattern in search_patterns:
                 if pattern in original_text_lower:
-                    logger.warning(f"[STAR_EDITOR] Metric {value}{unit} FOUND in original via pattern {pattern}")
                     return True
-            logger.warning(f"[STAR_EDITOR] Metric {value}{unit} NOT found in original. Searched: {search_patterns}")
             return False
         
         # Remove metrics not in original
