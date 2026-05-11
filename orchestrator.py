@@ -92,6 +92,9 @@ class PipelineOrchestrator:
         Returns:
             Complete pipeline result with final resume and metadata
         """
+        # Forward skills into kwargs so StarEditor receives it
+        if skills:
+            kwargs["skills"] = skills
         start_time = time.time()
         pipeline_start = datetime.utcnow().isoformat()
 
@@ -268,15 +271,16 @@ class PipelineOrchestrator:
             stage3_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 3: StarEditor")
 
-            # Extract additional sections from kwargs
+            # Extract additional sections from kwargs (skills also via local variable)
             education = kwargs.get("education", [])
             projects = kwargs.get("projects", [])
             certifications = kwargs.get("certifications", [])
+            skills_list = list(skills or []) if skills else kwargs.get("skills", [])
             location = kwargs.get("location", "")
 
-            if education or projects or certifications:
+            if education or projects or certifications or skills_list:
                 logger.info(
-                    f"[ORCHESTRATOR] Additional sections: {len(education)} education, {len(projects)} projects, {len(certifications)} certifications"
+                    f"[ORCHESTRATOR] Additional sections: {len(education)} education, {len(projects)} projects, {len(certifications)} certifications, {len(skills_list)} skills"
                 )
 
             try:
@@ -287,6 +291,7 @@ class PipelineOrchestrator:
                     education=education,
                     projects=projects,
                     certifications=certifications,
+                    skills=skills_list,
                     location=location,
                     temperature_override=temperatures["star_editor"],
                 )

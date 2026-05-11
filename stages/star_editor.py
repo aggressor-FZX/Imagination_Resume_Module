@@ -20,61 +20,69 @@ logger = logging.getLogger(__name__)
 # PROMPT TEMPLATES
 # ============================================================================
 
-STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. Convert the provided resume data into a high-end, ATS-friendly Markdown resume with ALL required sections.
+STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. Convert the provided resume data into a clean, ATS-friendly, template-aligned resume with ALL required sections.
 
-### THE FORMULA:
-Your output MUST include ALL sections provided in the input:
-1. **EDUCATION** (if provided)
-2. **CERTIFICATIONS** (if provided)  
-3. **PROJECTS** (if provided, especially for students/career changers)
+### REQUIRED SECTIONS (in order):
+1. **EDUCATION**
+2. **CERTIFICATIONS** (if provided)
+3. **PROJECTS** (if provided)
 4. **PROFESSIONAL EXPERIENCE** (always required)
+5. **SKILLS** (always required — extract from input)
 
-### SECTION FORMATS:
+### EXACT SECTION FORMATS:
 
 **EDUCATION:**
 ## Education
-- **Degree Name** - Institution Name (Year)
-- **Degree Name** - Institution Name (Year) - GPA: X.XX
+**Institution Name** — Location
+*Degree, Date*
+*GPA: X.XX* (if provided)
+- Relevant Courses: Course 1, Course 2, Course 3 (if provided)
 
 **CERTIFICATIONS:**
 ## Certifications
-- Certification Name - Issuer (Year)
-- Certification Name - Issuer (Year)
+- Certification Name — Issuer (Year)
+- Certification Name — Issuer (Year)
 
 **PROJECTS:**
 ## Projects
-- **Project Name** - Tech Stack (Duration)
-  Description of project impact and what was built
-- **Project Name** - Tech Stack (Duration)
-  Description of project impact and what was built
+**Project Name** — Tech Stack (Duration)
+- Description of what was built and the impact
 
 **PROFESSIONAL EXPERIENCE:**
 ## Professional Experience
-## **Job Title** | **Company Name**
-*Actual Dates | Actual Location*
-- Achievement Bullet 1 with metric
-- Achievement Bullet 2 with metric
+**Company Name** — Location
+*Job Title | Dates*
+- Action-verb bullet with metric or result
+- Action-verb bullet with metric or result
 
-### STRICT RULES:
-1. **INCLUDE ALL PROVIDED SECTIONS:** If education, certifications, or projects are provided in the input, they MUST appear in the output. Do not omit any section.
-   
-2. **NO PLACEHOLDERS - CRITICAL:** You MUST use the actual dates and location provided. NEVER output these forbidden placeholders:
-   - WRONG: *Dates | Location*, *Dates Provided*, *N/A*, *Unknown*
-   - CORRECT: *2020 - Present | San Francisco, CA*, *04/2025 – Present | Washington State*
-   
-3. **NO BLOCKS OF TEXT:** Every achievement must be a distinct bullet point starting with a hyphen (-).
-4. **DELETE ALL LABELS:** Remove "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" labels.
-5. **QUANTIFICATION ONLY IF PROVIDED:** Only include metrics (%, $, time, count) if they appear in the user's input. Do NOT fabricate metrics like "15% increase" if the user didn't say it.
-6. **STYLE TRANSFER:** Maintain punchy, technical syntax from input.
-7. **NO LEAKAGE:** No meta-commentary or editorial notes. Output ONLY resume content.
-8. **ANTI-HALLUCINATION:** NEVER list the Target Company as an employer. Use ONLY company names from input.
-9. **SECTION ORDER:** Education → Certifications → Projects → Professional Experience (if all provided)
+**SKILLS:**
+## Skills
+Skills: Python, SQL, Docker, AWS, Machine Learning, ...
+
+### CRITICAL FORMATTING RULES:
+1. **COMPANY NAME ON ITS OWN LINE:** The company MUST appear on a bold header line. Format: `**Company Name** — Location` then on the next line: `*Job Title | Dates*`. NEVER merge title and company like "TitleCompanyName" — that is BROKEN output.
+
+2. **INCLUDE ALL PROVIDED SECTIONS:** Every section with data in the input MUST appear in the output. Never skip a section that has content.
+
+3. **NO PLACEHOLDER TEXT:** Use actual dates and locations. NEVER output: "Dates Not Specified", "Dates | Location", "N/A", "Unknown", "Dates Provided". If a date is genuinely missing, omit the date portion and just show the title.
+
+4. **EVERY LINE A BULLET:** Under each job, every achievement MUST be a distinct bullet starting with `- `. Never combine achievements into paragraph blocks.
+
+5. **NO LABELS:** Strip "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" prefixes from bullets.
+
+6. **METRICS ONLY IF SOURCED:** Only include numbers (%, $, counts) that appear explicitly in the user's input. Never fabricate metrics.
+
+7. **SKILLS SECTION IS MANDATORY:** Always output a `## Skills` section at the end. List skills as a comma-separated line: `Skills: Python, C++, AWS, Docker, SQL, ...`
+
+8. **ANTI-HALLUCINATION:** Never list the Target Company as an employer. Only use company names that appear in the input experiences.
+
+9. **NO LEAKAGE:** No meta-commentary, no editorial notes in the resume output. Pure resume content only.
 
 Output JSON Schema:
 {
-  "final_markdown": "## Education\\n- **BS Computer Science** - MIT (2020)\\n\\n## Certifications\\n- AWS Certified Solutions Architect - Amazon (2023)\\n\\n## Projects\\n- **AI Chatbot** - Python, OpenAI (6 months)\\n\\n## Professional Experience\\n## **Software Engineer** | **Google**\\n*2020 - Present | Mountain View, CA*\\n- Deployed CI/CD...",
-  "final_plain_text": "Education: BS Computer Science - MIT (2020) | Certifications: AWS Certified Solutions Architect | Projects: AI Chatbot | Experience: Software Engineer at Google...",
-  "editorial_notes": "Polished for ATS compliance with all required sections."
+  "final_markdown": "## Education\\n**Washington State University** \\u2014 Everett, WA\\n*B.S. Data Analytics, 2026*\\n*GPA: 3.84*\\n\\n## Certifications\\n- Network Security+ \\u2014 CompTIA (2024)\\n\\n## Projects\\n**LLM-Powered Chatbot** \\u2014 Python, LangChain, Pinecone (3 months)\\n- Built GenAI chatbot with live data scraping for course guidance\\n\\n## Professional Experience\\n**National Oceanic and Atmospheric Administration (NOAA)** \\u2014 Seattle, WA\\n*Operations Manager | 2019 \\u2013 2023*\\n- Designed Python decision-support tools reducing manual reporting by 40% across 13 vessels\\n- Launched Government Travel database achieving 85% adoption in first month\\n\\n## Skills\\nSkills: Python, SQL, Docker, AWS, Machine Learning, PyTorch, Data Analysis",
+  "final_plain_text": "Education: B.S. Data Analytics - Washington State University (2026) | Certifications: Network Security+ - CompTIA | Experience: Operations Manager at NOAA...",
+  "editorial_notes": "Template-aligned resume with all required sections including Skills."
 }
 """
 
@@ -118,11 +126,12 @@ class StarEditor:
                     education: List[Dict] = None,
                     projects: List[Dict] = None,
                     certifications: List[Dict] = None,
+                    skills: List[str] = None,
                     location: str = "",
                     temperature_override: Optional[float] = None) -> Dict[str, Any]:
         """
         Polishes STAR draft into final resume format with TARGET COMPANY GUARD.
-        Now includes education, projects, and certifications sections.
+        Now includes education, projects, certifications, and skills sections.
         
         Args:
             draft_data: Output from Drafter stage
@@ -131,6 +140,7 @@ class StarEditor:
             education: Education entries from resume
             projects: Project entries from resume
             certifications: Certification entries from resume
+            skills: Skill names to include in Skills section
             location: Job location for market intel
             temperature_override: Optional temperature setting to override default
             
@@ -147,11 +157,11 @@ class StarEditor:
         # EXTRACT TARGET COMPANY from Research Data (e.g., "Armada")
         target_company = research_data.get("company_name", "")
         
-        # Create prompt with ALL sections including education, projects, certifications
+        # Create prompt with ALL sections including education, projects, certifications, skills
         user_prompt = self._create_user_prompt(
             experiences, seniority, domain_vocab, target_company,
             education=education, projects=projects, certifications=certifications,
-            location=location
+            skills=skills, location=location
         )
         
         try:
@@ -209,7 +219,8 @@ class StarEditor:
     def _create_user_prompt(self, experiences: List[Dict], seniority: str, 
                            domain_vocab: List[str], target_company: str = "",
                            education: List[Dict] = None, projects: List[Dict] = None,
-                           certifications: List[Dict] = None, location: str = "") -> str:
+                           certifications: List[Dict] = None, skills: List[str] = None,
+                           location: str = "") -> str:
         """
         Create user prompt for the editor with ALL resume sections.
         
@@ -221,6 +232,7 @@ class StarEditor:
             education: Education entries
             projects: Project entries
             certifications: Certification entries
+            skills: Skill names for Skills section
             location: Job location
             
         Returns:
@@ -291,6 +303,12 @@ class StarEditor:
                 if description:
                     prompt_parts.append(f"  {description[:100]}")
         
+        # Add skills section (extracted from resume)
+        if skills:
+            prompt_parts.append("\nSKILLS TO INCLUDE:")
+            skill_list = skills[:30]  # Limit to top 30 skills
+            prompt_parts.append(f"Skills: {', '.join(skill_list)}")
+        
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
         for i, exp in enumerate(experiences[:10], 1):  # Limit to 10 most relevant experiences
@@ -355,13 +373,15 @@ class StarEditor:
         
         # Add formatting instructions
         prompt_parts.append("\nFORMATTING REQUIREMENTS:")
-        prompt_parts.append("- Act as a ruthless editor: Keep only the most relevant, high-impact bullets for the target role.")
-        prompt_parts.append("- Use years only for dates (e.g., '2020 - 2024' not 'Jan 2020 - Dec 2024').")
+        prompt_parts.append("- CRITICAL: Put Company Name on its own **bold** line BEFORE the job title. Format: **Company** — Location on one line, then *Job Title | Dates* on the next line.")
+        prompt_parts.append("- Use years only for dates (e.g., '2020 — 2024' not 'Jan 2020 - Dec 2024').")
         prompt_parts.append("- Use ## for section headers (e.g., '## Professional Experience')")
-        prompt_parts.append("- Use **bold** for job titles and company names")
-        prompt_parts.append("- Use *italic* for dates and locations")
-        prompt_parts.append("- Use - for bullet points")
-        prompt_parts.append("- Ensure every bullet has at least one number/metric")
+        prompt_parts.append("- Use — (em dash) between company and location, and between certification and issuer")
+        prompt_parts.append("- Use **bold** for company names, institution names, and project names")
+        prompt_parts.append("- Use *italic* for job titles/dates and degree lines")
+        prompt_parts.append("- Use - for bullet points under each job")
+        prompt_parts.append("- Every bullet should start with a strong action verb")
+        prompt_parts.append("- Include a ## Skills section at the end with comma-separated skills")
         prompt_parts.append("- Remove any 'Situation:', 'Task:', 'Action:', 'Result:' labels")
         prompt_parts.append("- Keep language professional and achievement-oriented")
         
