@@ -68,26 +68,31 @@ except ImportError:
 # =============================================================================
 
 # Patterns for common PII that should be removed from resumes
+# CAREFUL: Overly aggressive patterns break LLM input quality. Only redact unambiguous PII.
+# Company names, university names, certifications, and proper nouns MUST be preserved
+# for the LLM to produce a quality rewrite.
 _PII_PATTERNS = [
     # Email addresses
-    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', re.IGNORECASE), '[EMAIL REDACTED]'),
+    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', re.IGNORECASE), '[email removed]'),
     # Phone numbers (various formats)
-    (re.compile(r'\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b'), '[PHONE REDACTED]'),
+    (re.compile(r'\b(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}\b'), '[phone removed]'),
     # Social Security Numbers
-    (re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'), '[SSN REDACTED]'),
-    # Street addresses (simplified pattern for common US formats)
-    (re.compile(r'\b\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl|Loop)\b', re.IGNORECASE), '[ADDRESS REDACTED]'),
-    # Full names at start of resume (usually the candidate's name)
-    # This pattern looks for capitalized words at the very beginning of text
-    (re.compile(r'^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*', re.MULTILINE), '[NAME REDACTED]'),
+    (re.compile(r'\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b'), '[ssn removed]'),
+    # Street addresses — match NUMBER + StreetName + StreetSuffix only (e.g. "123 Main St")
+    (re.compile(r'\b\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Place|Pl|Loop)\b', re.IGNORECASE), '[address removed]'),
+    # LinkedIn URL (but NOT github URLs — portfolio links are resume content)
+    (re.compile(r'linkedin\.com/in/[^\s,;|]+', re.IGNORECASE), '[linkedin removed]'),
 ]
 
-# Header patterns that commonly contain personal info
+# Header patterns that commonly contain personal info combos
+# These only match lines combining name + contact info (pipe-delimited resumes)
 _HEADER_LINE_PATTERNS = [
-    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}', re.MULTILINE | re.IGNORECASE),  # Name | email
-    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}', re.MULTILINE),  # Name | phone
-    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct)', re.MULTILINE | re.IGNORECASE),  # Name | address
-    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*(?:City|Location)', re.MULTILINE),  # Name | Company | Location (not address)
+    # Name | email  (e.g. "John Doe | john@email.com")
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}', re.MULTILINE | re.IGNORECASE),
+    # Name | phone  (e.g. "John Doe | 555-123-4567")
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}', re.MULTILINE),
+    # Name | number StreetName StreetSuffix (e.g. "John Doe | 123 Main St")
+    re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*\|\s*\d+\s+[A-Za-z]+(?:\s+[A-Za-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct)', re.MULTILINE | re.IGNORECASE),
 ]
 
 def sanitize_resume_pii(text: str) -> str:
@@ -120,7 +125,7 @@ def sanitize_resume_pii(text: str) -> str:
         for pattern in _HEADER_LINE_PATTERNS:
             if pattern.search(line):
                 # Replace the entire line with a generic placeholder
-                cleaned_lines.append('[PERSONAL INFO REDACTED]')
+                cleaned_lines.append('[personal info removed]')
                 line_cleaned = True
                 break
         if not line_cleaned:
