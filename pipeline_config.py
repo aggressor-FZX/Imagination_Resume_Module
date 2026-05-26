@@ -16,31 +16,32 @@ load_dotenv()
 # MODEL REGISTRY - 3-Stage Pipeline (Cost-Optimized)
 # ============================================================================
 
-# Correct OpenRouter Slugs for the 3-Stage Pipeline
-OR_SLUG_RESEARCHER = "google/gemini-2.5-flash"       # Grounded search capability (Gemini 2.5 Flash)
-#OR_SLUG_DRAFTER = "google/gemini-3-flash-preview"   # High-quality STAR reasoning
-OR_SLUG_STAR_EDITOR = "google/gemini-2.5-flash-lite"                 # High‑speed, clean Markdown (now 2.5 Flash Lite)
-OR_SLUG_DRAFTER = "anthropic/claude-3.5-haiku"                       # High‑quality drafter
-OR_SLUG_JOB_TITLE_EXTRACTOR = "google/gemini-2.5-flash-lite"         # Job‑title extractor (2.5 Flash Lite)
+# Correct OpenRouter Slugs for the 3-Stage Pipeline (2026-05-26)
+# All analysis stages → inception/mercury-2; writer/drafter → deepseek/deepseek-v4-flash
+OR_SLUG_RESEARCHER = "inception/mercury-2"                          # Research — analysis only, cheap & grounded
+OR_SLUG_STAR_EDITOR = "inception/mercury-2"                         # Editor — polish & format, analysis only
+OR_SLUG_DRAFTER = "deepseek/deepseek-v4-flash"                      # Writer — content generation
+OR_SLUG_JOB_TITLE_EXTRACTOR = "inception/mercury-2"                 # Title extractor — analysis only
 
 # Fallback models (in case primary models are unavailable)
 FALLBACK_MODELS = {
     "researcher": [
-        "perplexity/sonar",
-        "google/gemini-2.5-flash-lite",   # was gemini-2.0-flash-001
+        "google/gemini-2.5-flash",
+        "google/gemini-2.5-flash-lite",
     ],
     "drafter": [
-        "anthropic/claude-3.5-haiku",
-        "google/gemini-2.5-flash-lite",   # was gemini-2.0-flash-001
+        "deepseek/deepseek-v4-flash",       # same model; retry on transient error
+        "google/gemini-2.5-flash-lite",
         "openai/gpt-4o-mini",
     ],
     "star_editor": [
-        "google/gemini-2.5-flash-lite",   # was gemini-2.0-flash-001
-        "anthropic/claude-3.5-haiku",
+        "inception/mercury-2",
+        "google/gemini-2.5-flash-lite",
     ],
     "job_title_extractor": [
-        "google/gemini-2.5-flash-lite",   # was gemini-2.0-flash-001
-        "openai/gpt-4o-mini",             # existing fallback
+        "inception/mercury-2",
+        "google/gemini-2.5-flash-lite",
+        "openai/gpt-4o-mini",
     ],
 }
 
@@ -61,7 +62,9 @@ PRICING = {
     # OpenRouter aggregate pricing (verify: https://openrouter.ai/models/x-ai/grok-4.1-fast )
     "x-ai/grok-4.1-fast": {"input": 0.0002, "output": 0.0005},
     "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # DEPRECATED: 2x higher than estimated
-    "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075} # Added: cheap alternative
+    "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075}, # Added: cheap alternative
+    "inception/mercury-2": {"input": 0.0002, "output": 0.0004},   # Analysis — per OpenRouter
+    "deepseek/deepseek-v4-flash": {"input": 0.00015, "output": 0.0006}, # Writer — per OpenRouter
 }
 
 # ============================================================================
