@@ -704,10 +704,10 @@ def render_template(template_text: str, resume: ResumePayload) -> str:
     rendered = replace_pattern(rendered, r"^\\social\[linkedin\]\{.*?\}$", f"\\social[linkedin]{{{latex_escape(resume.linkedin.replace('https://', '').replace('http://', '').replace('www.', ''))}}}")
     rendered = replace_pattern(rendered, r"^\\social\[github\]\{.*?\}$", f"\\social[github]{{{latex_escape(resume.github.replace('https://', '').replace('http://', '').replace('www.', ''))}}}")
 
-    rendered = replace_between_markers(rendered, "% TAGLINE / SUMMARY-------------------------------", "% TECHNICAL SKILLS-------------------------------", build_summary_block(resume))
-    rendered = replace_between_markers(rendered, "% TECHNICAL SKILLS-------------------------------", "% PROFESSIONAL EXPERIENCE-------------------------------", build_skill_block(resume))
+    rendered = replace_between_markers(rendered, "% TAGLINE / SUMMARY-------------------------------", "% PROFESSIONAL EXPERIENCE-------------------------------", build_summary_block(resume))
     rendered = replace_between_markers(rendered, "% PROFESSIONAL EXPERIENCE-------------------------------", "% ML AND ANALYTICS PROJECTS-------------------------------", generate_experience_block(resume))
-    rendered = replace_between_markers(rendered, "% ML AND ANALYTICS PROJECTS-------------------------------", "% EDUCATION-------------------------------", generate_projects_block(resume))
+    rendered = replace_between_markers(rendered, "% ML AND ANALYTICS PROJECTS-------------------------------", "% TECHNICAL SKILLS-------------------------------", generate_projects_block(resume))
+    rendered = replace_between_markers(rendered, "% TECHNICAL SKILLS-------------------------------", "% EDUCATION-------------------------------", build_skill_block(resume))
     rendered = replace_between_markers(rendered, "% EDUCATION-------------------------------", "% CERTIFICATIONS-------------------------------", generate_education_block(resume))
     rendered = replace_between_markers(rendered, "% CERTIFICATIONS-------------------------------", "% PUBLICATION-------------------------------", generate_certification_block(resume))
     rendered = replace_between_markers(rendered, "% PUBLICATION-------------------------------", "\\end{document}", generate_publication_block(resume))
@@ -867,8 +867,8 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
         r.text = resume.summary
         set_run(r, size=8)
     
-    # ─── TECHNICAL SKILLS ───
-    if resume.skills:
+    # ─── PROFESSIONAL EXPERIENCE ───
+    if resume.experience:
         p, r = add_para(sp_before=8, sp_after=1)
         r.text = "Technical Skills"
         set_run(r, size=12, bold=True, color=COLOR_ACCENT)
@@ -995,6 +995,29 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
         for line in resume.certifications:
             p, r = add_para(sp_before=1, sp_after=1)
             r.text = line
+            set_run(r, size=9)
+    
+    # ─── TECHNICAL SKILLS (last section, after experience/projects/education/certs) ───
+    if resume.skills:
+        p, r = add_para(sp_before=8, sp_after=1)
+        r.text = "Technical Skills"
+        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
+        pPr = p._element.get_or_add_pPr()
+        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
+        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
+            docx_qn('w:val'): 'single',
+            docx_qn('w:sz'): '6',
+            docx_qn('w:space'): '1',
+            docx_qn('w:color'): '1F4E79'
+        })
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        
+        for label, values in resume.skills:
+            if not values:
+                continue
+            p, r = add_para(sp_before=1, sp_after=1)
+            r.text = f"{label}: {', '.join(values)}"
             set_run(r, size=9)
     
     docx_path = output_dir / f"{safe_title}.docx"
