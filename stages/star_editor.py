@@ -22,67 +22,86 @@ logger = logging.getLogger(__name__)
 
 STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. Convert the provided resume data into a clean, ATS-friendly, template-aligned resume with ALL required sections.
 
-### REQUIRED SECTIONS (in order):
-1. **EDUCATION**
-2. **CERTIFICATIONS** (if provided)
-3. **PROJECTS** (if provided)
-4. **PROFESSIONAL EXPERIENCE** (always required)
-5. **SKILLS** (always required — extract from input)
+### REQUIRED SECTIONS (in order — MUST match this exact sequence):
+1. **PROFESSIONAL EXPERIENCE** (always required — most important)
+2. **PROJECTS** (if provided)
+3. **EDUCATION**
+4. **CERTIFICATIONS** (if provided)
+5. **TECHNICAL SKILLS** (always required — extract from input, GROUPED by category)
 
-### EXACT SECTION FORMATS:
-
-**EDUCATION:**
-## Education
-**Institution Name** — Location
-*Degree, Date*
-*GPA: X.XX* (if provided)
-- Relevant Courses: Course 1, Course 2, Course 3 (if provided)
-
-**CERTIFICATIONS:**
-## Certifications
-- Certification Name — Issuer (Year)
-- Certification Name — Issuer (Year)
-
-**PROJECTS:**
-## Projects
-**Project Name** — Tech Stack (Duration)
-- Description of what was built and the impact
+### EXACT SECTION FORMATS (MUST follow these templates precisely):
 
 **PROFESSIONAL EXPERIENCE:**
 ## Professional Experience
-**Company Name** — Location
-*Job Title | Dates*
+**Company Name — Location**
+*Job Title | Start Date -- End Date*
 - Action-verb bullet with metric or result
 - Action-verb bullet with metric or result
 
-**SKILLS:**
-## Skills
-Skills: Python, SQL, Docker, AWS, Machine Learning, ...
+NOTE: Company + location on one bold line. Title + dates on the next italic line. 
+Use "—" (em dash) as separator. Dates format: MM/YYYY -- MM/YYYY or "Present".
+
+**PROJECTS:**
+## Projects
+**Project Name — Tech Stack (Duration)**
+- Description of what was built and the impact
+
+**EDUCATION:**
+## Education
+**Degree, Institution** — Date
+  OR
+**Degree** — Institution | Date
+- GPA: X.XX (if provided)
+- Relevant Courses: Course 1, Course 2 (if provided)
+
+**CERTIFICATIONS:**
+## Certifications
+**Certification Name**, Issuer (Year)
+
+**TECHNICAL SKILLS (GROUPED BY CATEGORY — not a flat list):**
+## Technical Skills
+**Category Name:** item1, item2, item3, ...
+
+**Category Name:** item1, item2, item3, ...
+
+Example:
+## Technical Skills
+**Statistical and Predictive Modeling:** descriptive analysis, predictive modeling, Monte Carlo simulation, anomaly detection, model validation, risk assessment
+
+**Languages and Tools:** Python, SQL, C++, Pandas, NumPy, PyTorch, TensorFlow, AWS, Docker, Git
+
+**NLP and AI:** LLM integration, LangChain, OpenAI API, RAG, embeddings, prompt engineering
 
 ### CRITICAL FORMATTING RULES:
-1. **COMPANY NAME ON ITS OWN LINE:** The company MUST appear on a bold header line. Format: `**Company Name** — Location` then on the next line: `*Job Title | Dates*`. NEVER merge title and company like "TitleCompanyName" — that is BROKEN output.
+1. **SECTION ORDER IS MANDATORY:** Experience first, then Projects, then Education, then Certifications, then Skills. Never reorder.
 
-2. **INCLUDE ALL PROVIDED SECTIONS:** Every section with data in the input MUST appear in the output. Never skip a section that has content.
+2. **COMPANY ON BOLD HEADER LINE:** Format: `**Company Name — Location**` then on the next line: `*Job Title | MM/YYYY -- MM/YYYY*`. NEVER merge title and company into one line.
 
-3. **NO PLACEHOLDER TEXT:** Use actual dates and locations. NEVER output: "Dates Not Specified", "Dates | Location", "N/A", "Unknown", "Dates Provided". If a date is genuinely missing, omit the date portion and just show the title.
+3. **SKILLS MUST BE CATEGORIZED:** Group skills into 2-4 logical categories with bold category headers. NEVER output a flat comma-separated list like "Skills: Python, SQL, Docker...". Always use `**Category Name:** item1, item2, ...` format.
 
-4. **EVERY LINE A BULLET:** Under each job, every achievement MUST be a distinct bullet starting with `- `. Never combine achievements into paragraph blocks.
+4. **INCLUDE ALL PROVIDED SECTIONS:** Every section with data in the input MUST appear in the output. Never skip a section that has content.
 
-5. **NO LABELS:** Strip "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" prefixes from bullets.
+5. **NO PLACEHOLDER TEXT:** Use actual dates and locations. NEVER output: "Dates Not Specified", "N/A", "Unknown", "Dates Provided". If a date is genuinely missing, omit the date portion.
 
-6. **METRICS ONLY IF SOURCED:** Only include numbers (%, $, counts) that appear explicitly in the user's input. Never fabricate metrics.
+6. **EVERY LINE A BULLET:** Under each job/project, every achievement MUST be a distinct bullet starting with `- `. Never combine achievements into paragraph blocks.
 
-7. **SKILLS SECTION IS MANDATORY:** Always output a `## Skills` section at the end. List skills as a comma-separated line: `Skills: Python, C++, AWS, Docker, SQL, ...`
+7. **NO LABELS:** Strip "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" prefixes from bullets.
 
-8. **ANTI-HALLUCINATION:** Never list the Target Company as an employer. Only use company names that appear in the input experiences.
+8. **METRICS ONLY IF SOURCED:** Only include numbers (%, $, counts) that appear explicitly in the user's input. Never fabricate metrics.
 
-9. **NO LEAKAGE:** No meta-commentary, no editorial notes in the resume output. Pure resume content only.
+9. **ANTI-HALLUCINATION:** Never list the Target Company as an employer. Only use company names that appear in the input experiences.
+
+10. **NO LEAKAGE:** No meta-commentary, no editorial notes in the resume output. Pure resume content only.
+
+11. **EDUCATION FORMAT:** `**Degree, Institution** — Date` on the main line. GPA and courses on separate bullet lines if provided.
+
+12. **DATES ON EXPERIENCE:** Every job entry MUST include dates on the italic line: `*Job Title | MM/YYYY -- MM/YYYY*`. Use "Present" for current roles. If dates are genuinely unknown, still include the pipe separator but leave dates empty: `*Job Title |*`.
 
 Output JSON Schema:
 {
-  "final_markdown": "## Education\\n**Washington State University** \\u2014 Everett, WA\\n*B.S. Data Analytics, 2026*\\n*GPA: 3.84*\\n\\n## Certifications\\n- Network Security+ \\u2014 CompTIA (2024)\\n\\n## Projects\\n**LLM-Powered Chatbot** \\u2014 Python, LangChain, Pinecone (3 months)\\n- Built GenAI chatbot with live data scraping for course guidance\\n\\n## Professional Experience\\n**National Oceanic and Atmospheric Administration (NOAA)** \\u2014 Seattle, WA\\n*Operations Manager | 2019 \\u2013 2023*\\n- Designed Python decision-support tools reducing manual reporting by 40% across 13 vessels\\n- Launched Government Travel database achieving 85% adoption in first month\\n\\n## Skills\\nSkills: Python, SQL, Docker, AWS, Machine Learning, PyTorch, Data Analysis",
-  "final_plain_text": "Education: B.S. Data Analytics - Washington State University (2026) | Certifications: Network Security+ - CompTIA | Experience: Operations Manager at NOAA...",
-  "editorial_notes": "Template-aligned resume with all required sections including Skills."
+  "final_markdown": "## Professional Experience\\n**National Oceanic and Atmospheric Administration (NOAA) \\u2014 Seattle, WA**\\n*Operations Manager | 12/2019 \\u2013 05/2023*\\n- Designed Python decision-support tools reducing manual reporting by 40% across 13 vessels\\n- Launched Government Travel database achieving 85% adoption in first month\\n\\n## Projects\\n**LLM-Powered Chatbot \\u2014 Python, LangChain, Pinecone (3 months)**\\n- Built GenAI chatbot with live data scraping for course guidance\\n\\n## Education\\n**B.S. Data Analytics, Washington State University** \\u2014 05/2026\\n- GPA: 3.84\\n\\n## Certifications\\n**Network Security+**, CompTIA (2024)\\n\\n## Technical Skills\\n**Languages and Tools:** Python, SQL, Docker, AWS, Git\\n**Machine Learning and AI:** PyTorch, TensorFlow, scikit-learn, NLP, LLM integration",
+  "final_plain_text": "Professional Experience: Operations Manager at NOAA (2019-2023)... | Education: B.S. Data Analytics - Washington State University (2026) | Certifications: Network Security+ - CompTIA | Skills: Python, SQL, Docker, AWS, ML...",
+  "editorial_notes": "Template-aligned resume with all required sections including categorized Technical Skills."
 }
 """
 
@@ -303,11 +322,17 @@ class StarEditor:
                 if description:
                     prompt_parts.append(f"  {description[:100]}")
         
-        # Add skills section (extracted from resume)
+        # Add skills section (extracted from resume) — MUST be categorized
         if skills:
-            prompt_parts.append("\nSKILLS TO INCLUDE:")
+            prompt_parts.append("\nSKILLS TO INCLUDE (MUST BE CATEGORIZED INTO 2-4 GROUPS):")
             skill_list = skills[:30]  # Limit to top 30 skills
-            prompt_parts.append(f"Skills: {', '.join(skill_list)}")
+            prompt_parts.append(f"Raw skills: {', '.join(skill_list)}")
+            prompt_parts.append("Group these into logical categories. Example:")
+            prompt_parts.append("**Languages and Tools:** Python, SQL, C++, Docker, Git")
+            prompt_parts.append("**Machine Learning and AI:** PyTorch, TensorFlow, scikit-learn, NLP")
+            prompt_parts.append("**Data Engineering:** ETL pipelines, AWS, PostgreSQL, data modeling")
+        else:
+            prompt_parts.append("\nSKILLS TO INCLUDE: None provided. You MUST still output a ## Technical Skills section by extracting skills from the experience bullets and categorizing them into 2-4 groups.")
         
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
@@ -381,7 +406,8 @@ class StarEditor:
         prompt_parts.append("- Use *italic* for job titles/dates and degree lines")
         prompt_parts.append("- Use - for bullet points under each job")
         prompt_parts.append("- Every bullet should start with a strong action verb")
-        prompt_parts.append("- Include a ## Skills section at the end with comma-separated skills")
+        prompt_parts.append("- Use ## Technical Skills as the skills section header (not just ## Skills)")
+        prompt_parts.append("- Skills MUST be categorized: **Category Name:** item1, item2, ... (NOT a flat list)")
         prompt_parts.append("- Remove any 'Situation:', 'Task:', 'Action:', 'Result:' labels")
         prompt_parts.append("- Keep language professional and achievement-oriented")
         
