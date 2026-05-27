@@ -932,7 +932,7 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
             "resume.export.complete",
             extra={
                 "request_id": request_id, 
-                "filename": result["filename"],
+                "export_name": result["filename"],
                 "pdf_size_chars": len(result["pdf_base64"]),
                 "docx_size_chars": len(result["docx_base64"]),
             }
@@ -942,7 +942,7 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
     except Exception as e:
         logger.exception(
             "resume.export.failed",
-            extra={"request_id": request_id, "error": str(e)},
+            extra={"request_id": request_id, "err_msg": str(e)},
         )
         return JSONResponse(
             status_code=500,
