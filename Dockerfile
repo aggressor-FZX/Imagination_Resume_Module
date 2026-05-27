@@ -26,14 +26,16 @@ RUN uv pip install --system -r requirements.txt
 # Production stage - Minimal runtime image WITH TeX Live for PDF generation
 FROM python:3.11-slim
 
-# Install runtime system dependencies + TeX Live (pdflatex + moderncv)
+# Install runtime system dependencies + TeX Live (pdflatex + moderncv + fontawesome)
 # texlive-latex-recommended includes: moderncv, enumitem, geometry, hyperref
+# texlive-fonts-extra includes: fontawesome5 (needed by moderncv for icons)
 RUN apt-get update && apt-get install -y \
     curl \
     texlive-latex-base \
     texlive-latex-recommended \
     texlive-latex-extra \
     texlive-fonts-recommended \
+    texlive-fonts-extra \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security

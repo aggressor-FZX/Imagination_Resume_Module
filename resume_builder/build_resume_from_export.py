@@ -21,7 +21,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Tuple
 
 
 DEFAULT_TEMPLATE = Path(__file__).parent / "main_template.tex"
-DEFAULT_OUTPUT_DIR = Path("/app/data/generated_resumes")
+DEFAULT_OUTPUT_DIR = Path("/tmp/generated_resumes")
 
 
 @dataclass
