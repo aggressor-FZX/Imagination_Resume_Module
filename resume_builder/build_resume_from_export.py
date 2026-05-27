@@ -870,30 +870,6 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     # ─── PROFESSIONAL EXPERIENCE ───
     if resume.experience:
         p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Technical Skills"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        # Add bottom border to match moderncv section rule
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
-        
-        for label, values in resume.skills:
-            if not values:
-                continue
-            p, r = add_para(sp_before=1, sp_after=1)
-            r.text = f"{label}: {', '.join(values)}"
-            set_run(r, size=9)
-    
-    # ─── PROFESSIONAL EXPERIENCE ───
-    if resume.experience:
-        p, r = add_para(sp_before=8, sp_after=1)
         r.text = "Professional Experience"
         set_run(r, size=12, bold=True, color=COLOR_ACCENT)
         # Add bottom border
@@ -1016,9 +992,13 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
         for label, values in resume.skills:
             if not values:
                 continue
-            p, r = add_para(sp_before=1, sp_after=1)
-            r.text = f"{label}: {', '.join(values)}"
-            set_run(r, size=9)
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after = Pt(1)
+            r1 = p.add_run(f"{label}: ")
+            set_run(r1, size=9, bold=True)
+            r2 = p.add_run(", ".join(values))
+            set_run(r2, size=9, bold=False)
     
     docx_path = output_dir / f"{safe_title}.docx"
     doc.save(str(docx_path))
