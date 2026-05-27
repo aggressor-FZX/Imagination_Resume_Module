@@ -891,6 +891,65 @@ async def debug_flags():
     }
 
 
+@app.post("/resume/export", dependencies=[Depends(get_api_key)])
+async def export_resume(payload: Dict[str, Any], request: Request, api_key: str = Depends(get_api_key)):
+    """Generate a formatted PDF + DOCX resume from structured Imaginator output.
+    
+    Accepts the same output payload from /analyze and renders it through
+    LaTeX (moderncv banking style) + matching python-docx.
+    
+    Request body:
+        {
+            "name": "Jeff Calderon",          # required
+            "location": "Marysville, WA",      # optional
+            "phone": "916.712.8396",           # optional
+            "email": "jeff.d.calderon@...",    # optional
+            "linkedin": "linkedin.com/in/...", # optional
+            "github": "github.com/...",        # optional
+            "headline": "Data Scientist | ML", # optional
+            "summary": "Professional summary", # optional
+            "skills": [{ "category": "...", "items": [...] }],  # optional
+            "experience": [{ "title": "...", "bullets": [...], "start_date": "...", "end_date": "..." }],  # optional
+            "projects": [{ "title": "...", "bullets": [...] }],  # optional
+            "education": ["B.S. Computer Science, ..."],  # optional
+            "certifications": ["AWS Solutions Architect"],  # optional
+            "job_title": "Data Scientist"     # optional, for filename
+        }
+    
+    Returns:
+        { "pdf_base64": "...", "docx_base64": "...", "filename": "Data_Scientist" }
+    """
+    request_id = getattr(request.state, "request_id", None)
+    logger.info("resume.export.request", extra={"request_id": request_id})
+    
+    try:
+        from resume_builder.build_resume_from_export import build_resume_from_payload_base64
+        
+        job_title = payload.get("job_title") or payload.get("headline", "resume")
+        result = build_resume_from_payload_base64(payload, job_title=job_title)
+        
+        logger.info(
+            "resume.export.complete",
+            extra={
+                "request_id": request_id, 
+                "filename": result["filename"],
+                "pdf_size_chars": len(result["pdf_base64"]),
+                "docx_size_chars": len(result["docx_base64"]),
+            }
+        )
+        return JSONResponse(status_code=200, content=result)
+        
+    except Exception as e:
+        logger.exception(
+            "resume.export.failed",
+            extra={"request_id": request_id, "error": str(e)},
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Resume export failed: {str(e)}"},
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
 
