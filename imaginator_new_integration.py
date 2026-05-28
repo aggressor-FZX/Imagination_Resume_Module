@@ -804,23 +804,54 @@ async def run_new_pipeline_async(
             experiences = parse_experiences(resume_text)
             logger.info(f"[NEW_PIPELINE] Parsed {len(experiences)} experiences from resume text")
             
-            # Fallback: if parsing failed or returned invalid data, use raw resume text as a single experience
-            has_valid_company = any(
-                exp.get("company") and exp.get("company") not in ("N/A", "Unknown", "", None)
-                for exp in experiences
-            )
-            if not experiences or not has_valid_company:
-                logger.warning(f"[NEW_PIPELINE] Experience parsing failed or returned invalid data, using raw text fallback")
+            # Log extracted companies for debugging
+            for i, exp in enumerate(experiences):
+                logger.info(
+                    f"[NEW_PIPELINE]   Exp[{i}] role={exp.get('role','?')!r}, "
+                    f"company={exp.get('company','?')!r}, "
+                    f"title_line={exp.get('title_line','?')[:60]!r}"
+                )
+            
+            # Fallback: if parsing found zero experiences OR every experience
+            # is missing BOTH a company AND a role (meaning parse_experiences
+            # extracted nothing useful), collapse to raw text.  Having a valid
+            # title_line is sufficient — company/role may be empty for
+            # pipe-separated or non-standard headers where the drafter can
+            # still infer from context.
+            def _exp_is_usable(exp: dict) -> bool:
+                """An experience is usable if it has a role, company, or meaningful title_line."""
+                has_role = bool(exp.get("role"))
+                has_company = bool(exp.get("company") and exp.get("company") not in ("N/A", "Unknown"))
+                has_title_line = bool(exp.get("title_line") and len(exp.get("title_line", "")) >= 10)
+                has_body = bool(exp.get("body") and len(exp.get("body", "")) >= 50)
+                # Useable if *any* of role/company is set, or title_line exists with some body content
+                return (has_role or has_company) or (has_title_line and has_body)
+
+            usable_exps = [e for e in experiences if _exp_is_usable(e)]
+            
+            if not usable_exps:
+                logger.warning(
+                    f"[NEW_PIPELINE] Experience parsing returned {len(experiences)} entries "
+                    f"but none are usable (missing role/company/title_line). "
+                    f"Falling back to raw text."
+                )
                 experiences = [{
                     "title_line": "Professional Experience",
                     "company": "Current Employer",
                     "role": "Professional",
-                    "snippet": resume_text[:3000],  # Use first 3000 chars
+                    "snippet": resume_text[:3000],
                     "body": resume_text[:3000],
                     "duration": "",
                     "raw": resume_text[:3000]
                 }]
                 logger.info(f"[NEW_PIPELINE] Created 1 fallback experience from raw resume text")
+            else:
+                if len(usable_exps) < len(experiences):
+                    logger.info(
+                        f"[NEW_PIPELINE] Filtering {len(experiences)} parsed → "
+                        f"{len(usable_exps)} usable experiences (dropped {len(experiences) - len(usable_exps)} empty entries)"
+                    )
+                experiences = usable_exps
 
         provided_projects = kwargs.get("projects", [])
         provided_education = kwargs.get("education", [])

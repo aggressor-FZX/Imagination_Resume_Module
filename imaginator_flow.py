@@ -622,39 +622,132 @@ _ROLE_MAP = {
 }
 
 
+def _parse_title_line_to_company_role(title_line: str) ->tuple:
+    """
+    Split a title_line into (role, company, date_range) components.
+    
+    Handles formats like:
+      "Role -- Company MM/YYYY -- MM/YYYY"
+      "Role — Company MM/YYYY — MM/YYYY"
+      "Role | Company"
+      "Title (Company Inc) DateRange"
+      "Role — Company" (single em-dash separator)
+    
+    Returns (role, company, date_range) as strings. Falls back gracefully.
+    """
+    if not title_line:
+        return ("", "", "")
+    
+    role = ""
+    company = ""
+    date_range = ""
+    
+    # First, try to strip trailing date range: MM/YYYY -- MM/YYYY or MM/YYYY - Present
+    _date_tail = re.compile(
+        r'(\d{1,2}/\d{2,4}\s*[-–—]+\s*(?:\d{1,2}/\d{2,4}|[Pp]resent|[Cc]urrent|[Rr]esigned|[Ll]eft|[Ee]nded))(?:\s*)$'
+    )
+    dm = _date_tail.search(title_line)
+    if dm:
+        date_range = dm.group(1).strip()
+        title_line = title_line[:dm.start()].strip()
+    
+    # Format 1a: "Role -- Company" (double-dash or double em-dash)
+    dash_split = re.split(r'\s+[-–—]{2,}\s+', title_line, maxsplit=1)
+    if len(dash_split) == 2 and bool(dash_split[0].strip()) and bool(dash_split[1].strip()):
+        role = dash_split[0].strip()
+        company = dash_split[1].strip()
+        return (role, company, date_range)
+    
+    # Format 1b: "Role — Company" (single em-dash or en-dash separator)
+    # Only try if there's exactly one em-dash/en-dash and no hyphens
+    em_match = re.split(r'\s*[—–]\s+', title_line, maxsplit=1)
+    if len(em_match) == 2 and bool(em_match[0].strip()) and bool(em_match[1].strip()):
+        # Verify the em-dash was acting as a separator (not a hyphenated compound word)
+        # A valid separator split should have both parts >= 3 chars and the right side
+        # should not start with a lowercase word (which would indicate hyphenation)
+        left, right = em_match[0].strip(), em_match[1].strip()
+        if len(left) >= 3 and len(right) >= 3 and not right[0].islower():
+            role = left
+            company = right
+            return (role, company, date_range)
+    
+    # Format 2: "Role | Company" or "Role | Company |"
+    pipe_split = re.split(r'\s*\|\s*', title_line.strip().rstrip('|').strip())
+    if len(pipe_split) == 2 and bool(pipe_split[0].strip()) and bool(pipe_split[1].strip()):
+        role = pipe_split[0].strip()
+        company = pipe_split[1].strip()
+        return (role, company, date_range)
+    
+    # Format 3: "Title (Company Inc)" — extract company from parentheses
+    paren_match = re.match(
+        r'^(.+?)\s*\((.+?)\)\s*$',
+        title_line.strip()
+    )
+    if paren_match:
+        role = paren_match.group(1).strip()
+        company = paren_match.group(2).strip()
+        return (role, company, date_range)
+    
+    # Format 4: Single title_line with no separator — try to split at a keyword boundary
+    # e.g. "Research Physicist Naval Research Laboratory"
+    # Look for a known role token followed by remaining text as company
+    _role_end = re.compile(
+        r'^(.+?\b(?:Engineer|Developer|Analyst|Scientist|Manager|Director|Officer|'
+        r'Physicist|Researcher|Consultant|Specialist|Coordinator|Technician|Associate|'
+        r'Intern|Lead|Architect|Designer|Administrator|Administrator))\s+(.+)$',
+        re.IGNORECASE
+    )
+    rm = _role_end.match(title_line.strip())
+    if rm:
+        role = rm.group(1).strip()
+        company = rm.group(2).strip()
+        return (role, company, date_range)
+    
+    # Fallback: entire line is the role
+    return (title_line.strip(), "", date_range)
+
+
 def parse_experiences(text: str) -> List[Dict]:
     """
     Parse experience blocks from resume text.
     
     Returns experiences with fields compatible with creative drafter:
     - title_line: Job title/company header
+    - company: Extracted company name
+    - role: Extracted job role/title
     - skills: List of skills extracted from the experience
     - snippet: Full text content of the experience (for context)
     - body: Same as snippet (backward compatibility)
     - duration: Extracted date/duration info
+    - location: Extracted location
     - raw: Original block text
     
-    IMPROVED LOGIC (v3): Works line-by-line to handle PDFs that have single newlines
+    IMPROVED LOGIC (v4): Works line-by-line to handle PDFs that have single newlines
     between experiences. Detects new experiences by job title patterns, not newlines.
+    Now extracts company and role from title_line for drafter truth constraints.
     Handles:
     1. PDF format with single newlines between experiences
     2. Text format with double newlines between experiences  
     3. Inline dates in parentheses (AI Analyst format)
     4. Skips education entries, section headers, and narrative content
+    5. Extracts company/role from "Role -- Company" or "Role — Company" format
     """
     # Job title patterns - line must match one of these to be a job title
+    # v4: Relaxed anchor — allow role keywords anywhere in the line, not just at start
     job_title_pattern = re.compile(
         r'(?:'
-        r'.*\(.*(?:inc|llc|corp|company|organization|administration|laboratory|university|'
+        r'\(.*(?:inc|llc|corp|company|organization|administration|laboratory|university|'
         r'force|navy|army|air\s*force|marine|noaa|nasa|department|office|group|team|'
-        r'services|solutions|technologies|college|club|internship|researcher|research)\)|'  # Company in parens
-        r'.*\|.*\||'  # Pipe separators
-        r'^(?:senior|junior|lead|principal|staff|chief|head|director|manager|engineer|'
+        r'services|solutions|technologies|college|club|research)\)|'  # Company in parens
+        r'.*\|.*\|'  # Pipe separators (header lines)
+        r'|'
+        r'(?:'
+        r'\b(?:senior|junior|lead|principal|staff|chief|head|director|manager|engineer|'
         r'developer|analyst|scientist|specialist|coordinator|administrator|officer|'
-        r'technician|mechanic|craftsman|assistant|associate|intern|president|operations|'
-        r'faculty|commissioned|research\s*physicist|data\s*analyst|software|machine\s*learning|'
-        r'ml\s*engineer|ai\s*engineer|devops|sre|product|program|project|consultant|'
-        r'architect|designer|writer|editor|teacher|professor|instructor|coach|trainer)'
+        r'technician|craftsman|assistant|associate|intern|president|operations|'
+        r'faculty|commissioned|physicist|researcher|data\s+analyst|software|'
+        r'machine\s+learning|ml\s+engineer|ai\s+engineer|devops|sre)\b'
+        r')'
         r')',
         re.IGNORECASE
     )
@@ -781,7 +874,7 @@ def parse_experiences(text: str) -> List[Dict]:
     if current_exp and isinstance(current_exp, dict) and current_exp.get('lines'):
         experiences.append(current_exp)
     
-    # Convert to final format
+    # Convert to final format — extract company/role for drafter truth constraints
     result = []
     for exp in experiences:
         exp_lines = exp.get('lines', [])
@@ -794,8 +887,11 @@ def parse_experiences(text: str) -> List[Dict]:
         body_lines = [l for l in exp_lines[1:] if l.strip()]
         body = " ".join(body_lines) if body_lines else ""
         
-        # Extract duration information for seniority detection
-        duration = extract_duration_from_text(full_text)
+        # Extract company and role from title_line
+        parsed_role, parsed_company, parsed_date_range = _parse_title_line_to_company_role(title_line)
+        
+        # Use extracted date range if available, otherwise fall back to full-text extraction
+        duration = parsed_date_range if parsed_date_range else extract_duration_from_text(full_text)
         
         # Extract location from the experience text
         # Look for patterns like "City, ST" or "City, State" in the title line or body
@@ -824,6 +920,8 @@ def parse_experiences(text: str) -> List[Dict]:
         result.append({
             "raw": full_text,
             "title_line": title_line,
+            "company": parsed_company,    # NEW: used by drafter truth constraints
+            "role": parsed_role,          # NEW: used by drafter truth constraints
             "body": body,
             "snippet": body,  # Alias for creative drafter compatibility
             "skills": extracted_skills,  # Skills extracted from this experience
