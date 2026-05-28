@@ -23,12 +23,19 @@ COPY requirements.txt ./
 # Install Python dependencies using UV (faster than pip)
 RUN uv pip install --system -r requirements.txt
 
-# Production stage - Minimal runtime image
+# Production stage - Minimal runtime image WITH TeX Live for PDF generation
 FROM python:3.11-slim
 
-# Install only runtime system dependencies
+# Install runtime system dependencies + TeX Live (pdflatex + moderncv + fontawesome)
+# texlive-latex-recommended includes: moderncv, enumitem, geometry, hyperref
+# texlive-fonts-extra includes: fontawesome5 (needed by moderncv for icons)
 RUN apt-get update && apt-get install -y \
     curl \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -45,6 +52,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY . .
+
+# Copy resume build assets (LaTeX template + build script)
+COPY resume_builder/ /app/resume_builder/
 
 # Change ownership to non-root user
 RUN chown -R app:app /app

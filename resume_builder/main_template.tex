@@ -1,0 +1,129 @@
+\documentclass[10pt,letterpaper]{moderncv}
+\moderncvstyle{banking}
+\moderncvcolor{black}
+\definecolor{color1}{RGB}{0,0,0}% accent color
+\definecolor{color2}{RGB}{0,0,0}% main color
+\usepackage[margin=0.3in]{geometry}
+\usepackage{enumitem}
+
+\name{Jeff}{Calderon}
+\address{Marysville}{WA}
+\phone{916\,712\,8396}
+\email{jeff.d.calderon@gmail.com}
+\social[linkedin]{in/jeffdcalderon}
+\social[github]{aggressor-FZX}
+\nopagenumbers{}
+\begin{document}
+\makecvtitle
+
+% TAGLINE / SUMMARY-------------------------------
+\vspace*{-9mm}
+\begin{center}
+\textit{Engineering Data Scientist~|~Safety Analytics~|~Sensor Data~|~Predictive Modeling}
+\end{center}
+\vspace*{1mm}
+
+Engineering data scientist with a physics foundation and 10+ years of applied experience designing predictive models, analyzing sensor and temporal data streams, and delivering actionable safety insights to operational and executive stakeholders. Background spans safety-critical federal research (Naval Research Laboratory national security programs), multi-sensor oceanographic data analysis at scale (10+ TB, NOAA research fleet), aviation-adjacent operations (U.S. Air Force aerospace ground equipment), and Boeing Defense-sponsored ML research. Experienced building ETL pipelines, statistical models, anomaly detection systems, and data visualization products that drive risk-based decisions. Physics degree with a peer-reviewed publication.
+
+% PROFESSIONAL EXPERIENCE-------------------------------
+\vspace*{2mm}
+\section{Professional Experience}
+\vspace*{1mm}
+
+\textbf{Data Analyst Intern~-- Washington State Data Exchange for Public Safety} \hfill 04/2025 -- Present
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Design and implement ETL/ELT pipelines (AWS Step Functions, Glue, Lambda) ingesting multi-source safety and operational data; build Power BI dashboards and reports tracking safety-relevant KPIs for law enforcement and EMS leadership.
+  \item Perform exploratory analysis and variance reporting on operational datasets; translate findings into actionable recommendations for agency directors and cross-functional stakeholders.
+\end{itemize}
+
+\textbf{Operations Manager~-- National Oceanic and Atmospheric Administration (NOAA)} \hfill 12/2019 -- 05/2023
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Built descriptive and predictive analytical models synthesizing high-dimensional sensor data from 13 oceanographic research vessels; designed Python-based decision-support tools for operational safety and readiness monitoring, reducing manual reporting overhead by 40\%.
+  \item Delivered safety-relevant data insights and risk-based recommendations to Regional Director and fleet leadership through regular executive briefings; translated complex multi-source analytical findings into clear, actionable management summaries.
+  \item Launched Government Official Travel analytics portal: gathered requirements, designed data architecture, built monitoring system, and achieved 85\% adoption within the first month.
+  \item U.S. Coast Guard certified Medical Person in Charge (MPIC) aboard NOAA research vessels: performed patient assessment, administered medications, and managed medical emergencies -- demonstrates applied safety risk assessment, regulatory compliance, and critical decision-making in high-stakes operational environments directly relevant to aerospace safety analytics.
+\end{itemize}
+
+\textbf{Marine Data Analyst~|~Hydrographer~-- NOAA Commissioned Officer Corps (Office of Coast Survey)} \hfill 12/2016 -- 05/2019
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Processed and fused multi-sensor shipboard data streams in support of the U.S. Office of Coast Survey: multibeam sonar, single-beam sonar, side-scan sonar, LiDAR, GPS, inertial motion, tidal modeling, and shipboard weather sensor arrays -- a sensor fusion workload directly analogous to ADS-B and FDM aviation safety data pipelines.
+  \item Designed and implemented anomaly detection algorithms on sonar and geospatial datasets to identify navigation hazards and seafloor irregularities for official nautical chart updates; evaluated algorithm performance against surveyor-validated ground truth and iterated based on results -- safety-critical algorithm development with real-world consequences if wrong.
+  \item Applied trajectory-based analysis to vessel GPS and inertial motion data to reconstruct and validate survey track lines, assess data coverage, and flag positional anomalies in acquired sensor data.
+  \item Served as data custodian/steward for 10+ TB of oceanographic and atmospheric sensor data; maintained fully documented, reproducible data processing pipelines and version-controlled analysis workflows.
+  \item Produced detailed technical reports, visualizations, and safety recommendations from sensor analysis for operational and scientific leadership decision-making.
+\end{itemize}
+
+\textbf{Research Physicist~-- Naval Research Laboratory} \hfill 01/2014 -- 06/2016
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Designed original Monte Carlo algorithms for probabilistic safety risk quantification and radiological threat detection modeling in Python and C++; evaluated algorithm performance against empirical benchmarks, iterated based on results, and documented findings for reproducibility and peer review -- directly matching the job requirement for 4+ years designing and evaluating data analysis algorithms.
+  \item Performed multi-stage predictive model validation; applied statistical methods to identify risk drivers and anomalies in complex sensor measurement data; translated results into technical reports and executive briefings for non-technical government stakeholders.
+  \item Results secured \$500K in federal safety R\&D funding. Co-authored peer-reviewed publication (\textit{Journal of Instrumentation}, 2016); operated in classified national security environment under strict safety, governance, and documentation requirements.
+\end{itemize}
+
+\textbf{Aerospace Ground Equipment Craftsman~|~Staff Sergeant (E-5)~-- United States Air Force} \hfill 05/2002 -- 02/2010
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Maintained and operated safety-critical aerospace ground support equipment for F-16 fighter jet operations worldwide -- direct aviation domain experience with aircraft maintenance safety systems, readiness monitoring, and equipment lifecycle management.
+  \item Administered \$2.3M equipment database; led technician teams; reported aircraft safety readiness statistics to base commanders. Honorably discharged.
+\end{itemize}
+
+% ML AND ANALYTICS PROJECTS-------------------------------
+\vspace*{2mm}
+\section{ML and Analytics Projects}
+\vspace*{1mm}
+
+\textbf{Boeing Defense~-- Aerial Safety Vision AI} \textit{| Boeing-Sponsored Capstone} \hfill 08/2025 -- 05/2026
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Contributed to Boeing Defense-sponsored program designing ML models for aerial drone video analysis -- safety-relevant computer vision applied to aerial imagery. Trained generative models on 263,000+ image datasets via PyTorch DDP on NVIDIA H100/A100 GPU clusters; designed evaluation frameworks (LPIPS, PSNR, T-LPIPS) benchmarked across 10+ real-world flight scenarios.
+  \item Maintained fully reproducible training pipeline: version-controlled code (Git), deterministic evaluation protocol (fixed seed 1337), documented checkpointing cadence (200 kimg), and per-tick stats logging -- enabling exact reproduction of any training run. Applied NLP embedding techniques for semantic feature analysis of aerial imagery metadata.
+\end{itemize}
+
+\textbf{Sensor Data Analysis~-- LHC Particle Physics~| University of Maryland} \hfill 2013 -- 2015
+\vspace*{-2mm}
+\begin{itemize}[label={-}, itemsep=-1.0ex]
+  \item Designed and implemented gradient-based solvers, efficiency quantification algorithms, and statistical significance methods to extract signal from multi-terabyte particle physics sensor datasets at CERN; evaluated and compared multiple algorithmic approaches against ground truth and published results.
+  \item Maintained reproducible analysis workflows using version-controlled code, documented Jupyter notebooks, and shared computing grid environments; co-authored peer-reviewed publication on detector performance analysis.
+\end{itemize}
+
+% TECHNICAL SKILLS-------------------------------
+\vspace*{2mm}
+\section{Technical Skills}
+\vspace*{1mm}
+\textbf{Statistical and Predictive Modeling:} Descriptive, diagnostic, predictive, and prescriptive model development, statistical analysis, Monte Carlo simulation, risk quantification, anomaly detection, time-series and trajectory analysis, algorithm design and performance evaluation, model validation, safety risk assessment, Bayesian concepts, regression, gradient boosting, random forest, neural networks
+
+\textbf{Sensor and Temporal Data:} Multi-sensor data fusion, temporal data analysis, sensor stream ingestion and validation, large-scale time-series processing, ETL/ELT pipeline design, data quality and governance, geospatial data analysis (ArcGIS, CARIS), sonar data processing~-- directly analogous to ADS-B and FDM aviation sensor data workflows
+
+\textbf{Languages and Tools:} Python (primary), SQL, C++, Bash, JavaScript, TypeScript, Pandas, NumPy, PyTorch, TensorFlow, Scikit-learn, Matplotlib, Seaborn, Power BI, Tableau, AWS (Lambda, Glue, Step Functions, S3), Azure, Docker, Git, Linux
+
+\textbf{NLP and AI:} NLP (transformers, attention mechanisms, embeddings, sequence models), LLM integration (LangChain, OpenAI API, RAG), LLM fine-tuning, generative models (PyTorch DDP training on GPU clusters), NVIDIA H100/A100, SLURM HPC
+
+% EDUCATION-------------------------------
+\vspace*{2mm}
+\section{Education}
+\vspace*{1mm}
+\textbf{B.S. in Data Analytics}, Washington State University, Everett \hfill 05/2026\\
+\textbf{A.A.S. in Computer Science}, Everett Community College \hfill 04/2024\\
+GPA: 4.0 (President's List)\\
+\textbf{B.S. in Physics}, University of Maryland, College Park \hfill 12/2015
+
+% CERTIFICATIONS-------------------------------
+\vspace*{2mm}
+\section{Certifications}
+\vspace*{1mm}
+\textbf{Network Security+}, CompTIA (07/2024)\\
+\textbf{Cybersecurity Analyst}, Everett Community College (07/2024)\\
+\textbf{Data Analytics}, Washington State University (12/2024)\\
+\textbf{Medical Person in Charge}, U.S. Coast Guard Certified
+
+% PUBLICATION-------------------------------
+\vspace*{2mm}
+\section{Publication}
+\vspace*{1mm}
+\textit{Journal of Instrumentation} (2016)~-- Liquid Scintillator Tiles for Calorimetry, Large Hadron Collider detector performance analysis
+
+\end{document}
