@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import re
+import asyncio
 import httpx
+from functools import lru_cache
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
@@ -234,29 +236,48 @@ def _build_onet_search_variants(job_title: str) -> List[str]:
     return deduped
 
 
-def _search_onet_keyword(keyword: str, limit: int = 10) -> List[Dict[str, str]]:
-    """
-    Query O*NET keyword search and return candidate occupations.
-    """
+_ONET_CACHE: Dict[str, Any] = {}
+_ONET_HTTP: Optional[httpx.AsyncClient] = None
+
+
+def _get_onet_http() -> httpx.AsyncClient:
+    """Shared async HTTP client for O*NET API (connection pooling)."""
+    global _ONET_HTTP
+    if _ONET_HTTP is None or _ONET_HTTP.is_closed:
+        _ONET_HTTP = httpx.AsyncClient(timeout=10, headers={
+            "Authorization": f"Basic {ONET_API_AUTH}",
+            "Accept": "application/json",
+        })
+    return _ONET_HTTP
+
+
+_ONET_HEADERS = {
+    "Authorization": f"Basic {ONET_API_AUTH}",
+    "Accept": "application/json",
+}
+
+
+async def _search_onet_keyword(keyword: str, limit: int = 10) -> List[Dict[str, str]]:
+    """Query O*NET keyword search asynchronously with in-memory caching."""
     if not keyword:
         return []
 
-    headers = {
-        "Authorization": f"Basic {ONET_API_AUTH}",
-        "Accept": "application/json",
-    }
+    cache_key = f"search:{keyword.lower().strip()}:{limit}"
+    if cache_key in _ONET_CACHE:
+        return _ONET_CACHE[cache_key]
 
-    response = httpx.get(
-        f"{ONET_API_BASE}/online/search",
-        params={"keyword": keyword, "end": max(1, min(limit, 20))},
-        headers=headers,
-        timeout=10,
-    )
-    response.raise_for_status()
+    async with httpx.AsyncClient(timeout=10, headers=_ONET_HEADERS) as client:
+        response = await client.get(
+            f"{ONET_API_BASE}/online/search",
+            params={"keyword": keyword, "end": max(1, min(limit, 20))},
+        )
+        response.raise_for_status()
+
     data = response.json()
     occupations = data.get("occupation") or []
     if not occupations:
-        return []
+        result: List[Dict[str, str]] = []
+        return result
 
     candidates: List[Dict[str, str]] = []
     for occupation in occupations:
@@ -269,29 +290,31 @@ def _search_onet_keyword(keyword: str, limit: int = 10) -> List[Dict[str, str]]:
                 "query": keyword,
             }
         )
+    _ONET_CACHE[cache_key] = candidates
     return candidates
 
 
-def _validate_onet_code(code: str) -> bool:
-    """
-    Verify that an O*NET occupation code exists before trusting it.
-    """
+async def _validate_onet_code(code: str) -> bool:
+    """Verify O*NET code exists asynchronously with caching."""
     clean_code = (code or "").strip()
-    if not re.fullmatch(r"\d{2}-\d{4}\.\d{2}", clean_code):
+    if not clean_code or not re.fullmatch(r"\d{2}-\d{4}\.\d{2}", clean_code):
         return False
-    headers = {
-        "Authorization": f"Basic {ONET_API_AUTH}",
-        "Accept": "application/json",
-    }
-    try:
-        response = httpx.get(
-            f"{ONET_API_BASE}/online/occupations/{clean_code}/summary",
-            headers=headers,
-            timeout=10,
-        )
-        return response.status_code == 200
-    except Exception:
-        return False
+
+    cache_key = f"validate:{clean_code}"
+    if cache_key in _ONET_CACHE:
+        return _ONET_CACHE[cache_key]
+
+    async with httpx.AsyncClient(timeout=10, headers=_ONET_HEADERS) as client:
+        try:
+            response = await client.get(
+                f"{ONET_API_BASE}/online/occupations/{clean_code}/summary",
+            )
+            ok = response.status_code == 200
+        except Exception:
+            ok = False
+
+    _ONET_CACHE[cache_key] = ok
+    return ok
 
 
 def _tokenize_title(value: str) -> List[str]:
@@ -330,38 +353,53 @@ def _score_keyword_candidate(job_title: str, candidate_title: str, query: str) -
     return max(0.0, min(score, 1.0))
 
 
-def _scored_keyword_resolve(job_title: str) -> Dict[str, Any]:
+async def _scored_keyword_resolve(job_title: str) -> Dict[str, Any]:
     """
-    Fallback resolver using O*NET keyword variants + candidate scoring.
+    Concurrent keyword-variants resolution: all O*NET searches run in parallel.
     """
     best_match: Dict[str, Any] = {}
     best_score = -1.0
+    variants = _build_onet_search_variants(job_title)
 
-    for keyword in _build_onet_search_variants(job_title):
+    # Fire all keyword searches concurrently
+    async def _search_and_score(keyword: str) -> List[Dict[str, Any]]:
         try:
-            candidates = _search_onet_keyword(keyword, limit=10)
-            for candidate in candidates:
-                score = _score_keyword_candidate(
+            candidates = await _search_onet_keyword(keyword, limit=10)
+            results = []
+            for c in candidates:
+                s = _score_keyword_candidate(
                     job_title=job_title,
-                    candidate_title=candidate.get("title", ""),
+                    candidate_title=c.get("title", ""),
                     query=keyword,
                 )
-                if score > best_score:
-                    best_score = score
-                    best_match = {
-                        "code": candidate.get("code", ""),
-                        "title": candidate.get("title", ""),
-                        "query": keyword,
-                        "confidence": round(score, 3),
-                        "source": "keyword_scored",
-                    }
-        except Exception as search_err:
-            logger.warning(
-                "[NEW_PIPELINE] O*NET variant search failed for '%s' via '%s': %s",
-                job_title,
-                keyword,
-                search_err,
-            )
+                if s > 0.20:
+                    results.append({"candidate": c, "score": s})
+            return results
+        except Exception as exc:
+            logger.warning("[NEW_PIPELINE] O*NET search failed for '%s': %s", keyword, exc)
+            return []
+
+    gathered = await asyncio.gather(
+        *[_search_and_score(kw) for kw in variants],
+        return_exceptions=True,
+    )
+
+    # Flatten results and find the best
+    for result_set in gathered:
+        if isinstance(result_set, Exception):
+            continue
+        for item in result_set:
+            score = item["score"]
+            candidate = item["candidate"]
+            if score > best_score:
+                best_score = score
+                best_match = {
+                    "code": candidate.get("code", ""),
+                    "title": candidate.get("title", ""),
+                    "query": candidate.get("query", ""),
+                    "confidence": round(score, 3),
+                    "source": "keyword_concurrent",
+                }
 
     if best_match and best_score >= 0.25:
         return best_match
@@ -491,7 +529,7 @@ async def _resolve_onet_code(
         llm_confidence = float(llm_result.get("confidence", 0.0) or 0.0)
         llm_code = llm_result.get("code", "")
         if llm_code and llm_confidence >= confidence_floor:
-            if _validate_onet_code(llm_code):
+            if await _validate_onet_code(llm_code):
                 logger.info(
                     "[NEW_PIPELINE] O*NET resolved via LLM: '%s' -> %s (%s) confidence=%.2f",
                     normalized_title,
@@ -514,7 +552,7 @@ async def _resolve_onet_code(
                 confidence_floor,
             )
 
-    keyword_result = _scored_keyword_resolve(normalized_title)
+    keyword_result = await _scored_keyword_resolve(normalized_title)
     if keyword_result:
         logger.info(
             "[NEW_PIPELINE] O*NET resolved via scored keyword: '%s' -> %s (%s) score=%.2f",
@@ -1790,7 +1828,7 @@ Rate the alignment (0.0-1.0):"""
                     target_onet = onet_code if "onet_code" in locals() else "15-1252.00"
 
                     # Validate the onet_code before using it
-                    if not _validate_onet_code(target_onet):
+                    if not await _validate_onet_code(target_onet):
                         logger.warning(
                             f"[NEW_PIPELINE] Invalid O*NET code {target_onet}, skipping pivot analysis"
                         )
