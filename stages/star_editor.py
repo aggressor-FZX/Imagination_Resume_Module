@@ -559,12 +559,42 @@ class StarEditor:
         """
         Convert plain text to basic markdown format.
         
+        v2: Much broader section header detection — the LLM frequently returns
+        bare section names without ``##`` prefixes. We detect ALL standard
+        resume section names and convert them to proper markdown headers.
+        
         Args:
             plain_text: Plain text resume
             
         Returns:
             Basic markdown formatted resume
         """
+        # All recognized section header names (case-insensitive)
+        _KNOWN_SECTIONS: dict[str, str] = {
+            "professional experience":  "## Professional Experience",
+            "work experience":          "## Professional Experience",
+            "experience":               "## Professional Experience",
+            "relevant experience":      "## Professional Experience",
+            "employment history":       "## Professional Experience",
+            "career history":           "## Professional Experience",
+            "education":                "## Education",
+            "academic background":      "## Education",
+            "academic history":         "## Education",
+            "technical skills":         "## Technical Skills",
+            "skills":                   "## Technical Skills",
+            "skills & technologies":    "## Technical Skills",
+            "skills and technologies":  "## Technical Skills",
+            "core competencies":        "## Technical Skills",
+            "tools & infrastructure":   "## Technical Skills",
+            "certifications":           "## Certifications",
+            "certifications & publications": "## Certifications",
+            "certifications and licenses":    "## Certifications",
+            "projects":                 "## Projects",
+            "personal projects":        "## Projects",
+            "key projects":             "## Projects",
+            "capstone projects":        "## Projects",
+        }
+
         lines = plain_text.strip().split('\n')
         markdown_lines = []
         
@@ -572,19 +602,34 @@ class StarEditor:
             line = line.strip()
             if not line:
                 continue
-                
-            # Check for headers
-            if line.upper() in ["PROFESSIONAL EXPERIENCE", "WORK EXPERIENCE", "EDUCATION", "SKILLS"]:
-                markdown_lines.append(f"\n## {line}")
-            # Check for job titles (often followed by "at" or contain "|")
-            elif " at " in line or "|" in line:
+            
+            # Check for section headers (exact or with trailing colon)
+            lower_no_colon = line.lower().rstrip(':').strip()
+            if lower_no_colon in _KNOWN_SECTIONS:
+                markdown_lines.append(f"\n{_KNOWN_SECTIONS[lower_no_colon]}")
+                continue
+            
+            # Check for job titles (contain "|" or " at " — pipe is standard resume format)
+            if " at " in line or " | " in line:
                 parts = line.split(" at ")[0] if " at " in line else line.split("|")[0]
                 markdown_lines.append(f"\n**{parts.strip()}**")
-            # Check for bullet points
-            elif line.startswith("-") or line.startswith("•") or line.startswith("*"):
-                markdown_lines.append(f"- {line[1:].strip()}")
-            else:
-                markdown_lines.append(line)
+                continue
+            
+            # Check for bullet points (already prefixed)
+            if line.startswith("-") or line.startswith("•") or line.startswith("*"):
+                markdown_lines.append(f"- {line.lstrip('-•* ')}")
+                continue
+            
+            # Lines inside experience/skills sections that contain commas
+            # and are >20 chars likely represent a skill category line
+            if len(line) > 20 and ',' in line:
+                # Check if this looks like a skill category line
+                # e.g. "Python, SQL, Docker, AWS — Data Engineering"
+                markdown_lines.append(f"- {line}")
+                continue
+            
+            # Keep all other lines as-is (company headers, date lines, etc.)
+            markdown_lines.append(line)
         
         return "\n".join(markdown_lines)
     
@@ -668,13 +713,175 @@ class StarEditor:
         return result
 
     def _normalize_section_boundaries(self, markdown: str) -> str:
-        """Ensure resume section headings are clearly separated by blank lines."""
+        """Ensure resume section headings are clearly separated by blank lines.
+        
+        v2: Much more aggressive repair — the LLM frequently returns raw text
+        or uses wrong header formats. We now detect ALL common section variants
+        and deterministically inject ``##`` headers where they are missing.
+        
+        Also adds ``- `` bullet markers to paragraphs under experience sections
+        when the LLM forgot them.
+        """
         if not markdown:
             return markdown
 
         result = markdown
+        
+        # ------------------------------------------------------------------
+        # STEP 1: Identify ALL required sections and add ## headers if missing
+        # ------------------------------------------------------------------
+        # Ordered from most specific to least specific to avoid partial matches
+        _SECTION_ALIASES: list[tuple[str, list[str]]] = [
+            ("Technical Skills", [
+                "technical skills", "technicalskills", "tech skills",
+                "skills & technologies", "skills and technologies",
+                "core competencies", "tools & infrastructure",
+                "skills",  # last resort — only catch standalone "## Skills" 
+            ]),
+            ("Professional Experience", [
+                "professional experience", "work experience", "experience",
+                "employment history", "career history", "relevant experience",
+            ]),
+            ("Projects", [
+                "projects", "personal projects", "key projects",
+                "portfolio", "selected projects", "capstone projects",
+            ]),
+            ("Certifications", [
+                "certifications", "certifications & publications",
+                "certificates", "licenses", "certifications and licenses",
+            ]),
+            ("Education", [
+                "education", "academic background", "academic history",
+            ]),
+        ]
 
-        # If model returned plain labels, promote them to markdown headers.
+        # Build a set of section names that already have ## headers
+        existing_headers = re.findall(r'^##\s*(.+)', result, re.MULTILINE)
+        existing_lower = {h.strip().lower() for h in existing_headers}
+
+        # ------------------------------------------------------------------
+        # STEP 0: If no section headers at all but bullets exist, inject a
+        #         "## Professional Experience" header before the first bullet.
+        #         This handles the common LLM failure mode where the model
+        #         returns a wall of text with only inline bullets.
+        # ------------------------------------------------------------------
+        if not existing_headers:
+            first_bullet = re.search(r'(?:^|\n)\s*[-•*▪●►◦]\s+\S', result, re.MULTILINE)
+            if first_bullet:
+                insert_at = first_bullet.start()
+                # Find the preceding paragraph break — insert before it
+                if insert_at > 0 and result[insert_at - 1] != '\n':
+                    insert_at = result.rfind('\n', 0, insert_at) + 1
+                result = result[:insert_at] + "\n\n## Professional Experience\n\n" + result[insert_at:]
+
+        for canonical, aliases in _SECTION_ALIASES:
+            # Skip if this canonical section already has a ## header
+            already_has = any(a in existing_lower for a in [canonical.lower()] + [a.lower() for a in aliases])
+            if already_has:
+                continue
+
+            found = False
+            for alias in aliases:
+                # --- Pattern A: section name on its own line (standalone header) ---
+                pattern_ownline = rf'(?<!\#)(?:^|\n)\s*{re.escape(alias)}\s*:?\s*(?:\n|$)'
+                if re.search(pattern_ownline, result, re.IGNORECASE):
+                    result = re.sub(
+                        pattern_ownline,
+                        f"\n\n## {canonical}\n",
+                        result, count=1, flags=re.IGNORECASE,
+                    )
+                    found = True
+                    break
+
+                # --- Pattern B: section name at start of a line, followed by content
+                #     on the same line.  We split it into:
+                #         [## Canonical]\n  remaining content
+                #     Uses a line-by-line scan for robustness against \n capture drift.
+                alias_re = re.compile(rf'^\s*{re.escape(alias)}\s+', re.IGNORECASE)
+                new_lines: list[str] = []
+                for line in result.split("\n"):
+                    m = alias_re.match(line)
+                    # Only convert if the section name is at the START of the line
+                    # and it's the FIRST unconverted occurrence
+                    if m and not found:
+                        rest = line[m.end():]
+                        new_lines.append(f"\n## {canonical}")
+                        new_lines.append(rest)
+                        found = True
+                    else:
+                        new_lines.append(line)
+                if found:
+                    result = "\n".join(new_lines)
+                    break
+
+                # --- Pattern C: colon variant at line start  "Education: B.S. ..." ---
+                colon_re = re.compile(rf'^\s*{re.escape(alias)}\s*:\s', re.IGNORECASE)
+                new_lines = []
+                for line in result.split("\n"):
+                    m = colon_re.match(line)
+                    if m and not found:
+                        rest = line[m.end():]
+                        new_lines.append(f"\n## {canonical}")
+                        new_lines.append(rest)
+                        found = True
+                    else:
+                        new_lines.append(line)
+                if found:
+                    result = "\n".join(new_lines)
+                    break
+
+            if found:
+                continue
+
+        # ------------------------------------------------------------------
+        # STEP 2: Add ``- `` bullets under experience sections if missing
+        # Many LLM responses concatenate bullet items into paragraphs.
+        # We detect this pattern: experience header OR company line followed
+        # by a long line (>60 chars) without ``- `` or ``• `` prefix.
+        # ------------------------------------------------------------------
+        lines = result.split('\n')
+        out_lines: list[str] = []
+        in_experience_section = False
+
+        for line in lines:
+            stripped = line.strip()
+            lower = stripped.lower()
+
+            # Track whether we are in an experience/education section
+            if re.match(r'^##\s', stripped):
+                in_experience_section = any(
+                    kw in lower
+                    for kw in ['experience', 'project', 'education', 'certification']
+                )
+                out_lines.append(line)
+                continue
+
+            # Inside experience section: detect unmarked lines that look like bullets
+            if in_experience_section and stripped:
+                is_already_bullet = bool(re.match(r'^[-•*▪●►◦]\s', stripped))
+                is_bold_header = bool(re.match(r'^\*\*.*\*\*$', stripped))
+                is_italic_header = bool(re.match(r'^\*.*\*$', stripped))
+                is_section_header = bool(re.match(r'^##\s', stripped))
+
+                if (
+                    not is_already_bullet
+                    and not is_bold_header
+                    and not is_italic_header
+                    and not is_section_header
+                    and len(stripped) > 15
+                ):
+                    # This line is inside a section but has no bullet — add one
+                    out_lines.append(f"- {stripped}")
+                    continue
+
+            out_lines.append(line)
+
+        result = '\n'.join(out_lines)
+
+        # ------------------------------------------------------------------
+        # STEP 3: Final normalization — fix spacing, remove double ##/bolts
+        # ------------------------------------------------------------------
+        # If model returned plain labels only (no ## at all), fallback header pass
         if "##" not in result:
             for section in ["Education", "Certifications", "Projects", "Professional Experience"]:
                 pattern = rf'(?<!#)\b{re.escape(section)}\b\s*:?'
@@ -682,7 +889,7 @@ class StarEditor:
 
         # Ensure known section headers start on a fresh block.
         result = re.sub(
-            r'\s*(##\s*(Education|Certifications|Projects|Professional Experience)\b)',
+            r'\s*(##\s*(Education|Certifications|Projects|Professional Experience|Technical Skills)\b)',
             r'\n\n\1',
             result,
             flags=re.IGNORECASE,
