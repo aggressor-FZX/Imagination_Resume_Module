@@ -715,17 +715,65 @@ class StarEditor:
     def _normalize_section_boundaries(self, markdown: str) -> str:
         """Ensure resume section headings are clearly separated by blank lines.
         
-        v2: Much more aggressive repair — the LLM frequently returns raw text
-        or uses wrong header formats. We now detect ALL common section variants
-        and deterministically inject ``##`` headers where they are missing.
-        
-        Also adds ``- `` bullet markers to paragraphs under experience sections
-        when the LLM forgot them.
+        v3: Adds a newline-preprocessing step before all section detection.
+        Many LLM failures produce the ENTIRE resume as a single line with no
+        newlines at all, making line-by-line detection impossible.  We inject
+        ``\n`` before each known section name so the line-based steps work
+        reliably even on the worst-case single-line input.
         """
         if not markdown:
             return markdown
 
         result = markdown
+        
+        # ------------------------------------------------------------------
+        # STEP 0-NEW: Inject newlines before known section names that appear
+        # mid-text (single-line resume problem).  This ensures line-by-line
+        # detection in later steps always finds every section.
+        #
+        # We process LONGER (multi-word) phrases FIRST, then only match
+        # single-word names at positions NOT previously claimed by a phrase.
+        # ------------------------------------------------------------------
+        _SECTION_NAMES_LONG = [
+            "Technical Skills",
+            "Professional Experience",
+            "Work Experience",
+            "Skills & Technologies",
+            "Skills and Technologies",
+        ]
+        _SECTION_NAMES_SHORT = [
+            "Skills",
+            "Experience",
+            "Projects",
+            "Education",
+            "Certifications",
+        ]
+
+        # --- Phase 1: Insert newlines before long (multi-word) phrases ---
+        for name in _SECTION_NAMES_LONG:
+            pattern = rf'(?<!\n)\b({re.escape(name)})\s+([A-Z0-9*])'
+            def _add_newline_long(m: "re.Match[str]") -> str:
+                return "\n" + m.group(0)
+            result = re.sub(pattern, _add_newline_long, result)
+
+        # --- Phase 2: Insert newlines before single-word names,
+        #     SKIPPING those already part of a multi-word phrase ---
+        for name in _SECTION_NAMES_SHORT:
+            pattern = rf'(?<!\n)\b({re.escape(name)})\s+([A-Z0-9*])'
+
+            def _add_newline_short(m: "re.Match[str]", _name: str = name) -> str:
+                """Only insert newline if this word is NOT part of a longer phrase."""
+                substr = result[max(0, m.start() - 40):m.start() + len(_name) + 5]
+                is_part_of_longer = any(
+                    phrase.lower() in substr.lower()
+                    for phrase in _SECTION_NAMES_LONG
+                    if _name.lower() in phrase.lower()
+                )
+                if is_part_of_longer:
+                    return m.group(0)  # no newline — already part of a longer phrase
+                return "\n" + m.group(0)
+
+            result = re.sub(pattern, _add_newline_short, result)
         
         # ------------------------------------------------------------------
         # STEP 1: Identify ALL required sections and add ## headers if missing
