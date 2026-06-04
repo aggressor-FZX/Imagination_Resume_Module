@@ -180,7 +180,8 @@ class StarEditor:
             # POST-PROCESSING: Ensure all required sections are present
             result = self._ensure_all_sections(
                 result, education=education, certifications=certifications,
-                skills=skills, projects=projects
+                skills=skills, projects=projects,
+                original_resume_text=original_resume_text
             )
             
             # Ensure we have at least some data
@@ -634,10 +635,12 @@ class StarEditor:
                             education: List[Dict] = None,
                             certifications: List[Dict] = None,
                             skills: List[str] = None,
-                            projects: List[Dict] = None) -> Dict[str, Any]:
+                            projects: List[Dict] = None,
+                            original_resume_text: str = "") -> Dict[str, Any]:
         """Post-process the LLM output to ensure all required sections exist and have content.
         
         If the LLM dropped a section or left it empty, this appends a version from input data.
+        Falls back to raw text extraction if structured data is empty.
         """
         md = result.get("final_markdown", "")
         if not md:
@@ -650,14 +653,21 @@ class StarEditor:
             match = re.search(rf'##\s*{re.escape(section_name)}\s*\n(.*?)(?=##\s|\Z)', md, re.IGNORECASE | re.DOTALL)
             if match:
                 body = match.group(1).strip()
-                # Section counts as present only if it has content beyond just whitespace
                 if body and len(body) > 5:
                     sections_with_content.add(section_name.lower())
                 elif match:
-                    # Header exists but empty — remove the empty header so we can replace it
+                    # Header exists but empty — remove the empty header
                     md = md[:match.start()] + md[match.end():]
 
         added = []
+
+        # If structured data is empty, extract from raw resume text
+        if not education and original_resume_text:
+            education = self._extract_education_from_text(original_resume_text)
+        if not certifications and original_resume_text:
+            certifications = self._extract_certs_from_text(original_resume_text)
+        if not skills and original_resume_text:
+            skills = self._extract_skills_from_text(original_resume_text)
 
         # Ensure Education section with content
         if "education" not in sections_with_content and education:
@@ -667,7 +677,7 @@ class StarEditor:
                 inst = edu.get("institution", "")
                 dates = edu.get("dates", "")
                 gpa = edu.get("gpa", "")
-                # Clean pipe-delimited data: "B.S. Data Analytics | WSU | 2026"
+                # Clean pipe-delimited data
                 if "|" in degree:
                     parts = [p.strip() for p in degree.split("|")]
                     if len(parts) >= 2:
@@ -717,6 +727,78 @@ class StarEditor:
                 skill_block += f"**Tools & Platforms:** {', '.join(other_skills[:10])}\n"
             md += skill_block
             added.append("Technical Skills")
+
+        if added:
+            logger.warning(f"[STAR_EDITOR] LLM dropped/empty sections, appended from input: {added}")
+            result["final_markdown"] = md
+
+        return result
+
+    def _extract_education_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract education entries directly from raw resume text as fallback."""
+        edu_entries = []
+        lines = text.splitlines()
+        in_edu = False
+        for line in lines:
+            stripped = line.strip().lower()
+            if stripped in ("education:", "education", "academic background:", "academic background"):
+                in_edu = True
+                continue
+            if in_edu:
+                if stripped.startswith(("experience:", "experience", "certification", "project", "skills:", "technical")):
+                    break
+                if not line.strip() or line.strip().startswith("-"):
+                    continue
+                # Try to parse "Degree | Institution | Year" or "Degree - Institution (Year)"
+                raw = line.strip()
+                parts = [p.strip() for p in re.split(r'\s*\|\s*|\s*-\s+', raw)]
+                degree = parts[0] if parts else ""
+                inst = parts[1] if len(parts) > 1 else ""
+                dates = ""
+                year_match = re.search(r'(19|20)\d{2}', raw)
+                if year_match:
+                    dates = year_match.group(0)
+                gpa_match = re.search(r'GPA:\s*([\d.]+)', raw, re.IGNORECASE)
+                gpa = gpa_match.group(1) if gpa_match else ""
+                if degree:
+                    edu_entries.append({"degree": degree, "institution": inst, "dates": dates, "gpa": gpa})
+        return edu_entries
+
+    def _extract_certs_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract certification entries directly from raw resume text as fallback."""
+        cert_entries = []
+        lines = text.splitlines()
+        in_certs = False
+        for line in lines:
+            stripped = line.strip().lower()
+            if stripped in ("certifications:", "certifications", "certification:", "certification", "licenses:", "licenses & certifications:"):
+                in_certs = True
+                continue
+            if in_certs:
+                if stripped.startswith(("experience:", "project", "skills:", "technical", "education")):
+                    break
+                raw = line.strip()
+                if not raw or raw.startswith("-"):
+                    continue
+                year_match = re.search(r'(19|20)\d{2}', raw)
+                year = year_match.group(0) if year_match else ""
+                cert_entries.append({"name": raw, "issuer": "", "year": year})
+        return cert_entries
+
+    def _extract_skills_from_text(self, text: str) -> List[str]:
+        """Extract skill names directly from raw resume text as fallback."""
+        lines = text.splitlines()
+        for line in lines:
+            stripped = line.strip().lower()
+            if stripped.startswith(("skills:", "skills", "technical skills:", "skills & technologies")):
+                # Extract skills from the line or following lines
+                skills_text = line.split(":", 1)[-1].strip() if ":" in line else ""
+                if not skills_text:
+                    continue
+                # Split by common delimiters
+                skills = [s.strip() for s in re.split(r'[,;]', skills_text) if s.strip()]
+                return skills[:25]
+        return []
 
         if added:
             logger.warning(f"[STAR_EDITOR] LLM dropped/empty sections, appended from input: {added}")
