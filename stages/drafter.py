@@ -53,10 +53,12 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
     
     # 2. Format Golden Bullets as "Style Reference Only"
-    # IMPORTANT: Never include more than 3 golden bullets to reduce hallucination risk
+    # Raised from 3 to 10 (2026-06-04): More style references improve
+    # quality without increasing hallucination risk when anti-hallucination
+    # guardrails (TRUTH CONSTRAINTS below) are enforced by the prompt.
     golden_section = ""
     if golden_bullets:
-        selected_bullets = golden_bullets[:3]  # Strictly limit to 3 to minimize noise/hallucination
+        selected_bullets = golden_bullets[:10]
         bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
         
         golden_section = f"""
@@ -115,10 +117,13 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - If user said "data pipelines", you may add "ETL" as it's clearly implied
    - Do NOT add technologies completely unrelated to the user's work
 
-4. **NO PLAGIARISM FROM JOB DESCRIPTION:**
-   - The Job Description is provided ONLY for context on what is relevant.
-   - DO NOT copy sentences, requirements, or specific projects from the Job Description into the resume.
-   - DO NOT claim to have done the specific tasks listed as "Responsibilities" in the Job Ad unless the user's notes explicitly support it.
+4. **JD KEYWORD WEAVING (ATS OPTIMIZATION):**
+   - The Job Description contains keywords and domain vocabulary the target employer values.
+   - You MUST weave relevant JD terms naturally into resume bullets WHERE the candidate's experience genuinely supports them.
+   - Examples of safe weaving: If the JD mentions "deep learning internals analysis" and the candidate has PyTorch experience, you may write "Analyzed deep learning model internals using PyTorch..." — this bridges the candidate's actual skill with the JD's terminology.
+   - Examples of safe weaving: If the JD mentions "HPC environments" and the candidate worked with distributed computing, you may write "Deployed models in high-performance computing (HPC) environments..."
+   - DO NOT fabricate experiences to match JD requirements. Only connect existing skills/experience to JD language.
+   - DO NOT copy full sentences or responsibilities verbatim from the JD.
 
 5. **NO FABRICATED METRICS:** 
    - CRITICAL: Only include metrics (%, $, time) that appear EXPLICITLY in the user's input resume text.
