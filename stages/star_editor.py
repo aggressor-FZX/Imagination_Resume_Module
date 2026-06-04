@@ -604,18 +604,25 @@ class StarEditor:
             (r'\*Dates \| Location\*', ''),  # Classic placeholder
             (r'\*Dates Provided \| Location Provided\*', ''),  # Variation
             (r'\*Date \| Location\*', ''),  # Singular variation
+            (r'\*Dates \| City,?\s*[A-Z]{2}\*', ''),  # *Dates | City, ST*
             (r'\*Present - Present\*', ''),  # Invalid date range
             (r'\*N/A \| N/A\*', ''),  # N/A placeholder
             (r'\*Unknown \| Unknown\*', ''),  # Unknown placeholder
-            (r'\*Dates \| [A-Za-z\s]+\*', ''),  # Partial placeholder
+            (r'\*Dates \| [A-Za-z\s,]+\*', ''),  # Partial placeholder
             (r'\*[A-Za-z\s]+ \| Location\*', ''),  # Partial placeholder
             (r'\b20XX\b', ''),  # Placeholder year tokens
             (r'\bXX/XX\b', ''),  # Placeholder date fragments
-            (r'\bLocation\b', ''),  # Placeholder location tokens
+            (r'\(Year\)', ''),  # (Year) placeholder
+            (r'\(Duration\)', ''),  # (Duration) placeholder
+            (r'\bLocation\b(?!\s*Context)', ''),  # Placeholder location tokens (preserve "Location Context")
             (r'\s*\((?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\)', ''),
             (r'\|\s*(?:dur(?:a)?tion\s+not\s+specified|not\s+specified|n/?a|unknown|tbd)\b', ''),
+            # Catch any parenthetical that's just boilerplate
+            (r'\(\s*(?:Year|Duration|Dates?|Location|City|State)\s*\)', ''),
+            # Catch bare placeholder tokens in italic/bold lines
+            (r'\*(?:Year|Duration|Dates?|City,\s*[A-Z]{2})\*', ''),
         ]
-        
+
         result = markdown
         for pattern, replacement in placeholder_patterns:
             result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
@@ -624,6 +631,13 @@ class StarEditor:
         result = re.sub(r'\|\s*\|', '|', result)
         result = re.sub(r'\*\s*\|\s*', '*', result)
         result = re.sub(r'\s{2,}', ' ', result)
+        
+        # Post-cleanup validation: if known placeholders remain, run a second pass
+        leftover_patterns = [r'\(Year\)', r'\(Duration\)', r'\*Dates \|', r'20XX', r'XX/XX']
+        for pat in leftover_patterns:
+            if re.search(pat, result, re.IGNORECASE):
+                logger.warning(f"[STAR_EDITOR] Placeholder still present after first pass: {pat}, running second pass")
+                result = re.sub(pat, '', result, flags=re.IGNORECASE)
         
         # Log if we removed placeholders
         if result != markdown:
