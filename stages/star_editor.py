@@ -635,30 +635,51 @@ class StarEditor:
                             certifications: List[Dict] = None,
                             skills: List[str] = None,
                             projects: List[Dict] = None) -> Dict[str, Any]:
-        """Post-process the LLM output to ensure all required sections exist.
+        """Post-process the LLM output to ensure all required sections exist and have content.
         
-        If the LLM dropped a section, this appends a minimal version from the input data.
+        If the LLM dropped a section or left it empty, this appends a version from input data.
         """
         md = result.get("final_markdown", "")
         if not md:
             return result
 
-        sections_present = set()
+        # Check which sections exist AND have actual content (not just empty headers)
+        sections_with_content = set()
         for section_name in ["Professional Experience", "Experience", "Projects", 
                             "Education", "Certifications", "Technical Skills", "Skills"]:
-            if re.search(rf'##\s*{section_name}', md, re.IGNORECASE):
-                sections_present.add(section_name.lower())
+            match = re.search(rf'##\s*{re.escape(section_name)}\s*\n(.*?)(?=##\s|\Z)', md, re.IGNORECASE | re.DOTALL)
+            if match:
+                body = match.group(1).strip()
+                # Section counts as present only if it has content beyond just whitespace
+                if body and len(body) > 5:
+                    sections_with_content.add(section_name.lower())
+                elif match:
+                    # Header exists but empty — remove the empty header so we can replace it
+                    md = md[:match.start()] + md[match.end():]
 
         added = []
 
-        # Ensure Education section
-        if "education" not in sections_present and education:
+        # Ensure Education section with content
+        if "education" not in sections_with_content and education:
             edu_block = "\n\n## Education\n"
             for edu in education[:5]:
                 degree = edu.get("degree", "")
                 inst = edu.get("institution", "")
                 dates = edu.get("dates", "")
                 gpa = edu.get("gpa", "")
+                # Clean pipe-delimited data: "B.S. Data Analytics | WSU | 2026"
+                if "|" in degree:
+                    parts = [p.strip() for p in degree.split("|")]
+                    if len(parts) >= 2:
+                        degree = parts[0]
+                        inst = inst or parts[1]
+                        if len(parts) >= 3:
+                            dates = dates or parts[2]
+                if not dates and inst and "|" in inst:
+                    parts = [p.strip() for p in inst.split("|")]
+                    if len(parts) >= 2:
+                        inst = parts[0]
+                        dates = dates or parts[1]
                 line = f"**{degree}, {inst}**"
                 if dates:
                     line += f" -- {dates}"
@@ -668,24 +689,23 @@ class StarEditor:
             md += edu_block
             added.append("Education")
 
-        # Ensure Certifications section
-        if "certifications" not in sections_present and certifications:
+        # Ensure Certifications section with content
+        if "certifications" not in sections_with_content and certifications:
             cert_block = "\n\n## Certifications\n"
             for cert in certifications[:5]:
                 name = cert.get("name", "")
                 issuer = cert.get("issuer", "")
                 year = cert.get("year", "")
-                line = f"- {name} -- {issuer}"
+                line = f"- {name} -- {issuer}" if issuer else f"- {name}"
                 if year:
                     line += f" ({year})"
                 cert_block += line + "\n"
             md += cert_block
             added.append("Certifications")
 
-        # Ensure Technical Skills section
-        if "technical skills" not in sections_present and "skills" not in sections_present and skills:
+        # Ensure Technical Skills section with content
+        if "technical skills" not in sections_with_content and "skills" not in sections_with_content and skills:
             skill_block = "\n\n## Technical Skills\n"
-            # Group into 2-3 categories
             ml_skills = [s for s in skills if any(w in s.lower() for w in ['pytorch', 'tensorflow', 'keras', 'ml', 'deep learning', 'nlp', 'llm', 'langchain', 'scikit'])]
             data_skills = [s for s in skills if any(w in s.lower() for w in ['sql', 'pandas', 'numpy', 'spark', 'etl', 'tableau', 'power bi', 'data'])]
             other_skills = [s for s in skills if s not in ml_skills and s not in data_skills]
@@ -699,7 +719,7 @@ class StarEditor:
             added.append("Technical Skills")
 
         if added:
-            logger.warning(f"[STAR_EDITOR] LLM dropped sections, appended from input: {added}")
+            logger.warning(f"[STAR_EDITOR] LLM dropped/empty sections, appended from input: {added}")
             result["final_markdown"] = md
 
         return result
