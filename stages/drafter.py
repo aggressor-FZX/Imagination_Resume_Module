@@ -49,8 +49,24 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
     """
     # 1. Extract TRUTH constraints
-    original_companies = [exp.get("company", "Unknown") for exp in experiences if exp.get("company")]
-    original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
+    # Hermes sends 'title' key (not 'role'). The Zod schema accepts both via .passthrough().
+    # We check title first, then role (for backward compat), then title_line as last resort.
+    def _clean_company_name(name: str) -> str:
+        """Strip trailing date patterns from concatenated company names.
+        Hermes sometimes returns "Company Name 04/2025 - Present" instead of
+        clean company names."""
+        import re
+        return re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', name).strip()
+
+    def _extract_role(exp: Dict) -> str:
+        """Extract role from experience, checking all possible Hermes keys."""
+        return exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip() or "Professional"
+
+    original_companies = [
+        _clean_company_name(exp.get("company", "")) or "Unknown"
+        for exp in experiences if exp.get("company") or _extract_role(exp) != "Professional"
+    ]
+    original_titles = [_extract_role(exp) for exp in experiences if _extract_role(exp) != "Professional"]
     
     # 2. Format Golden Bullets as "Style Reference Only"
     # Raised 3→6 (2026-06-04): 6 references provide good style signal
@@ -236,6 +252,26 @@ class Drafter:
             extracted_job_title=extracted_job_title,
         ) + sparse_instruction
         
+        # Pre-extract metrics from the raw resume text to surface in the prompt.
+        # The "NO FABRICATED METRICS" rule prevents the LLM from inventing numbers,
+        # but we need to actively show what metrics ARE available in the source text.
+        import re as _re
+        _resume_text = json.dumps(experiences)
+        _metric_patterns = [
+            (r'(\d+(\.\d+)?%)', 'percentage'),
+            (r'\$[\d,]+(\.[\d]+)?\s*(million|billion|thousand|K|M|B)?', 'dollar_amount'),
+            (r'(\d+[\d,]*)\s*(users|customers|clients|devices|assets|records|rows|documents|models|servers)', 'count_with_unit'),
+            (r'(reduced|increased|improved|decreased|cut|saved|grew|boosted|lowered|accelerated|shortened|expanded)\s+\w+\s+by\s+\d+', 'verb_metric'),
+            (r'(\d+[\d,]*)\s*(hours|days|weeks|months|years)', 'time_unit'),
+        ]
+        _found_metrics = []
+        for _pat, _label in _metric_patterns:
+            for _m in _re.findall(_pat, _resume_text, _re.IGNORECASE):
+                _val = _m[0] if isinstance(_m, tuple) else _m
+                if _val and len(str(_val)) > 1:
+                    _found_metrics.append(str(_val).strip())
+        _found_metrics = list(dict.fromkeys(_found_metrics))[:10]  # dedupe, limit to 10
+
         user_prompt = f"""
 User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
 {json.dumps(experiences, indent=2)}
@@ -247,6 +283,9 @@ Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
 - Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
 - Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
+
+YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES):
+{chr(10).join('- ' + m for m in _found_metrics) if _found_metrics else '- (None found — use qualitative achievements only, do NOT fabricate numbers)'}
 """
         
         try:
@@ -485,9 +524,15 @@ Research Insights:
         """
         fallback_experiences = []
         
+        import re as _re
+        def _clean_company(name):
+            return _re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', (name or '')).strip()
+
         for exp in experiences[:3]:  # Limit to 3 experiences
-            company = exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
-            role = exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
+            raw_company = exp.get("company") or ""
+            company = _clean_company(raw_company) or exp.get("title_line", "").split("|")[-1].strip()
+            # Check title first (Hermes sends 'title'), then role, then title_line
+            role = exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
             duration = exp.get("duration") or exp.get("dates", "")
             location = exp.get("location", "")
             
