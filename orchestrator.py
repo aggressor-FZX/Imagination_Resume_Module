@@ -206,8 +206,11 @@ class PipelineOrchestrator:
                 f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics and {len(research_data.get('implied_skills', []))} implied skills"
             )
             
-            # Free memory before Stage 2
+            # Memory management: Stage 1 returns large dicts. The LLM API
+            # response is the heaviest object (held transiently in the adapter).
+            # Force GC, then pause to let the OS reclaim memory before Stage 2.
             gc.collect()
+            await asyncio.sleep(3.0)  # 3s cooldown — memory peaks right after a stage returns
 
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
@@ -264,8 +267,12 @@ class PipelineOrchestrator:
                 f"with {draft_data.get('quantification_score', 0):.1%} quantification"
             )
             
-            # Free memory before Stage 3
+            # Memory management: The Drafter LLM API response is the heaviest
+            # single object in the pipeline (4000 tokens × model output ×
+            # response_format). The raw response is held transiently in the
+            # adapter — force GC and pause to let the OS reclaim before Stage 3.
             gc.collect()
+            await asyncio.sleep(3.0)  # 3s cooldown
 
             # STAGE 3: STAR EDITOR - Polish into final resume
             stage3_start = time.time()
@@ -320,8 +327,11 @@ class PipelineOrchestrator:
                 f"[ORCHESTRATOR] StarEditor produced {len(editor_data.get('final_markdown', '').split())} word resume"
             )
             
-            # Free memory after pipeline
+            # Memory management: the StarEditor LLM response includes the final
+            # markdown string. Force GC, then pause to let the OS reclaim
+            # before Stage 4 metadata analysis.
             gc.collect()
+            await asyncio.sleep(3.0)  # 3s cooldown
 
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
             # Aggregate skills ONLY from user's actual resume experiences
