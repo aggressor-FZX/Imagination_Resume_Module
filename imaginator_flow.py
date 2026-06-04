@@ -933,6 +933,42 @@ def parse_experiences(text: str) -> List[Dict]:
     return [sanitize_experience_record(dict(e)) for e in result]
 
 
+def deduplicate_experiences(experiences: List[Dict]) -> List[Dict]:
+    """Deduplicate experiences by company name, keeping the richest version.
+    
+    When users upload multiple resume versions (combined_resumes.txt),
+    the parser picks up duplicate entries for the same job. This function
+    groups by company name and keeps the entry with the most bullet points.
+    """
+    if not experiences:
+        return []
+    
+    # Group by normalized company name
+    company_groups: Dict[str, List[Dict]] = {}
+    for exp in experiences:
+        company = (exp.get("company") or "").strip().lower()
+        # Normalize common variations
+        company = re.sub(r'\s*\([^)]*\)\s*', '', company)  # Remove parenthetical
+        company = re.sub(r'\s+', ' ', company).strip()
+        if not company:
+            company = f"__unknown_{id(exp)}"
+        company_groups.setdefault(company, []).append(exp)
+    
+    deduped = []
+    for company, group in company_groups.items():
+        if len(group) == 1:
+            deduped.append(group[0])
+        else:
+            # Keep the version with the most content
+            best = max(group, key=lambda e: len(e.get("body", "") or e.get("snippet", "") or e.get("raw", "")))
+            deduped.append(best)
+    
+    if len(deduped) < len(experiences):
+        logger.info(f"[DEDUP] Reduced {len(experiences)} experiences to {len(deduped)} (removed {len(experiences) - len(deduped)} duplicates)")
+    
+    return deduped
+
+
 def extract_skills_from_experience(text: str) -> Set[str]:
     """Extract skills mentioned in an experience block using keyword matching."""
     text_lower = text.lower()

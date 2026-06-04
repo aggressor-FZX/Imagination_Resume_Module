@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from orchestrator import PipelineOrchestrator
 from llm_client_adapter import LLMClientAdapter
-from imaginator_flow import parse_experiences
+from imaginator_flow import parse_experiences, deduplicate_experiences
 from role_title_sanitizer import sanitize_experience_list
 from pipeline_config import (
     OR_SLUG_STAR_EDITOR,
@@ -853,6 +853,10 @@ async def run_new_pipeline_async(
         else:
             experiences = parse_experiences(resume_text)
             logger.info(f"[NEW_PIPELINE] Parsed {len(experiences)} experiences from resume text")
+            
+            # Deduplicate by company name (keep richest version per company)
+            experiences = deduplicate_experiences(experiences)
+            logger.info(f"[NEW_PIPELINE] After dedup: {len(experiences)} unique experiences")
             
             # Log extracted companies for debugging
             for i, exp in enumerate(experiences):
