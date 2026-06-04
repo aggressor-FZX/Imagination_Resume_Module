@@ -1067,86 +1067,34 @@ async def run_new_pipeline_async(
         # Extract final output
         final_output = result.get("final_output", {})
 
-        # STAGE 4: Quick ATS Score Calculation using configured model
+        # STAGE 4: Quick ATS Score Calculation — skip if pipeline was large
+        # to avoid OOM from holding all pipeline data + new LLM response in memory
         logger.info("[NEW_PIPELINE] Stage 4/4: ATS Score Calculation")
-        critique_score = None
+        critique_score = 0.75  # Default score (avoid extra LLM call to prevent OOM)
         try:
-            system_prompt = """You are an ATS (Applicant Tracking System) scorer. Review the resume section and provide a JSON object with a single key "score" (float 0.0-1.0) indicating alignment with the job description. Higher scores mean better alignment."""
-
-            user_prompt = f"""Job Description:
-{job_ad[:1500]}
-
-Generated Resume Section:
-{final_output.get("final_written_section_markdown", "")[:2000]}
-
-Rate the alignment (0.0-1.0):"""
-
-            # Use STAR editor model for quick scoring (cost-effective)
-            response = await llm_client.call_llm_async(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                model=OR_SLUG_STAR_EDITOR,
-                temperature=0.3,
-                response_format={"type": "json_object"},
-                max_tokens=100,
-            )
-
-            # Handle empty, whitespace-only, or empty JSON responses
-            response_clean = (response or "").strip()
-
-            # Extract JSON from markdown if needed
-            if response_clean:
-                # Try ```json {...}``` pattern
-                json_block_match = re.search(
-                    r"```json\s*(\{.*\})\s*```",
-                    response_clean,
-                    re.DOTALL | re.IGNORECASE,
-                )
-                if json_block_match:
-                    response_clean = json_block_match.group(1)
-                else:
-                    # Try ```{...}``` pattern
-                    code_block_match = re.search(
-                        r"```\s*(\{.*\})\s*```",
-                        response_clean,
-                        re.DOTALL | re.IGNORECASE,
-                    )
-                    if code_block_match:
-                        response_clean = code_block_match.group(1)
-
-            if (
-                not response_clean
-                or response_clean == "{}"
-                or response_clean.startswith('{"error"')
-            ):
-                logger.warning(
-                    f"[NEW_PIPELINE] ATS scoring returned empty/error response: {response_clean[:100]}"
-                )
-                critique_score = 0.75  # Default to reasonable score
+            # Only attempt ATS scoring for small pipelines to avoid memory pressure
+            pipeline_size = len(json.dumps(result, default=str))
+            if pipeline_size > 50000:
+                logger.info(f"[NEW_PIPELINE] Skipping ATS scoring (pipeline {pipeline_size} bytes too large)")
             else:
-                try:
+                system_prompt = """You are an ATS scorer. Return JSON: {"score": float 0.0-1.0}"""
+                user_prompt = f"Job: {job_ad[:500]}\nResume: {final_output.get('final_written_section_markdown', '')[:1000]}\nScore:"
+                response = await llm_client.call_llm_async(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    model=OR_SLUG_STAR_EDITOR,
+                    temperature=0.3,
+                    response_format={"type": "json_object"},
+                    max_tokens=50,
+                )
+                response_clean = (response or "").strip()
+                if response_clean:
                     score_data = json.loads(response_clean)
-                    critique_score = score_data.get("score", 0.75)
-                    # Validate score is in reasonable range
-                    if (
-                        not isinstance(critique_score, (int, float))
-                        or critique_score < 0
-                        or critique_score > 1
-                    ):
-                        logger.warning(
-                            f"[NEW_PIPELINE] Invalid ATS score {critique_score}, using default"
-                        )
-                        critique_score = 0.75
-                except json.JSONDecodeError as e:
-                    logger.warning(
-                        f"[NEW_PIPELINE] ATS scoring JSON parse failed: {e}, using default"
-                    )
-                    critique_score = 0.75
-            logger.info(f"[NEW_PIPELINE] ATS score calculated: {critique_score}")
-
+                    critique_score = float(score_data.get("score", 0.75))
+                    critique_score = max(0.0, min(1.0, critique_score))
+                    logger.info(f"[NEW_PIPELINE] ATS score: {critique_score}")
         except Exception as e:
-            logger.warning(f"[NEW_PIPELINE] ATS scoring failed, using default: {e}")
-            critique_score = 0.75  # Default score on error (changed from 0.85)
+            logger.warning(f"[NEW_PIPELINE] ATS scoring failed, using default 0.75: {e}")
 
         # Build backward-compatible response with ALL expected fields
         errors = result.get("errors", [])
