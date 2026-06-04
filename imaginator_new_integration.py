@@ -1705,7 +1705,11 @@ async def run_new_pipeline_async(
             # Backward-compatible fields for frontend
             "experiences": trimmed_experiences,
             "aggregate_skills": aggregate_skills,
-            "domain_insights": {"domain": domain_insights.get("domain", "")},
+            "domain_insights": {
+                "domain": domain_insights.get("domain", "Technology"),
+                "skill_gap_priority": domain_insights.get("skill_gap_priority", "medium"),
+                "market_demand": domain_insights.get("market_demand", ""),
+            },
             "sectionCompleteness": section_completeness,
             "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
             "rewritten_resume": final_output.get("final_written_section", ""),
