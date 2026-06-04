@@ -833,6 +833,18 @@ async def run_new_pipeline_async(
         sanitized_len = len(resume_text)
         logger.info(f"[NEW_PIPELINE] PII sanitization: {original_resume_len} -> {sanitized_len} chars")
 
+    # Truncate to prevent OOM on Render Standard (1GB RAM). The 3-stage
+    # pipeline (Researcher->Drafter->StarEditor) holds full text in memory
+    # through 4 sequential LLM API calls. 8K chars captures all experiences,
+    # education, certs and skills while staying within memory budget.
+    MAX_RESUME_CHARS = 8000
+    if resume_text and len(resume_text) > MAX_RESUME_CHARS:
+        logger.warning(
+            f"[NEW_PIPELINE] Truncating resume from {len(resume_text)} "
+            f"to {MAX_RESUME_CHARS} chars"
+        )
+        resume_text = resume_text[:MAX_RESUME_CHARS]
+
     try:
         # Use provided experience if available, otherwise parse from text
         if experience:
