@@ -6,6 +6,7 @@ cost tracking, and quality assurance.
 """
 
 import asyncio
+import gc
 import logging
 import time
 import re
@@ -204,6 +205,9 @@ class PipelineOrchestrator:
             logger.info(
                 f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics and {len(research_data.get('implied_skills', []))} implied skills"
             )
+            
+            # Free memory before Stage 2
+            gc.collect()
 
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
@@ -276,6 +280,9 @@ class PipelineOrchestrator:
                 f"[ORCHESTRATOR] Drafter created {draft_data.get('total_bullets', 0)} bullets "
                 f"with {draft_data.get('quantification_score', 0):.1%} quantification"
             )
+            
+            # Free memory before Stage 3
+            gc.collect()
 
             # STAGE 3: STAR EDITOR - Polish into final resume
             stage3_start = time.time()
@@ -329,6 +336,9 @@ class PipelineOrchestrator:
             logger.info(
                 f"[ORCHESTRATOR] StarEditor produced {len(editor_data.get('final_markdown', '').split())} word resume"
             )
+            
+            # Free memory after pipeline
+            gc.collect()
 
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
             # Aggregate skills ONLY from user's actual resume experiences

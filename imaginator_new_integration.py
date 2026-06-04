@@ -835,9 +835,9 @@ async def run_new_pipeline_async(
 
     # Truncate to prevent OOM on Render Standard (1GB RAM). The 3-stage
     # pipeline (Researcher->Drafter->StarEditor) holds full text in memory
-    # through 4 sequential LLM API calls. 8K chars captures all experiences,
-    # education, certs and skills while staying within memory budget.
-    MAX_RESUME_CHARS = 8000
+    # through 4 sequential LLM API calls. 4K chars captures the most important
+    # experiences while staying within memory budget.
+    MAX_RESUME_CHARS = 4000
     if resume_text and len(resume_text) > MAX_RESUME_CHARS:
         logger.warning(
             f"[NEW_PIPELINE] Truncating resume from {len(resume_text)} "
