@@ -224,44 +224,25 @@ class PipelineOrchestrator:
                 )
                 experiences = experiences[:MAX_DRAFTER_EXPERIENCES]
 
-            # Retry logic for quality (Phase 4: Feature Completion / Quality Gate)
-            max_retries = 2
+            # Retry logic — single attempt only to prevent OOM from retry holding memory
             attempt = 0
             draft_data = {}
 
-            while attempt <= max_retries:
-                attempt += 1
-                try:
-                    draft_data = await self.drafter.draft(
-                        experiences,
-                        job_ad,
-                        research_data,
-                        golden_bullets=golden_bullets,
-                        tone_instruction=get_tone_instruction(creativity_mode),
-                        temperature_override=temperatures["drafter"] + (attempt * 0.05), # Slightly increase temp on retry
-                        extracted_job_title=extracted_job_title,
-                    )
-                    
-                    # Quality Check
-                    q_score = draft_data.get("quantification_score", 0.0)
-                    has_placeholders = draft_data.get("has_placeholders", False)
-                    
-                    if q_score >= 0.8 and not has_placeholders:
-                        logger.info(f"[ORCHESTRATOR] Drafter passed quality gate on attempt {attempt} (Q-Score: {q_score:.2f})")
-                        break
-                    else:
-                        logger.warning(
-                            f"[ORCHESTRATOR] Drafter failed quality gate on attempt {attempt}: "
-                            f"Q-Score={q_score:.2f} (Target >= 0.8), Placeholders={has_placeholders}"
-                        )
-                        if attempt > max_retries:
-                            logger.error("[ORCHESTRATOR] Max retries reached for Drafter quality gate. Proceeding with best attempt.")
-                except Exception as e:
-                    logger.exception(f"[ORCHESTRATOR] Stage 2 attempt {attempt} CRITICAL FAILURE: {e}")
-                    if attempt > max_retries:
-                        result["errors"].append(f"Drafter Exception: {str(e)}")
-                        draft_data = {"rewritten_experiences": [], "fallback": True}
-                        break
+            try:
+                draft_data = await self.drafter.draft(
+                    experiences,
+                    job_ad,
+                    research_data,
+                    golden_bullets=golden_bullets,
+                    tone_instruction=get_tone_instruction(creativity_mode),
+                    temperature_override=temperatures["drafter"],
+                    extracted_job_title=extracted_job_title,
+                )
+                attempt = 1
+            except Exception as e:
+                logger.exception(f"[ORCHESTRATOR] Stage 2 CRITICAL FAILURE: {e}")
+                result["errors"].append(f"Drafter Exception: {str(e)}")
+                draft_data = {"rewritten_experiences": [], "fallback": True}
 
             if draft_data.get("fallback"):
                 logger.warning("[ORCHESTRATOR] Stage 2 used fallback logic")
