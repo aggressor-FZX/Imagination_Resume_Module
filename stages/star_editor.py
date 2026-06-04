@@ -662,11 +662,11 @@ class StarEditor:
         added = []
 
         # If structured data is empty, extract from raw resume text
-        if not education and original_resume_text:
+        if (not education or len(education) == 0) and original_resume_text:
             education = self._extract_education_from_text(original_resume_text)
-        if not certifications and original_resume_text:
+        if (not certifications or len(certifications) == 0) and original_resume_text:
             certifications = self._extract_certs_from_text(original_resume_text)
-        if not skills and original_resume_text:
+        if (not skills or len(skills) == 0) and original_resume_text:
             skills = self._extract_skills_from_text(original_resume_text)
 
         # Ensure Education section with content
