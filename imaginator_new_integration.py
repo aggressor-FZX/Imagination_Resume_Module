@@ -1731,6 +1731,15 @@ Rate the alignment (0.0-1.0):"""
                 section_completeness["missing_sections"],
             )
 
+        # Trim experiences to only what the frontend needs (title + role)
+        trimmed_experiences = []
+        for exp in experiences[:8]:
+            trimmed_experiences.append({
+                "company": exp.get("company", ""),
+                "role": exp.get("role", ""),
+                "duration": exp.get("duration", ""),
+            })
+
         response = {
             # Core fields from new pipeline
             "final_written_section_markdown": final_output.get(
@@ -1739,54 +1748,25 @@ Rate the alignment (0.0-1.0):"""
             "final_written_section": final_output.get("final_written_section", ""),
             "editorial_notes": final_output.get("editorial_notes", ""),
             "seniority_level": final_output.get("seniority_level", "mid"),
-            "domain_terms_used": final_output.get("domain_terms_used", []),
-            "quantification_analysis": final_output.get("quantification_analysis", {}),
-            "hallucination_checked": final_output.get("hallucination_checked", False),
-            "critique_score": critique_score,  # ATS Score from criticism stage
-            "extracted_job_title": extracted_job_title,  # Extracted by GPT-4o
+            "critique_score": critique_score,
+            "extracted_job_title": extracted_job_title,
             # Backward-compatible fields for frontend
-            "experiences": experiences,
+            "experiences": trimmed_experiences,
             "aggregate_skills": aggregate_skills,
-            "processed_skills": result.get(
-                "processed_skills", {"all": aggregate_skills}
-            ),
-            "domain_insights": domain_insights,
-            "gap_analysis": gap_analysis_json,  # Generated from researcher insights (JSON string)
+            "domain_insights": {"domain": domain_insights.get("domain", "")},
             "sectionCompleteness": section_completeness,
-            "suggested_experiences": {"bridging_gaps": [], "metric_improvements": []},
-            "seniority_analysis": result.get(
-                "seniority_analysis",
-                {"level": final_output.get("seniority_level", "mid")},
-            ),
-            # Backward compatibility: rewritten_resume = final_written_section (for frontend)
+            "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
             "rewritten_resume": final_output.get("final_written_section", ""),
-            # Suggestions field for frontend
             "suggestions": [],
-            # Metadata
             "pipeline_version": "3.0",
-            "pipeline_status": result.get("metrics", {}).get(
-                "pipeline_status", "completed"
-            ),
-            "pipeline_metrics": {
-                "total_duration_seconds": result.get("metrics", {}).get(
-                    "total_duration_seconds", 0
-                ),
-                "stage_durations": result.get("metrics", {}).get("stage_durations", {}),
-                "errors": errors,
+            "pipeline_status": "completed",
+            "run_metrics": {
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_tokens": 0,
+                "estimated_cost_usd": 0.0,
+                "failures": [],
             },
-            # Token usage metrics from LLM client (critical for app.py detection)
-            "run_metrics": (
-                llm_client.get_usage_stats()
-                if hasattr(llm_client, "get_usage_stats")
-                else {
-                    "calls": [],
-                    "total_prompt_tokens": 0,
-                    "total_completion_tokens": 0,
-                    "total_tokens": 0,
-                    "estimated_cost_usd": 0.0,
-                    "failures": [],
-                }
-            ),
         }
 
         # Generate Career Alchemy if available

@@ -197,7 +197,6 @@ class PipelineOrchestrator:
             result["stages"]["researcher"] = {
                 "status": "completed" if "error" not in research_data else "failed",
                 "duration_seconds": stage1_duration,
-                "data": research_data,
                 "summary": self.researcher.get_metrics_summary(research_data),
             }
 
@@ -268,8 +267,8 @@ class PipelineOrchestrator:
             result["stages"]["drafter"] = {
                 "status": "completed" if not draft_data.get("fallback") else "fallback",
                 "duration_seconds": stage2_duration,
-                "data": draft_data,
-                "summary": self.drafter.get_draft_summary(draft_data),
+                "total_bullets": draft_data.get("total_bullets", 0),
+                "quantification_score": draft_data.get("quantification_score", 0),
             }
 
             logger.info(f"[ORCHESTRATOR] Stage 2 completed in {stage2_duration:.2f}s")
@@ -323,8 +322,7 @@ class PipelineOrchestrator:
             result["stages"]["star_editor"] = {
                 "status": "completed",
                 "duration_seconds": stage3_duration,
-                "data": editor_data,
-                "summary": self.star_editor.get_editor_summary(editor_data),
+                "word_count": len(editor_data.get("final_markdown", "").split()),
             }
 
             logger.info(f"[ORCHESTRATOR] Stage 3 completed in {stage3_duration:.2f}s")
