@@ -210,6 +210,17 @@ class PipelineOrchestrator:
             stage2_start = time.time()
             logger.info("[ORCHESTRATOR] Starting Stage 2: Drafter")
 
+            # Limit experiences for Drafter to prevent OOM. The Drafter
+            # generates rewritten text for each experience, so 21 experiences
+            # produces ~200KB+ output which crashes the 1GB instance.
+            MAX_DRAFTER_EXPERIENCES = 8
+            if len(experiences) > MAX_DRAFTER_EXPERIENCES:
+                logger.warning(
+                    f"[ORCHESTRATOR] Truncating experiences from {len(experiences)} "
+                    f"to {MAX_DRAFTER_EXPERIENCES} for Drafter memory budget"
+                )
+                experiences = experiences[:MAX_DRAFTER_EXPERIENCES]
+
             # Retry logic for quality (Phase 4: Feature Completion / Quality Gate)
             max_retries = 2
             attempt = 0
