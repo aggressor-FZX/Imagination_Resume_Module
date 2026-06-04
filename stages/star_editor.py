@@ -20,88 +20,46 @@ logger = logging.getLogger(__name__)
 # PROMPT TEMPLATES
 # ============================================================================
 
-STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. Convert the provided resume data into a clean, ATS-friendly, template-aligned resume with ALL required sections.
+STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. You MUST output ALL 5 sections below. Do NOT skip any section.
 
-### REQUIRED SECTIONS (in order — MUST match this exact sequence):
-1. **PROFESSIONAL EXPERIENCE** (always required — most important)
-2. **PROJECTS** (if provided)
-3. **EDUCATION**
-4. **CERTIFICATIONS** (if provided)
-5. **TECHNICAL SKILLS** (always required — extract from input, GROUPED by category)
+OUTPUT ALL 5 SECTIONS IN THIS EXACT ORDER:
 
-### EXACT SECTION FORMATS (MUST follow these templates precisely):
-
-**PROFESSIONAL EXPERIENCE:**
 ## Professional Experience
-**Company Name — Location**
-*Job Title | Start Date -- End Date*
-- Action-verb bullet with metric or result
-- Action-verb bullet with metric or result
+For each job:
+**Company Name** -- Location
+*Job Title | dates*
+- bullet point 1
+- bullet point 2
 
-NOTE: Company + location on one bold line. Title + dates on the next italic line. 
-Use "—" (em dash) as separator. Dates format: MM/YYYY -- MM/YYYY or "Present".
+## Projects  
+For each project:
+**Project Name** -- Tech Stack (duration)
+- bullet point
 
-**PROJECTS:**
-## Projects
-**Project Name — Tech Stack (Duration)**
-- Description of what was built and the impact
-
-**EDUCATION:**
 ## Education
-**Degree, Institution** — Date
-  OR
-**Degree** — Institution | Date
-- GPA: X.XX (if provided)
-- Relevant Courses: Course 1, Course 2 (if provided)
+**Degree, Institution** -- Date
+- GPA: X.XX
+- Relevant Courses: ...
 
-**CERTIFICATIONS:**
 ## Certifications
-**Certification Name**, Issuer (Year)
+- Certification Name -- Issuer (Year)
 
-**TECHNICAL SKILLS (GROUPED BY CATEGORY — not a flat list):**
 ## Technical Skills
-**Category Name:** item1, item2, item3, ...
+**Category:** skill1, skill2, skill3
 
-**Category Name:** item1, item2, item3, ...
+RULES:
+- Every section above MUST appear in the output.
+- Company names go on bold lines, NOT merged with job titles.
+- Each job has its own sub-section with bullets.
+- Skills are grouped by category (2-4 categories).
+- Never invent companies, dates, or metrics not in the input.
+- Output ONLY resume content, no meta-commentary.
 
-Example:
-## Technical Skills
-**Statistical and Predictive Modeling:** descriptive analysis, predictive modeling, Monte Carlo simulation, anomaly detection, model validation, risk assessment
-
-**Languages and Tools:** Python, SQL, C++, Pandas, NumPy, PyTorch, TensorFlow, AWS, Docker, Git
-
-**NLP and AI:** LLM integration, LangChain, OpenAI API, RAG, embeddings, prompt engineering
-
-### CRITICAL FORMATTING RULES:
-1. **SECTION ORDER IS MANDATORY:** Experience first, then Projects, then Education, then Certifications, then Skills. Never reorder.
-
-2. **COMPANY ON BOLD HEADER LINE:** Format: `**Company Name — Location**` then on the next line: `*Job Title | MM/YYYY -- MM/YYYY*`. NEVER merge title and company into one line.
-
-3. **SKILLS MUST BE CATEGORIZED:** Group skills into 2-4 logical categories with bold category headers. NEVER output a flat comma-separated list like "Skills: Python, SQL, Docker...". Always use `**Category Name:** item1, item2, ...` format.
-
-4. **INCLUDE ALL PROVIDED SECTIONS:** Every section with data in the input MUST appear in the output. Never skip a section that has content.
-
-5. **NO PLACEHOLDER TEXT:** Use actual dates and locations. NEVER output: "Dates Not Specified", "N/A", "Unknown", "Dates Provided". If a date is genuinely missing, omit the date portion.
-
-6. **EVERY LINE A BULLET:** Under each job/project, every achievement MUST be a distinct bullet starting with `- `. Never combine achievements into paragraph blocks.
-
-7. **NO LABELS:** Strip "Situation:", "Task:", "Action:", "Result:", "STAR:", "CAR:" prefixes from bullets.
-
-8. **METRICS ONLY IF SOURCED:** Only include numbers (%, $, counts) that appear explicitly in the user's input. Never fabricate metrics.
-
-9. **ANTI-HALLUCINATION:** Never list the Target Company as an employer. Only use company names that appear in the input experiences.
-
-10. **NO LEAKAGE:** No meta-commentary, no editorial notes in the resume output. Pure resume content only.
-
-11. **EDUCATION FORMAT:** `**Degree, Institution** — Date` on the main line. GPA and courses on separate bullet lines if provided.
-
-12. **DATES ON EXPERIENCE:** Every job entry MUST include dates on the italic line: `*Job Title | MM/YYYY -- MM/YYYY*`. Use "Present" for current roles. If dates are genuinely unknown, still include the pipe separator but leave dates empty: `*Job Title |*`.
-
-Output JSON Schema:
+OUTPUT JSON:
 {
-  "final_markdown": "## Professional Experience\\n**National Oceanic and Atmospheric Administration (NOAA) \\u2014 Seattle, WA**\\n*Operations Manager | 12/2019 \\u2013 05/2023*\\n- Designed Python decision-support tools reducing manual reporting by 40% across 13 vessels\\n- Launched Government Travel database achieving 85% adoption in first month\\n\\n## Projects\\n**LLM-Powered Chatbot \\u2014 Python, LangChain, Pinecone (3 months)**\\n- Built GenAI chatbot with live data scraping for course guidance\\n\\n## Education\\n**B.S. Data Analytics, Washington State University** \\u2014 05/2026\\n- GPA: 3.84\\n\\n## Certifications\\n**Network Security+**, CompTIA (2024)\\n\\n## Technical Skills\\n**Languages and Tools:** Python, SQL, Docker, AWS, Git\\n**Machine Learning and AI:** PyTorch, TensorFlow, scikit-learn, NLP, LLM integration",
-  "final_plain_text": "Professional Experience: Operations Manager at NOAA (2019-2023)... | Education: B.S. Data Analytics - Washington State University (2026) | Certifications: Network Security+ - CompTIA | Skills: Python, SQL, Docker, AWS, ML...",
-  "editorial_notes": "Template-aligned resume with all required sections including categorized Technical Skills."
+  "final_markdown": "## Professional Experience\n**NOAA** -- Seattle, WA\n*Operations Manager | 2019 -- 2023*\n- bullet\n\n## Projects\n**Name** -- Tech (duration)\n- bullet\n\n## Education\n**BS, WSU** -- 2026\n\n## Certifications\n- Cert -- Issuer (year)\n\n## Technical Skills\n**Languages:** Python, SQL",
+  "final_plain_text": "plain text summary",
+  "editorial_notes": "all sections present"
 }
 """
 
@@ -219,6 +177,12 @@ class StarEditor:
             # Validate metrics - remove any that weren't in the original input
             result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
             
+            # POST-PROCESSING: Ensure all required sections are present
+            result = self._ensure_all_sections(
+                result, education=education, certifications=certifications,
+                skills=skills, projects=projects
+            )
+            
             # Ensure we have at least some data
             if not result.get("final_markdown"):
                 result["final_markdown"] = "## Professional Experience\n\nNo resume content generated."
@@ -276,140 +240,94 @@ class StarEditor:
         
         # Add education section
         if education:
-            prompt_parts.append("\nEDUCATION TO INCLUDE:")
-            for edu in education[:5]:  # Limit education entries
+            prompt_parts.append("\nEDUCATION:")
+            for edu in education[:5]:
                 degree = edu.get("degree", "")
                 institution = edu.get("institution", "")
                 dates = edu.get("dates", "")
                 gpa = edu.get("gpa", "")
-                details = f"{degree}"
-                if institution:
-                    details += f" - {institution}"
-                if dates:
-                    details += f" ({dates})"
+                line = f"  {degree} -- {institution} ({dates})" if dates else f"  {degree} -- {institution}"
                 if gpa:
-                    details += f" - GPA: {gpa}"
-                prompt_parts.append(f"- {details}")
+                    line += f" GPA: {gpa}"
+                prompt_parts.append(line)
         
         # Add certifications section
         if certifications:
-            prompt_parts.append("\nCERTIFICATIONS TO INCLUDE:")
-            for cert in certifications[:5]:  # Limit certification entries
+            prompt_parts.append("\nCERTIFICATIONS:")
+            for cert in certifications[:5]:
                 name = cert.get("name", "")
                 issuer = cert.get("issuer", "")
                 year = cert.get("year", "")
-                details = name
-                if issuer:
-                    details += f" - {issuer}"
-                if year:
-                    details += f" ({year})"
-                prompt_parts.append(f"- {details}")
+                line = f"  {name} -- {issuer} ({year})" if year else f"  {name} -- {issuer}"
+                prompt_parts.append(line)
         
-        # Add projects section (for students/career changers)
+        # Add projects section
         if projects:
-            prompt_parts.append("\nPROJECTS TO INCLUDE:")
-            for proj in projects[:5]:  # Limit project entries
+            prompt_parts.append("\nPROJECTS:")
+            for proj in projects[:5]:
                 name = proj.get("name", "")
                 description = proj.get("description", "")
                 technologies = proj.get("technologies", [])
                 duration = proj.get("duration", "")
-                details = name
-                if technologies:
-                    details += f" - {', '.join(technologies[:3])}"
-                if duration and not self._is_placeholder_duration(duration):
-                    details += f" ({duration})"
-                prompt_parts.append(f"- {details}")
+                tech = ", ".join(technologies[:5]) if technologies else ""
+                dur = f" ({duration})" if duration and not self._is_placeholder_duration(duration) else ""
+                prompt_parts.append(f"  {name} -- {tech}{dur}")
                 if description:
-                    prompt_parts.append(f"  {description[:100]}")
+                    prompt_parts.append(f"    {description[:120]}")
         
-        # Add skills section (extracted from resume) — MUST be categorized
+        # Add skills
         if skills:
-            prompt_parts.append("\nSKILLS TO INCLUDE (MUST BE CATEGORIZED INTO 2-4 GROUPS):")
-            skill_list = skills[:30]  # Limit to top 30 skills
-            prompt_parts.append(f"Raw skills: {', '.join(skill_list)}")
-            prompt_parts.append("Group these into logical categories. Example:")
-            prompt_parts.append("**Languages and Tools:** Python, SQL, C++, Docker, Git")
-            prompt_parts.append("**Machine Learning and AI:** PyTorch, TensorFlow, scikit-learn, NLP")
-            prompt_parts.append("**Data Engineering:** ETL pipelines, AWS, PostgreSQL, data modeling")
+            prompt_parts.append(f"\nSKILLS: {', '.join(skills[:25])}")
         else:
-            prompt_parts.append("\nSKILLS TO INCLUDE: None provided. You MUST still output a ## Technical Skills section by extracting skills from the experience bullets and categorizing them into 2-4 groups.")
+            prompt_parts.append("\nSKILLS: (extract from experience bullets)")
         
         # Add experiences with dates and location
-        prompt_parts.append("\nEXPERIENCES TO FORMAT:")
-        for i, exp in enumerate(experiences[:10], 1):  # Limit to 10 most relevant experiences
+        prompt_parts.append("\nEXPERIENCES:")
+        for i, exp in enumerate(experiences[:10], 1):
             company = exp.get("company", "Company")
             role = exp.get("role") or exp.get("title", "Role")
             
-            # Extract duration from multiple possible sources
             duration = exp.get("duration") or exp.get("dates", "")
             if not duration:
-                # Try to extract from title_line (Drafter format)
                 title_line = exp.get("title_line", "")
-                if "(" in title_line and ")" in title_line:
-                    match = re.search(r'\(([^)]+)\)', title_line)
-                    if match:
-                        duration = match.group(1)
+                match = re.search(r'\(([^)]+)\)', title_line)
+                if match:
+                    duration = match.group(1)
             
-            # Extract just years from duration (e.g., "2020 - Present" or "Jan 2020 - Dec 2023")
             if duration and not self._is_placeholder_duration(duration):
-                # Find all 4-digit years
                 years = re.findall(r'\b(19|20)\d{2}\b', duration)
                 if len(years) >= 2:
-                    duration = f"{years[0]} - {years[-1]}"  # "2020 - 2024"
+                    duration = f"{years[0]} - {years[-1]}"
                 elif len(years) == 1:
-                    duration = years[0]  # "2020" or "Present"
+                    duration = years[0]
             else:
                 duration = ""
             
-            # Extract location from multiple possible sources
             location_exp = exp.get("location", "")
             if not location_exp:
-                # Try to extract from title_line or snippet
                 title_line = exp.get("title_line", "")
                 snippet = exp.get("snippet", "")
-                # Look for "City, ST" pattern
                 loc_match = re.search(r'([A-Za-z\s]+,\s*[A-Z]{2})(?:\s|$|\)|-)', title_line + " " + snippet)
                 if loc_match:
                     location_exp = loc_match.group(1).strip()
             
             bullets = exp.get("bullets", [])
             if not bullets and exp.get("snippet"):
-                # Convert snippet to bullets if no bullets provided
                 bullets = [exp.get("snippet")]
             
-            # Rank bullets by relevance to target job (domain_vocab matches)
             if domain_vocab and bullets:
                 def score_bullet(b):
-                    b_lower = b.lower()
-                    return sum(1 for v in domain_vocab if v.lower() in b_lower)
-                # Stable sort: highest score first, preserves original order on ties
+                    return sum(1 for v in domain_vocab if v.lower() in b.lower())
                 bullets = sorted(bullets, key=score_bullet, reverse=True)
             
-            # Build the header line with available data
-            header = f"{i}. {role} at {company}"
-            if duration or location:
-                header += f" | {duration}"
-                if location:
-                    header += f" | {location}"
-            
-            prompt_parts.append(f"\n{header}")
-            for bullet in bullets[:6]:  # Limit to 6 bullets per experience
-                prompt_parts.append(f"   - {bullet}")
+            loc = f" -- {location_exp}" if location_exp else ""
+            dur = f" | {duration}" if duration else ""
+            prompt_parts.append(f"  {company}{loc} | {role}{dur}")
+            for bullet in bullets[:6]:
+                prompt_parts.append(f"    - {bullet}")
         
-        # Add formatting instructions
-        prompt_parts.append("\nFORMATTING REQUIREMENTS:")
-        prompt_parts.append("- CRITICAL: Put Company Name on its own **bold** line BEFORE the job title. Format: **Company** — Location on one line, then *Job Title | Dates* on the next line.")
-        prompt_parts.append("- Use years only for dates (e.g., '2020 — 2024' not 'Jan 2020 - Dec 2024').")
-        prompt_parts.append("- Use ## for section headers (e.g., '## Professional Experience')")
-        prompt_parts.append("- Use — (em dash) between company and location, and between certification and issuer")
-        prompt_parts.append("- Use **bold** for company names, institution names, and project names")
-        prompt_parts.append("- Use *italic* for job titles/dates and degree lines")
-        prompt_parts.append("- Use - for bullet points under each job")
-        prompt_parts.append("- Every bullet should start with a strong action verb")
-        prompt_parts.append("- Use ## Technical Skills as the skills section header (not just ## Skills)")
-        prompt_parts.append("- Skills MUST be categorized: **Category Name:** item1, item2, ... (NOT a flat list)")
-        prompt_parts.append("- Remove any 'Situation:', 'Task:', 'Action:', 'Result:' labels")
-        prompt_parts.append("- Keep language professional and achievement-oriented")
+        # Minimal formatting instructions
+        prompt_parts.append("\nFORMAT: Company on bold line, title+dates on italic line, bullets start with -.")
         
         return "\n".join(prompt_parts)
     
@@ -710,6 +628,80 @@ class StarEditor:
         if result != markdown:
             logger.warning("[STAR_EDITOR] Removed placeholder text from output")
         
+        return result
+
+    def _ensure_all_sections(self, result: Dict[str, Any], 
+                            education: List[Dict] = None,
+                            certifications: List[Dict] = None,
+                            skills: List[str] = None,
+                            projects: List[Dict] = None) -> Dict[str, Any]:
+        """Post-process the LLM output to ensure all required sections exist.
+        
+        If the LLM dropped a section, this appends a minimal version from the input data.
+        """
+        md = result.get("final_markdown", "")
+        if not md:
+            return result
+
+        sections_present = set()
+        for section_name in ["Professional Experience", "Experience", "Projects", 
+                            "Education", "Certifications", "Technical Skills", "Skills"]:
+            if re.search(rf'##\s*{section_name}', md, re.IGNORECASE):
+                sections_present.add(section_name.lower())
+
+        added = []
+
+        # Ensure Education section
+        if "education" not in sections_present and education:
+            edu_block = "\n\n## Education\n"
+            for edu in education[:5]:
+                degree = edu.get("degree", "")
+                inst = edu.get("institution", "")
+                dates = edu.get("dates", "")
+                gpa = edu.get("gpa", "")
+                line = f"**{degree}, {inst}**"
+                if dates:
+                    line += f" -- {dates}"
+                edu_block += line + "\n"
+                if gpa:
+                    edu_block += f"- GPA: {gpa}\n"
+            md += edu_block
+            added.append("Education")
+
+        # Ensure Certifications section
+        if "certifications" not in sections_present and certifications:
+            cert_block = "\n\n## Certifications\n"
+            for cert in certifications[:5]:
+                name = cert.get("name", "")
+                issuer = cert.get("issuer", "")
+                year = cert.get("year", "")
+                line = f"- {name} -- {issuer}"
+                if year:
+                    line += f" ({year})"
+                cert_block += line + "\n"
+            md += cert_block
+            added.append("Certifications")
+
+        # Ensure Technical Skills section
+        if "technical skills" not in sections_present and "skills" not in sections_present and skills:
+            skill_block = "\n\n## Technical Skills\n"
+            # Group into 2-3 categories
+            ml_skills = [s for s in skills if any(w in s.lower() for w in ['pytorch', 'tensorflow', 'keras', 'ml', 'deep learning', 'nlp', 'llm', 'langchain', 'scikit'])]
+            data_skills = [s for s in skills if any(w in s.lower() for w in ['sql', 'pandas', 'numpy', 'spark', 'etl', 'tableau', 'power bi', 'data'])]
+            other_skills = [s for s in skills if s not in ml_skills and s not in data_skills]
+            if ml_skills:
+                skill_block += f"**Machine Learning & AI:** {', '.join(ml_skills[:10])}\n"
+            if data_skills:
+                skill_block += f"**Data & Analytics:** {', '.join(data_skills[:10])}\n"
+            if other_skills:
+                skill_block += f"**Tools & Platforms:** {', '.join(other_skills[:10])}\n"
+            md += skill_block
+            added.append("Technical Skills")
+
+        if added:
+            logger.warning(f"[STAR_EDITOR] LLM dropped sections, appended from input: {added}")
+            result["final_markdown"] = md
+
         return result
 
     def _normalize_section_boundaries(self, markdown: str) -> str:
