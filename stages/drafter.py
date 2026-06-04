@@ -301,7 +301,7 @@ YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES)
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 fallback_models=self.fallback_models,
-                max_tokens=2000,
+                max_tokens=4000,  # 2000→4000: 6 experiences × 2 bullets + metrics + rationale needs ~3K tokens
             )
             
             # Parse and validate response
