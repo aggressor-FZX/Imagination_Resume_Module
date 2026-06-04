@@ -213,7 +213,7 @@ class PipelineOrchestrator:
             # Limit experiences for Drafter to prevent OOM. The Drafter
             # generates rewritten text for each experience, so 21 experiences
             # produces ~200KB+ output which crashes the 1GB instance.
-            MAX_DRAFTER_EXPERIENCES = 8
+            MAX_DRAFTER_EXPERIENCES = 5
             if len(experiences) > MAX_DRAFTER_EXPERIENCES:
                 logger.warning(
                     f"[ORCHESTRATOR] Truncating experiences from {len(experiences)} "

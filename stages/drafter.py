@@ -261,7 +261,7 @@ Research Insights:
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 fallback_models=self.fallback_models,
-                max_tokens=6000,
+                max_tokens=2000,
             )
             
             # Parse and validate response
