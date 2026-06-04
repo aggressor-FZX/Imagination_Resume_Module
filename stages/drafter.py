@@ -84,6 +84,7 @@ REFERENCE PATTERNS (FICTIONAL - DO NOT COPY DATA):
 3. **Only Use Real Metrics:** Only include metrics (%, $, time) that appear EXPLICITLY in the user's input. Do NOT invent "increased revenue by X%" unless the user said it.
 4. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
 5. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
+"""
     
     title_context = ""
     if extracted_job_title:
