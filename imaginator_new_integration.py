@@ -833,6 +833,28 @@ async def run_new_pipeline_async(
         sanitized_len = len(resume_text)
         logger.info(f"[NEW_PIPELINE] PII sanitization: {original_resume_len} -> {sanitized_len} chars")
 
+    # Truncate resume text to prevent OOM on the 3-stage LLM pipeline
+    # The pipeline holds the full text in memory through Researcher → Drafter → StarEditor.
+    # 12K chars is enough to capture all experiences, education, skills, and certifications
+    # while keeping the total pipeline memory under the Render instance limit.
+    MAX_RESUME_CHARS = 12000
+    if resume_text and len(resume_text) > MAX_RESUME_CHARS:
+        logger.warning(
+            f"[NEW_PIPELINE] Truncating resume from {len(resume_text)} to {MAX_RESUME_CHARS} chars "
+            f"to fit pipeline memory budget"
+        )
+        # Try to truncate at a section boundary (before Education/Certifications/Skills)
+        # so the section guard fallback can still extract those from the full text
+        resume_text = resume_text[:MAX_RESUME_CHARS]
+        # Find last complete section start and truncate there
+        last_section = -1
+        for marker in ["\nEducation:", "\nCertifications:", "\nProjects:", "\nSkills:"]:
+            idx = resume_text.rfind(marker)
+            if idx > 0 and idx > last_section:
+                last_section = idx
+        if last_section > MAX_RESUME_CHARS * 0.7:  # Only if we're past 70% of the limit
+            resume_text = resume_text[:last_section]
+
     try:
         # Use provided experience if available, otherwise parse from text
         if experience:
