@@ -53,12 +53,11 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     original_titles = [exp.get("role", "Unknown") for exp in experiences if exp.get("role")]
     
     # 2. Format Golden Bullets as "Style Reference Only"
-    # Raised from 3 to 10 (2026-06-04): More style references improve
-    # quality without increasing hallucination risk when anti-hallucination
-    # guardrails (TRUTH CONSTRAINTS below) are enforced by the prompt.
+    # Raised 3→6 (2026-06-04): 6 references provide good style signal
+    # without OOM. 10 caused instance crash on 1GB Render.
     golden_section = ""
     if golden_bullets:
-        selected_bullets = golden_bullets[:10]
+        selected_bullets = golden_bullets[:6]
         bullets_text = "\n".join([f"• {b}" for b in selected_bullets])
         
         golden_section = f"""
