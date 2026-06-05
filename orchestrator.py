@@ -210,7 +210,7 @@ class PipelineOrchestrator:
             # response is the heaviest object (held transiently in the adapter).
             # Force GC, then pause to let the OS reclaim memory before Stage 2.
             gc.collect()
-            await asyncio.sleep(3.0)  # 3s cooldown — memory peaks right after a stage returns
+            await asyncio.sleep(2.0)  # 2s cooldown — memory peaks right after a stage returns
 
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
@@ -272,7 +272,7 @@ class PipelineOrchestrator:
             # response_format). The raw response is held transiently in the
             # adapter — force GC and pause to let the OS reclaim before Stage 3.
             gc.collect()
-            await asyncio.sleep(3.0)  # 3s cooldown
+            await asyncio.sleep(2.0)  # 2s cooldown
 
             # STAGE 3: STAR EDITOR - Polish into final resume
             stage3_start = time.time()
@@ -331,7 +331,7 @@ class PipelineOrchestrator:
             # markdown string. Force GC, then pause to let the OS reclaim
             # before Stage 4 metadata analysis.
             gc.collect()
-            await asyncio.sleep(3.0)  # 3s cooldown
+            await asyncio.sleep(2.0)  # 2s cooldown
 
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
             # Aggregate skills ONLY from user's actual resume experiences
