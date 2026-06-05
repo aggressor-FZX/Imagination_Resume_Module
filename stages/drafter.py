@@ -171,9 +171,11 @@ Output JSON Schema:
       "role": "Original or Polished Title",
       "bullets": [
         "Strong Action Verb + Specific Tech + Quantifiable Result",
-        "Strong Action Verb + Problem Solved + Benefit"
+        "Strong Action Verb + Specific Tech + Quantifiable Result",
+        "Strong Action Verb + Problem Solved + Benefit",
+        "Strong Action Verb + Specific Tech + Business Outcome"
       ],
-      "metrics_used": ["90% latency reduction", "10k+ assets"],
+      "metrics_used": ["90% latency reduction", "10k+ assets", "$500K funding"],
       "style_transfer_rationale": "Mapped user's edge computing note to the Golden Bullet about 'High-availability distributed systems'."
     }}
   ],
@@ -273,11 +275,15 @@ class Drafter:
         _found_metrics = list(dict.fromkeys(_found_metrics))[:10]  # dedupe, limit to 10
 
         user_prompt = f"""
-User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
+User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
+Each experience has a 'description' field containing the ORIGINAL bullet content.
+Mine this field for: metrics, technologies, action verbs, and domain-specific language.
+DO NOT fabricate anything not in these descriptions.
+
 {json.dumps(experiences, indent=2)}
 
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
-{job_ad[:1500]}
+{job_ad[:3000]}
 
 Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
@@ -301,7 +307,7 @@ YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES)
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 fallback_models=self.fallback_models,
-                max_tokens=4000,  # 2000→4000: 6 experiences × 2 bullets + metrics + rationale needs ~3K tokens
+                max_tokens=6000,  # 4000→6000: 6 experiences × 4 bullets + metrics + rationale needs ~5K tokens
             )
             
             # Parse and validate response

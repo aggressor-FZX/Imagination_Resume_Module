@@ -151,7 +151,7 @@ class StarEditor:
                 temperature=temperature,
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
-                max_tokens=2000,
+                max_tokens=5000,  # 2000→5000: PNNL benchmark is 7742 chars/942 words. 2000 capped output at ~250 words. 5000 allows ~600-800 words.
             )
             
             # Parse and validate response
