@@ -127,7 +127,7 @@ TIMEOUTS = {
 # Temperature settings
 TEMPERATURES = {
     "researcher": 0.1,
-    "drafter": 0.4,
+    "drafter": 0.2,  # Lowered 0.4→0.2 for deterministic JSON output (prevents generic fallback)
     "star_editor": 0.1
 }
 
