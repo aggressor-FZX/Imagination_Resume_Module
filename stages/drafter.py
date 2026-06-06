@@ -214,6 +214,7 @@ class Drafter:
         tone_instruction: Optional[str] = None,
         temperature_override: Optional[float] = None,
         extracted_job_title: Optional[str] = None,
+        resume_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
@@ -254,11 +255,11 @@ class Drafter:
             extracted_job_title=extracted_job_title,
         ) + sparse_instruction
         
-        # Pre-extract metrics from the raw resume text to surface in the prompt.
+        # Pre-extract metrics from BOTH the raw resume text and structured experiences.
         # The "NO FABRICATED METRICS" rule prevents the LLM from inventing numbers,
         # but we need to actively show what metrics ARE available in the source text.
         import re as _re
-        _resume_text = json.dumps(experiences)
+        _search_text = (resume_text or '') + '\n' + json.dumps(experiences)
         _metric_patterns = [
             (r'(\d+(\.\d+)?%)', 'percentage'),
             (r'\$[\d,]+(\.[\d]+)?\s*(million|billion|thousand|K|M|B)?', 'dollar_amount'),
@@ -268,7 +269,7 @@ class Drafter:
         ]
         _found_metrics = []
         for _pat, _label in _metric_patterns:
-            for _m in _re.findall(_pat, _resume_text, _re.IGNORECASE):
+            for _m in _re.findall(_pat, _search_text, _re.IGNORECASE):
                 _val = _m[0] if isinstance(_m, tuple) else _m
                 if _val and len(str(_val)) > 1:
                     _found_metrics.append(str(_val).strip())

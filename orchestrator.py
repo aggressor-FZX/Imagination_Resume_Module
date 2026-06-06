@@ -242,6 +242,7 @@ class PipelineOrchestrator:
                     tone_instruction=get_tone_instruction(creativity_mode),
                     temperature_override=temperatures["drafter"],
                     extracted_job_title=extracted_job_title,
+                    resume_text=resume_text,
                 )
                 attempt = 1
             except Exception as e:
@@ -474,10 +475,9 @@ class PipelineOrchestrator:
         markdown_lines = ["## Professional Experience"]
 
         for exp in experiences[:6]:  # Increased fallback coverage
-            company = (
-                exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
-            )
-            role = exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
+            raw_company = exp.get("company") or ""
+            company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or exp.get("title_line", "").split("|")[-1].strip()
+            role = exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
 
             if company and role:
                 markdown_lines.append(f"\n**{role}** at *{company}*")
@@ -590,7 +590,7 @@ class PipelineOrchestrator:
         else:
             valid_experiences = 0
             for exp in experiences:
-                if exp.get("company") or exp.get("role"):
+                if exp.get("company") or exp.get("title") or exp.get("role"):
                     valid_experiences += 1
 
             if valid_experiences == 0:

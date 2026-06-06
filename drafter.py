@@ -44,7 +44,7 @@ def create_drafter_prompt(
         exp.get("company", "Unknown") for exp in experiences if exp.get("company")
     ]
     original_titles = [
-        exp.get("role", "Unknown") for exp in experiences if exp.get("role")
+        exp.get("title") or exp.get("role", "Unknown") for exp in experiences if exp.get("title") or exp.get("role")
     ]
 
     # 2. Format Golden Bullets as "Style Reference Only"
@@ -164,6 +164,7 @@ class Drafter:
         tone_instruction: Optional[str] = None,
         temperature_override: Optional[float] = None,
         extracted_job_title: Optional[str] = None,
+        resume_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
@@ -173,6 +174,8 @@ class Drafter:
             job_ad: Job description text
             research_data: Output from Researcher stage
             golden_bullets: Optional list of high-quality example bullets
+            resume_text: Raw resume text — used to surface existing metrics
+                so the Drafter uses real numbers instead of fabricating them.
 
         Returns:
             Dictionary with rewritten experiences and metadata
@@ -192,6 +195,26 @@ class Drafter:
             logger.info("[DRAFTER] Sparse input detected, adding expansion instruction")
             sparse_instruction = "\nNOTE: The user's notes are very brief. You must EXPAND them into full bullets by inferring standard industry tasks associated with these roles/skills. Focus on HOW the work was likely done, but DO NOT invent specific metrics or projects found in the Job Description."
 
+        # Pre-extract metrics from BOTH the raw resume text and structured experiences.
+        # The "NO FABRICATED METRICS" rule prevents the LLM from inventing numbers,
+        # but we need to actively show what metrics ARE available in the source text.
+        import re as _re
+        _search_text = (resume_text or "") + "\n" + json.dumps(experiences)
+        _metric_patterns = [
+            (r"(\d+(\.\d+)?%)", "percentage"),
+            (r"\$[\d,]+(\.[\d]+)?\s*(million|billion|thousand|K|M|B)?", "dollar_amount"),
+            (r"(\d+[\d,]*)\s*(users|customers|clients|devices|assets|records|rows|documents|models|servers)", "count_with_unit"),
+            (r"(reduced|increased|improved|decreased|cut|saved|grew|boosted|lowered|accelerated|shortened|expanded)\s+\w+\s+by\s+\d+", "verb_metric"),
+            (r"(\d+[\d,]*)\s*(hours|days|weeks|months|years)", "time_unit"),
+        ]
+        _found_metrics = []
+        for _pat, _label in _metric_patterns:
+            for _m in _re.findall(_pat, _search_text, _re.IGNORECASE):
+                _val = _m[0] if isinstance(_m, tuple) else _m
+                if _val and len(str(_val)) > 1:
+                    _found_metrics.append(str(_val).strip())
+        _found_metrics = list(dict.fromkeys(_found_metrics))[:10]  # dedupe, limit to 10
+
         # Create prompt
         system_prompt = (
             create_drafter_prompt(
@@ -209,16 +232,23 @@ class Drafter:
         )
 
         user_prompt = f"""
-User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH:
+User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
+Each experience has a 'description' field containing the ORIGINAL bullet content.
+Mine this field for: metrics, technologies, action verbs, and domain-specific language.
+DO NOT fabricate anything not in these descriptions.
+
 {json.dumps(experiences, indent=2)}
 
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
-{job_ad[:1000]}
+{job_ad[:3000]}
 
 Research Insights:
 - Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
 - Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
 - Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
+
+YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES):
+{chr(10).join('- ' + m for m in _found_metrics) if _found_metrics else '- (None found — use qualitative achievements only, do NOT fabricate numbers)'}
 """
 
         try:
@@ -445,7 +475,7 @@ Research Insights:
             company = (
                 exp.get("company") or exp.get("title_line", "").split("|")[-1].strip()
             )
-            role = exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
+            role = exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
             duration = exp.get("duration") or exp.get("dates", "")
             location = exp.get("location", "")
 

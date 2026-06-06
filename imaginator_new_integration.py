@@ -874,7 +874,7 @@ async def run_new_pipeline_async(
             # still infer from context.
             def _exp_is_usable(exp: dict) -> bool:
                 """An experience is usable if it has a role, company, or meaningful title_line."""
-                has_role = bool(exp.get("role"))
+                has_role = bool(exp.get("title") or exp.get("role"))
                 has_company = bool(exp.get("company") and exp.get("company") not in ("N/A", "Unknown"))
                 has_title_line = bool(exp.get("title_line") and len(exp.get("title_line", "")) >= 10)
                 has_body = bool(exp.get("body") and len(exp.get("body", "")) >= 50)

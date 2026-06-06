@@ -288,9 +288,13 @@ class StarEditor:
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES TO FORMAT:")
         for i, exp in enumerate(experiences[:10], 1):  # Limit to 10 experiences
-            company = exp.get("company", "Company")
-            role = exp.get("role") or exp.get("title", "Role")
-            
+            # Hermes sometimes appends dates to company names (e.g. "NOAA 12/2019 - 05/2023").
+            # Strip trailing date patterns so the header stays clean.
+            raw_company = exp.get("company", "Company")
+            company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or raw_company
+            # Hermes sends 'title' as the canonical key. Check title first, then role.
+            role = exp.get("title") or exp.get("role", "Role")
+
             # Extract duration from multiple possible sources
             duration = exp.get("duration") or exp.get("dates", "")
             if not duration:
@@ -300,11 +304,12 @@ class StarEditor:
                     match = re.search(r'\(([^)]+)\)', title_line)
                     if match:
                         duration = match.group(1)
-            
+
             # Extract just years from duration (e.g., "2020 - Present" or "Jan 2020 - Dec 2023")
             if duration and not self._is_placeholder_duration(duration):
-                # Find all 4-digit years
-                years = re.findall(r'\b(19|20)\d{2}\b', duration)
+                # Find all 4-digit years (non-capturing group so we keep the FULL year,
+                # not just the 2-digit prefix — fixes the "20 - 20" collapse).
+                years = re.findall(r'\b(?:19|20)\d{2}\b', duration)
                 if len(years) >= 2:
                     duration = f"{years[0]} - {years[-1]}"  # "2020 - 2024"
                 elif len(years) == 1:
@@ -641,11 +646,15 @@ class StarEditor:
         # 1. Build list of legitimate companies from input
         original_companies = []
         for exp in original_experiences:
-            # Handle various input formats
+            # Handle various input formats. Strip trailing date patterns
+            # ("NOAA 12/2019 - 05/2023" → "NOAA") so the guard list
+            # matches what we actually expect in the markdown headers.
             comp = exp.get("company")
+            if comp:
+                comp = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', comp).strip()
             if not comp and "title_line" in exp:
                 comp = exp.get("title_line", "").split("|")[-1].strip()
-            
+
             if comp and comp not in original_companies:
                 original_companies.append(comp)
         
@@ -764,12 +773,15 @@ class StarEditor:
         markdown_lines = ["## Professional Experience"]
         
         for exp in experiences[:3]:  # Limit to 3 experiences
-            company = exp.get("company", "Company")
-            role = exp.get("role", "Role")
+            # Hermes sometimes appends dates to company names — strip them.
+            raw_company = exp.get("company", "Company")
+            company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or raw_company
+            # Hermes sends 'title' as the canonical key. Check title first, then role.
+            role = exp.get("title") or exp.get("role", "Role")
             bullets = exp.get("bullets", [])
-            
+
             markdown_lines.append(f"\n**{role}** at *{company}*")
-            
+
             for bullet in bullets[:2]:  # Limit to 2 bullets per experience
                 markdown_lines.append(f"- {bullet}")
         

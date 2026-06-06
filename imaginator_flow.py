@@ -3562,10 +3562,48 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
           # Ensure required fields and types
           parsed.setdefault("final_written_section", "")
           parsed.setdefault("final_written_section_markdown", "")
-          if not isinstance(parsed.get("final_written_section"), str):
-              parsed["final_written_section"] = json.dumps(parsed.get("final_written_section"), default=str)
-          if not isinstance(parsed.get("final_written_section_markdown"), str):
-              parsed["final_written_section_markdown"] = json.dumps(parsed.get("final_written_section_markdown"), default=str)
+
+          # CRITICAL: Unwrap double-nested JSON. The LLM sometimes returns
+          # `final_written_section` as a dict (e.g. {"final_markdown": "..."})
+          # because the synthesis prompt asks for a JSON object. Naively
+          # stringifying this with json.dumps() produces a doubly-wrapped
+          # string like '"{\\"final_markdown\\": \\"...\\"}"' which downstream
+          # consumers (frontend, PDF renderer) see as opaque text rather than
+          # the actual resume content. We must dig out the inner string.
+          def _coerce_to_text(value):
+              if value is None:
+                  return ""
+              if isinstance(value, str):
+                  return value
+              if isinstance(value, dict):
+                  # Prefer markdown; fall back to plain text
+                  inner = (
+                      value.get("final_markdown")
+                      or value.get("final_written_section_markdown")
+                      or value.get("final_plain_text")
+                      or value.get("final_written_section")
+                      or value.get("text")
+                      or ""
+                  )
+                  if isinstance(inner, str) and inner:
+                      return inner
+                  # Last resort: serialize the whole dict so nothing is lost
+                  return json.dumps(value, default=str)
+              if isinstance(value, (list, tuple)):
+                  return "\n".join(_coerce_to_text(v) for v in value if v)
+              return str(value)
+
+          parsed["final_written_section"] = _coerce_to_text(parsed.get("final_written_section"))
+          parsed["final_written_section_markdown"] = _coerce_to_text(
+              parsed.get("final_written_section_markdown")
+          )
+
+          # If markdown is empty but plain text is present, derive markdown from it
+          if (
+              not parsed["final_written_section_markdown"]
+              and parsed["final_written_section"]
+          ):
+              parsed["final_written_section_markdown"] = parsed["final_written_section"]
 
           # Force provenance to match API schema using actual experiences.
           parsed["final_written_section_provenance"] = _build_provenance_entries_from_experiences(experiences)
