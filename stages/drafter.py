@@ -371,10 +371,23 @@ YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES)
                 if isinstance(exp, dict):
                     # Preserve duration and location from original experience if available
                     original_exp = original_experiences[i] if i < len(original_experiences) else {}
+                    # Build duration: prefer LLM's output, then original's duration,
+                    # then reconstruct from start_date/end_date if those are split fields.
+                    _dur = (
+                        exp.get("duration")
+                        or original_exp.get("duration")
+                        or original_exp.get("dates", "")
+                    )
+                    if not _dur and original_exp.get("start_date"):
+                        _start = original_exp.get("start_date", "")
+                        _end = original_exp.get("end_date", "") or "Present"
+                        _dur = f"{_start} - {_end}"
                     validated = {
                         "company": exp.get("company", ""),
                         "role": exp.get("role", ""),
-                        "duration": exp.get("duration") or original_exp.get("duration") or original_exp.get("dates", ""),
+                        "duration": _dur,
+                        "start_date": original_exp.get("start_date", ""),
+                        "end_date": original_exp.get("end_date", ""),
                         "location": exp.get("location") or original_exp.get("location", ""),
                         "bullets": exp.get("bullets", []),
                         "metrics_used": exp.get("metrics_used", []),
