@@ -1204,20 +1204,56 @@ class StarEditor:
         original_text_lower = original_resume_text.lower() if original_resume_text else ""
         
         # Find all metrics in the output
-        metric_pattern = re.compile(r'(\d+(?:\.\d+)?)\s*(%|percent|\$\d+|k|thousand|million|billion|hours|days|weeks|months|years)', re.IGNORECASE)
-        
+        metric_pattern = re.compile(
+            r'(\d+(?:\.\d+)?)\s*(%|percent|\$\d+|k\b|thousand|million|billion|'
+            r'hours|days|weeks|months|years|man[\- ]?hours|vessels?)',
+            re.IGNORECASE,
+        )
+
+        # Pre-extract numeric tokens from the original input so we can do a
+        # quick membership test. The Drafter may rephrase the unit (e.g. "13
+        # oceanographic research vessels" -> "13‑vessel fleet"); we accept
+        # the bare numeric value as a fallback so we don't drop real metrics.
+        orig_numeric_tokens = set()
+        for _tm in re.finditer(r'\d+(?:\.\d+)?', original_text_lower):
+            orig_numeric_tokens.add(_tm.group(0))
+
         def is_metric_in_original(match):
             value = match.group(1)
-            unit = match.group(2).lower()
-            # Check if this exact value appears in original text with unit
-            # Original might have "30%." or "30 percent" - handle both
+            unit = match.group(2).lower().replace(' ', '').replace('-', '')
+            # Build all the variants the original resume might have used
+            # for the same fact. Examples: "30%", "30 percent", "30 man-hours",
+            # "30 man hours", "500K", "500,000", "2.3 million", "13 vessels".
             search_patterns = [
-                f"{value}%",           # "30%"
-                f"{value} percent",    # "30 percent"
+                f"{value}{unit}",
+                f"{value} {unit}",
+                f"{value}k",
+                f"{value} thousand",
+                f"{value}m",
+                f"{value} million",
+                f"{value}b",
+                f"{value} billion",
+                f"{value}%",
+                f"{value} percent",
+                f"{value} man-hours",
+                f"{value} manhours",
+                f"{value} man hours",
+                f"{value} vessels",
+                f"{value} hours",
+                f"{value} days",
+                f"{value} weeks",
+                f"{value} months",
+                f"{value} years",
+                f"{int(float(value)):,}" if '.' in value else f"{int(value):,}",
             ]
             for pattern in search_patterns:
                 if pattern in original_text_lower:
                     return True
+            # Fallback: bare numeric value appears in the original (the LLM
+            # may have rephrased the unit). This is permissive but correct
+            # for the drafter's "PRESERVE METRIC VALUES" instruction.
+            if value in orig_numeric_tokens:
+                return True
             return False
         
         # Remove metrics not in original
