@@ -107,6 +107,7 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 2. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
 3. **No Hallucinations:** Use ONLY the user's actual companies listed above.
 4. **Concrete Tech:** Do not say "cutting-edge tech." Name the specific tool (e.g., "TensorFlow", "Kubernetes") if the user mentioned it or if it is heavily implied by the Research Data.
+5. **PRESERVE METRIC VALUES VERBATIM:** If the input contains a specific number (e.g. "500K", "30 man-hours", "2.3 million dollars", "13 vessels"), you MUST copy the numeric value into your bullet. NEVER replace a number with an empty placeholder like "$" or "X" or "N/A". NEVER round, abbreviate, or drop the value. If you cannot fit the full bullet, KEEP the metric and shorten the rest of the sentence.
 
 BAD VS GOOD:
 ✗ Weak: "Strategized deployment of models." (Vague, passive)

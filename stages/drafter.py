@@ -144,6 +144,7 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - CRITICAL: Only include metrics (%, $, time) that appear EXPLICITLY in the user's input resume text.
    - PROHIBITED: Do NOT invent "increased revenue by X%", "saved $X" etc. unless these exact numbers appear in the user's input.
    - If the user says "improved efficiency by 30%", you MAY use "30%". If they don't say any percentage, DO NOT add one.
+   - **PRESERVE METRIC VALUES VERBATIM:** If the input contains a specific number (e.g. "500K", "30 man-hours", "2.3 million dollars", "13 vessels"), you MUST copy the numeric value into your bullet. NEVER replace a number with an empty placeholder like "$" or "X" or "N/A". NEVER round, abbreviate, or drop the value. If you cannot fit the full bullet, KEEP the metric and shorten the rest of the sentence.
 
 6. **STRONG BULLETS REQUIRED:**
    - Each bullet should be 15-25 words, starting with a strong action verb
