@@ -153,6 +153,8 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - BAD: "Applied technical skills to achieve measurable results" (generic, no specifics)
    - GOOD: "Led analysis and interpretation of sensor data for 13-vessel research fleet; built metrics dashboards reducing manual reporting overhead by 40%"
 
+7. **DATE FORMAT (IMPORTANT):** Render all date ranges with an en-dash (–) and a single space on each side, e.g. "12/2019 – 5/2023" or "2019 – 2023". NEVER use double-hyphens (--), em-dashes (—), or "20 20" patterns. The output goes through a Markdown renderer and "--" renders as a single em-dash which can corrupt downstream PDF/HTML rendering.
+
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
 2. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
