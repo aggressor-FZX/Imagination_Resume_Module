@@ -280,7 +280,7 @@ class Drafter:
 
         user_prompt = f"""
 User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
-Each experience has a 'description' field containing the ORIGINAL bullet content.
+Each experience has a 'bullets' (or 'description') field containing the ORIGINAL bullet content.
 Mine this field for: metrics, technologies, action verbs, and domain-specific language.
 DO NOT fabricate anything not in these descriptions.
 
