@@ -20,7 +20,7 @@ load_dotenv()
 # All analysis stages → inception/mercury-2; writer/drafter → deepseek/deepseek-v4-flash
 OR_SLUG_RESEARCHER = "inception/mercury-2"                          # Research — analysis only, cheap & grounded
 OR_SLUG_STAR_EDITOR = "inception/mercury-2"                         # Editor — polish & format, analysis only
-OR_SLUG_DRAFTER = "deepseek/deepseek-v4-flash"                      # Writer — content generation
+OR_SLUG_DRAFTER = "z-ai/glm-5.1"                                  # Writer — content generation, strong prose
 OR_SLUG_JOB_TITLE_EXTRACTOR = "inception/mercury-2"                 # Title extractor — analysis only
 
 # Fallback models (in case primary models are unavailable)
@@ -30,7 +30,7 @@ FALLBACK_MODELS = {
         "google/gemini-2.5-flash-lite",
     ],
     "drafter": [
-        "deepseek/deepseek-v4-flash",       # same model; retry on transient error
+        "deepseek/deepseek-v4-flash",       # fallback writer
         "google/gemini-2.5-flash-lite",
         "openai/gpt-4o-mini",
     ],
@@ -64,7 +64,8 @@ PRICING = {
     "anthropic/claude-3.5-sonnet": {"input": 0.006, "output": 0.030}, # DEPRECATED: 2x higher than estimated
     "deepseek/deepseek-chat-v3.1": {"input": 0.00015, "output": 0.00075}, # Added: cheap alternative
     "inception/mercury-2": {"input": 0.0002, "output": 0.0004},   # Analysis — per OpenRouter
-    "deepseek/deepseek-v4-flash": {"input": 0.00015, "output": 0.0006}, # Writer — per OpenRouter
+    "deepseek/deepseek-v4-flash": {"input": 0.00015, "output": 0.0006}, # Writer fallback
+    "z-ai/glm-5.1": {"input": 0.0003, "output": 0.0009},               # Writer — GLM 5.1, strong prose
 }
 
 # ============================================================================
