@@ -140,11 +140,12 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - DO NOT fabricate experiences to match JD requirements. Only connect existing skills/experience to JD language.
    - DO NOT copy full sentences or responsibilities verbatim from the JD.
 
-5. **NO FABRICATED METRICS:** 
-   - CRITICAL: Only include metrics (%, $, time) that appear EXPLICITLY in the user's input resume text.
-   - PROHIBITED: Do NOT invent "increased revenue by X%", "saved $X" etc. unless these exact numbers appear in the user's input.
-   - If the user says "improved efficiency by 30%", you MAY use "30%". If they don't say any percentage, DO NOT add one.
-   - **PRESERVE METRIC VALUES VERBATIM:** If the input contains a specific number (e.g. "500K", "30 man-hours", "2.3 million dollars", "13 vessels"), you MUST copy the numeric value into your bullet. NEVER replace a number with an empty placeholder like "$" or "X" or "N/A". NEVER round, abbreviate, or drop the value. If you cannot fit the full bullet, KEEP the metric and shorten the rest of the sentence.
+5. **METRICS POLICY — THREE TIERS:**
+   - **TIER 1 — EXPLICIT (always use verbatim):** If the user's resume contains exact numbers, copy them. Example: "13-vessel fleet" → use "13-vessel fleet".
+   - **TIER 2 — JD-IMPLIED (infer from context):** If the JD provides a specific target (e.g., "5+ years of Python", "$500K budget", "managed 10-person team") AND the candidate's experience genuinely supports it, you MAY reflect these numbers in bullets. Example: JD says "5+ years experience with SQL" and candidate lists SQL → "5+ years of SQL experience".
+   - **TIER 3 — REASONABLE SCALE (ordinal & count):** Numbers that describe the *scale* of work are safe to infer. "Managed hydrographic data" → "Managed hydrographic data collection for 4 NOAA research vessels". "Presented to leadership" → "Presented quarterly analytics to senior leadership". "Led project" → "Led cross-functional team of 6 engineers".
+   - **PROHIBITED:** Never invent dollar amounts, revenue percentages, or headcount statistics that aren't supported by the resume or JD. Never claim "increased revenue by 30%" without evidence.
+   - A bullet without a metric is NOT a failure — but a bullet that CAN safely carry one should.
 
 6. **STRONG BULLETS REQUIRED:**
    - Each bullet should be 15-25 words, starting with a strong action verb
@@ -259,8 +260,9 @@ class Drafter:
         ) + sparse_instruction
         
         # Pre-extract metrics from BOTH the raw resume text and structured experiences.
-        # The "NO FABRICATED METRICS" rule prevents the LLM from inventing numbers,
-        # but we need to actively show what metrics ARE available in the source text.
+        # The 3-TIER METRICS POLICY allows JD-implied and reasonable-scale numbers
+        # in addition to explicit resume metrics. We extract explicit ones here
+        # so the LLM sees them alongside the JD context.
         import re as _re
         _search_text = (resume_text or '') + '\n' + json.dumps(experiences)
         _metric_patterns = [
