@@ -294,8 +294,18 @@ Research Insights:
 - Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
 - Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
 
-YOUR EXISTING METRICS (found in your resume — YOU MUST USE THESE EXACT VALUES):
+YOUR EXISTING METRICS (extracted from your resume):
 {chr(10).join('- ' + m for m in _found_metrics) if _found_metrics else '- (None found — use qualitative achievements only, do NOT fabricate numbers)'}
+
+⚠️  METRIC INJECTION REQUIREMENT (CRITICAL — FAILURE = INCOMPLETE OUTPUT):
+You MUST weave AT LEAST 2 of the metrics listed above into your rewritten bullets.
+- If the metric is "13-vessel", write "13-vessel fleet" or "fleet of 13 research vessels"
+- If the metric is "40%", write "reduced reporting overhead by 40%"
+- If the metric is "500K", write "secured $500K in federal R&D funding"
+- If the metric is "30 hours", write "saving 30 hours per week"
+- If the metric is "10+ TB", write "processed 10+ TB of maritime data"
+You have PERMISSION to use these exact values in your bullets. They were extracted from the user's OWN resume. USING them is NOT fabrication — it's faithful reproduction.
+DO NOT skip this step. Every experience must carry at least one concrete metric where available.
 """
         
         try:

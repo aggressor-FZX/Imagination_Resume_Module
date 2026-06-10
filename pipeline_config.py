@@ -20,7 +20,7 @@ load_dotenv()
 # All analysis stages → inception/mercury-2; writer/drafter → deepseek/deepseek-v4-flash
 OR_SLUG_RESEARCHER = "inception/mercury-2"                          # Research — analysis only, cheap & grounded
 OR_SLUG_STAR_EDITOR = "inception/mercury-2"                         # Editor — polish & format, analysis only
-OR_SLUG_DRAFTER = "deepseek/deepseek-v4-flash"                  # Writer — content generation, proven stable on 1GB
+OR_SLUG_DRAFTER = "qwen/qwen3-coder"                  # Writer — fastest + cheapest, best Fusion score (79.9 on Boeing)
 OR_SLUG_JOB_TITLE_EXTRACTOR = "inception/mercury-2"                 # Title extractor — analysis only
 
 # Fallback models (in case primary models are unavailable)

@@ -50,9 +50,11 @@ For each project:
 RULES:
 - Every section above MUST appear in the output.
 - Company names go on bold lines, NOT merged with job titles.
-- Each job has its own sub-section with bullets.
+- Each job has its own sub-section with bullets (4-5 bullets per role).
 - Skills are grouped by category (2-4 categories).
 - Never invent companies, dates, or metrics not in the input.
+- Target total word count: 450-600 words. Do NOT truncate early.
+- Weave JD keywords naturally into bullet content.
 - Output ONLY resume content, no meta-commentary.
 
 OUTPUT JSON:
@@ -100,6 +102,7 @@ class StarEditor:
     async def polish(self, draft_data: Dict[str, Any], 
                     research_data: Dict[str, Any],
                     original_resume_text: str = "",
+                    job_ad: str = "",
                     education: List[Dict] = None,
                     projects: List[Dict] = None,
                     certifications: List[Dict] = None,
@@ -138,7 +141,7 @@ class StarEditor:
         user_prompt = self._create_user_prompt(
             experiences, seniority, domain_vocab, target_company,
             education=education, projects=projects, certifications=certifications,
-            skills=skills, location=location
+            skills=skills, location=location, job_ad=job_ad
         )
         
         try:
@@ -204,7 +207,7 @@ class StarEditor:
                            domain_vocab: List[str], target_company: str = "",
                            education: List[Dict] = None, projects: List[Dict] = None,
                            certifications: List[Dict] = None, skills: List[str] = None,
-                           location: str = "") -> str:
+                           location: str = "", job_ad: str = "") -> str:
         """
         Create user prompt for the editor with ALL resume sections.
         
@@ -230,6 +233,17 @@ class StarEditor:
         # Add domain vocabulary guidance
         if domain_vocab:
             prompt_parts.append(f"DOMAIN VOCABULARY TO INCORPORATE: {', '.join(domain_vocab[:10])}")
+        
+        # Add JD keyword targets for ATS optimization
+        if job_ad:
+            jd_lower = job_ad.lower()
+            jd_keywords = ["data science", "analytics", "supply chain", "python", "sql", "tableau",
+                         "power bi", "data visualization", "machine learning", "ai", "leadership",
+                         "executive", "azure", "aws", "spark", "team lead", "management",
+                         "stakeholder", "strategy", "process improvement"]
+            matched = [kw for kw in jd_keywords if kw in jd_lower]
+            prompt_parts.append(f"\nJD KEYWORD TARGETS (weave these naturally into bullets): {', '.join(matched)}")
+            prompt_parts.append("Ensure at least 6 of these keywords appear in the final resume. Weave them into bullet content — never just list them.")
         
         # Add SPECIFIC negative constraint for target company
         if target_company:
