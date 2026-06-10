@@ -20,7 +20,7 @@ load_dotenv()
 # All analysis stages → inception/mercury-2; writer/drafter → deepseek/deepseek-v4-flash
 OR_SLUG_RESEARCHER = "inception/mercury-2"                          # Research — analysis only, cheap & grounded
 OR_SLUG_STAR_EDITOR = "inception/mercury-2"                         # Editor — polish & format, analysis only
-OR_SLUG_DRAFTER = "z-ai/glm-5.1"                  # Writer — GLM-5.1 (Standard plan: 2GB RAM, proven stable)
+OR_SLUG_DRAFTER = "qwen/qwen3-coder"                  # Writer — Qwen3-Coder (lighter than GLM-5.1)
 OR_SLUG_JOB_TITLE_EXTRACTOR = "inception/mercury-2"                 # Title extractor — analysis only
 
 # Fallback models (in case primary models are unavailable)
@@ -66,6 +66,7 @@ PRICING = {
     "inception/mercury-2": {"input": 0.0002, "output": 0.0004},   # Analysis — per OpenRouter
     "deepseek/deepseek-v4-flash": {"input": 0.00015, "output": 0.0006}, # Writer (primary)
     "z-ai/glm-5.1": {"input": 0.55, "output": 4.01},               # Writer upgrade — needs 2GB+ RAM
+    "qwen/qwen3-coder": {"input": 0.00015, "output": 0.0006},      # Writer — lightweight alternative
 }
 
 # ============================================================================
