@@ -20,7 +20,7 @@ load_dotenv()
 # All analysis stages → inception/mercury-2; writer/drafter → deepseek/deepseek-v4-flash
 OR_SLUG_RESEARCHER = "inception/mercury-2"                          # Research — analysis only, cheap & grounded
 OR_SLUG_STAR_EDITOR = "inception/mercury-2"                         # Editor — polish & format, analysis only
-OR_SLUG_DRAFTER = "qwen/qwen3-coder"                  # Writer — Qwen3-Coder (lighter than GLM-5.1)
+OR_SLUG_DRAFTER = "deepseek/deepseek-v4-flash"                  # Writer — Qwen3-Coder (lighter than GLM-5.1)
 OR_SLUG_JOB_TITLE_EXTRACTOR = "inception/mercury-2"                 # Title extractor — analysis only
 
 # Fallback models (in case primary models are unavailable)
@@ -120,10 +120,11 @@ OPENROUTER_APP_TITLE = "Imaginator Resume Co-Writer"
 
 # Timeout settings (seconds)
 TIMEOUTS = {
+    TIMEOUTS = {
     "researcher": 45,
-    "drafter": 180,  # Increased for GLM-5.1 (slower, more thorough)
+    "drafter": 70,  # Increased for GLM-5.1 (slower, more thorough)
     "star_editor": 45,
-    "total": 300
+    "total": 180
 }
 
 # Temperature settings
