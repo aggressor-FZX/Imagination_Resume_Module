@@ -2179,6 +2179,7 @@ async def run_creative_draft_async(
     analysis: Dict[str, Any],
     job_ad: str,
     research_data: Dict[str, Any],
+    resume_text: Optional[str] = None,  # Added 2026-06-12: source for metric pre-extraction
     openrouter_api_keys: Optional[List[str]] = None,
     **kwargs,
 ) -> str:
@@ -2200,13 +2201,37 @@ async def run_creative_draft_async(
     
     logger.info("[CREATIVE DRAFTER] === Stage 2: Drafting enhanced resume ===")
     RUN_METRICS["stages"]["creative_draft"] = {"start": time.time()}
-    
+
     # Extract key data (PRIORITY: Hermes + FastSVM + Researcher data FIRST)
     experiences = analysis.get("experiences", [])
     aggregate_skills = list(analysis.get("aggregate_skills", []))  # From Hermes/FastSVM
     implied_skills = research_data.get("implied_skills", [])       # From researcher
     industry_metrics = research_data.get("industry_metrics", [])   # From researcher
     research_notes = research_data.get("research_notes", "")       # From researcher
+
+    # --- Metric pre-extraction (Added 2026-06-12) -----------------------------
+    # Pre-extract metrics from BOTH the raw resume text and structured experiences.
+    # Mirrors the proven drafter.py logic so the Creative Drafter can use
+    # the candidate's ACTUAL numbers instead of being told not to fabricate any.
+    import re as _metric_re
+    _search_text = (resume_text or "") + "\n" + json.dumps(experiences)
+    _metric_patterns = [
+        (r"(\d+(\.\d+)?%)", "percentage"),
+        (r"\$[\d,]+(\.[\d]+)?\s*(million|billion|thousand|K|M|B)?", "dollar_amount"),
+        (r"(\d+[\d,]*)\s*(users|customers|clients|devices|assets|records|rows|documents|models|servers)", "count_with_unit"),
+        (r"(reduced|increased|improved|decreased|cut|saved|grew|boosted|lowered|accelerated|shortened|expanded)\s+\w+\s+by\s+\d+", "verb_metric"),
+        (r"(\d+[\d,]*)\s*(hours|days|weeks|months|years)", "time_unit"),
+    ]
+    _found_metrics = []
+    for _pat, _label in _metric_patterns:
+        for _m in _metric_re.findall(_pat, _search_text, _metric_re.IGNORECASE):
+            _val = _m[0] if isinstance(_m, tuple) else _m
+            if _val and len(str(_val)) > 1:
+                _found_metrics.append(str(_val).strip())
+    _found_metrics = list(dict.fromkeys(_found_metrics))[:15]  # dedupe, limit to 15
+    if _found_metrics:
+        logger.info(f"[CREATIVE DRAFTER] Injected {len(_found_metrics)} candidate metrics into prompt")
+    # -------------------------------------------------------------------------
     
     # Build experiences summary - FIT AS MUCH AS POSSIBLE within context limits
     # Priority: Use semantic relevance to job ad to select most important content
@@ -2301,7 +2326,14 @@ Return the enhanced experience section in clean markdown format with:
 - Company name and dates (from original)
 - Enhanced position titles (if appropriate to the role's actual scope)
 - 4-6 achievement bullets per position with quantified impact where reasonable
-- Focus on impact, results, and skills relevant to target role"""
+- Focus on impact, results, and skills relevant to target role
+
+METRIC PRESERVATION (CRITICAL — Added 2026-06-12):
+When the candidate has ACTUAL metrics in their resume (see YOUR EXISTING METRICS block below),
+you MUST copy those numbers verbatim into the bullets. NEVER replace a real number with an
+empty placeholder like "$", "X", or "N/A". NEVER round, abbreviate, or drop a real value. If
+the bullet gets too long, keep the metric and shorten the surrounding text. If the resume
+has NO metrics, you may use qualitative achievements only."""
     
     user_prompt = f"""PRIORITY DATA (Hermes + FastSVM Analysis):
 Extracted Skills: {', '.join(aggregate_skills[:50])}
@@ -2317,11 +2349,15 @@ TARGET JOB DESCRIPTION:
 CANDIDATE'S ACTUAL EXPERIENCES (fit within context):
 {experiences_text}
 
+YOUR EXISTING METRICS (found in candidate's resume — USE THESE EXACT VALUES, do NOT fabricate):
+{chr(10).join('- ' + m for m in _found_metrics) if _found_metrics else '- (None found — use qualitative achievements only)'}
+
 TASK:
 Draft an enhanced "Professional Experience" section using:
 1. Hermes/FastSVM extracted skills (PRIMARY SOURCE)
 2. Web research insights (implied skills & metrics)
 3. Candidate's actual experiences (fitted within context)
+4. Candidate's EXISTING METRICS (above) — preserve these verbatim
 
 Use ACTUAL experiences only. Incorporate research insights naturally. Make it compelling and aligned with target role."""
     
@@ -2336,7 +2372,7 @@ Use ACTUAL experiences only. Incorporate research insights naturally. Make it co
             system_prompt,
             user_prompt,
             temperature=0.8,  # Higher temperature for creativity
-            max_tokens=2500,  # Balanced output size for cost control
+            max_tokens=4000,  # Bumped 2026-06-12: 2500→4000 to hit 600+ word target
             openrouter_api_keys=openrouter_api_keys,
             **kwargs
         )
@@ -3792,6 +3828,7 @@ async def run_full_analysis_async(
         analysis=analysis,
         job_ad=job_ad,
         research_data=research_data,
+        resume_text=resume_text,  # Added 2026-06-12: enables metric pre-extraction for quantified bullets
         openrouter_api_keys=openrouter_api_keys,
         **kwargs
     )
