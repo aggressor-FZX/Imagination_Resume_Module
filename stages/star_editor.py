@@ -310,21 +310,14 @@ class StarEditor:
                 match = re.search(r'\(([^)]+)\)', title_line)
                 if match:
                     duration = match.group(1)
-            
-            if duration and not self._is_placeholder_duration(duration):
-                # Capture the FULL 4-digit year (the previous regex used a single
-                # capture group `(19|20)` so years[0] resolved to just the 2-digit
-                # prefix, producing "20 - 20" instead of "2019 - 2023").
-                years = re.findall(r'\b(?:19|20)\d{2}\b', duration)
-                if len(years) >= 2:
-                    duration = f"{years[0]} - {years[-1]}"
-                elif len(years) == 1:
-                    duration = years[0]
-                # If the original was a clean date range like "12/2019 – 05/2023"
-                # and the user prefers MM/YYYY format, keep it as-is (no rewrite).
-                elif re.search(r'\d{2}/\d{4}', duration):
-                    pass  # leave original MM/YYYY range intact
-            else:
+
+            # Preserve the original duration string as-is when it already looks
+            # like a valid date range (e.g. "12/2019 – 05/2023", "04/2025 – Present",
+            # "2019 - 2023").  The drafter already formats dates correctly; re-parsing
+            # here was stripping months ("12/2019" → "2019") and dropping "Present"
+            # ("04/2025 – Present" → "2025") which caused dates to appear wrong in
+            # the PDF and UI.
+            if self._is_placeholder_duration(duration):
                 duration = ""
             
             location_exp = exp.get("location", "")
