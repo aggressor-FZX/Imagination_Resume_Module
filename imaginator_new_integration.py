@@ -1818,14 +1818,112 @@ async def run_new_pipeline_async(
                 section_completeness["missing_sections"],
             )
 
-        # Trim experiences to only what the frontend needs (title + role)
-        trimmed_experiences = []
-        for exp in experiences[:8]:
-            trimmed_experiences.append({
+        # ── Capstone / sponsored-research detection ─────────────────────────────
+        # If any experience looks like an academic capstone or sponsored research
+        # project (Boeing Defense, university-sponsored, capstone project, etc.)
+        # it should be categorised as a Project, not Professional Experience.
+        _CAPSTONE_MARKERS = [
+            "capstone", "sponsored", "boeing defense", "senior project",
+            "senior design", "thesis", "research project", "university project",
+            "academic project", "independent study",
+        ]
+
+        def _looks_like_project(exp: dict) -> bool:
+            """Return True if this experience entry is really a capstone/project."""
+            combined = " ".join([
+                exp.get("company", ""),
+                exp.get("role", ""),
+                exp.get("title", ""),
+                exp.get("title_line", ""),
+                " ".join(str(b) for b in exp.get("bullets", [])),
+            ]).lower()
+            return any(marker in combined for marker in _CAPSTONE_MARKERS)
+
+        promoted_to_projects: List[Dict] = []
+        remaining_experiences: List[Dict] = []
+        for exp in experiences:
+            if _looks_like_project(exp):
+                promoted_to_projects.append(exp)
+                logger.info(
+                    "[NEW_PIPELINE] Promoted '%s' to Projects (capstone/sponsored)",
+                    exp.get("company", exp.get("role", "?")),
+                )
+            else:
+                remaining_experiences.append(exp)
+
+        # Merge promoted entries into effective_projects (dedup by role+company key)
+        existing_project_keys = {
+            (p.get("company", "") + "|" + p.get("role", "")).lower()
+            for p in effective_projects
+        }
+        for promoted in promoted_to_projects:
+            key = (promoted.get("company", "") + "|" + promoted.get("role", "")).lower()
+            if key not in existing_project_keys:
+                effective_projects.append(promoted)
+                existing_project_keys.add(key)
+        experiences = remaining_experiences  # use filtered list going forward
+
+        # ── Build full structured experience list for export ─────────────────────
+        # Prefer the drafter's rewritten_experiences (have bullets, role, company,
+        # duration, location).  Fall back to the original parsed experiences.
+        drafter_rewritten = (
+            result.get("stages", {}).get("drafter", {}).get("rewritten_experiences", [])
+        )
+        structured_experiences = drafter_rewritten if drafter_rewritten else experiences
+
+        # Cap at 8 to avoid huge payloads; preserve full fields needed for PDF export
+        full_experiences = []
+        for exp in structured_experiences[:8]:
+            full_experiences.append({
                 "company": exp.get("company", ""),
-                "role": exp.get("role", ""),
-                "duration": exp.get("duration", ""),
+                "role": exp.get("role", "") or exp.get("title", ""),
+                "duration": exp.get("duration", "") or exp.get("dates", ""),
+                "start_date": exp.get("start_date", ""),
+                "end_date": exp.get("end_date", ""),
+                "location": exp.get("location", ""),
+                "bullets": exp.get("bullets", []),
             })
+
+        # Build full projects list (promoted capstones + original effective_projects)
+        full_projects = []
+        for proj in effective_projects[:6]:
+            full_projects.append({
+                "company": proj.get("company", "") or proj.get("organization", ""),
+                "role": proj.get("role", "") or proj.get("title", "") or proj.get("project", ""),
+                "duration": proj.get("duration", "") or proj.get("dates", ""),
+                "location": proj.get("location", ""),
+                "bullets": proj.get("bullets", []) or proj.get("highlights", []),
+            })
+
+        # ── Populate domain_insights certifications from user's resume ────────────
+        # The upstream pipeline never fills domain_insights["certifications"] from
+        # the user's actual certs (it always leaves it []). Backfill it here.
+        if not domain_insights.get("certifications") and effective_certifications:
+            # Normalize: each cert can be a string or a dict
+            cert_strings: List[str] = []
+            for c in effective_certifications:
+                if isinstance(c, str) and c.strip():
+                    cert_strings.append(c.strip())
+                elif isinstance(c, dict):
+                    name = c.get("name") or c.get("certification") or c.get("title", "")
+                    issuer = c.get("issuer", "")
+                    year = c.get("year", "") or c.get("date", "")
+                    parts = [p for p in [name, issuer, year] if p]
+                    if parts:
+                        cert_strings.append(" – ".join(parts))
+            if cert_strings:
+                domain_insights["certifications"] = cert_strings[:6]
+                logger.info(
+                    "[NEW_PIPELINE] Populated domain_insights.certifications (%d) from user certs",
+                    len(cert_strings),
+                )
+
+        # ── Populate domain_insights top_skills from aggregate if still empty ────
+        if not domain_insights.get("top_skills") and aggregate_skills:
+            domain_insights["top_skills"] = aggregate_skills[:5]
+            logger.info(
+                "[NEW_PIPELINE] Populated domain_insights.top_skills from aggregate_skills"
+            )
 
         response = {
             # Core fields from new pipeline
@@ -1837,14 +1935,16 @@ async def run_new_pipeline_async(
             "seniority_level": final_output.get("seniority_level", "mid"),
             "critique_score": critique_score,
             "extracted_job_title": extracted_job_title,
-            # Backward-compatible fields for frontend
-            "experiences": trimmed_experiences,
+            # Structured experiences with full bullets for PDF/DOCX export
+            "experience": full_experiences,
+            "experiences": full_experiences,  # backward-compat alias
+            "projects": full_projects,
+            "certifications": effective_certifications,
+            "education": effective_education,
             "aggregate_skills": aggregate_skills,
-            "domain_insights": {
-                "domain": domain_insights.get("domain", "Technology"),
-                "skill_gap_priority": domain_insights.get("skill_gap_priority", "medium"),
-                "market_demand": domain_insights.get("market_demand", ""),
-            },
+            # Full domain_insights — previously only 3 fields were emitted which
+            # caused Top Skills and Certifications to show as empty in the UI.
+            "domain_insights": domain_insights,
             "sectionCompleteness": section_completeness,
             "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
             "rewritten_resume": final_output.get("final_written_section", ""),

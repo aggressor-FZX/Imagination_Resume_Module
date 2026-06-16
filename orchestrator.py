@@ -260,6 +260,9 @@ class PipelineOrchestrator:
                 "duration_seconds": stage2_duration,
                 "total_bullets": draft_data.get("total_bullets", 0),
                 "quantification_score": draft_data.get("quantification_score", 0),
+                # Expose full structured experiences so the export pipeline can build
+                # "Role -- Company \hfill Date" headings and render real bullets.
+                "rewritten_experiences": draft_data.get("rewritten_experiences", []),
             }
 
             logger.info(f"[ORCHESTRATOR] Stage 2 completed in {stage2_duration:.2f}s")

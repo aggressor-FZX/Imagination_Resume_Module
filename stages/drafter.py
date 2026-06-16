@@ -154,7 +154,12 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - BAD: "Applied technical skills to achieve measurable results" (generic, no specifics)
    - GOOD: "Led analysis and interpretation of sensor data for 13-vessel research fleet; built metrics dashboards reducing manual reporting overhead by 40%"
 
-7. **DATE FORMAT (IMPORTANT):** Render all date ranges with an en-dash (–) and a single space on each side, e.g. "12/2019 – 5/2023" or "2019 – 2023". NEVER use double-hyphens (--), em-dashes (—), or "20 20" patterns. The output goes through a Markdown renderer and "--" renders as a single em-dash which can corrupt downstream PDF/HTML rendering.
+7. **DATE FORMAT & PRESERVATION (IMPORTANT):**
+   - Copy the EXACT start and end dates from the User Input "Duration" field into the output `duration` field. Do NOT invent, approximate, or omit dates.
+   - If the original says "04/2025 – Present" you MUST output "04/2025 – Present" (keep "Present" for current roles).
+   - If the original says "12/2019 – 05/2023" you MUST output "12/2019 – 05/2023" (do NOT change past end-dates to "Present").
+   - If the user typed a typo like "presetn", correct it to "Present" — but ONLY for the CURRENT (most recent, open-ended) role.
+   - Format: use an en-dash (–) with a single space on each side. NEVER double-hyphens (--) or em-dashes (—).
 
 ### CRITICAL RULES:
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
@@ -388,6 +393,9 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
                     original_exp = original_experiences[i] if i < len(original_experiences) else {}
                     # Build duration: prefer LLM's output, then original's duration,
                     # then reconstruct from start_date/end_date if those are split fields.
+                    # IMPORTANT: only default to "Present" when the ORIGINAL experience
+                    # has no end_date AND the experience is the most recent one (index 0).
+                    # For past jobs (index > 0 or explicit end_date), never inject "Present".
                     _dur = (
                         exp.get("duration")
                         or original_exp.get("duration")
@@ -395,8 +403,17 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
                     )
                     if not _dur and original_exp.get("start_date"):
                         _start = original_exp.get("start_date", "")
-                        _end = original_exp.get("end_date", "") or "Present"
-                        _dur = f"{_start} - {_end}"
+                        _raw_end = original_exp.get("end_date", "")
+                        # Only default to "Present" for the most-recent job (index 0)
+                        # when no end_date is provided; past jobs get an empty end date
+                        # rather than a misleading "Present".
+                        if _raw_end:
+                            _end = _raw_end
+                        elif i == 0:
+                            _end = "Present"
+                        else:
+                            _end = ""
+                        _dur = f"{_start} – {_end}" if _end else _start
                     validated = {
                         "company": exp.get("company", ""),
                         "role": exp.get("role", ""),

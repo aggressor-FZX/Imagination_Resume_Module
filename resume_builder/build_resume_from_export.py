@@ -225,33 +225,76 @@ def parse_skill_groups(source: Dict[str, Any]) -> List[Tuple[str, List[str]]]:
 
 def format_date_range(entry: Dict[str, Any]) -> str:
     """Extract a date range from an entry dict.
-    
-    Supports: date_string, start_date/end_date, dates, date, year
+
+    Supports: duration (drafter output), date_string, start_date/end_date, dates, date, year.
     Returns a formatted string like '12/2019 -- 05/2023' or ''.
     """
-    # Direct date string
-    for key in ["date_string", "dates", "date_range"]:
+    # "duration" is the primary field the Imaginator drafter writes dates into.
+    # It should be checked FIRST so drafter output takes precedence over stale
+    # upstream fields (e.g. start_date/end_date from Hermes that may be empty).
+    for key in ["duration", "date_string", "dates", "date_range"]:
         val = entry.get(key)
         if isinstance(val, str) and val.strip():
-            return val.strip()
-    
+            # Normalise en-dash/em-dash variants to LaTeX double-hyphen
+            normalised = val.strip().replace("\u2013", "--").replace("\u2014", "--")
+            return normalised
+
     start = first_nonempty(entry, ["start_date", "start", "from", "date_start"], "")
     end = first_nonempty(entry, ["end_date", "end", "to", "date_end"], "")
-    
+
     if start and end:
         return f"{start} -- {end}"
     if start:
         return f"{start} -- Present"
     if end:
         return end
-    
+
     # Single date/year fallback
     for key in ["date", "year"]:
         val = entry.get(key)
         if isinstance(val, str) and val.strip():
             return val.strip()
-    
+
     return ""
+
+
+def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
+    """Build a clean 'Role -- Company' heading for a resume section.
+
+    The drafter returns separate ``role`` and ``company`` fields.  Hermes may
+    also include a raw ``title_line`` like
+    "Software Engineer | Acme Corp | Seattle, WA | 2020 – Present".
+    If we paste title_line verbatim into LaTeX it wraps to 2+ bold lines,
+    then the following ``\vspace*{-2mm}`` causes the itemize block to overlap.
+
+    Priority order:
+      1. ``role`` + ``company`` (drafter output)  → "Role -- Company"
+      2. ``title`` + ``company``                   → "Title -- Company"
+      3. ``title`` or ``role`` alone               → just the role
+      4. First ``|``-segment of ``title_line``      → avoid the full multi-part blob
+      5. fallback
+    """
+    role = (
+        first_nonempty(entry, ["role", "title", "name"], "")
+    )
+    company = first_nonempty(entry, ["company", "organization", "employer"], "")
+
+    if role and company:
+        return f"{role} -- {company}"
+    if role:
+        return role
+    if company:
+        return company
+
+    # Last resort: take only the first pipe-segment of title_line so we never
+    # embed the full "Role | Company | Location | Dates" blob into the heading.
+    title_line = entry.get("title_line", "")
+    if isinstance(title_line, str) and title_line.strip():
+        first_segment = title_line.split("|")[0].strip()
+        if first_segment:
+            return first_segment
+
+    return fallback or "Experience"
 
 
 def parse_sections(source: Dict[str, Any], keys: Sequence[str]) -> List[ResumeSection]:
@@ -262,13 +305,13 @@ def parse_sections(source: Dict[str, Any], keys: Sequence[str]) -> List[ResumeSe
             sections: List[ResumeSection] = []
             for index, entry in enumerate(value):
                 if isinstance(entry, dict):
-                    title = format_entry_title(entry, f"Entry {index + 1}")
+                    title = _build_section_title(entry, f"Entry {index + 1}")
                     body = format_entry_body(entry)
                     if not body and entry.get("text"):
                         body = [str(entry["text"]).strip()]
                     date_str = format_date_range(entry)
                     sections.append(ResumeSection(
-                        title=title or f"Entry {index + 1}",
+                        title=title,
                         body_lines=body,
                         date_string=date_str,
                     ))
