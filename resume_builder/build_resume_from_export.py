@@ -228,10 +228,16 @@ def format_date_range(entry: Dict[str, Any]) -> str:
 
     Supports: duration (drafter output), date_string, start_date/end_date, dates, date, year.
     Returns a formatted string like '12/2019 -- 05/2023' or ''.
+
+    The Imaginator Drafter is the source of truth for dates and writes them into the
+    "duration" field (already formatted as "MM/YYYY -- MM/YYYY" or "MM/YYYY -- Present").
+    The start_date/end_date fallback path only fires when "duration" is absent; it
+    does NOT default a missing end_date to "Present" because we cannot know at this
+    level whether a role is current. The Drafter already handles that rule (only
+    index-0 gets "Present" when end_date is unknown).
     """
     # "duration" is the primary field the Imaginator drafter writes dates into.
-    # It should be checked FIRST so drafter output takes precedence over stale
-    # upstream fields (e.g. start_date/end_date from Hermes that may be empty).
+    # Check it FIRST so drafter output takes full precedence.
     for key in ["duration", "date_string", "dates", "date_range"]:
         val = entry.get(key)
         if isinstance(val, str) and val.strip():
@@ -245,7 +251,8 @@ def format_date_range(entry: Dict[str, Any]) -> str:
     if start and end:
         return f"{start} -- {end}"
     if start:
-        return f"{start} -- Present"
+        # Do NOT default to "Present" — only the Drafter knows which role is current.
+        return start
     if end:
         return end
 
@@ -261,11 +268,11 @@ def format_date_range(entry: Dict[str, Any]) -> str:
 def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
     """Build a clean 'Role -- Company' heading for a resume section.
 
-    The drafter returns separate ``role`` and ``company`` fields.  Hermes may
-    also include a raw ``title_line`` like
-    "Software Engineer | Acme Corp | Seattle, WA | 2020 – Present".
-    If we paste title_line verbatim into LaTeX it wraps to 2+ bold lines,
-    then the following ``\vspace*{-2mm}`` causes the itemize block to overlap.
+    The drafter returns separate ``role`` and ``company`` fields, which are
+    preferred. A raw ``title_line`` field (legacy LLM-parser format like
+    "Software Engineer | Acme Corp | Seattle, WA | 2020 – Present") is used
+    as a last resort — only the first pipe-segment is extracted to avoid
+    embedding the full multi-part blob into a LaTeX bold line.
 
     Priority order:
       1. ``role`` + ``company`` (drafter output)  → "Role -- Company"

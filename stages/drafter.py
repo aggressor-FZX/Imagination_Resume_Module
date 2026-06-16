@@ -48,18 +48,17 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
     """
     Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
     """
-    # 1. Extract TRUTH constraints
-    # Hermes sends 'title' key (not 'role'). The Zod schema accepts both via .passthrough().
-    # We check title first, then role (for backward compat), then title_line as last resort.
+    # 1. Extract TRUTH constraints from structured experience data.
+    # The LLM Parser writes the job title into the 'title' key; we also check
+    # 'role' for backward compat and 'title_line' as a last resort.
     def _clean_company_name(name: str) -> str:
-        """Strip trailing date patterns from concatenated company names.
-        Hermes sometimes returns "Company Name 04/2025 - Present" instead of
-        clean company names."""
+        """Strip trailing date patterns that sometimes appear in company names
+        (e.g. "Company Name 04/2025 - Present" → "Company Name")."""
         import re
         return re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', name).strip()
 
     def _extract_role(exp: Dict) -> str:
-        """Extract role from experience, checking all possible Hermes keys."""
+        """Extract role from experience entry, checking all known key variants."""
         return exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip() or "Professional"
 
     original_companies = [
@@ -583,7 +582,6 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
         for exp in experiences[:3]:  # Limit to 3 experiences
             raw_company = exp.get("company") or ""
             company = _clean_company(raw_company) or exp.get("title_line", "").split("|")[-1].strip()
-            # Check title first (Hermes sends 'title'), then role, then title_line
             role = exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip()
             duration = exp.get("duration") or exp.get("dates", "")
             location = exp.get("location", "")

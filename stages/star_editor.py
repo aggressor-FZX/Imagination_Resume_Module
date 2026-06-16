@@ -299,7 +299,8 @@ class StarEditor:
         # Add experiences with dates and location
         prompt_parts.append("\nEXPERIENCES:")
         for i, exp in enumerate(experiences[:10], 1):
-            # Hermes sometimes appends dates to company names (e.g. "NOAA 12/2019 - 05/2023")
+            # Strip trailing date patterns that can appear in company names
+            # (e.g. "NOAA 12/2019 - 05/2023" → "NOAA")
             raw_company = exp.get("company", "Company")
             company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or raw_company
             role = exp.get("title") or exp.get("role", "Role")
@@ -1088,7 +1089,7 @@ class StarEditor:
         # 1. Build list of legitimate companies from input
         original_companies = []
         for exp in original_experiences:
-            # Handle various input formats. Strip trailing date patterns
+            # Strip trailing date patterns from company names
             # ("NOAA 12/2019 - 05/2023" → "NOAA") so the guard list
             # matches what we actually expect in the markdown headers.
             comp = exp.get("company")
@@ -1301,10 +1302,8 @@ class StarEditor:
         markdown_lines = ["## Professional Experience"]
 
         for exp in experiences[:3]:  # Limit to 3 experiences
-            # Hermes sometimes appends dates to company names — strip them.
             raw_company = exp.get("company", "Company")
             company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or raw_company
-            # Hermes sends 'title' as the canonical key.
             role = exp.get("title") or exp.get("role", "Role")
             bullets = exp.get("bullets", [])
 
