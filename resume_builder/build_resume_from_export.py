@@ -715,19 +715,26 @@ def render_template(template_text: str, resume: ResumePayload) -> str:
 
 
 def bullet_block(lines: Sequence[str]) -> str:
-    items = "\n".join(f"  \\item {latex_escape(normalize_dash(line))}" for line in lines)
+    # Filter out empty lines
+    filtered_lines = [line for line in lines if line and line.strip()]
+    if not filtered_lines:
+        return ""
+    items = "\n".join(f"  \\item {latex_escape(normalize_dash(line))}" for line in filtered_lines)
     return f"\\begin{{itemize}}[label={{-}}, itemsep=-1.0ex]\n{items}\n\\end{{itemize}}"
 
 
 def generate_section_body(section: ResumeSection) -> str:
     """Render a section entry with optional right-aligned date."""
     title = latex_escape(section.title)
+    bullet_content = bullet_block(section.body_lines)
     if section.date_string:
-        return f"\\textbf{{{title}}} \\hfill {latex_escape(section.date_string)}\n\\vspace*{{-2mm}}\n{bullet_block(section.body_lines)}\n"
-    return f"\\textbf{{{title}}}\n\\vspace*{{-2mm}}\n{bullet_block(section.body_lines)}\n"
+        return f"\\textbf{{{title}}} \\hfill {latex_escape(section.date_string)}\n\\vspace*{{-2mm}}\n{bullet_content}\n"
+    return f"\\textbf{{{title}}}\n\\vspace*{{-2mm}}\n{bullet_content}\n"
 
 
 def generate_experience_block(resume: ResumePayload) -> str:
+    if not resume.experience:
+        return ""
     blocks = []
     blocks.append("% PROFESSIONAL EXPERIENCE-------------------------------\n\\vspace*{2mm}\n\\section{Professional Experience}\n\\vspace*{1mm}\n")
     for section in resume.experience:
