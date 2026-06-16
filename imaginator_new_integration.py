@@ -768,6 +768,100 @@ def _extract_structured_sections_from_resume(
     return parsed
 
 
+def _compute_jd_skill_gaps(
+    job_ad: str,
+    candidate_skills: List[str],
+    resume_text: str = "",
+    max_gaps: int = 8,
+) -> tuple[List[str], List[str]]:
+    """Compare JD keywords against candidate skills/resume text.
+
+    Returns (critical_gaps, nice_to_have_gaps).
+    """
+    if not job_ad or not job_ad.strip():
+        return [], []
+
+    import re
+
+    def _norm(value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+    candidate_norm = {_norm(s) for s in candidate_skills if s}
+    resume_norm = _norm(resume_text)
+
+    def _present(term: str) -> bool:
+        term_norm = _norm(term)
+        if not term_norm:
+            return True
+        if term_norm in resume_norm:
+            return True
+        return any(term_norm in skill or skill in term_norm for skill in candidate_norm)
+
+    # High-signal JD terms for data/governance/analytics roles
+    critical_terms = [
+        "data governance",
+        "data quality",
+        "data lineage",
+        "metadata",
+        "business glossary",
+        "data catalog",
+        "Collibra",
+        "Alation",
+        "Informatica",
+        "ETL",
+        "ELT",
+        "Airflow",
+        "Talend",
+        "dbt",
+        "Snowflake",
+        "Redshift",
+        "BigQuery",
+        "SQL",
+        "AWS",
+        "Azure",
+        "GCP",
+        "ITAR",
+        "EAR",
+        "export controls",
+        "compliance",
+        "MDM",
+        "master data",
+        "stakeholder",
+        "KPI",
+        "SLA",
+    ]
+    nice_terms = [
+        "Power BI",
+        "Tableau",
+        "Python",
+        "data modeling",
+        "data steward",
+        "agile",
+        "orchestration",
+        "profiling",
+        "access control",
+        "privacy",
+    ]
+
+    job_lower = job_ad.lower()
+    critical_gaps: List[str] = []
+    nice_gaps: List[str] = []
+
+    for term in critical_terms:
+        if term.lower() in job_lower and not _present(term):
+            critical_gaps.append(term)
+        if len(critical_gaps) >= max_gaps:
+            break
+
+    for term in nice_terms:
+        if term.lower() in job_lower and not _present(term):
+            nice_gaps.append(term)
+        if len(nice_gaps) >= max_gaps:
+            break
+
+    return critical_gaps, nice_gaps
+
+
 async def run_new_pipeline_async(
     resume_text: str,
     job_ad: str,
@@ -1640,16 +1734,57 @@ async def run_new_pipeline_async(
         if gap_parts:
             gap_analysis = " ".join(gap_parts)
 
+        # Compute actual missing JD skills vs candidate profile
+        rewritten_for_gaps = final_output.get("final_written_section", "") or resume_text
+        critical_missing, nice_missing = _compute_jd_skill_gaps(
+            job_ad=job_ad or "",
+            candidate_skills=aggregate_skills,
+            resume_text=rewritten_for_gaps,
+        )
+
+        if critical_missing:
+            gap_summary = (
+                f"For {job_title_context}, strengthen evidence for: "
+                f"{', '.join(critical_missing[:5])}."
+            )
+        elif gap_parts:
+            gap_summary = gap_analysis
+        else:
+            gap_summary = (
+                f"Analysis for {job_title_context}: Focus on demonstrating relevant "
+                "experience and quantifiable achievements."
+            )
+
+        bridging_strategies: List[str] = []
+        if implied_skills_normalized:
+            bridging_strategies.append(
+                "Highlight transferable skills: "
+                + ", ".join(str(s) for s in implied_skills_normalized[:3] if s)
+            )
+        if implied_metrics_normalized:
+            bridging_strategies.append(
+                "Target benchmarks: "
+                + ", ".join(str(m) for m in implied_metrics_normalized[:3] if m)
+            )
+        if insider_tips:
+            bridging_strategies.append(str(insider_tips))
+
         # Build structured gap analysis with job-specific context
         gap_analysis_payload = {
-            "summary": gap_analysis
-            or f"Analysis for {job_title_context}: Focus on demonstrating relevant experience and quantifiable achievements.",
-            "critical_gaps": implied_skills_normalized[:5],  # Limit to top 5
-            "benchmarks": implied_metrics_normalized[:3],  # Limit to top 3
+            "summary": gap_summary,
+            "critical_gaps": critical_missing[:8],
+            "nice_to_have_gaps": nice_missing[:8],
+            "gap_bridging_strategy": (
+                bridging_strategies[0]
+                if bridging_strategies
+                else "Add concrete projects or accomplishments to demonstrate missing JD skills."
+            ),
+            "bridging_strategies": bridging_strategies,
+            "benchmarks": implied_metrics_normalized[:3],
             "insider_tips": insider_tips
             or f"Research {job_title_context} requirements and tailor your application accordingly.",
             "job_title": job_title_context,
-            "alignment_score": critique_score,  # Include ATS score for context
+            "alignment_score": critique_score,
         }
         gap_analysis_json = json.dumps(gap_analysis_payload)
 
@@ -1713,6 +1848,7 @@ async def run_new_pipeline_async(
             "sectionCompleteness": section_completeness,
             "seniority_analysis": {"level": final_output.get("seniority_level", "mid")},
             "rewritten_resume": final_output.get("final_written_section", ""),
+            "gap_analysis": gap_analysis_json,
             "suggestions": [],
             "pipeline_version": "3.0",
             "pipeline_status": "completed",
