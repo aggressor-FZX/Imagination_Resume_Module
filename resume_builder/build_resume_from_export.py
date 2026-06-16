@@ -784,15 +784,32 @@ def compile_latex(tex_path: Path, working_dir: Path) -> Path:
         str(tex_path),
     ]
     # First pass: generate .aux files
-    subprocess.run(command, cwd=working_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result1 = subprocess.run(command, cwd=working_dir, capture_output=True, text=True)
+    if result1.returncode != 0:
+        # Log the actual LaTeX error output
+        error_output = result1.stdout + "\n" + result1.stderr
+        log_path = tex_path.with_suffix(".log")
+        if log_path.exists():
+            log_tail = log_path.read_text(errors="ignore")[-3000:]
+            error_output += f"\n\n--- Log file tail ---\n{log_tail}"
+        raise RuntimeError(f"pdflatex first pass failed (exit code {result1.returncode}):\n{error_output}")
+    
     # Second pass: resolve references
-    subprocess.run(command, cwd=working_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result2 = subprocess.run(command, cwd=working_dir, capture_output=True, text=True)
+    if result2.returncode != 0:
+        error_output = result2.stdout + "\n" + result2.stderr
+        log_path = tex_path.with_suffix(".log")
+        if log_path.exists():
+            log_tail = log_path.read_text(errors="ignore")[-3000:]
+            error_output += f"\n\n--- Log file tail ---\n{log_tail}"
+        raise RuntimeError(f"pdflatex second pass failed (exit code {result2.returncode}):\n{error_output}")
+    
     pdf_path = tex_path.with_suffix(".pdf")
     if not pdf_path.exists():
         # Check .log for the error
         log_path = tex_path.with_suffix(".log")
         if log_path.exists():
-            log_tail = log_path.read_text(errors="ignore")[-2000:]
+            log_tail = log_path.read_text(errors="ignore")[-3000:]
             raise FileNotFoundError(f"pdflatex failed to produce PDF. Log tail:\n{log_tail}")
         raise FileNotFoundError(f"Expected PDF not produced: {pdf_path}")
     return pdf_path
