@@ -222,12 +222,23 @@ class PipelineOrchestrator:
             # Raised 5→6 (2026-06-04): 6 is safe on 1GB Render instance.
             # 7+ caused OOM crash with 10 golden bullets.
             MAX_DRAFTER_EXPERIENCES = 6
-            if len(experiences) > MAX_DRAFTER_EXPERIENCES:
+            # Education pseudo-entries are for Researcher context only — never consume
+            # Drafter slots or push out recent professional roles (e.g. Cogito Metric).
+            prof_experiences = [e for e in experiences if not e.get("is_education")]
+            edu_experiences = [e for e in experiences if e.get("is_education")]
+            if len(prof_experiences) > MAX_DRAFTER_EXPERIENCES:
                 logger.warning(
-                    f"[ORCHESTRATOR] Truncating experiences from {len(experiences)} "
-                    f"to {MAX_DRAFTER_EXPERIENCES} for Drafter memory budget"
+                    f"[ORCHESTRATOR] Truncating professional experiences from "
+                    f"{len(prof_experiences)} to {MAX_DRAFTER_EXPERIENCES} "
+                    f"for Drafter memory budget"
                 )
-                experiences = experiences[:MAX_DRAFTER_EXPERIENCES]
+                prof_experiences = prof_experiences[:MAX_DRAFTER_EXPERIENCES]
+            experiences = prof_experiences
+            if edu_experiences:
+                logger.info(
+                    f"[ORCHESTRATOR] Excluded {len(edu_experiences)} education "
+                    f"pseudo-entries from Drafter input"
+                )
 
             # Retry logic — single attempt only to prevent OOM from retry holding memory
             attempt = 0
