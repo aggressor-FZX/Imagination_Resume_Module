@@ -11,9 +11,11 @@ This module provides a robust way to interact with OpenRouter API:
 
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 import requests
 from config import settings
+
+TokenCallback = Callable[[str], None]
 
 
 class OpenRouterSafeClient:
@@ -162,6 +164,8 @@ class OpenRouterSafeClient:
         temperature: float = 0.7,
         fallback_models: Optional[List[str]] = None,
         timeout: int = 90,
+        stream: bool = False,
+        on_token: Optional[TokenCallback] = None,
     ) -> Dict[str, Any]:
         """
         Call OpenRouter with proper request formatting and failsafe fallback.
@@ -173,6 +177,8 @@ class OpenRouterSafeClient:
             temperature: Sampling temperature (0-2)
             fallback_models: Optional list of models to try if primary fails
             timeout: HTTP read timeout in seconds for each attempt
+            stream: When True, use SSE streaming and accumulate content
+            on_token: Optional callback invoked with each content delta (stream only)
 
         Returns:
             Response dict with 'success', 'data', 'error', and 'model_used'
@@ -231,10 +237,83 @@ class OpenRouterSafeClient:
                     "messages": messages,
                     "max_tokens": max_tokens,
                     "temperature": temperature,
-                    "stream": False  # Explicitly disable streaming
+                    "stream": bool(stream),
                 }
 
-                print(f"   📤 Request payload keys: {list(payload.keys())}")
+                print(f"   📤 Request payload keys: {list(payload.keys())} stream={bool(stream)}")
+
+                if stream:
+                    response = requests.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=timeout,
+                        stream=True,
+                    )
+                    print(f"   📥 Response status: {response.status_code} (stream)")
+                    if response.status_code == 200:
+                        content_parts: List[str] = []
+                        usage: Dict[str, Any] = {}
+                        for raw_line in response.iter_lines(decode_unicode=True):
+                            if not raw_line:
+                                continue
+                            line = raw_line.strip()
+                            if not line.startswith("data:"):
+                                continue
+                            data_str = line[5:].strip()
+                            if not data_str or data_str == "[DONE]":
+                                continue
+                            try:
+                                chunk = json.loads(data_str)
+                            except Exception:
+                                continue
+                            if chunk.get("usage"):
+                                usage = chunk["usage"]
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            delta = (choices[0].get("delta") or {}).get("content") or ""
+                            if not delta:
+                                delta = ((choices[0].get("message") or {}).get("content")) or ""
+                            if delta:
+                                content_parts.append(delta)
+                                if on_token:
+                                    try:
+                                        on_token(delta)
+                                    except Exception:
+                                        pass
+                        content = "".join(content_parts)
+                        if content.strip():
+                            print(f"   ✅ Stream success with {model_id} ({len(content)} chars)")
+                            data = {
+                                "id": f"stream-{model_id}",
+                                "model": model_id,
+                                "choices": [{"message": {"role": "assistant", "content": content}}],
+                                "usage": usage,
+                            }
+                            return {
+                                "success": True,
+                                "data": data,
+                                "model_used": model_id,
+                                "content": content,
+                            }
+                        last_error = "Empty stream content"
+                        print(f"   ⚠️  {last_error}")
+                    elif response.status_code == 429:
+                        last_error = "Rate limit exceeded (429)"
+                        print(f"   ⏳ {last_error}")
+                    elif response.status_code == 401:
+                        last_error = "Invalid API key (401)"
+                        print(f"   🔐 {last_error}")
+                        return {
+                            "success": False,
+                            "error": last_error,
+                            "model_used": None,
+                        }
+                    else:
+                        last_error = f"HTTP {response.status_code}: {response.text[:100]}"
+                        print(f"   ⚠️  {last_error}")
+                    continue
 
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
