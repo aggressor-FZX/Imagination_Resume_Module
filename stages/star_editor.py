@@ -155,9 +155,12 @@ class StarEditor:
                 response_format={"type": "json_object"},
                 timeout=self.timeout,
                 max_tokens=5000,  # 2000→5000: PNNL benchmark is 7742 chars/942 words. 2000 capped output at ~250 words. 5000 allows ~600-800 words.
+                # C2: when a request-scoped token callback is set, stream deltas then
+                # assemble the full JSON string into final_markdown via _parse_response.
+                stream_tokens=True,
             )
             
-            # Parse and validate response
+            # Parse and validate response (full assembled content, stream or not)
             result = self._parse_response(response)
             result["model_used"] = self.model # Track model in result
             

@@ -84,6 +84,15 @@ class LLMClientAdapter:
             
             # Call synchronous method (OpenRouterSafeClient is sync)
             http_timeout = timeout if timeout is not None else 90
+            # StarEditor may request token streaming; only then enable SSE (C2).
+            stream_tokens = bool(kwargs.get("stream_tokens"))
+            on_token = kwargs.get("on_token")
+            if stream_tokens and on_token is None:
+                try:
+                    from stream_context import get_token_callback
+                    on_token = get_token_callback()
+                except Exception:
+                    on_token = None
             result = self.client.call_model(
                 messages=messages,
                 model=model,
@@ -91,6 +100,8 @@ class LLMClientAdapter:
                 max_tokens=safe_max_tokens,
                 fallback_models=fallback_models,
                 timeout=http_timeout,
+                stream=bool(stream_tokens and on_token),
+                on_token=on_token if stream_tokens else None,
             )
             
             # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)
