@@ -20,8 +20,10 @@ from fastapi import (
     Request,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
+import asyncio
+from stream_context import set_token_callback, reset_token_callback
 
 from config import settings
 from logging_setup import configure_logging, RequestIDMiddleware
@@ -141,13 +143,10 @@ async def root():
     return {"status": "ok", "service": "Generative Resume Co-Writer"}
 
 
-@app.post(
-    "/analyze", response_model=AnalysisResponse, dependencies=[Depends(get_api_key)]
-)
-async def analyze_resume(
+async def _analyze_resume_impl(
     payload: AnalysisRequest,
     request: Request,
-    api_key: str = Depends(get_api_key),
+    api_key: str,
 ):
     """
     Analyze a resume against a job description and provide career development recommendations.
@@ -583,6 +582,93 @@ async def analyze_resume(
                 },
             ).model_dump(),
         )
+
+
+@app.post("/analyze", dependencies=[Depends(get_api_key)])
+async def analyze_resume(
+    payload: AnalysisRequest,
+    request: Request,
+    api_key: str = Depends(get_api_key),
+):
+    """
+    Dual-mode /analyze (C3):
+    - Default: JSON AnalysisResponse (unchanged)
+    - Accept: text/event-stream → SSE token deltas then final result event
+    """
+    accept = (request.headers.get("accept") or "").lower()
+    wants_sse = "text/event-stream" in accept
+
+    if not wants_sse:
+        return await _analyze_resume_impl(payload, request, api_key)
+
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def on_token(delta: str) -> None:
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, ("token", delta))
+        except Exception:
+            pass
+
+    async def produce() -> None:
+        token = set_token_callback(on_token)
+        try:
+            result = await _analyze_resume_impl(payload, request, api_key)
+            await queue.put(("result", result))
+        except Exception as exc:
+            await queue.put(("error", str(exc)))
+        finally:
+            reset_token_callback(token)
+
+    async def event_stream():
+        task = asyncio.create_task(produce())
+        try:
+            while True:
+                kind, payload_data = await queue.get()
+                if kind == "token":
+                    yield (
+                        "event: token\n"
+                        f"data: {json.dumps({'field': 'rewrite', 'delta': payload_data})}\n\n"
+                    )
+                elif kind == "result":
+                    if isinstance(payload_data, AnalysisResponse):
+                        data = (
+                            payload_data.model_dump()
+                            if hasattr(payload_data, "model_dump")
+                            else payload_data.dict()
+                        )
+                    elif isinstance(payload_data, JSONResponse):
+                        # Error/partial JSONResponse — surface as error event
+                        try:
+                            body = payload_data.body
+                            data = json.loads(body.decode("utf-8")) if body else {}
+                        except Exception:
+                            data = {"error": "analysis_failed"}
+                        yield f"event: error\ndata: {json.dumps(data, default=str)}\n\n"
+                        break
+                    elif isinstance(payload_data, dict):
+                        data = payload_data
+                    else:
+                        data = {"result": str(payload_data)}
+                    yield f"event: result\ndata: {json.dumps(data, default=str)}\n\n"
+                    break
+                elif kind == "error":
+                    yield (
+                        "event: error\n"
+                        f"data: {json.dumps({'message': payload_data})}\n\n"
+                    )
+                    break
+        finally:
+            await task
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post(
