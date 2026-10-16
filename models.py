@@ -246,6 +246,14 @@ class AnalysisRequest(BaseModel):
         validation_alias=AliasChoices("job_titles", "jobTitles", "target_job_titles"),
         description="List of possible matching job titles for the user",
     )
+    research_data: Optional[Dict[str, Any]] = Field(
+        None,
+        validation_alias=AliasChoices("research_data", "researchData", "precomputed_research"),
+        description=(
+            "Precomputed Researcher output (job-ad fork). When present, Stage 1 is skipped "
+            "and Drafter/StarEditor consume this payload directly."
+        ),
+    )
 
     @field_validator("extracted_skills_json")
     @classmethod

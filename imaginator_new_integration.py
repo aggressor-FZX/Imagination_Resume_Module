@@ -1156,6 +1156,7 @@ async def run_new_pipeline_async(
             skills=skills,
             classified_skills=classified_skills,
             job_titles=job_titles,
+            research_data=kwargs.get("research_data"),
         )
 
         # Extract final output

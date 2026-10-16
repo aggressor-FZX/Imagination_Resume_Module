@@ -35,6 +35,10 @@ from models import (
     ErrorResponse,
     ProcessingStatus,
 )
+from pydantic import BaseModel, Field
+from pipeline_config import TIMEOUTS, OPENROUTER_API_KEYS
+from llm_client_adapter import LLMClientAdapter
+from stages.researcher import Researcher
 import imaginator_flow as imaginator_flow_module
 from imaginator_flow import (
     RUN_METRICS,
@@ -326,6 +330,7 @@ async def _analyze_resume_impl(
             skills=payload.skills,
             classified_skills=payload.classified_skills,
             job_titles=payload.job_titles,
+            research_data=payload.research_data,
         )
         if settings.VERBOSE_PIPELINE_LOGS:
             logger.info(
@@ -582,6 +587,93 @@ async def _analyze_resume_impl(
                 },
             ).model_dump(),
         )
+
+
+class ResearchRequest(BaseModel):
+    """Job-ad-only Researcher fork (no structured profile)."""
+
+    job_ad: str = Field(..., min_length=1, description="Target job description text")
+
+
+EMPTY_RESEARCH_FALLBACK = {
+    "implied_metrics": [],
+    "domain_vocab": [],
+    "implied_skills": [],
+    "work_archetypes": [],
+    "fallback": True,
+}
+
+
+@app.post("/research", dependencies=[Depends(get_api_key)])
+async def research_job_ad(
+    payload: ResearchRequest,
+    request: Request,
+    api_key: str = Depends(get_api_key),
+):
+    """
+    Job-ad-only Researcher for orch fork-join.
+    Strict timeout → empty research_data (never hangs Drafter).
+    """
+    request_id = getattr(request.state, "request_id", None)
+    timeout_s = float(TIMEOUTS.get("researcher", 45))
+    api_keys = [
+        key
+        for key in [settings.openrouter_api_key_1, settings.openrouter_api_key_2]
+        if key
+    ] or [k for k in OPENROUTER_API_KEYS if k]
+
+    if not api_keys:
+        logger.warning("research.no_openrouter_keys", extra={"request_id": request_id})
+        return JSONResponse(
+            {
+                "research_data": {**EMPTY_RESEARCH_FALLBACK, "error": "no_openrouter_keys"},
+                "status": "fallback",
+            }
+        )
+
+    llm_client = LLMClientAdapter(
+        api_key=api_keys[0],
+        fallback_keys=api_keys[1:] if len(api_keys) > 1 else [],
+    )
+    researcher = Researcher(llm_client)
+    t0 = time.time()
+    try:
+        research_data = await asyncio.wait_for(
+            researcher.analyze(payload.job_ad, experiences=None),
+            timeout=timeout_s,
+        )
+        status = "completed" if "error" not in research_data else "failed"
+    except asyncio.TimeoutError:
+        logger.warning(
+            "research.timeout",
+            extra={"request_id": request_id, "timeout_s": timeout_s},
+        )
+        research_data = {
+            **EMPTY_RESEARCH_FALLBACK,
+            "error": f"timeout_after_{timeout_s}s",
+        }
+        status = "timeout"
+    except Exception as exc:
+        logger.exception("research.failed", extra={"request_id": request_id})
+        research_data = {**EMPTY_RESEARCH_FALLBACK, "error": str(exc)[:300]}
+        status = "error"
+
+    duration_ms = int((time.time() - t0) * 1000)
+    logger.info(
+        "research.done",
+        extra={
+            "request_id": request_id,
+            "status": status,
+            "duration_ms": duration_ms,
+            "metrics": len(research_data.get("implied_metrics") or []),
+        },
+    )
+    return {
+        "research_data": research_data,
+        "status": status,
+        "duration_ms": duration_ms,
+        "forked": True,
+    }
 
 
 @app.post("/analyze", dependencies=[Depends(get_api_key)])

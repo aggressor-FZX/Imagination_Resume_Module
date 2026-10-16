@@ -168,49 +168,77 @@ class PipelineOrchestrator:
             )
 
             # STAGE 1: RESEARCHER - Extract metrics and domain vocabulary
+            # When research_data is precomputed (orch job-ad fork), skip the LLM call.
             stage1_start = time.time()
-            logger.info("[ORCHESTRATOR] Starting Stage 1: Researcher")
-
-            try:
-                research_data = await self.researcher.analyze(
-                    job_ad,
-                    experiences,
-                    temperature_override=temperatures["researcher"],
+            precomputed_research = kwargs.get("research_data")
+            if precomputed_research is not None and isinstance(precomputed_research, dict):
+                logger.info(
+                    "[ORCHESTRATOR] Stage 1: using precomputed research_data (fork-join skip)"
                 )
-                if "error" in research_data:
-                    logger.error(
-                        f"[ORCHESTRATOR] Stage 1 returned error: {research_data['error']}"
+                research_data = precomputed_research
+                if not research_data.get("implied_metrics") and not research_data.get(
+                    "domain_vocab"
+                ):
+                    research_data = {
+                        **research_data,
+                        "implied_metrics": research_data.get("implied_metrics")
+                        or [],
+                        "domain_vocab": research_data.get("domain_vocab") or [],
+                        "implied_skills": research_data.get("implied_skills") or [],
+                        "fallback": bool(research_data.get("fallback", True)),
+                    }
+                stage1_duration = time.time() - stage1_start
+                result["stages"]["researcher"] = {
+                    "status": "precomputed"
+                    if not research_data.get("fallback")
+                    else "precomputed_fallback",
+                    "duration_seconds": stage1_duration,
+                    "summary": self.researcher.get_metrics_summary(research_data),
+                    "forked": True,
+                }
+            else:
+                logger.info("[ORCHESTRATOR] Starting Stage 1: Researcher")
+
+                try:
+                    research_data = await self.researcher.analyze(
+                        job_ad,
+                        experiences,
+                        temperature_override=temperatures["researcher"],
                     )
-                    result["errors"].append(
-                        f"Researcher Error: {research_data['error']}"
-                    )
-            except Exception as e:
-                logger.exception(f"[ORCHESTRATOR] Stage 1 CRITICAL FAILURE: {e}")
-                result["errors"].append(f"Researcher Exception: {str(e)}")
-                research_data = {
-                    "implied_metrics": [],
-                    "domain_vocab": [],
-                    "fallback": True,
+                    if "error" in research_data:
+                        logger.error(
+                            f"[ORCHESTRATOR] Stage 1 returned error: {research_data['error']}"
+                        )
+                        result["errors"].append(
+                            f"Researcher Error: {research_data['error']}"
+                        )
+                except Exception as e:
+                    logger.exception(f"[ORCHESTRATOR] Stage 1 CRITICAL FAILURE: {e}")
+                    result["errors"].append(f"Researcher Exception: {str(e)}")
+                    research_data = {
+                        "implied_metrics": [],
+                        "domain_vocab": [],
+                        "fallback": True,
+                    }
+
+                stage1_duration = time.time() - stage1_start
+
+                result["stages"]["researcher"] = {
+                    "status": "completed" if "error" not in research_data else "failed",
+                    "duration_seconds": stage1_duration,
+                    "summary": self.researcher.get_metrics_summary(research_data),
                 }
 
-            stage1_duration = time.time() - stage1_start
-
-            result["stages"]["researcher"] = {
-                "status": "completed" if "error" not in research_data else "failed",
-                "duration_seconds": stage1_duration,
-                "summary": self.researcher.get_metrics_summary(research_data),
-            }
+                # Memory management: Stage 1 returns large dicts. The LLM API
+                # response is the heaviest object (held transiently in the adapter).
+                # Force GC, then pause to let the OS reclaim memory before Stage 2.
+                gc.collect()
+                await asyncio.sleep(1.5)  # 1.5s cooldown — memory peaks right after a stage returns
 
             logger.info(f"[ORCHESTRATOR] Stage 1 completed in {stage1_duration:.2f}s")
             logger.info(
                 f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics and {len(research_data.get('implied_skills', []))} implied skills"
             )
-            
-            # Memory management: Stage 1 returns large dicts. The LLM API
-            # response is the heaviest object (held transiently in the adapter).
-            # Force GC, then pause to let the OS reclaim memory before Stage 2.
-            gc.collect()
-            await asyncio.sleep(1.5)  # 1.5s cooldown — memory peaks right after a stage returns
 
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
