@@ -76,12 +76,20 @@ def sanitize_export_text(text: str) -> str:
     if not isinstance(text, str):
         text = str(text)
 
-    # If C1 controls are present, prefer a latin-1 → cp1252 round-trip repair.
+    # Repair C1 controls that are actually Windows-1252 bytes mislabeled as Unicode.
+    # Remap only those codepoints — do not latin-1-encode the whole string (drops U+2014 etc).
     if any(0x80 <= ord(ch) <= 0x9F for ch in text):
-        try:
-            text = text.encode("latin-1", errors="ignore").decode("cp1252", errors="ignore")
-        except Exception:
-            pass
+        repaired: List[str] = []
+        for ch in text:
+            code = ord(ch)
+            if 0x80 <= code <= 0x9F:
+                try:
+                    repaired.append(bytes([code]).decode("cp1252", errors="ignore"))
+                except Exception:
+                    repaired.append("")
+            else:
+                repaired.append(ch)
+        text = "".join(repaired)
 
     replacements = {
         "\u2018": "'",  # ‘
