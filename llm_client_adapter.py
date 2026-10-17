@@ -2,6 +2,7 @@
 LLM Client Adapter for New Orchestrator
 Wraps OpenRouterSafeClient to provide async call_llm_async method
 """
+import asyncio
 import json
 import logging
 from typing import Dict, Any, Optional, List
@@ -93,7 +94,12 @@ class LLMClientAdapter:
                     on_token = get_field_callback("rewrite")
                 except Exception:
                     on_token = None
-            result = self.client.call_model(
+            # Run the blocking requests call in a worker thread so the event loop
+            # (SSE queue, other requests) is not stalled. on_token is resolved above
+            # (contextvar read on the loop thread) and its consumer uses
+            # loop.call_soon_threadsafe, so invoking it from the worker is safe.
+            result = await asyncio.to_thread(
+                self.client.call_model,
                 messages=messages,
                 model=model,
                 temperature=temperature,
