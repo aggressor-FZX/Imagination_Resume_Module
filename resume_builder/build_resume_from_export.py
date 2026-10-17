@@ -66,11 +66,23 @@ LATEX_SPECIAL_CHARS = {
 
 
 def sanitize_export_text(text: str) -> str:
-    """Normalize LLM/smart punctuation so LaTeX/DOCX generators stay ASCII-safe."""
+    """Normalize LLM/smart punctuation so LaTeX/DOCX generators stay ASCII-safe.
+
+    Also repairs Windows-1252 bytes that were mis-decoded as Latin-1 (they show up
+    as C1 controls like U+0091 / U+0080 and crash pdflatex).
+    """
     if not text:
         return ""
     if not isinstance(text, str):
         text = str(text)
+
+    # If C1 controls are present, prefer a latin-1 → cp1252 round-trip repair.
+    if any(0x80 <= ord(ch) <= 0x9F for ch in text):
+        try:
+            text = text.encode("latin-1", errors="ignore").decode("cp1252", errors="ignore")
+        except Exception:
+            pass
+
     replacements = {
         "\u2018": "'",  # ‘
         "\u2019": "'",  # ’
@@ -86,9 +98,22 @@ def sanitize_export_text(text: str) -> str:
         "\u2026": "...",  # …
         "\u00b7": "-",  # ·
         "\u202f": " ",  # narrow nbsp
+        # C1 controls that survive mis-decode (pdflatex: "Unicode character U+0091")
+        "\u0080": "",
+        "\u0085": "...",
+        "\u0091": "'",
+        "\u0092": "'",
+        "\u0093": '"',
+        "\u0094": '"',
+        "\u0096": "--",
+        "\u0097": "--",
+        "\u0099": "",
     }
     for original, replacement in replacements.items():
         text = text.replace(original, replacement)
+
+    # Drop remaining C0/C1 controls (keep \n \t)
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", text)
     return text
 
 
