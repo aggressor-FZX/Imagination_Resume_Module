@@ -89,8 +89,8 @@ class LLMClientAdapter:
             on_token = kwargs.get("on_token")
             if stream_tokens and on_token is None:
                 try:
-                    from stream_context import get_token_callback
-                    on_token = get_token_callback()
+                    from stream_context import get_field_callback
+                    on_token = get_field_callback("rewrite")
                 except Exception:
                     on_token = None
             result = self.client.call_model(

@@ -273,6 +273,16 @@ class PipelineOrchestrator:
             attempt = 0
             draft_data = {}
 
+            # Field-aware SSE: explicit on_draft_token wins; else use request-scoped
+            # stream context (emits {"field":"draft"}); None => no streaming.
+            draft_cb = on_draft_token
+            if draft_cb is None:
+                try:
+                    from stream_context import get_field_callback
+                    draft_cb = get_field_callback("draft")
+                except Exception:
+                    draft_cb = None
+
             try:
                 draft_data = await self.drafter.draft(
                     experiences,
@@ -283,7 +293,7 @@ class PipelineOrchestrator:
                     temperature_override=temperatures["drafter"],
                     extracted_job_title=extracted_job_title,
                     resume_text=resume_text,
-                    on_token=on_draft_token,
+                    on_token=draft_cb,
                 )
                 attempt = 1
             except Exception as e:

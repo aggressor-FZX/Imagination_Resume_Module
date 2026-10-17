@@ -696,9 +696,9 @@ async def analyze_resume(
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
-    def on_token(delta: str) -> None:
+    def on_token(field: str, delta: str) -> None:
         try:
-            loop.call_soon_threadsafe(queue.put_nowait, ("token", delta))
+            loop.call_soon_threadsafe(queue.put_nowait, ("token", (field, delta)))
         except Exception:
             pass
 
@@ -718,9 +718,10 @@ async def analyze_resume(
             while True:
                 kind, payload_data = await queue.get()
                 if kind == "token":
+                    field, delta = payload_data
                     yield (
                         "event: token\n"
-                        f"data: {json.dumps({'field': 'rewrite', 'delta': payload_data})}\n\n"
+                        f"data: {json.dumps({'field': field, 'delta': delta})}\n\n"
                     )
                 elif kind == "result":
                     if isinstance(payload_data, AnalysisResponse):
