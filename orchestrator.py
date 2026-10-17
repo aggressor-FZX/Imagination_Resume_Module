@@ -10,7 +10,7 @@ import gc
 import logging
 import time
 import re
-from typing import Dict, Any, Optional, List
+from typing import Callable, Dict, Any, Optional, List
 from datetime import datetime
 
 from stages.researcher import Researcher
@@ -70,6 +70,7 @@ class PipelineOrchestrator:
         skills: Optional[List[str]] = None,
         classified_skills: Optional[Dict[str, Any]] = None,
         job_titles: Optional[List[str]] = None,
+        on_draft_token: Optional[Callable[[str], None]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -282,6 +283,7 @@ class PipelineOrchestrator:
                     temperature_override=temperatures["drafter"],
                     extracted_job_title=extracted_job_title,
                     resume_text=resume_text,
+                    on_token=on_draft_token,
                 )
                 attempt = 1
             except Exception as e:

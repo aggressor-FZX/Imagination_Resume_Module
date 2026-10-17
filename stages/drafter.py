@@ -10,8 +10,9 @@ Based on Alternate_flow_proposal.md recommendations:
 
 import json
 import logging
+import os
 import re
-from typing import Dict, Any, List, Optional
+from typing import Callable, Dict, Any, List, Optional
 from pipeline_config import OR_SLUG_DRAFTER, FALLBACK_MODELS, TEMPERATURES, TIMEOUTS, get_seniority_config
 
 logger = logging.getLogger(__name__)
@@ -223,6 +224,7 @@ class Drafter:
         temperature_override: Optional[float] = None,
         extracted_job_title: Optional[str] = None,
         resume_text: Optional[str] = None,
+        on_token: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
@@ -319,7 +321,7 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
             temperature = (
                 temperature_override if temperature_override is not None else self.temperature
             )
-            response = await self.llm_client.call_llm_async(
+            llm_kwargs: Dict[str, Any] = dict(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 model=self.model,
@@ -329,6 +331,13 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
                 fallback_models=self.fallback_models,
                 max_tokens=6000,  # 4000→6000: 6 experiences × 4 bullets + metrics + rationale needs ~5K tokens
             )
+            # Optional token streaming (killswitch IMAG_STREAM_DRAFTER=false disables).
+            # The client accumulates deltas and returns the full string, so the
+            # JSON parse below is identical to the non-stream path.
+            if on_token is not None and os.getenv("IMAG_STREAM_DRAFTER", "true").lower() != "false":
+                llm_kwargs["stream_tokens"] = True
+                llm_kwargs["on_token"] = on_token
+            response = await self.llm_client.call_llm_async(**llm_kwargs)
             
             # Parse and validate response
             result = self._parse_response(response, experiences)
