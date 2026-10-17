@@ -23,3 +23,5 @@ Sanitization also normalizes em-dashes / smart quotes before LaTeX escape and DO
 ## Related pipeline
 
 Job-ad Researcher can be precomputed via `POST /research` and passed as `research_data` on `/analyze` so Stage 1 is skipped (orch fork-join). That path does not change export shape.
+
+SSE token streaming for Drafter/StarEditor is documented in [STREAMING.md](./STREAMING.md); export still uses the final analysis JSON only (never draft preview text).
