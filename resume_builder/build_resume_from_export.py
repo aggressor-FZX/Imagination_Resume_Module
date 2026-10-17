@@ -65,15 +65,42 @@ LATEX_SPECIAL_CHARS = {
 }
 
 
+def sanitize_export_text(text: str) -> str:
+    """Normalize LLM/smart punctuation so LaTeX/DOCX generators stay ASCII-safe."""
+    if not text:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
+    replacements = {
+        "\u2018": "'",  # ‘
+        "\u2019": "'",  # ’
+        "\u201a": "'",  # ‚
+        "\u201c": '"',  # “
+        "\u201d": '"',  # ”
+        "\u201e": '"',  # „
+        "\u2013": "--",  # –
+        "\u2014": "--",  # —
+        "\u2212": "-",  # −
+        "\u2022": "-",  # •
+        "\u00a0": " ",  # nbsp
+        "\u2026": "...",  # …
+        "\u00b7": "-",  # ·
+        "\u202f": " ",  # narrow nbsp
+    }
+    for original, replacement in replacements.items():
+        text = text.replace(original, replacement)
+    return text
+
+
 def latex_escape(text: str) -> str:
-    escaped = text
+    escaped = sanitize_export_text(text)
     for original, replacement in LATEX_SPECIAL_CHARS.items():
         escaped = escaped.replace(original, replacement)
     return escaped
 
 
 def normalize_dash(text: str) -> str:
-    return text.replace("–", "--").replace("—", "--")
+    return sanitize_export_text(text).replace("–", "--").replace("—", "--")
 
 
 def split_list_block(text: str) -> List[str]:
@@ -840,33 +867,39 @@ def compile_latex(tex_path: Path, working_dir: Path) -> Path:
         "-output-directory", str(working_dir),
         str(tex_path),
     ]
-    # First pass: generate .aux files
-    result1 = subprocess.run(command, cwd=working_dir, capture_output=True, text=True)
-    if result1.returncode != 0:
-        # Log the actual LaTeX error output
-        error_output = result1.stdout + "\n" + result1.stderr
+    def _decode_proc_output(raw: Optional[bytes]) -> str:
+        # pdflatex often emits latin-1 / mixed bytes (e.g. 0xa2). Never use
+        # subprocess text=True here — it raises UnicodeDecodeError mid-compile.
+        return (raw or b"").decode("utf-8", errors="replace")
+
+    def _log_tail() -> str:
         log_path = tex_path.with_suffix(".log")
-        if log_path.exists():
-            log_tail = log_path.read_text(errors="ignore")[-3000:]
+        if not log_path.exists():
+            return ""
+        return log_path.read_text(encoding="utf-8", errors="replace")[-3000:]
+
+    # First pass: generate .aux files
+    result1 = subprocess.run(command, cwd=working_dir, capture_output=True)
+    if result1.returncode != 0:
+        error_output = _decode_proc_output(result1.stdout) + "\n" + _decode_proc_output(result1.stderr)
+        log_tail = _log_tail()
+        if log_tail:
             error_output += f"\n\n--- Log file tail ---\n{log_tail}"
         raise RuntimeError(f"pdflatex first pass failed (exit code {result1.returncode}):\n{error_output}")
-    
+
     # Second pass: resolve references
-    result2 = subprocess.run(command, cwd=working_dir, capture_output=True, text=True)
+    result2 = subprocess.run(command, cwd=working_dir, capture_output=True)
     if result2.returncode != 0:
-        error_output = result2.stdout + "\n" + result2.stderr
-        log_path = tex_path.with_suffix(".log")
-        if log_path.exists():
-            log_tail = log_path.read_text(errors="ignore")[-3000:]
+        error_output = _decode_proc_output(result2.stdout) + "\n" + _decode_proc_output(result2.stderr)
+        log_tail = _log_tail()
+        if log_tail:
             error_output += f"\n\n--- Log file tail ---\n{log_tail}"
         raise RuntimeError(f"pdflatex second pass failed (exit code {result2.returncode}):\n{error_output}")
-    
+
     pdf_path = tex_path.with_suffix(".pdf")
     if not pdf_path.exists():
-        # Check .log for the error
-        log_path = tex_path.with_suffix(".log")
-        if log_path.exists():
-            log_tail = log_path.read_text(errors="ignore")[-3000:]
+        log_tail = _log_tail()
+        if log_tail:
             raise FileNotFoundError(f"pdflatex failed to produce PDF. Log tail:\n{log_tail}")
         raise FileNotFoundError(f"Expected PDF not produced: {pdf_path}")
     return pdf_path
@@ -898,6 +931,9 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     COLOR_MUTED = DocxRGB(0x44, 0x44, 0x44)
     
     def set_run(run, size=10, bold=False, italic=False, color=COLOR_BODY):
+        # Keep text sanitized; Arial covers the remaining BMP range for DOCX.
+        if run.text:
+            run.text = sanitize_export_text(run.text)
         run.font.name = FONT
         run.font.size = Pt(size)
         run.bold = bold
@@ -910,6 +946,8 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
             rPr.insert(0, rFonts)
         rFonts.set(docx_qn('w:ascii'), FONT)
         rFonts.set(docx_qn('w:hAnsi'), FONT)
+        rFonts.set(docx_qn('w:cs'), FONT)
+        rFonts.set(docx_qn('w:eastAsia'), FONT)
     
     def add_para(sp_before=0, sp_after=2, alignment=None):
         p = doc.add_paragraph()
