@@ -3,9 +3,10 @@ FastAPI web service for Generative Resume Co-Writer
 Based on Context7 research findings for FastAPI best practices
 """
 
+import os
 import time
 import json
-from typing import Dict, Any, Optional, List
+from typing import Callable, Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
 
@@ -604,15 +605,24 @@ EMPTY_RESEARCH_FALLBACK = {
 }
 
 
-@app.post("/research", dependencies=[Depends(get_api_key)])
-async def research_job_ad(
+def _research_partial_patch(research_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Small preview patch of research_data for SSE research_partial events."""
+    return {
+        "domain_vocab_preview": list((research_data.get("domain_vocab") or [])[:8]),
+        "implied_metrics_count": len(research_data.get("implied_metrics") or []),
+        "implied_skills_count": len(research_data.get("implied_skills") or []),
+    }
+
+
+async def _research_job_ad_impl(
     payload: ResearchRequest,
     request: Request,
-    api_key: str = Depends(get_api_key),
+    on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None,
 ):
     """
-    Job-ad-only Researcher for orch fork-join.
-    Strict timeout → empty research_data (never hangs Drafter).
+    Shared /research implementation (JSON + SSE). Strict timeout → empty
+    research_data (never hangs Drafter). ``on_progress(event, data)`` is only
+    used by the SSE path; the JSON path passes None.
     """
     request_id = getattr(request.state, "request_id", None)
     timeout_s = float(TIMEOUTS.get("researcher", 45))
@@ -637,12 +647,19 @@ async def research_job_ad(
     )
     researcher = Researcher(llm_client)
     t0 = time.time()
+    if on_progress:
+        on_progress(
+            "stage",
+            {"stage": "researcher", "state": "started", "message": "Researcher started"},
+        )
     try:
         research_data = await asyncio.wait_for(
             researcher.analyze(payload.job_ad, experiences=None),
             timeout=timeout_s,
         )
         status = "completed" if "error" not in research_data else "failed"
+        if on_progress:
+            on_progress("research_partial", _research_partial_patch(research_data))
     except asyncio.TimeoutError:
         logger.warning(
             "research.timeout",
@@ -653,10 +670,20 @@ async def research_job_ad(
             "error": f"timeout_after_{timeout_s}s",
         }
         status = "timeout"
+        if on_progress:
+            on_progress(
+                "stage",
+                {"stage": "researcher", "state": "fallback", "reason": "timeout"},
+            )
     except Exception as exc:
         logger.exception("research.failed", extra={"request_id": request_id})
         research_data = {**EMPTY_RESEARCH_FALLBACK, "error": str(exc)[:300]}
         status = "error"
+        if on_progress:
+            on_progress(
+                "stage",
+                {"stage": "researcher", "state": "fallback", "reason": "error"},
+            )
 
     duration_ms = int((time.time() - t0) * 1000)
     logger.info(
@@ -674,6 +701,82 @@ async def research_job_ad(
         "duration_ms": duration_ms,
         "forked": True,
     }
+
+
+@app.post("/research", dependencies=[Depends(get_api_key)])
+async def research_job_ad(
+    payload: ResearchRequest,
+    request: Request,
+    api_key: str = Depends(get_api_key),
+):
+    """
+    Dual-mode job-ad-only Researcher for orch fork-join.
+    - Default: JSON (unchanged)
+    - Accept: text/event-stream → ``stage`` (+ heartbeats, ``research_partial``)
+      then ``result`` with the same body as the JSON response.
+    Strict timeout → empty research_data (never hangs Drafter).
+    """
+    accept = (request.headers.get("accept") or "").lower()
+    if "text/event-stream" not in accept:
+        return await _research_job_ad_impl(payload, request)
+
+    queue: asyncio.Queue = asyncio.Queue()
+    heartbeat_s = max(
+        0.05, float(os.getenv("IMAG_RESEARCH_HEARTBEAT_S", "5") or 5)
+    )
+
+    def on_progress(event: str, data: Dict[str, Any]) -> None:
+        # Runs on the event loop (impl is async) → ordered before the result put.
+        try:
+            queue.put_nowait((event, data))
+        except Exception:
+            pass
+
+    async def produce() -> None:
+        try:
+            result = await _research_job_ad_impl(payload, request, on_progress)
+            if isinstance(result, JSONResponse):
+                try:
+                    result = json.loads(result.body.decode("utf-8")) if result.body else {}
+                except Exception:
+                    result = {"status": "error"}
+            await queue.put(("result", result))
+        except Exception as exc:
+            await queue.put(("error", {"message": str(exc)[:300]}))
+
+    async def event_stream():
+        yield (
+            "event: stage\n"
+            f"data: {json.dumps({'stage': 'researcher', 'state': 'queued'})}\n\n"
+        )
+        task = asyncio.create_task(produce())
+        t0 = time.time()
+        try:
+            while True:
+                try:
+                    kind, data = await asyncio.wait_for(queue.get(), timeout=heartbeat_s)
+                except asyncio.TimeoutError:
+                    hb = {
+                        "stage": "researcher",
+                        "state": "running",
+                        "elapsed_ms": int((time.time() - t0) * 1000),
+                    }
+                    yield f"event: stage\ndata: {json.dumps(hb)}\n\n"
+                    continue
+                yield f"event: {kind}\ndata: {json.dumps(data, default=str)}\n\n"
+                if kind in ("result", "error"):
+                    break
+        finally:
+            await task
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/analyze", dependencies=[Depends(get_api_key)])
