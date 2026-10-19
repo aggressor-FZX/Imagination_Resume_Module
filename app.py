@@ -700,7 +700,18 @@ async def _research_job_ad_impl(
         "status": status,
         "duration_ms": duration_ms,
         "forked": True,
+        "run_metrics": _research_run_metrics(llm_client),
     }
+
+
+def _research_run_metrics(llm_client: Any) -> Optional[Dict[str, Any]]:
+    """Usage for the orchestrator's cost log; never allowed to fail /research."""
+    try:
+        usage = llm_client.get_usage_stats()
+        usage["calls"] = [{**c, "stage": "researcher"} for c in usage.get("calls", [])]
+        return usage
+    except Exception:
+        return None
 
 
 @app.post("/research", dependencies=[Depends(get_api_key)])

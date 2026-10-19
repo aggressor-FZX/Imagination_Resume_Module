@@ -81,6 +81,32 @@ def test_research_sse_stage_partial_result(client):
     assert sse_body == json_body
 
 
+def test_research_returns_researcher_run_metrics(client, monkeypatch):
+    class FakeAdapter:
+        def __init__(self, **_kw):
+            pass
+
+        def get_usage_stats(self):
+            return {
+                "calls": [{"model": "m", "prompt_tokens": 12, "completion_tokens": 3}],
+                "total_prompt_tokens": 12,
+                "total_completion_tokens": 3,
+            }
+
+    monkeypatch.setattr(app_module, "LLMClientAdapter", FakeAdapter)
+    body = client.post("/research", json={"job_ad": "Data Analyst"}).json()
+    assert body["status"] == "completed"
+    assert body["run_metrics"]["calls"] == [
+        {"model": "m", "prompt_tokens": 12, "completion_tokens": 3, "stage": "researcher"}
+    ]
+
+
+def test_research_run_metrics_failure_never_breaks_research(client):
+    body = client.post("/research", json={"job_ad": "Data Analyst"}).json()
+    assert body["status"] == "completed"
+    assert body["run_metrics"] is None
+
+
 def test_research_sse_timeout_falls_back(client, monkeypatch):
     import asyncio
 
