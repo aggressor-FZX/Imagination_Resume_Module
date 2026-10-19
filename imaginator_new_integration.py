@@ -1953,13 +1953,7 @@ async def run_new_pipeline_async(
             "suggestions": [],
             "pipeline_version": "3.0",
             "pipeline_status": "completed",
-            "run_metrics": {
-                "total_prompt_tokens": 0,
-                "total_completion_tokens": 0,
-                "total_tokens": 0,
-                "estimated_cost_usd": 0.0,
-                "failures": [],
-            },
+            "run_metrics": {**llm_client.get_usage_stats(), "failures": []},
         }
 
         # Generate Career Alchemy if available
