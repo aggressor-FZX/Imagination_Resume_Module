@@ -776,6 +776,9 @@ def _compute_jd_skill_gaps(
 ) -> tuple[List[str], List[str]]:
     """Compare JD keywords against candidate skills/resume text.
 
+    GAPS-01: terms come from the job ad itself (a curated tech vocabulary matched
+    against the ad), not from a fixed data-governance list, so a Machine Learning
+    Engineer ad surfaces PyTorch/Kubernetes-style gaps instead of empty results.
     Returns (critical_gaps, nice_to_have_gaps).
     """
     if not job_ad or not job_ad.strip():
@@ -797,64 +800,59 @@ def _compute_jd_skill_gaps(
             return True
         return any(term_norm in skill or skill in term_norm for skill in candidate_norm)
 
-    # High-signal JD terms for data/governance/analytics roles
-    critical_terms = [
-        "data governance",
-        "data quality",
-        "data lineage",
-        "metadata",
-        "business glossary",
-        "data catalog",
-        "Collibra",
-        "Alation",
-        "Informatica",
-        "ETL",
-        "ELT",
-        "Airflow",
-        "Talend",
-        "dbt",
-        "Snowflake",
-        "Redshift",
-        "BigQuery",
-        "SQL",
-        "AWS",
-        "Azure",
-        "GCP",
-        "ITAR",
-        "EAR",
-        "export controls",
-        "compliance",
-        "MDM",
-        "master data",
-        "stakeholder",
-        "KPI",
-        "SLA",
+    # Curated, multi-domain vocabulary. A term is only a gap when the JOB AD
+    # itself mentions it, so the vocabulary breadth cannot fabricate gaps.
+    critical_vocab = [
+        # data governance / analytics (the original list)
+        "data governance", "data quality", "data lineage", "metadata",
+        "business glossary", "data catalog", "Collibra", "Alation",
+        "Informatica", "ETL", "ELT", "Airflow", "Talend", "dbt", "Snowflake",
+        "Redshift", "BigQuery", "SQL", "AWS", "Azure", "GCP", "ITAR", "EAR",
+        "export controls", "compliance", "MDM", "master data", "stakeholder",
+        "KPI", "SLA",
+        # ML / AI engineering
+        "PyTorch", "TensorFlow", "scikit-learn", "machine learning",
+        "deep learning", "computer vision", "NLP", "LLM", "MLOps",
+        "model deployment", "model monitoring", "feature engineering",
+        "MLflow", "Kubeflow", "SageMaker", "Vertex AI", "Triton",
+        "vector database", "Pinecone", "LangChain", "RAG",
+        "prompt engineering", "fine-tuning", "model training",
+        # data / infrastructure engineering
+        "Kubernetes", "Docker", "Spark", "Kafka", "Redis", "PostgreSQL",
+        "MongoDB", "Airflow", "Terraform", "CI/CD", "microservices",
+        "REST API", "GraphQL", "streaming", "data pipelines",
+        "data warehouse", "lakehouse", "Delta Lake", "Databricks",
+        "distributed systems", "Linux", "bash",
+        # software engineering
+        "Python", "Java", "Scala", "Go", "TypeScript", "JavaScript",
+        "React", "Node.js", "FastAPI", "Django", "Flask", "unit testing",
+        "test coverage", "code review", "agile",
     ]
-    nice_terms = [
-        "Power BI",
-        "Tableau",
-        "Python",
-        "data modeling",
-        "data steward",
-        "agile",
-        "orchestration",
-        "profiling",
-        "access control",
-        "privacy",
+    nice_vocab = [
+        "Power BI", "Tableau", "Python", "data modeling", "data steward",
+        "agile", "orchestration", "profiling", "access control", "privacy",
+        "A/B testing", "experimentation", "statistics", "Bayesian",
+        "data visualization", "storytelling", "mentoring", "technical writing",
+        "Jira", "Git", "GitHub Actions", "monitoring", "observability",
+        "Grafana", "Datadog", "cost optimization", "performance tuning",
     ]
 
     job_lower = job_ad.lower()
     critical_gaps: List[str] = []
     nice_gaps: List[str] = []
 
-    for term in critical_terms:
-        if term.lower() in job_lower and not _present(term):
+    # Terms the job ad actually mentions, in vocabulary priority order.
+    mentioned_critical = [t for t in critical_vocab if t.lower() in job_lower]
+    mentioned_nice = [t for t in nice_vocab if t.lower() in job_lower and t not in mentioned_critical]
+
+    for term in mentioned_critical:
+        if not _present(term):
             critical_gaps.append(term)
         if len(critical_gaps) >= max_gaps:
             break
 
-    for term in nice_terms:
-        if term.lower() in job_lower and not _present(term):
+    for term in mentioned_nice:
+        if not _present(term):
             nice_gaps.append(term)
         if len(nice_gaps) >= max_gaps:
             break
