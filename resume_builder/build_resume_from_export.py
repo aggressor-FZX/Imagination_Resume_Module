@@ -76,6 +76,27 @@ def sanitize_export_text(text: str) -> str:
     if not isinstance(text, str):
         text = str(text)
 
+    # EXPORT-01/DOCX-01: repair double-encoded UTF-8 ("mojibake") that was
+    # decoded as cp1252 then stored as UTF-8. The stored run-3 text contains
+    # e.g. "04/2025 â€“ Present" (U+00E2 U+0080 U+0093) where a plain en-dash
+    # was intended. This MUST run before the C1-control remap below, which
+    # would otherwise convert U+0080/U+0093 to €/" and break the sequence.
+    mojibake_repair = {
+        "\u00e2\u0080\u0093": "-",    # â€“  ← UTF-8 e2 80 93 (en dash)
+        "\u00e2\u0080\u0094": "--",  # â€"  ← UTF-8 e2 80 94 (em dash)
+        "\u00e2\u0080\u0099": "'",   # â€™  ← UTF-8 e2 80 99 (right quote)
+        "\u00e2\u0080\u0098": "'",   # â€˜  ← UTF-8 e2 80 98 (left quote)
+        "\u00e2\u0080\u009c": '"',   # â€œ  ← UTF-8 e2 80 9c (left dquote)
+        "\u00e2\u0080\u009d": '"',   # â€<9d> ← UTF-8 e2 80 9d (right dquote)
+        "\u00e2\u0080\u00a2": "-",    # â€¢  ← UTF-8 e2 80 a2 (bullet)
+        "\u00e2\u0080\u00af": "-",   # â€¯  ← UTF-8 e2 80 af (narrow nbsp → hyphen)
+        "\u00e2\u0080\u0091": "-",   # non-breaking hyphen (mojibake)
+        "\u00c2\u00a0": " ",          # Â    ← UTF-8 c2 a0 (nbsp)
+        "\u00c2\u00ad": "-",          # Â­   ← UTF-8 c2 ad (soft hyphen)
+    }
+    for original, replacement in mojibake_repair.items():
+        text = text.replace(original, replacement)
+
     # Repair C1 controls that are actually Windows-1252 bytes mislabeled as Unicode.
     # Remap only those codepoints — do not latin-1-encode the whole string (drops U+2014 etc).
     if any(0x80 <= ord(ch) <= 0x9F for ch in text):
@@ -122,6 +143,9 @@ def sanitize_export_text(text: str) -> str:
 
     # Drop remaining C0/C1 controls (keep \n \t)
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", text)
+    # Strip stray markdown section markers that merged onto content lines
+    # ("... diverse scientific audiences. ##" — from "##\n\n## Projects").
+    text = re.sub(r"\s*#{1,6}\s*$", "", text)
     return text
 
 
@@ -255,11 +279,21 @@ def format_certification_entry(entry: Any) -> str:
     return " ".join(parts) or str(entry)
 
 
+def _strip_md_markers(text: str) -> str:
+    """Remove markdown emphasis/bullet markers from a skill string.
+
+    The frontend markdown fallback can leave '**' bold markers on skill
+    lines ("** Python, Java, ** PyTorch, ..."); strip them so the rendered
+    PDF/DOCX shows clean text.
+    """
+    return text.replace("**", "").replace("*", "").strip()
+
+
 def parse_skill_groups(source: Dict[str, Any]) -> List[Tuple[str, List[str]]]:
     structured = source.get("skills")
     if isinstance(structured, list):
         if structured and all(isinstance(item, str) for item in structured):
-            return [("Skills", [item.strip() for item in structured if item.strip()])]
+            return [("Skills", [_strip_md_markers(item) for item in structured if _strip_md_markers(item)])]
         if structured and all(isinstance(item, dict) for item in structured):
             groups: List[Tuple[str, List[str]]] = []
             for entry in structured:
@@ -268,15 +302,15 @@ def parse_skill_groups(source: Dict[str, Any]) -> List[Tuple[str, List[str]]]:
                 for key in ["items", "skills", "values"]:
                     raw = entry.get(key)
                     if isinstance(raw, list):
-                        values.extend([str(item).strip() for item in raw if str(item).strip()])
+                        values.extend([_strip_md_markers(str(item)) for item in raw if _strip_md_markers(str(item))])
                 if not values:
-                    values = [str(entry.get("skill", "")).strip()] if entry.get("skill") else []
+                    values = [_strip_md_markers(str(entry.get("skill", "")))] if entry.get("skill") else []
                 groups.append((label, values))
             return groups
 
     flat = source.get("user_skills") or source.get("aggregate_skills") or source.get("skills_list")
     if isinstance(flat, list):
-        items = [str(item).strip() for item in flat if str(item).strip()]
+        items = [_strip_md_markers(str(item)) for item in flat if _strip_md_markers(str(item))]
         if items:
             return [("Skills", items)]
 
