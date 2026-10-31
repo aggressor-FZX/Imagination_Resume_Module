@@ -16,6 +16,11 @@ class ProcessingStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
+    # The pipeline produced output but verification failed: some generated
+    # claims are unsupported. Distinct from COMPLETED so a caller cannot treat
+    # an unverified draft as a finished resume, and distinct from FAILED so the
+    # user's own facts are not discarded.
+    NEEDS_REVIEW = "needs_review"
     FAILED = "failed"
 
 
@@ -367,6 +372,58 @@ class AnalysisResponse(BaseModel):
     )
     run_metrics: Optional[RunMetrics] = Field(
         None, description="Usage metrics and costs"
+    )
+    # ── Verification containment (review requirement #2) ────────────────
+    # These fields MUST be declared here. AnalysisResponse is a Pydantic model,
+    # so any key the route puts in `output` that is not declared here is
+    # SILENTLY DROPPED. Measured: metrics_support was computed correctly by the
+    # orchestrator (verdict FAIL, unsupported 87%) yet never reached the client,
+    # so a caller could not distinguish a verified resume from a fabricated one.
+    metrics_support: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Tier-A verification result: {verdict, unsupported_metrics, checked}. "
+            "verdict is 'FAIL' or 'PASS (tier A only)' — never a bare PASS, "
+            "because semantic claims are not verified."
+        ),
+    )
+    requires_review: Optional[bool] = Field(
+        None, description="True when a generated resume failed Tier-A verification"
+    )
+    review_reason: Optional[str] = Field(
+        None, description="Machine-readable reason code for the review flag"
+    )
+    # These were DROPPED by Pydantic until declared here — the same
+    # silent-filtering defect that hid metrics_support earlier. Any field the
+    # publication gate sets must be declared, or the client cannot act on it.
+    review_reasons: Optional[List[str]] = Field(
+        None, description="All machine-readable block reasons, ordered"
+    )
+    verification_coverage: Optional[str] = Field(
+        None,
+        description=(
+            "'full' | 'partial' | 'none'. 'partial' means Tier A only: numbers, "
+            "employers, dates and entity names. Semantic claims are NOT verified."
+        ),
+    )
+    entity_evidence: Optional[str] = Field(
+        None,
+        description=(
+            "'missing' | 'empty' | 'populated'. 'missing' means the route did "
+            "not supply an approved-entity list (wiring bug, blocks publication). "
+            "'empty' is a legitimate candidate with no projects."
+        ),
+    )
+    publication_receipt: Optional[str] = Field(
+        None,
+        description=(
+            "Signed approval receipt binding content fingerprint + owner. "
+            "Required by /resume/export; a caller-supplied metrics_support block "
+            "is NOT accepted as approval."
+        ),
+    )
+    review_message: Optional[str] = Field(
+        None, description="User-facing explanation shown when review is required"
     )
     processing_status: ProcessingStatus = Field(
         ProcessingStatus.COMPLETED, description="Processing status"
