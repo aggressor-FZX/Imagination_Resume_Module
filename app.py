@@ -51,6 +51,7 @@ from imaginator_flow import (
     run_synthesis_async,
 )
 from imaginator_new_integration import run_new_pipeline_async
+import publication_gate
 
 # Configure global logger for this service
 logger = configure_logging(service_name="imaginator")
@@ -393,12 +394,30 @@ async def _analyze_resume_impl(
                 )
 
             # Construct final output from analysis_result
-            output = {
-                **analysis_result,
-                "run_metrics": merged_metrics,
-                "processing_status": ProcessingStatus.COMPLETED,
-                "processing_time_seconds": time.time() - start_time,
-            }
+            #
+            # Publication decision comes from ONE module (publication_gate).
+            # Previously this logic was duplicated here and in the legacy path,
+            # and absent entirely from /api/analysis/multi-file — which is how
+            # an unverified resume was publishable from that route.
+            _decision = publication_gate.decide(
+                resume_markdown=analysis_result.get(
+                    "final_written_section_markdown"),
+                metrics_support=(analysis_result or {}).get("metrics_support"),
+                fallback_used=bool(analysis_result.get("pipeline_status")
+                                   == "failed"),
+                finish_reason=analysis_result.get("finish_reason"),
+                approved_entities=_approved_entities_from_payload(
+                    analysis_result, payload),
+            )
+            output = publication_gate.apply_to_payload(
+                {
+                    **analysis_result,
+                    "run_metrics": merged_metrics,
+                    "processing_time_seconds": time.time() - start_time,
+                },
+                _decision,
+            )
+            output = _issue_publication_receipt(output)
 
             # Fix nested domain_insights structure from upstream services (Hermes/FastSVM)
             if "domain_insights" in output and isinstance(
@@ -535,18 +554,38 @@ async def _analyze_resume_impl(
         if "suggested_experiences" not in criticism_result:
             criticism_result = {"suggested_experiences": criticism_result}
 
-        # Assemble final output
-        output = {
-            **analysis_result,  # experiences, aggregate_skills, processed_skills, domain_insights, gap_analysis, seniority_analysis
-            **criticism_result,  # suggested_experiences
-            "final_written_section": final_written_section,
-            "final_written_section_markdown": final_markdown,
-            "final_written_section_provenance": final_provenance,
-            "critique_score": critique_score,
-            "run_metrics": RUN_METRICS.copy(),
-            "processing_status": ProcessingStatus.COMPLETED,
-            "processing_time_seconds": time.time() - start_time,
-        }
+        # ── Publication decision (single authoritative gate) ─────────────
+        # Same module as the fast-track path. Migration note: this used to be a
+        # second, hand-rolled copy of the containment rules; two copies meant
+        # /api/analysis/multi-file could be forgotten — and it was.
+        _support = (analysis_result or {}).get("metrics_support") or {}
+        if not _support:
+            _support = ((analysis_result or {}).get("final_output") or {}).get(
+                "metrics_support") or {}
+
+        _decision = publication_gate.decide(
+            resume_markdown=final_markdown,
+            metrics_support=_support,
+            fallback_used=bool((analysis_result or {}).get("pipeline_status")
+                               == "failed"),
+            approved_entities=_approved_entities_from_payload(
+                analysis_result, getattr(payload, "__dict__", None)),
+        )
+
+        output = publication_gate.apply_to_payload(
+            {
+                **analysis_result,
+                **criticism_result,
+                "final_written_section": final_written_section,
+                "final_written_section_markdown": final_markdown,
+                "final_written_section_provenance": final_provenance,
+                "critique_score": critique_score,
+                "run_metrics": RUN_METRICS.copy(),
+                "processing_time_seconds": time.time() - start_time,
+            },
+            _decision,
+        )
+        output = _issue_publication_receipt(output)
 
         ## Validate output schema
         validate_output_schema(output)
@@ -714,6 +753,187 @@ def _research_run_metrics(llm_client: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _issue_publication_receipt(output, owner=None):
+    """Attach a signed approval receipt to a publishable result.
+
+    Export verifies this against the content it is about to render, so a caller
+    cannot forge `metrics_support` or edit the resume between approval and
+    export. Non-publishable results get no receipt.
+    """
+    try:
+        if not isinstance(output, dict):
+            return output
+        support = output.get("metrics_support") or {}
+        verdict = str(support.get("verdict") or "")
+        if verdict != publication_gate.Verdict.PASS_TIER_A.value:
+            output["publication_receipt"] = None
+            return output
+        md = output.get("final_written_section_markdown")
+        receipt = publication_gate.issue_receipt(
+            markdown=md, verdict=verdict, owner=owner)
+        output["publication_receipt"] = receipt
+        if receipt is None:
+            # Signing unavailable: do not claim approval we cannot vouch for.
+            output["verification_coverage"] = "none"
+            output["requires_review"] = True
+            output["review_reasons"] = list(
+                output.get("review_reasons") or []) + [
+                    "receipt_signing_unavailable"]
+        return output
+    except Exception:  # noqa: BLE001
+        if isinstance(output, dict):
+            output["publication_receipt"] = None
+        return output
+
+
+def _markdown_from_export_payload(payload):
+    """Reconstruct a comparable markdown proxy from a structured export payload.
+
+    The gate needs *text* to run its structural checks. Export payloads are
+    structured (experience/projects/education arrays). Building an equivalent
+    markdown view lets the same checks apply without a second code path.
+
+    Returns None when the payload carries no resume content at all, which the
+    gate treats as EMPTY_OUTPUT and blocks.
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    parts = []
+
+    exp = payload.get("experience") or payload.get("experiences") or []
+    if isinstance(exp, list) and exp:
+        parts.append("## Professional Experience")
+        for e in exp:
+            if not isinstance(e, dict):
+                continue
+            title = e.get("title") or e.get("role") or ""
+            company = e.get("company") or ""
+            dates = " ".join(
+                x for x in (e.get("start_date"), e.get("end_date")) if x)
+            line = " ".join(x for x in (title, company, dates) if x)
+            if line:
+                parts.append(line)
+            for b in (e.get("bullets") or []):
+                if isinstance(b, str) and b.strip():
+                    parts.append(f"- {b}")
+
+    projects = payload.get("projects") or []
+    if isinstance(projects, list) and projects:
+        parts.append("## Projects")
+        for pr in projects:
+            if not isinstance(pr, dict):
+                continue
+            nm = pr.get("title") or pr.get("name") or ""
+            if nm:
+                parts.append(f"**{nm}**")
+            for b in (pr.get("bullets") or []):
+                if isinstance(b, str) and b.strip():
+                    parts.append(f"- {b}")
+
+    edu = payload.get("education") or []
+    if isinstance(edu, list) and edu:
+        parts.append("## Education")
+        for item in edu:
+            if isinstance(item, str) and item.strip():
+                parts.append(f"- {item}")
+            elif isinstance(item, dict):
+                line = " ".join(
+                    str(v) for v in (item.get("degree"), item.get("institution"))
+                    if v)
+                if line:
+                    parts.append(f"- {line}")
+
+    certs = payload.get("certifications") or []
+    if isinstance(certs, list) and certs:
+        parts.append("## Certifications")
+        for c in certs:
+            if isinstance(c, str) and c.strip():
+                parts.append(f"- {c}")
+
+    summary = payload.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        parts.append("## Summary")
+        parts.append(summary)
+
+    return "\n".join(parts) if parts else None
+
+
+def _approved_entities_from_payload(analysis_result, payload=None):
+    """Compose the approved-entity allow-list for the publication gate.
+
+    CRITICAL: evidence must come from SOURCE / CONFIRMED CANDIDATE DATA only —
+    never from generated output.
+
+    The previous version read `result.get("projects")` / `experiences` /
+    `education` from `analysis_result`. That object contains the GENERATED
+    resume. An invented project therefore appeared in the evidence list and
+    approved itself: the editor writes "**Automated Reporting Dashboard**", the
+    allow-list is built from that same text, and the gate finds it "allowed".
+    Measured: this is exactly how entity checking could be defeated.
+
+    Sources, in order:
+      1. `payload` — what the CALLER submitted (confirmed candidate data).
+      2. `analysis_result["source_*"]` — pipeline fields that echo the source,
+         not the generation.
+      3. Nothing else. Generated projects cannot self-approve.
+
+    Returns a list (possibly empty) or None when no source data exists at all.
+    """
+    entities = []
+
+    def _add(value, keys=("name", "company", "institution", "title",
+                          "canonical_title", "school", "issuer", "degree")):
+        if not value:
+            return
+        if isinstance(value, str):
+            v = value.strip()
+            if v:
+                entities.append(v)
+        elif isinstance(value, dict):
+            for k in keys:
+                _add(value.get(k), keys)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                _add(item, keys)
+
+    saw_source = False
+
+    # ── 1. caller-supplied candidate data (authoritative) ───────────────
+    if isinstance(payload, dict):
+        for key in ("projects", "education", "certifications", "experience",
+                    "experiences", "skills"):
+            if key in payload:
+                saw_source = True
+                _add(payload.get(key))
+
+    # ── 2. explicit SOURCE echo fields on the result ────────────────────
+    # Names must indicate provenance. Anything else risks generated content.
+    if isinstance(analysis_result, dict):
+        for key in ("source_projects", "source_education",
+                    "source_certifications", "source_experiences",
+                    "source_experience", "confirmed_projects",
+                    "parsed_projects", "original_projects",
+                    "original_experiences"):
+            if key in analysis_result:
+                saw_source = True
+                _add(analysis_result.get(key))
+
+    # ── 3. de-duplicate, preserve order ─────────────────────────────────
+    seen = set()
+    out = []
+    for e in entities:
+        key = e.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(e)
+
+    # Empty list is meaningful: source data was examined and yielded nothing
+    # (a candidate with no projects). None means we never saw source data.
+    return out if saw_source else None
+
+
 @app.post("/research", dependencies=[Depends(get_api_key)])
 async def research_job_ad(
     payload: ResearchRequest,
@@ -810,9 +1030,21 @@ async def analyze_resume(
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
+    # ── SSE containment (owner item 5) ──────────────────────────────────
+    # DEFECT: token deltas were streamed to the client BEFORE verification ran,
+    # so rejected content reached the browser incrementally even when the final
+    # result event was blocked. A blocked publication must not have leaked in
+    # pieces first.
+    #
+    # Fix: buffer token deltas until the pipeline completes and the publication
+    # gate has decided. Only replay them when the result is publishable.
+    _token_buffer: list = []
+    _flush_tokens = {"allowed": False}
+
     def on_token(field: str, delta: str) -> None:
         try:
-            loop.call_soon_threadsafe(queue.put_nowait, ("token", (field, delta)))
+            loop.call_soon_threadsafe(
+                queue.put_nowait, ("token", (field, delta)))
         except Exception:
             pass
 
@@ -833,10 +1065,9 @@ async def analyze_resume(
                 kind, payload_data = await queue.get()
                 if kind == "token":
                     field, delta = payload_data
-                    yield (
-                        "event: token\n"
-                        f"data: {json.dumps({'field': field, 'delta': delta})}\n\n"
-                    )
+                    # BUFFER, do not emit. Tokens are released only after the
+                    # publication gate has approved the final result.
+                    _token_buffer.append((field, delta))
                 elif kind == "result":
                     if isinstance(payload_data, AnalysisResponse):
                         data = (
@@ -857,6 +1088,25 @@ async def analyze_resume(
                         data = payload_data
                     else:
                         data = {"result": str(payload_data)}
+
+                    # Only replay buffered deltas when this result is publishable.
+                    published = (
+                        data.get("processing_status") == "completed"
+                        and not data.get("requires_review")
+                    )
+                    if published:
+                        for field, delta in _token_buffer:
+                            yield (
+                                "event: token\n"
+                                f"data: {json.dumps({'field': field, 'delta': delta})}\n\n"
+                            )
+                    else:
+                        # Emit no tokens at all for a blocked result. The client
+                        # never sees a partial resume, so it cannot render one.
+                        yield (
+                            "event: withheld\n"
+                            f"data: {json.dumps({'reasons': data.get('review_reasons') or [], 'message': data.get('review_message')}, default=str)}\n\n"
+                        )
                     yield f"event: result\ndata: {json.dumps(data, default=str)}\n\n"
                     break
                 elif kind == "error":
@@ -1028,17 +1278,36 @@ async def analyze_multi_file(
 
         if "suggested_experiences" not in criticism_result:
             criticism_result = {"suggested_experiences": criticism_result}
-        output = {
-            **analysis_result,
-            **criticism_result,
-            "final_written_section": final_written_section,
-            "final_written_section_markdown": final_markdown,
-            "final_written_section_provenance": final_provenance,
-            "critique_score": critique_score,
-            "run_metrics": RUN_METRICS.copy(),
-            "processing_status": ProcessingStatus.COMPLETED,
-            "processing_time_seconds": time.time() - start_time,
-        }
+
+        # ── Publication decision (single authoritative gate) ─────────────
+        # DEFECT FOUND: this route had NO verification gate at all. It hard-set
+        # processing_status = COMPLETED, so a resume with invented figures was
+        # publishable here even after the /analyze path was fixed. Every route
+        # must go through publication_gate.
+        _mf_support = (analysis_result or {}).get("metrics_support") or {}
+        if not _mf_support:
+            _mf_support = ((analysis_result or {}).get("final_output")
+                           or {}).get("metrics_support") or {}
+        _mf_decision = publication_gate.decide(
+            resume_markdown=final_markdown,
+            metrics_support=_mf_support,
+            fallback_used=bool((analysis_result or {}).get("pipeline_status")
+                               == "failed"),
+            approved_entities=_approved_entities_from_payload(analysis_result),
+        )
+        output = publication_gate.apply_to_payload(
+            {
+                **analysis_result,
+                **criticism_result,
+                "final_written_section": final_written_section,
+                "final_written_section_markdown": final_markdown,
+                "final_written_section_provenance": final_provenance,
+                "critique_score": critique_score,
+                "run_metrics": RUN_METRICS.copy(),
+                "processing_time_seconds": time.time() - start_time,
+            },
+            _mf_decision,
+        )
         validate_output_schema(output)
         processing_time = time.time() - start_time
         logger.info(
@@ -1216,6 +1485,73 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
     logger.info("resume.export.request", extra={"request_id": request_id})
     
     try:
+        # ── Export containment: SERVER-AUTHORITATIVE (owner item 2) ─────
+        # Previously this read `metrics_support` out of the request body, so a
+        # caller could POST a forged
+        #   {"verdict": "PASS (tier A only)", "checked": true}
+        # alongside invented content and be approved. Client-supplied approval
+        # is not approval.
+        #
+        # Now: the caller must present the signed receipt issued by /analyze.
+        # The receipt binds the exact content fingerprint and owner, so neither
+        # a forged verdict nor edited content passes.
+        _export_markdown = (payload.get("final_written_section_markdown")
+                            or _markdown_from_export_payload(payload))
+        _receipt = payload.get("publication_receipt")
+        _owner = (payload.get("owner") or payload.get("user_id")
+                  or payload.get("email"))
+        _receipt_ok, _receipt_reason = publication_gate.verify_receipt(
+            _receipt, markdown=_export_markdown, owner=_owner)
+
+        if not _receipt_ok:
+            logger.warning(
+                "resume.export.blocked",
+                extra={"request_id": request_id, "reason": _receipt_reason},
+            )
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "publication_blocked",
+                    "reasons": [_receipt_reason],
+                    "verification_coverage": "none",
+                    "entity_evidence": "unknown",
+                    "message": (
+                        "This document has not been approved for export. Run the "
+                        "resume analysis first; only verified results can be "
+                        "exported. Your original information is preserved."
+                    ),
+                },
+            )
+
+        # Receipt verified: the content is what the server approved.
+        _export_support = payload.get("metrics_support")
+        _export_decision = publication_gate.decide(
+            resume_markdown=_export_markdown,
+            metrics_support=_export_support
+            or {"verdict": publication_gate.Verdict.PASS_TIER_A.value,
+                "checked": True},
+            approved_entities=_approved_entities_from_payload(payload, payload),
+        )
+        if _export_decision.blocked():
+            logger.warning(
+                "resume.export.blocked",
+                extra={"request_id": request_id,
+                       "reasons": _export_decision.reason_codes},
+            )
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "publication_blocked",
+                    "reasons": _export_decision.reason_codes,
+                    "verification_coverage": _export_decision.coverage,
+                    "entity_evidence": _export_decision.entity_evidence,
+                    "message": _export_decision.review_message
+                    or ("We couldn't verify some generated claims, so this "
+                        "document was not produced. Your original information "
+                        "is preserved."),
+                },
+            )
+
         from resume_builder.build_resume_from_export import build_resume_from_payload_base64
         
         job_title = payload.get("job_title") or payload.get("headline", "resume")

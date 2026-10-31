@@ -137,10 +137,22 @@ def sanitize_resume_pii(text: str) -> str:
     # Apply PII pattern replacements
     for pattern, replacement in _PII_PATTERNS:
         result = pattern.sub(replacement, result)
-    
-    # Clean up any double spaces or trailing/leading whitespace issues
-    result = re.sub(r'\s{2,}', ' ', result)
-    
+
+    # Collapse runs of HORIZONTAL whitespace only.
+    #
+    # R-1 fix (2026-10-30): the previous pattern was r'\s{2,}' which matches
+    # '\n' as well as spaces/tabs. That flattened the whole document — blank
+    # lines and the newline before every section header were replaced by a
+    # single space, so the line-based parse_experiences() downstream saw
+    # "…PROFESSIONAL EXPERIENCE Cascade Power Solutions…" as one line.
+    # Measured: a 10-line resume became 5 lines (evidence C4).
+    #
+    # [^\S\n] = "whitespace that is not a newline", so line structure is kept.
+    result = re.sub(r'[^\S\n]{2,}', ' ', result)
+
+    # Strip trailing spaces per line without touching the line breaks.
+    result = '\n'.join(line.rstrip() for line in result.split('\n'))
+
     return result.strip()
 
 
@@ -1931,6 +1943,22 @@ async def run_new_pipeline_async(
             ),
             "final_written_section": final_output.get("final_written_section", ""),
             "editorial_notes": final_output.get("editorial_notes", ""),
+            # Verification containment (review requirement #2): surface the
+            # truth verdict through THIS path too. Measured: /analyze returns
+            # via run_new_pipeline_async, and without this the response carried
+            # no metrics_support key at all — so a caller could not tell a
+            # verified resume from one with invented numbers.
+            "metrics_support": final_output.get("metrics_support") or {},
+            "requires_review": (
+                (final_output.get("metrics_support") or {}).get("verdict")
+                == "FAIL"
+            ),
+            "review_message": (
+                "We couldn't verify some generated claims. Your original "
+                "information is preserved; this draft needs review."
+                if (final_output.get("metrics_support") or {}).get("verdict")
+                == "FAIL" else None
+            ),
             "seniority_level": final_output.get("seniority_level", "mid"),
             "critique_score": critique_score,
             "extracted_job_title": extracted_job_title,

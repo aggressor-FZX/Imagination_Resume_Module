@@ -468,7 +468,33 @@ class PipelineOrchestrator:
                         "quantification_analysis": editor_data.get(
                             "quantification_check", {}
                         ),
-                        "hallucination_checked": not editor_data.get("fallback", False),
+                        # REMOVED (milestone 6): "hallucination_checked" was
+                        # set to `not fallback` — it recorded that the editor
+                        # did not crash, NOT that claims were verified. A
+                        # success-shaped flag that lied is worse than no flag.
+                        # The truthful signal is metrics_support.checked.
+                        # Phase 2: surface Tier-A reporting so the metrics check
+                        # is CONSUMED rather than inert. Until this was plumbed,
+                        # _validate_metrics_against_input reported violations
+                        # into an object nobody read.
+                        #
+                        # verdict is deliberately qualified: only numeric,
+                        # employer and date claims are checked deterministically.
+                        # Semantic claims (invented technology, invented
+                        # activity) are NOT verified — hence "tier A only".
+                        "metrics_support": {
+                            "verdict": (
+                                "FAIL"
+                                if editor_data.get("unsupported_metrics")
+                                else "PASS (tier A only)"
+                            ),
+                            "unsupported_metrics": editor_data.get(
+                                "unsupported_metrics", []
+                            ),
+                            "checked": bool(
+                                editor_data.get("metrics_support_checked")
+                            ),
+                        },
                     },
                     "metrics": {
                         "total_duration_seconds": total_duration,
@@ -557,7 +583,12 @@ class PipelineOrchestrator:
                 "quantification_score": 0,
                 "needs_improvement": True,
             },
-            "hallucination_checked": True,
+            # REMOVED (milestone 6): "hallucination_checked": True was asserted
+            # on the EMERGENCY FALLBACK path, where no verification ran at all.
+            # A success-shaped flag on an error path is exactly the class of
+            # misleading completion signal this milestone targets. The
+            # publication gate blocks this output because metrics_support is
+            # absent, which is the correct fail-closed behaviour.
             "emergency_fallback": True,
         }
 
