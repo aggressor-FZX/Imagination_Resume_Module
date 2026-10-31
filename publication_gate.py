@@ -603,8 +603,8 @@ def render_content_violations(
 
     Three checks, in order of specificity:
 
-      1. BLOCK BINDING — every career block (employer, project) must hash to a
-         block that was approved. This is what catches REASSIGNMENT: moving an
+        1. BLOCK BINDING — uniquely scoped claims within a career block must not
+            span different approved blocks. This catches some REASSIGNMENT: moving an
          approved bullet to another employer, moving a project into employment,
          or restating a role's dates keeps every string approved while changing
          which block it belongs to.
@@ -613,8 +613,9 @@ def render_content_violations(
       3. identity claims — a populated headline / top-level location must appear
          in the approved document (narrowed exemption).
 
-    Blocks are compared as a MULTISET so that deleting a required achievement
-    changes the block hash, while reordering approved bullets does not.
+    Career achievements are also checked for preservation. This is not a
+    canonical-object equality check: ambiguous/shared claims and rearrangements
+    inside one approved block remain known limits.
     """
     if not isinstance(payload, dict):
         return [{"field": "*", "text": "", "reason": "payload_not_structured"}]
@@ -848,10 +849,14 @@ def approved_segments(markdown: Optional[str]) -> List[Dict[str, Any]]:
 
     segments: List[Dict[str, Any]] = []
     current = {"heading": "", "claims": set(), "bullets": [],
-               "is_block": False}
+               "is_block": False, "section": None}
+    section = None
 
     def flush():
         if current["heading"] or current["claims"]:
+            # Joined wrapped bullets must scope together, not only as fragments.
+            for bullet in current["bullets"]:
+                current["claims"] |= _text_claims(bullet)
             segments.append(dict(current))
 
     for raw in text.splitlines():
@@ -865,13 +870,21 @@ def approved_segments(markdown: Optional[str]) -> List[Dict[str, Any]]:
         is_bold_block = _is_block_heading(line)
         is_section_label = _squash(heading) in _SECTION_LABELS
 
-        if is_markdown_heading or is_bold_block:
+        if is_markdown_heading or is_bold_block or is_section_label:
             flush()
+            if is_section_label:
+                label = _squash(heading)
+                section = ("experience" if label in {
+                    "professionalexperience", "workexperience",
+                    "employmentexperience", "experience", "relevantexperience",
+                    "careerhistory",
+                } else "project" if label == "projects" else "other")
             current = {
                 "heading": heading,
                 "claims": _text_claims(heading),
                 "bullets": [],
                 "is_block": not is_section_label,
+                "section": section,
             }
         else:
             if not current["heading"]:
@@ -890,8 +903,7 @@ def approved_segments(markdown: Optional[str]) -> List[Dict[str, Any]]:
             if starts_bullet:
                 current["bullets"].append("")
             if current["bullets"]:
-                current["bullets"][-1] += line
-                current["open_bullet"] = True
+                current["bullets"][-1] += " " + line
             elif claims - {c for c in claims if c.startswith("date:")}:
                 current["bullets"].append(line)
 
@@ -914,7 +926,10 @@ def _is_block_heading(line: str) -> bool:
     NB: do not strip '*' before testing — `**` IS the marker. Only a leading
     bullet marker ("- ", "• ") may be removed first.
     """
-    stripped = re.sub(r'^[-•·▪▸]\s+', '', line.strip()).strip()
+    # Bold emphasis inside a bullet is body text, NEVER an employer boundary.
+    if re.match(r'^[-•·▪▸*]\s+', line.strip()):
+        return False
+    stripped = line.strip()
     return stripped.startswith("**") and stripped.count("**") >= 2
 
 
@@ -966,6 +981,13 @@ def _block_binding_violations(payload: Any, markdown: Optional[str],
         return []
     blocks = [i for i, seg in enumerate(segments) if seg.get("is_block")]
     violations: List[Dict[str, str]] = []
+    for seg in segments:
+        if (seg.get("section") in {"experience", "project"}
+                and not seg.get("is_block") and seg.get("bullets")):
+            # An unrecognised heading must not collapse all employers into one
+            # section-wide scope and silently turn this guard off.
+            violations.append({"field": seg["section"], "text": "",
+                               "reason": "career_segmentation_ambiguous"})
     for group in _block_claim_groups(payload):
         scopes = set()
         for token in group["claims"]:
@@ -996,13 +1018,10 @@ def _preservation_violations(payload: Any,
     payload renders. Headings, dates and section labels are excluded because a
     legitimate export may legitimately re-derive them.
 
-    The check is skipped when the payload renders NO structured blocks at all
-    (the renderer falls back to the approved markdown, so nothing is lost) and
-    when the approved document yielded no bullets to preserve.
+    Only named non-career sections are exempt. Missing all blocks or deleting
+    an entire employer is NOT evidence that the renderer preserves the Markdown.
     """
     groups = _block_claim_groups(payload)
-    if not groups:
-        return []          # renderer will use the approved markdown verbatim
 
     # Containment, not set equality. The live analysis route emits
     # `experiences[]` entries whose `snippet` concatenates whole sections, so a
@@ -1014,18 +1033,14 @@ def _preservation_violations(payload: Any,
         c for group in groups for c in group["claims"] if not c.startswith("date:")
     )
 
-    # Only blocks that HAVE a rendered counterpart can be checked for omission.
-    # Education is rendered from a flat string list, not as bullet sections, so
-    # its degree line is not an "achievement" this promise covers and demanding
-    # it here would block every honest export.
-    rendered_claims = {c for g in groups for c in g["claims"]}
-
     approved_bullets = []
     for seg in segments:
-        if not seg.get("is_block"):
+        # The exemption is based on SECTION TYPE, not surviving overlap. A
+        # deleted employer/project (including every bullet) is still required.
+        # Education/certifications render as flat entries, not career bullets.
+        if not seg.get("is_block") or seg.get("section") not in {
+                "experience", "project"}:
             continue
-        if not any(c in rendered_claims for c in seg["claims"]):
-            continue       # this approved block is not rendered as a section
         for bullet in seg.get("bullets") or []:
             squashed = _squash(bullet)
             if len(squashed) >= _MIN_CLAIM_CHARS:
