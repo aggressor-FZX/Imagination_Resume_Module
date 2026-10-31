@@ -20,9 +20,19 @@ class Settings(BaseSettings):
     - Nested configuration support
     """
 
-    # Required API Keys - using OpenRouter only
-    openrouter_api_key_1: str
-    openrouter_api_key_2: str
+    # API keys.
+    #
+    # Phase 1 item 1.7 (2026-10-30): these were `str` with no default, so
+    # importing this module — and therefore collecting ANY test in the package —
+    # raised a pydantic ValidationError unless both keys were set. That made the
+    # test suite unrunnable in CI and on a clean checkout (evidence C0: 14 tests
+    # collected, 4 modules errored).
+    #
+    # Tests must be able to run with NO real credentials (SPEC.v2 §13 N-6).
+    # Validation that a key exists belongs at the point of use — where an
+    # outbound call is actually made — not at import time.
+    openrouter_api_key_1: Optional[str] = None
+    openrouter_api_key_2: Optional[str] = None
 
     # Optional Context7 API Key for documentation
     context7_api_key: Optional[str] = None
@@ -53,7 +63,10 @@ class Settings(BaseSettings):
     cors_allow_headers: list[str] = ["*"]
 
     # Security
-    IMAGINATOR_AUTH_TOKEN: str
+    # Phase 1 item 1.7: optional at import so the test suite can collect with no
+    # credentials. The auth dependency rejects requests when this is unset, so
+    # production behaviour is unchanged.
+    IMAGINATOR_AUTH_TOKEN: Optional[str] = None
 
     # Feature Flags
     ENABLE_LOADER: bool = False

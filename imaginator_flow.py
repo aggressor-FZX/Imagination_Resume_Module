@@ -622,6 +622,29 @@ _ROLE_MAP = {
 }
 
 
+def _looks_like_role(text: str) -> bool:
+    """Heuristic: does this pipe-field look like a job title rather than a company?
+
+    Used by the single-pipe header parser (R-7 fix) to decide whether the first
+    field is a role (\"Data Scientist | Cogito Metric | 2020 - 2022\") or a
+    company (\"Cascade Power Solutions, LLC - Tacoma, WA | March 2020 - Present\").
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    # A company marker disqualifies the role reading.
+    if re.search(r'\b(llc|inc|corp|ltd|co\.|company|incorporated|gmbh|plc)\b', lowered):
+        return False
+    return bool(re.search(
+        r'\b(engineer|developer|analyst|scientist|manager|director|officer|'
+        r'physicist|researcher|consultant|specialist|coordinator|technician|'
+        r'associate|intern|lead|architect|designer|administrator|electrician|'
+        r'planner|supervisor|president|founder|contractor|assistant|clerk|'
+        r'accountant|nurse|teacher|instructor|representative|agent)\b',
+        lowered,
+    ))
+
+
 def _parse_title_line_to_company_role(title_line: str) ->tuple:
     """
     Split a title_line into (role, company, date_range) components.
@@ -659,24 +682,74 @@ def _parse_title_line_to_company_role(title_line: str) ->tuple:
         return (role, company, date_range)
     
     # Format 1b: "Role — Company" (single em-dash or en-dash separator)
-    # Only try if there's exactly one em-dash/en-dash and no hyphens
-    em_match = re.split(r'\s*[—–]\s+', title_line, maxsplit=1)
-    if len(em_match) == 2 and bool(em_match[0].strip()) and bool(em_match[1].strip()):
-        # Verify the em-dash was acting as a separator (not a hyphenated compound word)
-        # A valid separator split should have both parts >= 3 chars and the right side
-        # should not start with a lowercase word (which would indicate hyphenation)
-        left, right = em_match[0].strip(), em_match[1].strip()
-        if len(left) >= 3 and len(right) >= 3 and not right[0].islower():
-            role = left
-            company = right
-            return (role, company, date_range)
+    #
+    # R-7 fix (2026-10-30): this only applies when there is NO pipe separator.
+    # Real headers are "Company, LLC — City, ST | March 2020 – Present", where
+    # splitting on the em-dash yields company="City, ST | March 2020 – Present"
+    # and loses the employer entirely. Pipes take precedence over dashes.
+    if "|" not in title_line:
+        em_match = re.split(r'\s*[—–]\s+', title_line, maxsplit=1)
+        if len(em_match) == 2 and bool(em_match[0].strip()) and bool(em_match[1].strip()):
+            # Verify the em-dash was acting as a separator (not a hyphenated compound word)
+            # A valid separator split should have both parts >= 3 chars and the right side
+            # should not start with a lowercase word (which would indicate hyphenation)
+            left, right = em_match[0].strip(), em_match[1].strip()
+            # Do not treat a date range as the company.
+            if (len(left) >= 3 and len(right) >= 3 and not right[0].islower()
+                    and not re.search(r'\b(?:19|20)\d{2}\b', right)
+                    and not re.search(r'\b(?:present|current|ongoing)\b', right,
+                                      re.IGNORECASE)):
+                role = left
+                company = right
+                return (role, company, date_range)
     
     # Format 2: "Role | Company" or "Role | Company |"
+    #
+    # R-7 fix (2026-10-30): only accept this reading when the second field is
+    # NOT a date range. Real headers look like
+    #   "Cascade Power Solutions, LLC - Tacoma, WA | March 2020 - Present"
+    # and the previous code assigned company="March 2020 - Present" while
+    # treating the whole employer line as the role. Date-shaped tails are
+    # handled by Format 2b below instead.
     pipe_split = re.split(r'\s*\|\s*', title_line.strip().rstrip('|').strip())
-    if len(pipe_split) == 2 and bool(pipe_split[0].strip()) and bool(pipe_split[1].strip()):
+
+    def _is_date_field(value: str) -> bool:
+        return bool(
+            re.search(r'\b(?:19|20)\d{2}\b', value)
+            or re.search(r'\b(?:present|current|ongoing)\b', value, re.IGNORECASE)
+        )
+
+    if (len(pipe_split) == 2 and bool(pipe_split[0].strip())
+            and bool(pipe_split[1].strip()) and not _is_date_field(pipe_split[1])):
         role = pipe_split[0].strip()
         company = pipe_split[1].strip()
         return (role, company, date_range)
+
+    # Format 2b (R-7 fix, 2026-10-30): "Company, LLC - City, ST | March 2020 -
+    # Present". This is the most common real-world header shape: the LAST pipe
+    # field is a date range, and the fields before it are company/location. The
+    # previous code only handled the 2-field "Role | Company" case, so these
+    # lines produced no company at all.
+    if len(pipe_split) >= 2:
+        tail = pipe_split[-1].strip()
+        if re.search(r'\b(?:19|20)\d{2}\b', tail) or re.search(
+            r'\b(?:present|current|ongoing)\b', tail, re.IGNORECASE
+        ):
+            if not date_range:
+                date_range = tail
+            head_fields = [f.strip() for f in pipe_split[:-1] if f.strip()]
+            if head_fields:
+                head = " | ".join(head_fields)
+                # "Company - City, ST" -> company
+                comp_city = re.split(r'\s+[-–—]\s+', head, maxsplit=1)
+                company = comp_city[0].strip()
+                # Recover a role if the first field looks like one.
+                role_candidate = head_fields[0]
+                if _looks_like_role(role_candidate):
+                    role = role_candidate
+                    if len(head_fields) > 1:
+                        company = head_fields[1]
+                return (role, company, date_range)
     
     # Format 3: "Title (Company Inc)" — extract company from parentheses
     paren_match = re.match(
@@ -705,6 +778,34 @@ def _parse_title_line_to_company_role(title_line: str) ->tuple:
     
     # Fallback: entire line is the role
     return (title_line.strip(), "", date_range)
+
+
+def _normalize_ligatures(text: str) -> str:
+    """Repair PDF typographic ligatures (R-7).
+
+    PDF text extraction commonly yields U+FB01 'ﬁ' and friends, so a company
+    name reads "Paci\uFB01c Northwest" instead of "Pacific Northwest". Two
+    strings that a human sees as identical then fail to match, which silently
+    breaks employer-preservation checks and any downstream exact comparison.
+
+    NFKC folds ligatures, but it would also rewrite other typography, so the
+    handful of ligatures that actually appear in extracted resumes are mapped
+    explicitly.
+    """
+    if not text:
+        return text
+    table = {
+        "\ufb00": "ff", "\ufb01": "fi", "\ufb02": "fl",
+        "\ufb03": "ffi", "\ufb04": "ffl", "\ufb05": "st",
+        # Dashes are deliberately NOT folded: date ranges keep their
+        # typographic en-dash for display ("March 2020 – Present").
+        "\u00a0": " ", "\u2007": " ", "\u202f": " ",
+        "\u00ad": "", "\u200b": "", "\ufeff": "",
+    }
+    for bad, good in table.items():
+        if bad in text:
+            text = text.replace(bad, good)
+    return text
 
 
 def parse_experiences(text: str) -> List[Dict]:
@@ -740,6 +841,13 @@ def parse_experiences(text: str) -> List[Dict]:
         r'force|navy|army|air\s*force|marine|noaa|nasa|department|office|group|team|'
         r'services|solutions|technologies|college|club|research)\)|'  # Company in parens
         r'.*\|.*\|'  # Pipe separators (header lines)
+        # R-7 fix (2026-10-30): a SINGLE pipe plus a year is also a header.
+        # Real resumes overwhelmingly use "Company, LLC - City, ST | March 2020
+        # - Present" — one pipe, no role keyword. The previous pattern required
+        # TWO pipes or a role keyword, so these lines were never recognised as
+        # job titles and whole employment blocks were dropped (measured: 0
+        # blocks returned for a valid electrician resume).
+        r'|.*\|.*\b(?:19|20)\d{2}\b'
         r'|'
         r'(?:'
         r'\b(?:senior|junior|lead|principal|staff|chief|head|director|manager|engineer|'
@@ -784,8 +892,10 @@ def parse_experiences(text: str) -> List[Dict]:
     # File separator pattern (frontend combines files with ---)
     file_separator_pattern = re.compile(r'^-{3,}$')
     
-    # Split into lines and process
-    lines = text.split('\n')
+    # Split into lines and process.
+    # R-7 fix: repair PDF ligatures before line splitting so "Paciﬁ c" and
+    # "Pacific" compare equal downstream.
+    lines = _normalize_ligatures(text).split('\n')
     
     experiences = []
     current_exp = None
@@ -806,10 +916,25 @@ def parse_experiences(text: str) -> List[Dict]:
             continue
         
         line_lower = line.lower()
-        
-        # Check for section headers
-        is_section_header = any(line_lower == s or line_lower.startswith(s + ' ') or 
-                                line_lower.startswith(s + ':') for s in skip_sections)
+
+        # Check for section headers.
+        #
+        # R-7 fix (2026-10-30): a wrapped PROSE line that merely starts with a
+        # section word is not a header. In the electrician fixture the summary
+        # sentence "projects on time and within budget while adhering to ..."
+        # matched "projects" and flipped the parser into skip mode, which
+        # discarded the entire first employment block.
+        # A real header is short and does not read like a sentence.
+        _is_header_shaped = (
+            len(line) <= 40
+            and line.count(' ') <= 5
+            and not line.rstrip().endswith(('.', ',', ';', ':'))
+        )
+        is_section_header = _is_header_shaped and any(
+            line_lower == s or line_lower.startswith(s + ' ') or
+            line_lower.startswith(s + ':')
+            for s in skip_sections
+        )
         
         if is_section_header:
             # If we hit "professional experience" or "work experience", start capturing
@@ -842,6 +967,40 @@ def parse_experiences(text: str) -> List[Dict]:
             not location_date_pattern.match(line) and
             not education_pattern.match(line)
         )
+        # R-7 fix: an employer header with a date range is a job-title
+        # equivalent even when it carries no role keyword (see below).
+        if not is_job_title:
+            is_job_title = bool(
+                re.search(r'\b(llc|inc|corp|ltd|co\.|company|incorporated|gmbh|plc|'
+                          r'university|hospital|institute|foundation|group|solutions|'
+                          r'services|systems|technologies)\b', line, re.IGNORECASE)
+                and re.search(r'\b(?:19|20)\d{2}\b|\b(?:present|current|ongoing)\b',
+                              line, re.IGNORECASE)
+                and not bullet_pattern.match(line)
+            )
+        # R-7 fix: a role keyword alone is not enough. A wrapped BULLET that
+        # begins with a verb also used as a title ("Lead a crew of 2-3
+        # apprentices on multi-building retail center buildouts, coordinating
+        # daily") was being promoted to a job title, creating a phantom
+        # experience block with an empty company. A genuine header is short.
+        # Only demote lines that have no date range and no pipe — those are
+        # still handled by the employer-header branch above.
+        if is_job_title and not (
+            re.search(r'\b(?:19|20)\d{2}\b', line)
+            or '|' in line
+        ):
+            _words = line.split()
+            _looks_like_prose = (
+                len(_words) > 8
+                or len(line) > 70
+                or line.rstrip().endswith(('.', ',', ';'))
+                or bool(re.match(
+                    r'^(?:lead|led|manage|managed|build|built|develop|developed|'
+                    r'design|designed|create|created|conduct|conducted)\b',
+                    line, re.IGNORECASE))
+            )
+            if _looks_like_prose:
+                is_job_title = False
         
         # Check if this is a location/date line
         is_location = location_date_pattern.match(line)
@@ -850,7 +1009,21 @@ def parse_experiences(text: str) -> List[Dict]:
         is_bullet = bullet_pattern.match(line)
         
         if is_job_title:
-            if not is_valid_extracted_job_title(line):
+            # R-7 fix (2026-10-30): a header may be an EMPLOYER line without a
+            # job-title token, e.g. "Cascade Power Solutions, LLC - Tacoma, WA
+            # | March 2020 - Present". The old code required a role keyword, so
+            # these valid employment blocks were appended to the PREVIOUS block
+            # as loose lines (or dropped entirely if there was no previous
+            # block). Accept the line when it carries a company marker AND a
+            # date range.
+            _employer_header = (
+                re.search(r'\b(llc|inc|corp|ltd|co\.|company|incorporated|gmbh|plc|'
+                          r'university|hospital|institute|foundation|group|solutions|'
+                          r'services|systems|technologies)\b', line, re.IGNORECASE)
+                and re.search(r'\b(?:19|20)\d{2}\b|\b(?:present|current|ongoing)\b',
+                              line, re.IGNORECASE)
+            )
+            if not is_valid_extracted_job_title(line) and not _employer_header:
                 if current_exp and current_exp.get('lines'):
                     current_exp['lines'].append(line)
                 continue
