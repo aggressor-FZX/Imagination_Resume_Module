@@ -8,6 +8,8 @@ cost tracking, and quality assurance.
 import asyncio
 import gc
 import logging
+import math
+import os
 import time
 import re
 from typing import Callable, Dict, Any, Optional, List
@@ -24,6 +26,19 @@ from pipeline_config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def stage_cooldown_seconds() -> float:
+    """Production memory-reclamation pause; configurable without patching asyncio.
+
+    Invalid, negative or non-finite settings retain the protective 1.5s default.
+    Offline tests explicitly set STAGE_COOLDOWN_SECONDS=0 in their own process.
+    """
+    try:
+        value = float(os.environ.get("STAGE_COOLDOWN_SECONDS", "1.5"))
+    except (TypeError, ValueError):
+        return 1.5
+    return value if math.isfinite(value) and value >= 0 else 1.5
 
 # ============================================================================
 # ORCHESTRATOR CLASS
@@ -234,7 +249,7 @@ class PipelineOrchestrator:
                 # response is the heaviest object (held transiently in the adapter).
                 # Force GC, then pause to let the OS reclaim memory before Stage 2.
                 gc.collect()
-                await asyncio.sleep(1.5)  # 1.5s cooldown — memory peaks right after a stage returns
+                await asyncio.sleep(stage_cooldown_seconds())
 
             logger.info(f"[ORCHESTRATOR] Stage 1 completed in {stage1_duration:.2f}s")
             logger.info(
@@ -327,7 +342,7 @@ class PipelineOrchestrator:
             # response_format). The raw response is held transiently in the
             # adapter — force GC and pause to let the OS reclaim before Stage 3.
             gc.collect()
-            await asyncio.sleep(1.5)  # 1.5s cooldown
+            await asyncio.sleep(stage_cooldown_seconds())
 
             # STAGE 3: STAR EDITOR - Polish into final resume
             stage3_start = time.time()
@@ -387,7 +402,7 @@ class PipelineOrchestrator:
             # markdown string. Force GC, then pause to let the OS reclaim
             # before Stage 4 metadata analysis.
             gc.collect()
-            await asyncio.sleep(1.5)  # 1.5s cooldown
+            await asyncio.sleep(stage_cooldown_seconds())
 
             # STAGE 4: METADATA & ANALYSIS (Seniority + Skills)
             # Aggregate skills ONLY from user's actual resume experiences
