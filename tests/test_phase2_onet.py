@@ -1,41 +1,15 @@
 
-import asyncio
 import logging
-import sys
-import os
 import pytest
-from dotenv import load_dotenv
-
-# Load all real secrets from the primary workspace secret file
-base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-shared_env_path = os.path.join(base_dir, ".env_shared_secrets")
-load_dotenv(shared_env_path)
-
-# Add the current directory to sys.path to import local modules
-sys.path.append(os.getcwd())
-
-from imaginator_new_integration import _resolve_onet_code, run_new_pipeline_async
-from models import AnalysisRequest
-from llm_client_adapter import LLMClientAdapter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Phase 2: these two tests are explicitly live-network checks — they say
-# "REAL API CHECK" in their own log lines and require OpenRouter credentials
-# plus the O*NET API. They cannot pass in the offline gate (SPEC.v2 §13 N-1).
-# Marking them makes the suite an honest pass/fail signal instead of reporting
-# a permanent, expected red that hides real regressions.
-_live_requires_credentials = pytest.mark.skipif(
-    not os.getenv("OPENROUTER_API_KEY_1") or
-    os.getenv("OPENROUTER_API_KEY_1", "").startswith("rctb-") or
-    os.getenv("OPENROUTER_API_KEY_1", "") in ("d", "test-dummy-key-1"),
-    reason="live network/credential test — excluded from the offline gate",
-)
+@pytest.mark.live
+async def test_onet_passthrough(live_credentials):
+    from imaginator_new_integration import _resolve_onet_code
+    from llm_client_adapter import LLMClientAdapter
 
-
-@_live_requires_credentials
-async def test_onet_passthrough():
     logger.info("Testing O*NET Passthrough Logic (REAL API CHECK)...")
     
     # Test 1: Direct passthrough (Verification of upstream code)
@@ -50,8 +24,8 @@ async def test_onet_passthrough():
     # This hits the live O*NET API and LLM resolver
     
     # Initialize real LLM client for O*NET semantic mapping
-    api_key_1 = os.getenv("OPENROUTER_API_KEY_1")
-    api_key_2 = os.getenv("OPENROUTER_API_KEY_2")
+    api_key_1 = live_credentials["OPENROUTER_API_KEY_1"]
+    api_key_2 = live_credentials["OPENROUTER_API_KEY_2"]
     
     llm_client = LLMClientAdapter(
         api_key=api_key_1,
@@ -66,14 +40,16 @@ async def test_onet_passthrough():
     assert resolved_real["code"].startswith("15-") # Cloud/Software is usually 15-
     assert resolved_real["source"] in ["llm", "llm_validated", "keyword_scored"]
 
-@_live_requires_credentials
-async def test_pipeline_real_integration():
+@pytest.mark.live
+async def test_pipeline_real_integration(live_credentials):
+    from imaginator_new_integration import run_new_pipeline_async
+
     logger.info("Testing REAL Pipeline Integration (End-to-End Trace)...")
     
     resume_text = "Experienced Senior Software Engineer with 10 years of Python, AWS, and Kubernetes experience. Managed teams of 5 and delivered mission-critical fintech APIs."
     job_ad = "Looking for a Lead Software Engineer to refactor our legacy Go and Python microservices. Must have high-load experience and AWS expertise."
     
-    api_keys = [os.getenv("OPENROUTER_API_KEY_1"), os.getenv("OPENROUTER_API_KEY_2")]
+    api_keys = [live_credentials["OPENROUTER_API_KEY_1"], live_credentials["OPENROUTER_API_KEY_2"]]
     api_keys = [k for k in api_keys if k]
     
     # Use real Golden Bullets for style transfer check
@@ -103,7 +79,4 @@ async def test_pipeline_real_integration():
         raise e
 
 if __name__ == "__main__":
-    import sys
-    # To save tokens/time, we can run selectively or all
-    asyncio.run(test_onet_passthrough())
-    asyncio.run(test_pipeline_real_integration())
+    raise SystemExit("Use pytest --run-live with explicit environment credentials.")

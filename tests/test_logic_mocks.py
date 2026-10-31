@@ -100,10 +100,12 @@ async def test_drafter_quality_gate_retry(mock_llm_client):
     )
 
 @pytest.mark.asyncio
-async def test_onet_passthrough_logic(mock_llm_client):
+@pytest.mark.live
+async def test_onet_passthrough_logic(mock_llm_client, live_credentials):
     """
     Verify that if onet_code is provided, we don't hit the LLM resolver for it.
-    This requires inspecting the integration layer.
+    The integration layer constructs its own real client; the mock fixture does
+    not intercept it, so this is a live test rather than an offline unit test.
     """
     from imaginator_new_integration import run_new_pipeline_async
     
@@ -114,8 +116,9 @@ async def test_onet_passthrough_logic(mock_llm_client):
         resume_text="Resume",
         job_ad="Job",
         onet_code="15-1252.00",
-        openrouter_api_keys=["key"],
-        # Mocking the internal adapter creation or passing it if possible
+        openrouter_api_keys=[
+            live_credentials[name]
+            for name in ("OPENROUTER_API_KEY_1", "OPENROUTER_API_KEY_2")
+            if live_credentials[name]
+        ],
     )
-    # This test is a bit complex due to internal adapter creation, 
-    # but we've already patched the code to handle it.
