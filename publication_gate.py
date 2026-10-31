@@ -290,6 +290,12 @@ def apply_to_payload(payload: Dict[str, Any],
             if f in out:
                 out[f] = None
         out["final_written_section_provenance"] = []
+        # Diagnostics must not re-publish what was withheld. `metrics_support`
+        # carries `unsupported_metrics`, whose `surface` field is literally the
+        # rejected claim ("87%"). Leaving it intact means a blocked response
+        # still ships the invented figure in a side channel — the client was
+        # measured reconstructing text from exactly such fields.
+        out["metrics_support"] = _redact_metric_surfaces(out.get("metrics_support"))
         # Belt-and-braces against reconstruction: a blocked payload must not
         # carry the generated text inside ANY nested object either, because a
         # client extractor may walk nested fields (measured: the frontend
@@ -302,6 +308,32 @@ def apply_to_payload(payload: Dict[str, Any],
                 for sub in DELIVERABLE_FIELDS:
                     if sub in val:
                         val[sub] = None
+        if isinstance(out.get("final_output"), dict):
+            out["final_output"]["metrics_support"] = (
+                _redact_metric_surfaces(out["final_output"].get("metrics_support")))
+    return out
+
+
+def _redact_metric_surfaces(support: Any) -> Any:
+    """Drop the literal claim text from a blocked result's diagnostics.
+
+    Keeps the machine-readable shape (value/unit/reason) so an operator can still
+    see WHAT kind of violation occurred, but not the prose that was withheld.
+    """
+    if not isinstance(support, dict):
+        return support
+    out = dict(support)
+    unsupported = out.get("unsupported_metrics")
+    if isinstance(unsupported, list):
+        redacted = []
+        for item in unsupported:
+            if isinstance(item, dict):
+                kept = {k: v for k, v in item.items() if k != "surface"}
+                kept["redacted"] = True
+                redacted.append(kept)
+            else:
+                redacted.append({"redacted": True})
+        out["unsupported_metrics"] = redacted
     return out
 
 
@@ -323,13 +355,27 @@ def apply_to_payload(payload: Dict[str, Any],
 
 RECEIPT_TTL_SECONDS = 60 * 30
 
+# Receipt wire version. Bump when the payload shape or signing scheme changes.
+# A verifier that does not recognise the version rejects rather than guesses:
+# an unknown version may mean a field it needs is absent, and "verify what you
+# understand, reject the rest" is the only fail-closed option.
+RECEIPT_VERSION = 1
+_SUPPORTED_RECEIPT_VERSIONS = frozenset({RECEIPT_VERSION})
+
 
 def _receipt_secret() -> Optional[bytes]:
-    """Signing key. Absent => receipts unavailable => export fails closed."""
-    for var in ("PUBLICATION_RECEIPT_SECRET", "IMAGINATOR_AUTH_TOKEN"):
-        val = os.environ.get(var)
-        if val and len(val) >= 16:
-            return val.encode()
+    """Signing key. Absent => receipts unavailable => export fails closed.
+
+    Dedicated secret only (owner item 4). This previously fell back to
+    `IMAGINATOR_AUTH_TOKEN` — the shared bearer token used for request auth.
+    Reusing it means anyone who learns the request token can also MINT approval
+    receipts, so auth leakage silently becomes approval forgery. An approval key
+    must be distinct from an access key. If it is unset, no receipt can be
+    issued, and export fails closed instead of borrowing a weaker credential.
+    """
+    val = os.environ.get("PUBLICATION_RECEIPT_SECRET")
+    if val and len(val) >= 16:
+        return val.encode()
     return None
 
 
@@ -344,35 +390,286 @@ def content_fingerprint(markdown: Optional[str]) -> str:
     return hashlib.sha256(normalised.encode("utf-8")).hexdigest()
 
 
+def canonical_render_content(payload: Any) -> Optional[str]:
+    """Deterministic text view of what the resume renderer will put in the document.
+
+    Built from the renderer's OWN parser (`parse_resume_payload`) so this cannot
+    drift from what is actually rendered.
+    """
+    if not isinstance(payload, dict):
+        return None
+    try:
+        from resume_builder.build_resume_from_export import parse_resume_payload
+    except Exception:  # pragma: no cover - renderer unavailable
+        return None
+
+    try:
+        resume = parse_resume_payload(payload)
+    except Exception:  # noqa: BLE001 - malformed payload => no canonical form
+        return None
+
+    def _norm(value: Any) -> Any:
+        if isinstance(value, str):
+            return re.sub(r'\s+', ' ', value).strip()
+        if isinstance(value, (list, tuple)):
+            return [_norm(v) for v in value]
+        return value
+
+    structure = {
+        "name": _norm(resume.name),
+        "location": _norm(resume.location),
+        "phone": _norm(resume.phone),
+        "email": _norm(resume.email),
+        "linkedin": _norm(resume.linkedin),
+        "github": _norm(resume.github),
+        "headline": _norm(resume.headline),
+        "summary": _norm(resume.summary),
+        "skills": _norm([[g, items] for g, items in (resume.skills or [])]),
+        "experience": _norm([
+            [s.title, s.body_lines, s.start_date, s.end_date, s.date_string]
+            for s in (resume.experience or [])
+        ]),
+        "projects": _norm([
+            [s.title, s.body_lines, s.start_date, s.end_date, s.date_string]
+            for s in (resume.projects or [])
+        ]),
+        "education": _norm(list(resume.education or [])),
+        "certifications": _norm(list(resume.certifications or [])),
+        "publication": _norm(resume.publication),
+    }
+
+    has_content = any(
+        bool(structure[k]) for k in
+        ("experience", "projects", "education", "certifications", "summary",
+         "skills")
+    )
+    if not has_content:
+        return None
+    return json.dumps(structure, sort_keys=True, separators=(",", ":"))
+
+
+# ── Render-content binding (owner item 2) ────────────────────────────────
+# The receipt binds the approved MARKDOWN. Export, however, is rendered from the
+# STRUCTURED payload, which is a different set of fields. A caller could
+# therefore hold a valid receipt for the approved markdown and swap the
+# `experience` bullets underneath it: the approved fingerprint still matched,
+# and the PDF changed.
+#
+# Why this is a consistency check rather than a second signature over the
+# structure: the server that issues the receipt does not see the caller's
+# profile metadata (name, phone, email), while the export request does. A
+# fingerprint over the render structure would therefore never match between the
+# two sides — it would reject every legitimate export. Instead, every substantive
+# structured string the renderer will emit must APPEAR in the approved markdown.
+# Swapped or injected content is by definition absent from it.
+_IDENTITY_FIELDS = frozenset({
+    "name", "phone", "email", "linkedin", "github", "location", "headline",
+})
+
+
+def _squash(text: str) -> str:
+    """Lowercase alphanumerics only, for layout-insensitive containment tests."""
+    return re.sub(r'[^a-z0-9]+', '', (text or "").lower())
+
+
+def _as_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    return [value]
+
+
+def _iter_render_claims(payload: Dict[str, Any]):
+    """Yield (field, text) for each substantive string the export payload supplies.
+
+    Deliberately reads the RAW payload rather than the renderer's parsed output.
+    `parse_resume_payload` fills in defaults (a placeholder name, a boilerplate
+    summary) and composes titles as "Title -- Company"; those strings were never
+    approved by anyone, so treating them as claims made every legitimate export
+    fail. What matters is the content the CALLER supplied.
+
+    Identity and contact fields (name, phone, email, links, location, headline)
+    are excluded on purpose. They come from the signed-in user's own profile at
+    export time, which the analysis service never sees — so they cannot be
+    pre-approved, and rejecting them would refuse every honest export. They are
+    still scoped: the receipt is bound to the owner, so one candidate's approval
+    cannot be spent on another candidate's document.
+    """
+    def _emit(field: str, value: Any):
+        if isinstance(value, str) and value.strip():
+            yield field, value
+        elif isinstance(value, dict):
+            for key in ("text", "name", "title", "value", "description"):
+                inner = value.get(key)
+                if isinstance(inner, str) and inner.strip():
+                    yield field, inner
+                    return
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                yield from _emit(field, item)
+
+    summary = payload.get("summary")
+    if isinstance(summary, str) and summary.strip():
+        yield "summary", summary
+
+    for value in _as_list(payload.get("skills")):
+        yield from _emit("skills", value)
+
+    for entry in _as_list(payload.get("experience") or payload.get("experiences")):
+        if isinstance(entry, dict):
+            for key in ("bullets", "highlights", "achievements",
+                        "responsibilities"):
+                for bullet in _as_list(entry.get(key)):
+                    yield from _emit("bullet", bullet)
+            for key in ("title", "role", "title_line"):
+                value = entry.get(key)
+                if isinstance(value, str) and value.strip():
+                    yield "role", value
+            company = entry.get("company")
+            if isinstance(company, str) and company.strip():
+                yield "company", company
+        else:
+            yield from _emit("bullet", entry)
+
+    for entry in _as_list(payload.get("projects")):
+        if isinstance(entry, dict):
+            for key in ("bullets", "highlights", "description"):
+                for bullet in _as_list(entry.get(key)):
+                    yield from _emit("project", bullet)
+            for key in ("title", "name", "role"):
+                value = entry.get(key)
+                if isinstance(value, str) and value.strip():
+                    yield "project_title", value
+        else:
+            yield from _emit("project", entry)
+
+    for value in _as_list(payload.get("education")):
+        yield from _emit("education", value)
+
+    for value in _as_list(payload.get("certifications")):
+        yield from _emit("certifications", value)
+
+    publication = payload.get("publication")
+    if isinstance(publication, str) and publication.strip():
+        yield "publication", publication
+
+
+# Minimum length for a claim to be asserted on. Below this, fragments such as
+# "Python" or "SQL" appear coincidentally in unrelated prose, which would make
+# the check a source of false positives rather than a guard.
+_MIN_CLAIM_CHARS = 12
+
+
+def approved_render_claims(payload: Any) -> Dict[str, List[str]]:
+    """Normalised strings the renderer would emit for `payload`, keyed by field.
+
+    Computed on the issuing side from the server's own result and embedded in
+    the receipt. Keying by field is what lets export distinguish "the server
+    approved this name" from "the client supplied a name the server never saw".
+    """
+    if not isinstance(payload, dict):
+        return {}
+    out: Dict[str, set] = {}
+    for field, text in _iter_render_claims(payload):
+        squashed = _squash(text)
+        if len(squashed) >= _MIN_CLAIM_CHARS:
+            out.setdefault(field, set()).add(squashed)
+    return {field: sorted(vals) for field, vals in out.items()}
+
+
+def render_content_violations(
+    payload: Any,
+    markdown: Optional[str],
+    approved_claims: Optional[Dict[str, List[str]]] = None,
+) -> List[Dict[str, str]]:
+    """Structured render content that was NOT part of the approved document.
+
+    Two acceptance routes, because the client legitimately reshapes data (it
+    maps `role` to `title`, reformats dates, and adds its own profile metadata,
+    which would fail a strict equality test against the server's own structure):
+
+      1. the claim appears in the approved markdown, or
+      2. the claim appears in the approved claim set for that field.
+
+    New or substituted content is in neither route, so it still fails.
+    """
+    if not isinstance(payload, dict):
+        return [{"field": "*", "text": "", "reason": "payload_not_structured"}]
+
+    approved_md = _squash(markdown)
+    bound: Dict[str, List[str]] = approved_claims or {}
+    bound_all = {claim for claims in bound.values() for claim in claims}
+    if not approved_md and not bound_all:
+        return [{"field": "*", "text": "", "reason": "approved_content_empty"}]
+
+    violations: List[Dict[str, str]] = []
+    for field, text in _iter_render_claims(payload):
+        squashed = _squash(text)
+        if len(squashed) < _MIN_CLAIM_CHARS:
+            continue
+        if squashed in approved_md or squashed in bound_all:
+            continue
+        violations.append({
+            "field": field,
+            "text": text[:120],
+            "reason": "render_content_not_approved",
+        })
+    return violations
+
+
+def _normalise_owner(owner: Optional[str]) -> str:
+    return (owner or "").strip().lower()
+
+
 def issue_receipt(*, markdown: Optional[str], verdict: str,
                   owner: Optional[str] = None,
-                  ttl: int = RECEIPT_TTL_SECONDS) -> Optional[str]:
-    """Issue a signed approval receipt, or None when signing is unavailable."""
+                  ttl: int = RECEIPT_TTL_SECONDS,
+                  approved_claims: Optional[Dict[str, List[str]]] = None
+                  ) -> Optional[str]:
+    """Issue a signed approval receipt, or None when signing is unavailable.
+
+    ``approved_claims`` is the normalised, field-keyed set of strings the
+    server's own renderer would emit (see `approved_render_claims`). Embedding it
+    lets export verify that the structured fields it is about to render were part
+    of the approved document, instead of trusting a markdown-only binding.
+    """
     secret = _receipt_secret()
     if secret is None:
         return None
     payload = {
+        "v": RECEIPT_VERSION,
         "fp": content_fingerprint(markdown),
         "verdict": verdict,
-        "owner": (owner or "").strip().lower(),
+        "owner": _normalise_owner(owner),
         "iat": int(time.time()),
         "ttl": int(ttl),
     }
+    if approved_claims:
+        payload["cl"] = {
+            field: sorted(set(claims))
+            for field, claims in approved_claims.items() if claims
+        }
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     sig = hmac.new(secret, body.encode("utf-8"), hashlib.sha256).hexdigest()
-    import base64
     token = base64.urlsafe_b64encode(body.encode("utf-8")).decode("ascii")
     return f"{token}.{sig}"
 
 
 def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
-                   owner: Optional[str] = None) -> tuple:
+                   owner: Optional[str] = None,
+                   render_payload: Any = None) -> tuple:
     """Verify a receipt against the content being exported.
 
     Returns (ok: bool, reason: str).
 
     Failure reasons are specific so a caller and an operator can distinguish
     tampering from expiry from a stale-content binding.
+
+    When ``render_payload`` is supplied, the structured fields the renderer
+    will emit must also appear in the approved markdown. That is what stops a
+    caller from keeping an approved markdown and swapping the experience
+    bullets underneath it (owner item 2).
     """
     if not receipt or not isinstance(receipt, str) or "." not in receipt:
         return False, "receipt_missing"
@@ -380,7 +677,6 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
     if secret is None:
         return False, "receipt_signing_unavailable"
 
-    import base64
     token, _, sig = receipt.rpartition(".")
     try:
         body = base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
@@ -395,6 +691,22 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
         payload = json.loads(body)
     except Exception:  # noqa: BLE001
         return False, "receipt_malformed"
+    if not isinstance(payload, dict):
+        return False, "receipt_malformed"
+
+    # ── version gate (item 4) ───────────────────────────────────────────
+    # Absent or unknown version => reject. Guessing at an unfamiliar layout is
+    # how a verifier ends up validating a field that no longer means what it
+    # did when the receipt was minted.
+    version = payload.get("v")
+    if version is None:
+        return False, "receipt_version_missing"
+    try:
+        version_int = int(version)
+    except (TypeError, ValueError):
+        return False, "receipt_version_unknown"
+    if version_int not in _SUPPORTED_RECEIPT_VERSIONS:
+        return False, "receipt_version_unknown"
 
     if payload.get("verdict") != Verdict.PASS_TIER_A.value:
         return False, "receipt_not_approved"
@@ -407,8 +719,27 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
     if payload.get("fp") != content_fingerprint(markdown):
         return False, "receipt_content_mismatch"
 
-    bound_owner = (payload.get("owner") or "").strip().lower()
-    if bound_owner and (owner or "").strip().lower() != bound_owner:
+    # ── owner binding ───────────────────────────────────────────────────
+    # Checked BEFORE the render-content check: presenting someone else's
+    # approval and presenting tampered content can both be true, and the owner
+    # mismatch is the more specific and more important diagnosis. Reporting
+    # "content mismatch" for what is actually an attempt to spend another
+    # candidate's approval would send an operator looking in the wrong place.
+    bound_owner = _normalise_owner(payload.get("owner"))
+    if bound_owner and _normalise_owner(owner) != bound_owner:
         return False, "receipt_owner_mismatch"
+
+    # ── render-content binding (item 2) ─────────────────────────────────
+    # The receipt binds the approved MARKDOWN. Export, however, is rendered from
+    # the STRUCTURED payload. Without this check a caller could hold a valid
+    # receipt for the approved markdown and swap `experience` bullets, projects,
+    # education or certifications underneath it: the approved fingerprint still
+    # matches while the produced PDF says something different.
+    if render_payload is not None:
+        bound_claims = payload.get("cl")
+        if not isinstance(bound_claims, dict):
+            bound_claims = None
+        if render_content_violations(render_payload, markdown, bound_claims):
+            return False, "receipt_render_content_mismatch"
 
     return True, "ok"
