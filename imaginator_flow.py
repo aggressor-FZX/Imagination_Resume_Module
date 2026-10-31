@@ -1017,9 +1017,9 @@ def parse_experiences(text: str) -> List[Dict]:
             # block). Accept the line when it carries a company marker AND a
             # date range.
             _employer_header = (
-                re.search(r'\b(llc|inc|corp|ltd|co\.|company|incorporated|gmbh|plc|'
+                (('|' in line) or re.search(r'\b(llc|inc|corp|ltd|co\.|company|incorporated|gmbh|plc|'
                           r'university|hospital|institute|foundation|group|solutions|'
-                          r'services|systems|technologies)\b', line, re.IGNORECASE)
+                          r'services|systems|technologies)\b', line, re.IGNORECASE))
                 and re.search(r'\b(?:19|20)\d{2}\b|\b(?:present|current|ongoing)\b',
                               line, re.IGNORECASE)
             )
