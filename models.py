@@ -402,8 +402,9 @@ class AnalysisResponse(BaseModel):
     verification_coverage: Optional[str] = Field(
         None,
         description=(
-            "'full' | 'partial' | 'none'. 'partial' means Tier A only: numbers, "
-            "employers, dates and entity names. Semantic claims are NOT verified."
+            "'full' | 'partial' | 'none'. 'partial' means numeric surfaces and "
+            "explicit entity headings compared with input text, not comprehensive "
+            "date, employer/claim attribution or semantic verification."
         ),
     )
     entity_evidence: Optional[str] = Field(
@@ -421,6 +422,9 @@ class AnalysisResponse(BaseModel):
             "Required by /resume/export; a caller-supplied metrics_support block "
             "is NOT accepted as approval."
         ),
+    )
+    approved_export_payload: Optional[Dict[str, Any]] = Field(
+        None, description="Exact server-approved structured career content for rendering"
     )
     review_message: Optional[str] = Field(
         None, description="User-facing explanation shown when review is required"

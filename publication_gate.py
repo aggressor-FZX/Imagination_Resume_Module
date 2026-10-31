@@ -363,10 +363,12 @@ RECEIPT_TTL_SECONDS = 60 * 30
 #   v1 — bound `(fp, verdict, owner, iat, ttl, cl)` where `cl` was a FLAT,
 #        field-keyed claim set. Superseded: a flat set cannot tell "approved
 #        bullet at employer A" from "approved bullet at employer B".
-#   v2 — adds `cb`, the hash of each approved career block. Membership is now
-#        relational, so reassignment of approved strings is detectable.
-RECEIPT_VERSION = 2
-_SUPPORTED_RECEIPT_VERSIONS = frozenset({2})
+#   v2 — `sb` asserts the legacy Markdown-segment co-membership check.
+#   v3 — `render_fp` commits the exact renderer-normalized career object,
+#        derived once by the server and returned as approved_export_payload.
+#        No cross-parser substring or claim-pool alternative authorizes export.
+RECEIPT_VERSION = 3
+_SUPPORTED_RECEIPT_VERSIONS = frozenset({3})
 
 
 def _receipt_secret() -> Optional[bytes]:
@@ -422,12 +424,7 @@ def canonical_render_content(payload: Any) -> Optional[str]:
         return value
 
     structure = {
-        "name": _norm(resume.name),
         "location": _norm(resume.location),
-        "phone": _norm(resume.phone),
-        "email": _norm(resume.email),
-        "linkedin": _norm(resume.linkedin),
-        "github": _norm(resume.github),
         "headline": _norm(resume.headline),
         "summary": _norm(resume.summary),
         "skills": _norm([[g, items] for g, items in (resume.skills or [])]),
@@ -1103,6 +1100,7 @@ def issue_receipt(*, markdown: Optional[str], verdict: str,
                   owner: Optional[str] = None,
                   ttl: int = RECEIPT_TTL_SECONDS,
                   approved_claims: Optional[Dict[str, List[str]]] = None,
+                  approved_payload: Optional[Dict[str, Any]] = None,
                   ) -> Optional[str]:
     """Issue a signed approval receipt, or None when signing is unavailable.
 
@@ -1135,6 +1133,16 @@ def issue_receipt(*, markdown: Optional[str], verdict: str,
             for field, claims in approved_claims.items() if claims
         }
     payload["sb"] = 1
+    if approved_payload is None:
+        from approved_resume import export_payload
+        try:
+            approved_payload = export_payload(markdown)
+        except ValueError:
+            return None
+    career = canonical_render_content(approved_payload)
+    if not career:
+        return None
+    payload["render_fp"] = hashlib.sha256(career.encode("utf-8")).hexdigest()
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     sig = hmac.new(secret, body.encode("utf-8"), hashlib.sha256).hexdigest()
     token = base64.urlsafe_b64encode(body.encode("utf-8")).decode("ascii")
@@ -1241,8 +1249,15 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
             bound_claims = None
         if payload.get("sb") != 1:
             return False, "receipt_structure_unbound"
-        if render_content_violations(render_payload, markdown, bound_claims,
-                                     structural_binding=True):
+        # Normalize through the SAME parser used immediately by the renderer.
+        # The digest binds every emitted career field, including aliases,
+        # structured skill items, education/certification components, heading
+        # relationships, dates, location and all ordered bullets. Contact-only
+        # fields are excluded explicitly, not via substring heuristics.
+        career = canonical_render_content(render_payload)
+        if not payload.get("render_fp"):
+            return False, "receipt_structure_unbound"
+        if not career or payload["render_fp"] != hashlib.sha256(career.encode("utf-8")).hexdigest():
             return False, "receipt_render_content_mismatch"
 
     return True, "ok"

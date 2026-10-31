@@ -360,7 +360,7 @@ def format_date_range(entry: Dict[str, Any]) -> str:
 
 
 def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
-    """Build a clean 'Role -- Company' heading for a resume section.
+    """Build a clean 'Role -- Company -- Location' heading for a resume section.
 
     The drafter returns separate ``role`` and ``company`` fields, which are
     preferred. A raw ``title_line`` field (legacy LLM-parser format like
@@ -374,6 +374,9 @@ def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
       3. ``title`` or ``role`` alone               → just the role
       4. First ``|``-segment of ``title_line``      → avoid the full multi-part blob
       5. fallback
+
+    Append an explicitly supplied entry ``location`` to the selected heading.
+    Role locations never populate the top-level profile location.
     """
     role = (
         first_nonempty(entry, ["role", "title", "name"], "")
@@ -381,21 +384,19 @@ def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
     company = first_nonempty(entry, ["company", "organization", "employer"], "")
 
     if role and company:
-        return f"{role} -- {company}"
-    if role:
-        return role
-    if company:
-        return company
+        title = f"{role} -- {company}"
+    elif role:
+        title = role
+    elif company:
+        title = company
+    else:
+        # Last resort: keep only the first pipe-segment of title_line.
+        title_line = entry.get("title_line", "")
+        title = title_line.split("|")[0].strip() if isinstance(title_line, str) else ""
+        title = title or fallback or "Experience"
 
-    # Last resort: take only the first pipe-segment of title_line so we never
-    # embed the full "Role | Company | Location | Dates" blob into the heading.
-    title_line = entry.get("title_line", "")
-    if isinstance(title_line, str) and title_line.strip():
-        first_segment = title_line.split("|")[0].strip()
-        if first_segment:
-            return first_segment
-
-    return fallback or "Experience"
+    location = first_nonempty(entry, ["location"], "")
+    return f"{title} -- {location}" if location else title
 
 
 def parse_sections(source: Dict[str, Any], keys: Sequence[str]) -> List[ResumeSection]:
@@ -435,335 +436,42 @@ def extract_text_bundle(path: Path) -> Dict[str, Any]:
 
 
 def build_fallback_payload(source: Dict[str, Any]) -> ResumePayload:
-    data = source.get("data", source)
-    rewritten = data.get("rewrittenResume", "") or ""
-    domain_insights = data.get("domainInsights", {}) or {}
-
-    name = "Jeff Calderon"
-    location = get_nested(domain_insights, ["jobLocation"], "") or data.get("jobLocation", "") or "Marysville, WA"
-    phone = "916.712.8396"
-    email = "jeff.d.calderon@gmail.com"
-    linkedin = "linkedin.com/in/jeffdcalderon"
-    github = "github.com/aggressor-FZX"
-    headline = data.get("jobTitle", "") or get_nested(domain_insights, ["onet", "title"], "") or "Engineering Data Scientist"
-
-    summary = (
-        "Engineering data scientist with a physics foundation and 10+ years of applied experience designing predictive models, "
-        "analyzing sensor and temporal data streams, and delivering actionable safety insights to operational and executive stakeholders. "
-        "Background spans safety-critical federal research, multi-sensor fleet operations, aviation-adjacent work, and Boeing Defense-sponsored ML research."
-    )
-
-    skills = [
-        (
-            "Statistical and Predictive Modeling",
-            [
-                "descriptive analysis",
-                "predictive modeling",
-                "Monte Carlo simulation",
-                "anomaly detection",
-                "model validation",
-                "risk assessment",
-            ],
-        ),
-        (
-            "Languages and Tools",
-            [
-                "Python",
-                "SQL",
-                "C++",
-                "Bash",
-                "Pandas",
-                "NumPy",
-                "PyTorch",
-                "TensorFlow",
-                "AWS",
-                "Docker",
-                "Git",
-            ],
-        ),
-        (
-            "NLP and AI",
-            [
-                "LLM integration",
-                "LangChain",
-                "OpenAI API",
-                "RAG",
-                "embeddings",
-                "prompt engineering",
-            ],
-        ),
-    ]
-
-    experience = [
-        ResumeSection(
-            title="Data Analyst Intern -- Washington State Data Exchange for Public Safety",
-            body_lines=[
-                "Design and implement ETL/ELT pipelines (AWS Step Functions, Glue, Lambda) ingesting multi-source safety and operational data; build Power BI dashboards and reports tracking safety-relevant KPIs for law enforcement and EMS leadership.",
-                "Perform exploratory analysis and variance reporting on operational datasets; translate findings into actionable recommendations for agency directors and cross-functional stakeholders.",
-            ],
-        ),
-        ResumeSection(
-            title="Operations Manager -- National Oceanic and Atmospheric Administration (NOAA)",
-            body_lines=[
-                "Built descriptive and predictive analytical models synthesizing high-dimensional sensor data from 13 oceanographic research vessels; designed Python-based decision-support tools for operational safety and readiness monitoring, reducing manual reporting overhead by 40%.",
-                "Delivered safety-relevant data insights and risk-based recommendations to Regional Director and fleet leadership through regular executive briefings.",
-            ],
-        ),
-        ResumeSection(
-            title="Marine Data Analyst | Hydrographer -- NOAA Commissioned Officer Corps (Office of Coast Survey)",
-            body_lines=[
-                "Processed and fused multi-sensor shipboard data streams in support of the U.S. Office of Coast Survey: sonar, LiDAR, GPS, inertial motion, tidal modeling, and shipboard weather sensor arrays.",
-                "Designed and implemented anomaly detection algorithms on sonar and geospatial datasets to identify navigation hazards and seafloor irregularities for official nautical chart updates.",
-            ],
-        ),
-        ResumeSection(
-            title="Research Physicist -- Naval Research Laboratory",
-            body_lines=[
-                "Designed original Monte Carlo algorithms for probabilistic safety risk quantification and radiological threat detection modeling in Python and C++; evaluated algorithm performance against empirical benchmarks and documented findings for reproducibility.",
-                "Results secured $500K in federal safety R&D funding; co-authored peer-reviewed publication and operated in a classified national security environment.",
-            ],
-        ),
-    ]
-
-    projects = [
-        ResumeSection(
-            title="Boeing Defense -- Aerial Safety Vision AI",
-            body_lines=[
-                "Trained generative models on 263,000+ image datasets via PyTorch DDP on NVIDIA H100/A100 GPU clusters; designed evaluation frameworks benchmarked across real-world flight scenarios.",
-            ],
-        ),
-        ResumeSection(
-            title="Sensor Data Analysis -- LHC Particle Physics | University of Maryland",
-            body_lines=[
-                "Designed and implemented gradient-based solvers, efficiency quantification algorithms, and statistical significance methods to extract signal from multi-terabyte particle physics sensor datasets at CERN.",
-            ],
-        ),
-    ]
-
-    education = [
-        "B.S. in Data Analytics, Washington State University, Everett -- 05/2026",
-        "A.A.S. in Computer Science, Everett Community College -- 04/2024 -- GPA: 4.0 (President's List)",
-        "B.S. in Physics, University of Maryland, College Park -- 12/2015",
-    ]
-
-    certifications = [
-        "Network Security+, CompTIA (07/2024)",
-        "Cybersecurity Analyst, Everett Community College (07/2024)",
-        "Data Analytics, Washington State University (12/2024)",
-        "Medical Person in Charge, U.S. Coast Guard Certified",
-    ]
-
-    publication = "Journal of Instrumentation (2016) -- Liquid Scintillator Tiles for Calorimetry, Large Hadron Collider detector performance analysis"
-
-    return ResumePayload(
-        name=name,
-        location=location,
-        phone=phone,
-        email=email,
-        linkedin=linkedin,
-        github=github,
-        headline=headline,
-        summary=summary,
-        skills=skills,
-        experience=experience,
-        projects=projects,
-        education=education,
-        certifications=certifications,
-        publication=publication,
-    )
+    """Compatibility wrapper: missing fields stay empty, never sample-filled."""
+    return parse_resume_payload(source)
 
 
 def parse_resume_payload(bundle: Dict[str, Any]) -> ResumePayload:
+    """Parse explicitly supplied structured fields and aliases without inventing content.
+
+    Raw resume/markdown text is not a substitute for structured career fields.
+    Callers must parse that text before handing the canonical payload to rendering.
+    """
     source = bundle.get("data", bundle)
 
-    # Preferred path: direct structured input from the IMAGINATOR input spec.
-    if any(key in source for key in ["experience", "professional_experience", "projects", "education", "certifications", "skills"]):
-        name = first_nonempty(source, ["name", "full_name"], "Jeff Calderon")
-        location = first_nonempty(source, ["location", "job_location", "preferred_location", "city"], "Marysville, WA")
-        phone = first_nonempty(source, ["phone", "phone_number"], "916.712.8396")
-        email = first_nonempty(source, ["email", "email_address"], "jeff.d.calderon@gmail.com")
-        linkedin = first_nonempty(source, ["linkedin", "linkedin_url"], "linkedin.com/in/jeffdcalderon")
-        github = first_nonempty(source, ["github", "github_url"], "github.com/aggressor-FZX")
-        headline = first_nonempty(source, ["job_title", "target_job_title", "headline"], "Engineering Data Scientist")
-        summary = first_nonempty(source, ["summary", "professional_summary", "profile_summary"], "") or (
-            "Engineering data scientist with a physics foundation and 10+ years of applied experience designing predictive models, "
-            "analyzing sensor and temporal data streams, and delivering actionable insights to operational and executive stakeholders."
-        )
+    skills = parse_skill_groups(source)
+    if not skills:
+        # Preserve the existing scalar user_skills alias as explicit input.
+        values = [skill for skill in coerce_list(source.get("user_skills")) if isinstance(skill, str) and skill.strip()]
+        skills = [("Skills", values)] if values else []
 
-        skills = parse_skill_groups(source)
-        experience = parse_sections(source, ["experience", "professional_experience", "experiences"])
-        projects = parse_sections(source, ["projects"])
-        education_raw = coerce_list(source.get("education"))
-        certifications_raw = coerce_list(source.get("certifications"))
-        publication = first_nonempty(source, ["publication", "publications", "publication_line"], "")
-
-        if not skills:
-            skills = [
-                ("Skills", [skill for skill in coerce_list(source.get("user_skills")) if isinstance(skill, str) and skill.strip()]),
-            ]
-            skills = [item for item in skills if item[1]]
-
-        if not experience:
-            fallback_text = source.get("resume_text") or source.get("rewrittenResume") or ""
-            if fallback_text:
-                experience = [ResumeSection(title="Resume Experience", body_lines=[line.strip() for line in re.split(r"[\n•;]", str(fallback_text)) if line.strip()][:12])]
-
-        if not projects:
-            projects = []
-
-        return ResumePayload(
-            name=name,
-            location=location,
-            phone=phone,
-            email=email,
-            linkedin=linkedin,
-            github=github,
-            headline=headline,
-            summary=summary,
-            skills=skills,
-            experience=experience or [],
-            projects=projects,
-            education=[format_education_entry(entry) for entry in education_raw if format_education_entry(entry)],
-            certifications=[format_certification_entry(entry) for entry in certifications_raw if format_certification_entry(entry)],
-            publication=publication or "",
-        )
-
-    # Fallback path: current export bundle sample.
-    data = source
-    rewritten = data.get("rewrittenResume", "") or ""
-    domain_insights = data.get("domainInsights", {}) or {}
-
-    name = "Jeff Calderon"
-    location = get_nested(domain_insights, ["jobLocation"], "") or data.get("jobLocation", "") or "Marysville, WA"
-    phone = "916.712.8396"
-    email = "jeff.d.calderon@gmail.com"
-    linkedin = "linkedin.com/in/jeffdcalderon"
-    github = "github.com/aggressor-FZX"
-    headline = data.get("jobTitle", "") or get_nested(domain_insights, ["onet", "title"], "") or "Engineering Data Scientist"
-
-    summary = (
-        "Engineering data scientist with a physics foundation and 10+ years of applied experience designing predictive models, "
-        "analyzing sensor and temporal data streams, and delivering actionable safety insights to operational and executive stakeholders. "
-        "Background spans safety-critical federal research, multi-sensor fleet operations, aviation-adjacent work, and Boeing Defense-sponsored ML research."
-    )
-
-    skills = [
-        (
-            "Statistical and Predictive Modeling",
-            [
-                "descriptive analysis",
-                "predictive modeling",
-                "Monte Carlo simulation",
-                "anomaly detection",
-                "model validation",
-                "risk assessment",
-            ],
-        ),
-        (
-            "Languages and Tools",
-            [
-                "Python",
-                "SQL",
-                "C++",
-                "Bash",
-                "Pandas",
-                "NumPy",
-                "PyTorch",
-                "TensorFlow",
-                "AWS",
-                "Docker",
-                "Git",
-            ],
-        ),
-        (
-            "NLP and AI",
-            [
-                "LLM integration",
-                "LangChain",
-                "OpenAI API",
-                "RAG",
-                "embeddings",
-                "prompt engineering",
-            ],
-        ),
-    ]
-
-    experience = [
-        ResumeSection(
-            title="Data Analyst Intern -- Washington State Data Exchange for Public Safety",
-            body_lines=[
-                "Design and implement ETL/ELT pipelines (AWS Step Functions, Glue, Lambda) ingesting multi-source safety and operational data; build Power BI dashboards and reports tracking safety-relevant KPIs for law enforcement and EMS leadership.",
-                "Perform exploratory analysis and variance reporting on operational datasets; translate findings into actionable recommendations for agency directors and cross-functional stakeholders.",
-            ],
-        ),
-        ResumeSection(
-            title="Operations Manager -- National Oceanic and Atmospheric Administration (NOAA)",
-            body_lines=[
-                "Built descriptive and predictive analytical models synthesizing high-dimensional sensor data from 13 oceanographic research vessels; designed Python-based decision-support tools for operational safety and readiness monitoring, reducing manual reporting overhead by 40%.",
-                "Delivered safety-relevant data insights and risk-based recommendations to Regional Director and fleet leadership through regular executive briefings.",
-            ],
-        ),
-        ResumeSection(
-            title="Marine Data Analyst | Hydrographer -- NOAA Commissioned Officer Corps (Office of Coast Survey)",
-            body_lines=[
-                "Processed and fused multi-sensor shipboard data streams in support of the U.S. Office of Coast Survey: sonar, LiDAR, GPS, inertial motion, tidal modeling, and shipboard weather sensor arrays.",
-                "Designed and implemented anomaly detection algorithms on sonar and geospatial datasets to identify navigation hazards and seafloor irregularities for official nautical chart updates.",
-            ],
-        ),
-        ResumeSection(
-            title="Research Physicist -- Naval Research Laboratory",
-            body_lines=[
-                "Designed original Monte Carlo algorithms for probabilistic safety risk quantification and radiological threat detection modeling in Python and C++; evaluated algorithm performance against empirical benchmarks and documented findings for reproducibility.",
-                "Results secured $500K in federal safety R&D funding; co-authored peer-reviewed publication and operated in a classified national security environment.",
-            ],
-        ),
-    ]
-
-    projects = [
-        ResumeSection(
-            title="Boeing Defense -- Aerial Safety Vision AI",
-            body_lines=[
-                "Trained generative models on 263,000+ image datasets via PyTorch DDP on NVIDIA H100/A100 GPU clusters; designed evaluation frameworks benchmarked across real-world flight scenarios.",
-            ],
-        ),
-        ResumeSection(
-            title="Sensor Data Analysis -- LHC Particle Physics | University of Maryland",
-            body_lines=[
-                "Designed and implemented gradient-based solvers, efficiency quantification algorithms, and statistical significance methods to extract signal from multi-terabyte particle physics sensor datasets at CERN.",
-            ],
-        ),
-    ]
-
-    education = [
-        "B.S. in Data Analytics, Washington State University, Everett -- 05/2026",
-        "A.A.S. in Computer Science, Everett Community College -- 04/2024 -- GPA: 4.0 (President's List)",
-        "B.S. in Physics, University of Maryland, College Park -- 12/2015",
-    ]
-
-    certifications = [
-        "Network Security+, CompTIA (07/2024)",
-        "Cybersecurity Analyst, Everett Community College (07/2024)",
-        "Data Analytics, Washington State University (12/2024)",
-        "Medical Person in Charge, U.S. Coast Guard Certified",
-    ]
-
-    publication = "Journal of Instrumentation (2016) -- Liquid Scintillator Tiles for Calorimetry, Large Hadron Collider detector performance analysis"
+    education_raw = coerce_list(source.get("education"))
+    certifications_raw = coerce_list(source.get("certifications"))
 
     return ResumePayload(
-        name=name,
-        location=location,
-        phone=phone,
-        email=email,
-        linkedin=linkedin,
-        github=github,
-        headline=headline,
-        summary=summary,
+        name=first_nonempty(source, ["name", "full_name"]),
+        location=first_nonempty(source, ["location", "job_location", "preferred_location", "city"]),
+        phone=first_nonempty(source, ["phone", "phone_number"]),
+        email=first_nonempty(source, ["email", "email_address"]),
+        linkedin=first_nonempty(source, ["linkedin", "linkedin_url"]),
+        github=first_nonempty(source, ["github", "github_url"]),
+        headline=first_nonempty(source, ["job_title", "target_job_title", "headline"]),
+        summary=first_nonempty(source, ["summary", "professional_summary", "profile_summary"]),
         skills=skills,
-        experience=experience,
-        projects=projects,
-        education=education,
-        certifications=certifications,
-        publication=publication,
+        experience=parse_sections(source, ["experience", "professional_experience", "experiences"]),
+        projects=parse_sections(source, ["projects"]),
+        education=[format_education_entry(entry) for entry in education_raw if format_education_entry(entry)],
+        certifications=[format_certification_entry(entry) for entry in certifications_raw if format_certification_entry(entry)],
+        publication=first_nonempty(source, ["publication", "publications", "publication_line"]),
     )
 
 
@@ -776,7 +484,7 @@ def latex_list(items: Iterable[str]) -> str:
 def split_name(full_name: str) -> Tuple[str, str]:
     cleaned = full_name.strip()
     if not cleaned:
-        return "Jeff", "Calderon"
+        return "", ""
     parts = cleaned.split()
     if len(parts) == 1:
         return parts[0], ""
@@ -786,7 +494,7 @@ def split_name(full_name: str) -> Tuple[str, str]:
 def split_location(location: str) -> Tuple[str, str]:
     cleaned = location.strip()
     if not cleaned:
-        return "Marysville", "WA"
+        return "", ""
     if "," in cleaned:
         city, state = cleaned.split(",", 1)
         return city.strip(), state.strip()
@@ -842,11 +550,11 @@ def render_template(template_text: str, resume: ResumePayload) -> str:
     first_name, last_name = split_name(resume.name)
     city, state = split_location(resume.location)
     rendered = replace_pattern(rendered, r"^\\name\{.*?\}\{.*?\}$", f"\\name{{{latex_escape(first_name)}}}{{{latex_escape(last_name)}}}")
-    rendered = replace_pattern(rendered, r"^\\address\{.*?\}\{.*?\}$", f"\\address{{{latex_escape(city)}}}{{{latex_escape(state)}}}")
-    rendered = replace_pattern(rendered, r"^\\phone\{.*?\}$", f"\\phone{{{latex_escape(resume.phone)}}}")
-    rendered = replace_pattern(rendered, r"^\\email\{.*?\}$", f"\\email{{{latex_escape(resume.email)}}}")
-    rendered = replace_pattern(rendered, r"^\\social\[linkedin\]\{.*?\}$", f"\\social[linkedin]{{{latex_escape(resume.linkedin.replace('https://', '').replace('http://', '').replace('www.', ''))}}}")
-    rendered = replace_pattern(rendered, r"^\\social\[github\]\{.*?\}$", f"\\social[github]{{{latex_escape(resume.github.replace('https://', '').replace('http://', '').replace('www.', ''))}}}")
+    rendered = replace_pattern(rendered, r"^\\address\{.*?\}\{.*?\}$", f"\\address{{{latex_escape(city)}}}{{{latex_escape(state)}}}" if city or state else "")
+    rendered = replace_pattern(rendered, r"^\\phone\{.*?\}$", f"\\phone{{{latex_escape(resume.phone)}}}" if resume.phone else "")
+    rendered = replace_pattern(rendered, r"^\\email\{.*?\}$", f"\\email{{{latex_escape(resume.email)}}}" if resume.email else "")
+    rendered = replace_pattern(rendered, r"^\\social\[linkedin\]\{.*?\}$", f"\\social[linkedin]{{{latex_escape(resume.linkedin.replace('https://', '').replace('http://', '').replace('www.', ''))}}}" if resume.linkedin else "")
+    rendered = replace_pattern(rendered, r"^\\social\[github\]\{.*?\}$", f"\\social[github]{{{latex_escape(resume.github.replace('https://', '').replace('http://', '').replace('www.', ''))}}}" if resume.github else "")
 
     rendered = replace_between_markers(rendered, "% TAGLINE / SUMMARY-------------------------------", "% PROFESSIONAL EXPERIENCE-------------------------------", build_summary_block(resume))
     rendered = replace_between_markers(rendered, "% PROFESSIONAL EXPERIENCE-------------------------------", "% ML AND ANALYTICS PROJECTS-------------------------------", generate_experience_block(resume))
@@ -918,7 +626,7 @@ def generate_publication_block(resume: ResumePayload) -> str:
     return (
         "% PUBLICATION-------------------------------\n"
         "\\vspace*{2mm}\n\\section{Publication}\n\\vspace*{1mm}\n"
-        f"\\textit{{Journal of Instrumentation}} (2016) -- Liquid Scintillator Tiles for Calorimetry, Large Hadron Collider detector performance analysis\n"
+        f"{latex_escape(resume.publication)}\n"
     )
 
 

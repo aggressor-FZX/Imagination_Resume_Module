@@ -52,6 +52,7 @@ from imaginator_flow import (
 )
 from imaginator_new_integration import run_new_pipeline_async
 import publication_gate
+from approved_resume import unsupported_entities
 import tier_a_verifier
 
 # Configure global logger for this service
@@ -442,6 +443,8 @@ async def _analyze_resume_impl(
                 fallback_used=bool(analysis_result.get("pipeline_status")
                                    == "failed"),
                 finish_reason=analysis_result.get("finish_reason"),
+                required_facts_missing=unsupported_entities(
+                    analysis_result.get("final_written_section_markdown"), payload.resume_text),
                 approved_entities=_approved_entities_from_payload(
                     analysis_result, body, source_snapshot),
             )
@@ -605,6 +608,8 @@ async def _analyze_resume_impl(
             metrics_support=_support,
             fallback_used=bool((analysis_result or {}).get("pipeline_status")
                                == "failed"),
+            required_facts_missing=unsupported_entities(
+                final_markdown, payload.resume_text),
             approved_entities=_approved_entities_from_payload(
                 analysis_result, body, source_snapshot),
         )
@@ -798,30 +803,43 @@ def _issue_publication_receipt(output, owner=None):
     cannot forge `metrics_support` or edit the resume between approval and
     export. Non-publishable results get no receipt.
 
-    The receipt binds the approved markdown AND the set of substantive strings
-    the server's own renderer would emit for this result. Export requires every
-    structured field it is about to render to be in one of those, which is what
-    makes swapping `experience` bullets or `projects` after approval fail while
-    still allowing the client to reshape fields it legitimately reformats
-    (owner item 2).
+    The receipt binds both approved Markdown and the exact career object the
+    renderer consumes. The same object is returned as approved_export_payload,
+    eliminating cross-parser claim-set alternatives at export time.
     """
     try:
         if not isinstance(output, dict):
             return output
         support = output.get("metrics_support") or {}
         verdict = str(support.get("verdict") or "")
-        if verdict != publication_gate.Verdict.PASS_TIER_A.value:
+        if (output.get("requires_review") or output.get("processing_status") == "needs_review"
+                or verdict != publication_gate.Verdict.PASS_TIER_A.value):
             output["publication_receipt"] = None
+            output["approved_export_payload"] = None
             return output
         md = output.get("final_written_section_markdown")
+        from approved_resume import export_payload
+        try:
+            approved_payload = export_payload(md)
+        except ValueError:
+            output["publication_receipt"] = None
+            output["approved_export_payload"] = None
+            output["requires_review"] = True
+            output["processing_status"] = "needs_review"
+            output["review_reasons"] = ["render_contract_ambiguous"]
+            for field in publication_gate.DELIVERABLE_FIELDS:
+                output[field] = None
+            return output
         receipt = publication_gate.issue_receipt(
             markdown=md, verdict=verdict, owner=owner,
-            approved_claims=publication_gate.approved_render_claims(output))
+            approved_payload=approved_payload)
         output["publication_receipt"] = receipt
+        output["approved_export_payload"] = approved_payload if receipt else None
         if receipt is None:
             # Signing unavailable: do not claim approval we cannot vouch for.
             output["verification_coverage"] = "none"
             output["requires_review"] = True
+            output["processing_status"] = "needs_review"
             output["review_reasons"] = list(
                 output.get("review_reasons") or []) + [
                     "receipt_signing_unavailable"]
@@ -1192,7 +1210,7 @@ async def analyze_resume(
     """
     Dual-mode /analyze (C3):
     - Default: JSON AnalysisResponse (unchanged)
-    - Accept: text/event-stream → SSE token deltas then final result event
+    - Accept: text/event-stream → approved final content then final result event
     """
     accept = (request.headers.get("accept") or "").lower()
     wants_sse = "text/event-stream" in accept
@@ -1201,25 +1219,12 @@ async def analyze_resume(
         return await _analyze_resume_impl(payload, request, api_key)
 
     queue: asyncio.Queue = asyncio.Queue()
-    loop = asyncio.get_running_loop()
 
     # ── SSE containment (owner item 5) ──────────────────────────────────
-    # DEFECT: token deltas were streamed to the client BEFORE verification ran,
-    # so rejected content reached the browser incrementally even when the final
-    # result event was blocked. A blocked publication must not have leaked in
-    # pieces first.
-    #
-    # Fix: buffer token deltas until the pipeline completes and the publication
-    # gate has decided. Only replay them when the result is publishable.
-    _token_buffer: list = []
-    _flush_tokens = {"allowed": False}
-
+    # Approval covers the final Markdown, never earlier draft/rewrite/reasoning
+    # tokens. Discard raw callbacks instead of buffering them for later replay.
     def on_token(field: str, delta: str) -> None:
-        try:
-            loop.call_soon_threadsafe(
-                queue.put_nowait, ("token", (field, delta)))
-        except Exception:
-            pass
+        pass
 
     async def produce() -> None:
         token = set_token_callback(on_token)
@@ -1236,12 +1241,7 @@ async def analyze_resume(
         try:
             while True:
                 kind, payload_data = await queue.get()
-                if kind == "token":
-                    field, delta = payload_data
-                    # BUFFER, do not emit. Tokens are released only after the
-                    # publication gate has approved the final result.
-                    _token_buffer.append((field, delta))
-                elif kind == "result":
+                if kind == "result":
                     if isinstance(payload_data, AnalysisResponse):
                         data = (
                             payload_data.model_dump()
@@ -1262,16 +1262,17 @@ async def analyze_resume(
                     else:
                         data = {"result": str(payload_data)}
 
-                    # Only replay buffered deltas when this result is publishable.
+                    # Emit only the content actually covered by final approval.
                     published = (
                         data.get("processing_status") == "completed"
                         and not data.get("requires_review")
                     )
                     if published:
-                        for field, delta in _token_buffer:
+                        final_markdown = data.get("final_written_section_markdown")
+                        if isinstance(final_markdown, str) and final_markdown.strip():
                             yield (
                                 "event: token\n"
-                                f"data: {json.dumps({'field': field, 'delta': delta})}\n\n"
+                                f"data: {json.dumps({'field': 'rewrite', 'delta': final_markdown})}\n\n"
                             )
                     else:
                         # Emit no tokens at all for a blocked result. The client
@@ -1471,19 +1472,17 @@ async def analyze_multi_file(
         # was unpublishable. The acceptance condition is NOT relaxed: the same
         # Tier-A checker runs, against the ORIGINAL uploaded text as evidence.
         # If that check cannot run, the gate still blocks.
-        _mf_support = (analysis_result or {}).get("metrics_support") or {}
-        if not _mf_support:
-            _mf_support = ((analysis_result or {}).get("final_output")
-                           or {}).get("metrics_support") or {}
-        if not _mf_support:
-            _mf_support = tier_a_verifier.verify_metrics(
-                final_markdown, resume_text)
+        # Earlier analysis PASS is not approval of a later synthesis. Always
+        # verify THIS final document against immutable combined uploaded text.
+        _mf_support = tier_a_verifier.verify_metrics(final_markdown, resume_text)
 
         _mf_decision = publication_gate.decide(
             resume_markdown=final_markdown,
             metrics_support=_mf_support,
             fallback_used=bool((analysis_result or {}).get("pipeline_status")
                                == "failed"),
+            required_facts_missing=unsupported_entities(
+                final_markdown, resume_text),
             approved_entities=_approved_entities_from_payload(
                 analysis_result, None, source_snapshot),
         )
