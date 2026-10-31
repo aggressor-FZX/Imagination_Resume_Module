@@ -3619,9 +3619,13 @@ def run_generation(analysis_json: Union[str, Dict], job_ad: str, **kwargs) -> st
         return {"gap_bridging": [], "metric_improvements": []}
 
 
-async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, openrouter_api_keys: Optional[List[str]] = None, **kwargs) -> str:
+async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, openrouter_api_keys: Optional[List[str]] = None, llm_client: Any = None, **kwargs) -> str:
     """
     Generates a tailored resume section based on a job ad and skill analysis.
+
+    ``llm_client`` (owner item 1) is an optional injected client, symmetric with
+    ``run_synthesis_async``. Threading one client through every stage is what
+    makes a route fully controllable from a test without touching its logic.
     """
     RUN_METRICS["stages"]["generation"]["start"] = time.time()
     analysis = _load_json_payload(analysis_json, "analysis_json")
@@ -3650,6 +3654,12 @@ async def run_generation_async(analysis_json: Union[str, Dict], job_ad: str, ope
           if isinstance(content, str) and content:
               RUN_METRICS["calls"].append({"provider": "Mock", "stage": "generation"})
               return content
+        if llm_client is not None:
+            return await llm_client.call_llm_async(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=kwargs.get("model") or "generation",
+            )
         result = await call_llm_async(system_prompt, user_prompt, openrouter_api_keys=openrouter_api_keys, **kwargs)
         return result
     except Exception:
@@ -3665,10 +3675,23 @@ async def run_synthesis_async(
     analysis_result: Optional[Dict] = None,
     convenience_mode: bool = False,
     critique_json: Optional[Dict] = None,
+    llm_client: Any = None,
     **kwargs,
 ) -> Union[str, Dict[str, Any]]:
     """
     Synthesize generated experiences into cohesive resume section.
+
+    ``llm_client`` (owner item 1) is an OPTIONAL injected client. When supplied,
+    this function routes its model call through it instead of the ambient
+    ``call_llm_async`` helper. That makes the synthesis dependency controllable
+    from a test without weakening the acceptance condition: the route still runs
+    the real synthesis code path and the real publication gate, but the model
+    behind them is deterministic.
+
+    Previously the only way to make this stage offline was to accept that it
+    would fail with dummy credentials — which meant the multi-file route could
+    only ever be shown to fail closed. A negative-only demonstration cannot
+    distinguish "the gate works" from "the pipeline is broken".
     """
     logger.info("[SYNTHESIS] Starting synthesis with convenience_mode=%s", convenience_mode)
 
@@ -3760,6 +3783,12 @@ CRITICAL INSTRUCTION: If the source material is sparse, do your best with what i
             max_tokens=1200,
             temperature=0.3,
             **kwargs,
+        ) if llm_client is None else await llm_client.call_llm_async(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=kwargs.get("model") or kwargs.get("final_writer") or "synthesis",
+            max_tokens=1200,
+            temperature=0.3,
         )
 
         # Manual JSON parsing with error handling
@@ -3898,6 +3927,7 @@ async def run_criticism_async(
     generated_text: str,
     job_ad: str,
     openrouter_api_keys: Optional[List[str]] = None,
+    llm_client: Any = None,
     **kwargs
 ) -> str:
     """
@@ -3923,6 +3953,12 @@ async def run_criticism_async(
           if isinstance(content, str) and content:
               RUN_METRICS["calls"].append({"provider": "Mock", "stage": "criticism"})
               return content
+        if llm_client is not None:
+            return await llm_client.call_llm_async(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                model=kwargs.get("model") or "criticism",
+            )
         result = await call_llm_async(system_prompt, user_prompt, openrouter_api_keys=openrouter_api_keys, **kwargs)
         return result
     except Exception:

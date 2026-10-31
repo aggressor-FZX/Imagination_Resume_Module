@@ -52,6 +52,7 @@ from imaginator_flow import (
 )
 from imaginator_new_integration import run_new_pipeline_async
 import publication_gate
+import tier_a_verifier
 
 # Configure global logger for this service
 logger = configure_logging(service_name="imaginator")
@@ -128,6 +129,34 @@ async def get_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 
+# ── Trusted owner identity (owner item 3) ────────────────────────────────
+# Approval receipts are bound to an owner so one candidate's approval cannot
+# authorise another candidate's export. That owner MUST come from the trusted
+# request context, not the request body: a caller who supplies
+# `{"owner": "someone-else"}` is asserting, not authenticating.
+#
+# This service is invoked service-to-service by the orchestrator, which
+# authenticates the end user and forwards their identity on a dedicated header.
+# The header is only meaningful because the request already passed `get_api_key`;
+# an unauthenticated caller cannot set it at all.
+OWNER_IDENTITY_HEADER = "x-cogito-owner-id"
+
+
+def trusted_owner_identity(request) -> Optional[str]:
+    """Owner identity from the authenticated request context, or None.
+
+    Deliberately reads ONLY the header. Falling back to body fields
+    (`owner`, `user_id`, `email`) would let the caller choose who the approval
+    belongs to, which defeats the binding.
+    """
+    try:
+        raw = request.headers.get(OWNER_IDENTITY_HEADER)
+    except Exception:  # noqa: BLE001
+        return None
+    value = (raw or "").strip()
+    return value or None
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint for load balancers and monitoring"""
@@ -167,6 +196,13 @@ async def _analyze_resume_impl(
     # Parse incoming body and attach request_id
     body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
     request_id = getattr(request.state, "request_id", None)
+
+    # ── Immutable source evidence, captured at INGRESS (owner item 6) ────
+    # Taken from the submitted body and the uploaded text, before any stage
+    # runs. Every gate call below uses this snapshot instead of re-deriving
+    # evidence from `analysis_result`, which contains generated projects and
+    # could therefore approve itself.
+    source_snapshot = _snapshot_source_evidence(body, body.get("resume_text"))
     logger.info(
         "analyze.request.incoming",
         extra={
@@ -407,7 +443,7 @@ async def _analyze_resume_impl(
                                    == "failed"),
                 finish_reason=analysis_result.get("finish_reason"),
                 approved_entities=_approved_entities_from_payload(
-                    analysis_result, payload),
+                    analysis_result, body, source_snapshot),
             )
             output = publication_gate.apply_to_payload(
                 {
@@ -417,7 +453,8 @@ async def _analyze_resume_impl(
                 },
                 _decision,
             )
-            output = _issue_publication_receipt(output)
+            output = _issue_publication_receipt(
+                output, owner=trusted_owner_identity(request))
 
             # Fix nested domain_insights structure from upstream services (Hermes/FastSVM)
             if "domain_insights" in output and isinstance(
@@ -569,7 +606,7 @@ async def _analyze_resume_impl(
             fallback_used=bool((analysis_result or {}).get("pipeline_status")
                                == "failed"),
             approved_entities=_approved_entities_from_payload(
-                analysis_result, getattr(payload, "__dict__", None)),
+                analysis_result, body, source_snapshot),
         )
 
         output = publication_gate.apply_to_payload(
@@ -585,7 +622,8 @@ async def _analyze_resume_impl(
             },
             _decision,
         )
-        output = _issue_publication_receipt(output)
+        output = _issue_publication_receipt(
+            output, owner=trusted_owner_identity(request))
 
         ## Validate output schema
         validate_output_schema(output)
@@ -759,6 +797,13 @@ def _issue_publication_receipt(output, owner=None):
     Export verifies this against the content it is about to render, so a caller
     cannot forge `metrics_support` or edit the resume between approval and
     export. Non-publishable results get no receipt.
+
+    The receipt binds the approved markdown AND the set of substantive strings
+    the server's own renderer would emit for this result. Export requires every
+    structured field it is about to render to be in one of those, which is what
+    makes swapping `experience` bullets or `projects` after approval fail while
+    still allowing the client to reshape fields it legitimately reformats
+    (owner item 2).
     """
     try:
         if not isinstance(output, dict):
@@ -770,7 +815,8 @@ def _issue_publication_receipt(output, owner=None):
             return output
         md = output.get("final_written_section_markdown")
         receipt = publication_gate.issue_receipt(
-            markdown=md, verdict=verdict, owner=owner)
+            markdown=md, verdict=verdict, owner=owner,
+            approved_claims=publication_gate.approved_render_claims(output))
         output["publication_receipt"] = receipt
         if receipt is None:
             # Signing unavailable: do not claim approval we cannot vouch for.
@@ -784,6 +830,23 @@ def _issue_publication_receipt(output, owner=None):
         if isinstance(output, dict):
             output["publication_receipt"] = None
         return output
+
+
+def _multifile_llm_client(api_keys):
+    """Client for the multi-file route's generation / criticism / synthesis stages.
+
+    Returns an `LLMClientAdapter`, or None when no key is configured (the stages
+    then use their own ambient path and the gate blocks as unverified). Tests
+    replace `LLMClientAdapter` in this module's namespace with a stage-aware
+    stub, which is why this indirection exists rather than constructing the
+    adapter at each call site: one seam, three stages.
+    """
+    if not api_keys:
+        return None
+    return LLMClientAdapter(
+        api_key=api_keys[0],
+        fallback_keys=api_keys[1:] if len(api_keys) > 1 else [],
+    )
 
 
 def _markdown_from_export_payload(payload):
@@ -859,7 +922,8 @@ def _markdown_from_export_payload(payload):
     return "\n".join(parts) if parts else None
 
 
-def _approved_entities_from_payload(analysis_result, payload=None):
+def _approved_entities_from_payload(analysis_result, payload=None,
+                                    source_snapshot=None):
     """Compose the approved-entity allow-list for the publication gate.
 
     CRITICAL: evidence must come from SOURCE / CONFIRMED CANDIDATE DATA only —
@@ -873,10 +937,15 @@ def _approved_entities_from_payload(analysis_result, payload=None):
     Measured: this is exactly how entity checking could be defeated.
 
     Sources, in order:
-      1. `payload` — what the CALLER submitted (confirmed candidate data).
-      2. `analysis_result["source_*"]` — pipeline fields that echo the source,
-         not the generation.
-      3. Nothing else. Generated projects cannot self-approve.
+      1. `source_snapshot` — an immutable tuple captured at INGRESS from the
+         request body and the uploaded text, before any generation ran. Every
+         route passes this, so evidence cannot be influenced by the pipeline.
+      2. `payload` — what the CALLER submitted (confirmed candidate data).
+      3. `analysis_result["source_*"]` — legacy echo fields, used only when no
+         snapshot exists (direct callers). Real routes never take this path,
+         because a pipeline that ever wrote `source_projects` from generated
+         content would otherwise self-approve (owner item 6).
+      4. Nothing else. Generated projects cannot self-approve.
 
     Returns a list (possibly empty) or None when no source data exists at all.
     """
@@ -899,7 +968,24 @@ def _approved_entities_from_payload(analysis_result, payload=None):
 
     saw_source = False
 
+    # ── 0. immutable ingress snapshot (authoritative; owner item 6) ─────
+    # A tuple, so a later stage cannot mutate the evidence in place. Presence
+    # of the snapshot ends the search: nothing downstream may add to it.
+    if source_snapshot is not None:
+        for entry in tuple(source_snapshot):
+            _add(entry)
+        return entities
+
     # ── 1. caller-supplied candidate data (authoritative) ───────────────
+    #
+    # `payload` is what the CALLER submitted — confirmed candidate data.
+    # `analysis_result` is the pipeline output and may contain generated
+    # projects, so it is only consulted for explicit `source_*` echo fields.
+    #
+    # The caller may arrive as a pydantic model; normalise it first.
+    if payload is not None and not isinstance(payload, dict):
+        payload = getattr(payload, "__dict__", None) or getattr(
+            payload, "model_dump", lambda: None)()
     if isinstance(payload, dict):
         for key in ("projects", "education", "certifications", "experience",
                     "experiences", "skills"):
@@ -907,7 +993,7 @@ def _approved_entities_from_payload(analysis_result, payload=None):
                 saw_source = True
                 _add(payload.get(key))
 
-    # ── 2. explicit SOURCE echo fields on the result ────────────────────
+    # ── 2. explicit SOURCE echo fields on the result (legacy) ───────────
     # Names must indicate provenance. Anything else risks generated content.
     if isinstance(analysis_result, dict):
         for key in ("source_projects", "source_education",
@@ -932,6 +1018,93 @@ def _approved_entities_from_payload(analysis_result, payload=None):
     # Empty list is meaningful: source data was examined and yielded nothing
     # (a candidate with no projects). None means we never saw source data.
     return out if saw_source else None
+
+
+def _snapshot_source_evidence(payload=None, resume_text=None) -> tuple:
+    """Capture approved-entity evidence at ingress, before generation runs.
+
+    Owner item 6: approved evidence must be immutable and independent of
+    generated output. Both properties come from WHERE this runs — at request
+    entry, over the submitted structured fields and the uploaded resume text.
+    The returned tuple is then passed explicitly to every gate call, so no
+    later stage can substitute its own (possibly generated) view of the
+    candidate's employers, projects, education or certifications.
+
+    Structured sections are re-derived from the resume text when the caller did
+    not supply them, using the same conservative section parser the pipeline
+    uses, so a text-only upload still has real evidence to check against.
+    """
+    collected = []
+    saw_source = False
+
+    if isinstance(payload, dict):
+        for key in ("projects", "education", "certifications", "experience",
+                    "experiences", "skills"):
+            if key in payload:
+                saw_source = True
+                collected.append(payload.get(key))
+    elif payload is not None:
+        as_dict = (getattr(payload, "__dict__", None)
+                   or (payload.model_dump() if hasattr(payload, "model_dump")
+                       else None))
+        if isinstance(as_dict, dict):
+            for key in ("projects", "education", "certifications", "experience",
+                        "experiences", "skills"):
+                if key in as_dict:
+                    saw_source = True
+                    collected.append(as_dict.get(key))
+
+    if isinstance(resume_text, str) and resume_text.strip():
+        saw_source = True
+        try:
+            from imaginator_new_integration import (
+                _extract_structured_sections_from_resume,
+            )
+            inferred = _extract_structured_sections_from_resume(resume_text)
+        except Exception:  # noqa: BLE001 - parsing is best effort
+            inferred = {}
+        for key in ("projects", "education", "certifications"):
+            if inferred.get(key):
+                collected.append(inferred[key])
+        # Employers named in the uploaded text are evidence too.
+        try:
+            from imaginator_flow import parse_experiences
+            collected.append(parse_experiences(resume_text) or [])
+        except Exception:  # noqa: BLE001
+            pass
+
+    if not saw_source:
+        return tuple()
+
+    keys = ("name", "company", "institution", "title", "canonical_title",
+            "school", "issuer", "degree", "role")
+    flat = []
+
+    def _flatten(value):
+        if not value:
+            return
+        if isinstance(value, str):
+            if value.strip():
+                flat.append(value.strip())
+        elif isinstance(value, dict):
+            for k in keys:
+                _flatten(value.get(k))
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                _flatten(item)
+
+    for item in collected:
+        _flatten(item)
+
+    seen = set()
+    unique = []
+    for value in flat:
+        lowered = value.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique.append(value)
+    return tuple(unique)
 
 
 @app.post("/research", dependencies=[Depends(get_api_key)])
@@ -1158,6 +1331,12 @@ async def analyze_multi_file(
         resume_text = "\n\n".join([c for c in contents if c])
         if not resume_text.strip():
             raise HTTPException(status_code=422, detail="files cannot be empty")
+
+        # ── Immutable source evidence, captured at INGRESS (owner item 6) ─
+        # This route has no structured body (multipart only), so evidence comes
+        # from the uploaded text alone — parsed before the pipeline runs, and
+        # never re-derived from generated output afterwards.
+        source_snapshot = _snapshot_source_evidence(None, resume_text)
         api_keys = [
             key
             for key in [settings.openrouter_api_key_1, settings.openrouter_api_key_2]
@@ -1193,7 +1372,10 @@ async def analyze_multi_file(
         logger.info("run_generation.start", extra={"request_id": request_id})
         t0 = time.time()
         generation_result = await run_generation_async(
-            analysis_json=analysis_result, job_ad=job_ad, openrouter_api_keys=api_keys
+            analysis_json=analysis_result,
+            job_ad=job_ad,
+            openrouter_api_keys=api_keys,
+            llm_client=_multifile_llm_client(api_keys),
         )
         generation_duration_ms = int((time.time() - t0) * 1000)
         logger.info(
@@ -1209,6 +1391,7 @@ async def analyze_multi_file(
             generated_text=generation_result,
             job_ad=job_ad,
             openrouter_api_keys=api_keys,
+            llm_client=_multifile_llm_client(api_keys),
         )
         criticism_duration_ms = int((time.time() - t0) * 1000)
         logger.info(
@@ -1247,6 +1430,7 @@ async def analyze_multi_file(
             final_writer=getattr(
                 settings, "FINAL_WRITER_PROVIDER", None
             ),  # Use configured provider (safe getattr)
+            llm_client=_multifile_llm_client(api_keys),
         )
         synthesis_duration_ms = int((time.time() - t0) * 1000)
         logger.info(
@@ -1279,26 +1463,41 @@ async def analyze_multi_file(
         if "suggested_experiences" not in criticism_result:
             criticism_result = {"suggested_experiences": criticism_result}
 
-        # ── Publication decision (single authoritative gate) ─────────────
-        # DEFECT FOUND: this route had NO verification gate at all. It hard-set
-        # processing_status = COMPLETED, so a resume with invented figures was
-        # publishable here even after the /analyze path was fixed. Every route
-        # must go through publication_gate.
+        # ── Tier-A verification for THIS route (owner item 1) ────────────
+        # This route composes its final document from `run_synthesis_async`,
+        # which never runs the editor — so `analysis_result` carries no
+        # `metrics_support`. Previously that meant the gate could only ever
+        # block here (`verification_missing`), and a legitimate multi-file run
+        # was unpublishable. The acceptance condition is NOT relaxed: the same
+        # Tier-A checker runs, against the ORIGINAL uploaded text as evidence.
+        # If that check cannot run, the gate still blocks.
         _mf_support = (analysis_result or {}).get("metrics_support") or {}
         if not _mf_support:
             _mf_support = ((analysis_result or {}).get("final_output")
                            or {}).get("metrics_support") or {}
+        if not _mf_support:
+            _mf_support = tier_a_verifier.verify_metrics(
+                final_markdown, resume_text)
+
         _mf_decision = publication_gate.decide(
             resume_markdown=final_markdown,
             metrics_support=_mf_support,
             fallback_used=bool((analysis_result or {}).get("pipeline_status")
                                == "failed"),
-            approved_entities=_approved_entities_from_payload(analysis_result),
+            approved_entities=_approved_entities_from_payload(
+                analysis_result, None, source_snapshot),
         )
         output = publication_gate.apply_to_payload(
             {
                 **analysis_result,
                 **criticism_result,
+                # The verdict the gate decided on MUST be the verdict the client
+                # receives. `apply_to_payload` copies `metrics_support` from this
+                # dict, so omitting it here produced a response that said
+                # `completed` while carrying no verdict at all — the client could
+                # not tell a verified resume from an unverified one, and no
+                # receipt could be issued because issuance reads this field.
+                "metrics_support": _mf_support,
                 "final_written_section": final_written_section,
                 "final_written_section_markdown": final_markdown,
                 "final_written_section_provenance": final_provenance,
@@ -1308,6 +1507,8 @@ async def analyze_multi_file(
             },
             _mf_decision,
         )
+        output = _issue_publication_receipt(
+            output, owner=trusted_owner_identity(request))
         validate_output_schema(output)
         processing_time = time.time() - start_time
         logger.info(
@@ -1493,15 +1694,41 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
         # is not approval.
         #
         # Now: the caller must present the signed receipt issued by /analyze.
-        # The receipt binds the exact content fingerprint and owner, so neither
-        # a forged verdict nor edited content passes.
+        # The receipt binds the exact content fingerprint, the canonical render
+        # structure, and the owner, so neither a forged verdict, edited markdown,
+        # nor swapped structured fields passes (owner items 2 and 3).
+        #
+        # OWNER: read from the authenticated request context only. This used to
+        # read `payload["owner"]` / `user_id` / `email`, which let the caller
+        # nominate whose approval they were presenting. A normal application
+        # export with no trusted owner identity is rejected outright — an
+        # unowned approval would cross tenants.
         _export_markdown = (payload.get("final_written_section_markdown")
                             or _markdown_from_export_payload(payload))
         _receipt = payload.get("publication_receipt")
-        _owner = (payload.get("owner") or payload.get("user_id")
-                  or payload.get("email"))
+        _owner = trusted_owner_identity(request)
+        if not _owner:
+            logger.warning(
+                "resume.export.blocked",
+                extra={"request_id": request_id, "reason": "owner_unbound"},
+            )
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "publication_blocked",
+                    "reasons": ["receipt_owner_unbound"],
+                    "verification_coverage": "none",
+                    "entity_evidence": "unknown",
+                    "message": (
+                        "This export was not made on behalf of an identified "
+                        "account, so no approval can be attributed to it. Sign "
+                        "in and retry from your analysis results."
+                    ),
+                },
+            )
         _receipt_ok, _receipt_reason = publication_gate.verify_receipt(
-            _receipt, markdown=_export_markdown, owner=_owner)
+            _receipt, markdown=_export_markdown, owner=_owner,
+            render_payload=payload)
 
         if not _receipt_ok:
             logger.warning(

@@ -1248,53 +1248,15 @@ class StarEditor:
             original_resume_text.lower() if original_resume_text else ""
         )
 
-        # Normalized numeric tokens present in the source.
-        orig_numeric_tokens = {
-            m.group(0)
-            for m in re.finditer(r'\d+(?:\.\d+)?', original_text_lower)
-        }
+        # Single definition of Tier A: shared with the routes (owner item 1).
+        # Keeping a second private copy here is how the multi-file route ended up
+        # with no verdict at all — the checker existed only where the editor ran.
+        from tier_a_verifier import unsupported_metrics as _find_unsupported
 
-        unsupported: List[Dict[str, Any]] = []
-
-        if not markdown:
-            result["unsupported_metrics"] = unsupported
-            result["metrics_support_checked"] = bool(original_resume_text)
-            result.setdefault("hallucination_checked", True)
-            return result
-
-        for match in _OUTPUT_METRIC_RE.finditer(markdown):
-            value = match.group(1)
-            unit = (match.group(2) or "").lower().replace(" ", "").replace("-", "")
-            surface = match.group(0).strip()
-
-            supported = False
-            if original_text_lower:
-                variants = [
-                    f"{value}{unit}", f"{value} {unit}",
-                    f"{value}%", f"{value} percent",
-                    f"{value}k", f"{value} thousand",
-                    f"{value}m", f"{value} million",
-                    f"{value}b", f"{value} billion",
-                    f"{value} vessels", f"{value} hours", f"{value} days",
-                    f"{value} weeks", f"{value} months", f"{value} years",
-                    f"{value} tb", f"{value} gb",
-                    (f"{int(float(value)):,}" if '.' in value
-                     else f"{int(value):,}"),
-                ]
-                supported = any(v in original_text_lower for v in variants) or (
-                    value in orig_numeric_tokens
-                )
-
-            if not supported:
-                unsupported.append({
-                    "surface": surface,
-                    "value": value,
-                    "unit": unit,
-                    "reason": (
-                        "no_candidate_evidence" if original_text_lower
-                        else "no_source_text_supplied"
-                    ),
-                })
+        unsupported: List[Dict[str, Any]] = (
+            _find_unsupported(markdown, original_resume_text)
+            if markdown else []
+        )
 
         result["unsupported_metrics"] = unsupported
         result["metrics_support_checked"] = bool(original_text_lower)
