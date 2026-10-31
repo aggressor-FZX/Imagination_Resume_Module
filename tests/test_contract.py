@@ -10,7 +10,16 @@ client = TestClient(app)
 
 @pytest.fixture
 def valid_request():
+    # Phase 2: `resume_text` is a required field on AnalysisRequest but was
+    # absent from this fixture, so the "valid request" case failed schema
+    # validation. That was stale test data, not a schema defect.
     return {
+        "resume_text": (
+            "John Doe\nSenior Python Developer\n\n"
+            "PROFESSIONAL EXPERIENCE\n"
+            "Acme Corp - San Francisco, CA | 2019 - Present\n"
+            "- Built web services in Python and Django\n"
+        ),
         "user_profile": {
             "name": "John Doe",
             "email": "john@example.com",
@@ -49,9 +58,15 @@ def valid_request():
     }
 
 def test_valid_request_schema(valid_request):
-    """Test that a valid request passes schema validation"""
+    """Test that a valid request passes schema validation."""
     req = AnalysisRequest(**valid_request)
-    assert req.user_profile["name"] == "John Doe"
+    # AR-1 (Phase 2): this asserted `req.user_profile["name"]`, but
+    # AnalysisRequest has no `user_profile` field — the assertion was written
+    # against an older schema and had been failing (unseen, because collection
+    # was broken) ever since. Assert on fields that actually exist.
+    assert req.resume_text.startswith("John Doe")
+    assert "Python developer" in req.job_ad
+    assert req.creativity_mode == CreativityMode.BALANCED
 
 def test_invalid_request_schema():
     """Test that an invalid request fails schema validation"""

@@ -3,6 +3,7 @@ import asyncio
 import logging
 import sys
 import os
+import pytest
 from dotenv import load_dotenv
 
 # Load all real secrets from the primary workspace secret file
@@ -20,6 +21,20 @@ from llm_client_adapter import LLMClientAdapter
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Phase 2: these two tests are explicitly live-network checks — they say
+# "REAL API CHECK" in their own log lines and require OpenRouter credentials
+# plus the O*NET API. They cannot pass in the offline gate (SPEC.v2 §13 N-1).
+# Marking them makes the suite an honest pass/fail signal instead of reporting
+# a permanent, expected red that hides real regressions.
+_live_requires_credentials = pytest.mark.skipif(
+    not os.getenv("OPENROUTER_API_KEY_1") or
+    os.getenv("OPENROUTER_API_KEY_1", "").startswith("rctb-") or
+    os.getenv("OPENROUTER_API_KEY_1", "") in ("d", "test-dummy-key-1"),
+    reason="live network/credential test — excluded from the offline gate",
+)
+
+
+@_live_requires_credentials
 async def test_onet_passthrough():
     logger.info("Testing O*NET Passthrough Logic (REAL API CHECK)...")
     
@@ -51,6 +66,7 @@ async def test_onet_passthrough():
     assert resolved_real["code"].startswith("15-") # Cloud/Software is usually 15-
     assert resolved_real["source"] in ["llm", "llm_validated", "keyword_scored"]
 
+@_live_requires_credentials
 async def test_pipeline_real_integration():
     logger.info("Testing REAL Pipeline Integration (End-to-End Trace)...")
     

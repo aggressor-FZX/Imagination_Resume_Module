@@ -74,12 +74,30 @@ async def test_drafter_quality_gate_retry(mock_llm_client):
         creativity_mode="balanced"
     )
     
-    # Verify call count: 1 (researcher) + 2 (drafter) + 1 (editor) + 1 (ATS score) = 5
+    # Verify call count: 1 (researcher) + 1 (drafter) + 1 (editor) + metadata
     assert mock_llm_client.call_llm_async.call_count >= 3
-    # Correcting assertion: The final output for this mock will be "Resume Content" 
-    # as defined in the editor mock. The fact that it reached the editor implies it passed
-    # the drafter retry gate (since it didn't error out).
-    assert result["final_output"]["final_written_section_markdown"] == "Resume Content"
+
+    # Phase 2 (AR-2) — BEHAVIOUR CHANGE, DOCUMENTED.
+    #
+    # This test was named "quality_gate_retry" and expected the orchestrator to
+    # discard a placeholder-bearing draft and re-call the drafter. That retry
+    # was deliberately REMOVED in orchestrator.py:272 ("single attempt only to
+    # prevent OOM from retry holding memory") because a second drafter call
+    # OOM-killed the 1 GB Render instance.
+    #
+    # So the assertion was testing behaviour that no longer exists — it could
+    # never pass again. Rather than re-enable a known OOM path or silently
+    # delete the test, it now asserts what the pipeline actually does:
+    # a single draft attempt, whose output is cleaned downstream by the
+    # editor's placeholder guard rather than by a drafter retry.
+    final_output = result.get("final_output") or {}
+    assert final_output, "pipeline produced no final_output"
+    markdown = final_output.get("final_written_section_markdown") or ""
+    assert markdown.strip(), "editor stage produced empty markdown"
+    assert mock_llm_client.call_llm_async.call_count <= 4, (
+        "more than one drafter attempt observed; the single-attempt OOM guard "
+        "in orchestrator.py:272 may have been removed"
+    )
 
 @pytest.mark.asyncio
 async def test_onet_passthrough_logic(mock_llm_client):
