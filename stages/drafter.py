@@ -41,6 +41,117 @@ def _unwrap_markdown_json_fence(text: str) -> str:
 # PROMPT TEMPLATES
 # ============================================================================
 
+# ============================================================================
+# METRIC EXTRACTION
+# ============================================================================
+# R-2 fix (2026-10-30). The previous implementation used re.findall() with
+# patterns that contained leading optional capture groups, then took m[0].
+# For "$500K" the first group matched the empty string, so the metric was
+# dropped; "13 vessels" and "10+ TB" had no matching pattern at all; and
+# "30 hours" produced a bare "30" with the unit discarded.
+#
+# This version returns a NORMALIZED QUANTITY (value + unit) per SPEC §5.3,
+# which is what the truth checks compare against.
+import re as _metrics_re
+
+_METRIC_PATTERNS = [
+    # percentage: 40%, 12.5 %
+    ("percent", _metrics_re.compile(r'(?<![\d.])(\d+(?:\.\d+)?)\s*%')),
+    # currency: $500K, $1.2M, $3,000, $250,000
+    ("currency", _metrics_re.compile(
+        r'\$\s?(\d[\d,]*(?:\.\d+)?)\s*([KkMmBb](?![A-Za-z]))?')),
+    # data size: 10+ TB, 500 GB, 2MB
+    ("data_size", _metrics_re.compile(
+        r'(?<![\d.])(\d+(?:\.\d+)?)\s*\+?\s*(TB|GB|MB|KB|PB)\b', _metrics_re.I)),
+    # count with unit: 13 vessels, 200 users, 6 engineers, 3 models
+    ("count", _metrics_re.compile(
+        r'(?<![\d.])(\d+(?:\.\d+)?)\s*\+?\s*(vessels?|users?|customers?|clients?|'
+        r'devices?|assets?|records?|rows?|documents?|models?|servers?|'
+        r'engineers?|apprentices?|pipelines?|sites?|locations?|employees?|'
+        r'teams?|projects?|systems?|applications?)\b', _metrics_re.I)),
+    # time with unit: 30 hours, 12 weeks, 5 days
+    ("time", _metrics_re.compile(
+        r'(?<![\d.])(\d+(?:\.\d+)?)\s*\+?\s*(hours?|hrs?|days?|weeks?|months?|'
+        r'years?|minutes?|mins?)\b', _metrics_re.I)),
+    # multiplier: 3x, 10x
+    ("multiplier", _metrics_re.compile(r'(?<![\d.])(\d+(?:\.\d+)?)\s*[xX](?![A-Za-z])')),
+    # verb-led change without explicit percent: "reduced ... by 40"
+    ("change", _metrics_re.compile(
+        r'(?:reduced|increased|improved|decreased|cut|saved|grew|boosted|'
+        r'lowered|accelerated|shortened|expanded|scaled)\b[^.\n]{0,40}?\bby\s+'
+        r'(\d+(?:\.\d+)?)', _metrics_re.I)),
+]
+
+
+def _extract_metrics(text: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """Extract normalized metric quantities from free text.
+
+    Returns a list of dicts::
+
+        {"value": "30", "unit": "hours", "kind": "time",
+         "display": "30 hours", "source_text": "...context..."}
+
+    ``value`` and ``unit`` are what SPEC.v2 §5.3 compares; ``display`` keeps the
+    surface form for rendering. Digits are never returned without their unit,
+    which is the defect this function replaces (evidence C5).
+    """
+    if not text:
+        return []
+
+    found: List[Dict[str, Any]] = []
+    seen = set()
+
+    for kind, pattern in _METRIC_PATTERNS:
+        for match in pattern.finditer(text):
+            groups = [g for g in match.groups() if g]
+            if not groups:
+                continue
+            value = str(groups[0]).replace(",", "")
+            unit = str(groups[1]) if len(groups) > 1 else _DEFAULT_UNITS[kind]
+
+            # Skip bare years such as 2024 — they are dates, not achievements.
+            if kind == "time" and _METRIC_RE_YEAR.match(unit) and len(value) == 4:
+                continue
+
+            key = (value, unit.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+
+            display = match.group(0).strip()
+            context_start = max(0, match.start() - 40)
+            context = text[context_start:match.end() + 40].replace("\n", " ").strip()
+
+            found.append({
+                "value": value,
+                "unit": unit.lower(),
+                "kind": kind,
+                "display": display,
+                "source_text": context,
+            })
+            if len(found) >= limit:
+                return found
+
+    return found
+
+
+_DEFAULT_UNITS = {
+    "percent": "%",
+    "currency": "usd",
+    "data_size": "bytes",
+    "count": "count",
+    "time": "time",
+    "multiplier": "x",
+    "change": "count",
+}
+
+_METRIC_RE_YEAR = _metrics_re.compile(r'^(hours?|days?|weeks?|months?|years?)$', _metrics_re.I)
+
+
+# ============================================================================
+# PROMPT CONSTRUCTION
+# ============================================================================
+
 def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: Dict,
                          seniority_level: str, allowed_verbs: List[str],
                          golden_bullets: Optional[List[str]] = None,
@@ -126,33 +237,44 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - ALLOWED: {json.dumps(original_titles) if original_titles else '["Professional"]'}
    - You may slightly polish titles (e.g., "Programmer" -> "Software Engineer"), but DO NOT promote a "Junior" to "VP".
 
-3. **TECHNOLOGY:** Use technologies from the user's input AND technologies clearly implied by the role.
-   - If user said "SQL, Python, Tableau", you may use those exact words
-   - If user said "database work", you may add "SQL" as it's clearly implied
-   - If user said "data pipelines", you may add "ETL" as it's clearly implied
-   - Do NOT add technologies completely unrelated to the user's work
+3. **TECHNOLOGY — EVIDENCE ONLY:**
+   - Use technologies named in the user's input. Terminology normalization is
+     allowed: "database work" → "SQL" is acceptable ONLY if SQL appears in the
+     candidate's input or verified skills.
+   - Do NOT introduce a new ACTIVITY the source does not describe. Listing PyTorch
+     does not establish "analyzed deep learning model internals"; that is a new
+     claim, not a restatement.
+   - Do NOT add technologies unrelated to the user's work.
 
-4. **JD KEYWORD WEAVING (ATS OPTIMIZATION):**
-   - The Job Description contains keywords and domain vocabulary the target employer values.
-   - You MUST weave relevant JD terms naturally into resume bullets WHERE the candidate's experience genuinely supports them.
-   - Examples of safe weaving: If the JD mentions "deep learning internals analysis" and the candidate has PyTorch experience, you may write "Analyzed deep learning model internals using PyTorch..." — this bridges the candidate's actual skill with the JD's terminology.
-   - Examples of safe weaving: If the JD mentions "HPC environments" and the candidate worked with distributed computing, you may write "Deployed models in high-performance computing (HPC) environments..."
-   - DO NOT fabricate experiences to match JD requirements. Only connect existing skills/experience to JD language.
-   - DO NOT copy full sentences or responsibilities verbatim from the JD.
+4. **JD KEYWORD WEAVING (ATS OPTIMIZATION) — NO NEW CLAIMS:**
+   - The Job Description contains vocabulary the target employer values. You may
+     reuse that vocabulary ONLY to relabel an activity the candidate's input
+     already describes.
+   - Safe: candidate wrote "created embeddings in Pinecone" → "vector search with
+     Pinecone". Same activity, clearer term.
+   - UNSAFE: candidate lists "PyTorch" → writing "Analyzed deep learning model
+     internals using PyTorch". That invents an activity the source never mentions.
+   - DO NOT fabricate experiences to match JD requirements. DO NOT copy full
+     sentences or responsibilities verbatim from the JD.
 
-5. **METRICS POLICY — THREE TIERS:**
-   - **TIER 1 — EXPLICIT (always use verbatim):** If the user's resume contains exact numbers, copy them. Example: "13-vessel fleet" → use "13-vessel fleet".
-   - **TIER 2 — JD-IMPLIED (infer from context):** If the JD provides a specific target (e.g., "5+ years of Python", "$500K budget", "managed 10-person team") AND the candidate's experience genuinely supports it, you MAY reflect these numbers in bullets. Example: JD says "5+ years experience with SQL" and candidate lists SQL → "5+ years of SQL experience".
-   - **TIER 3 — REASONABLE SCALE (ordinal & count):** Numbers that describe the *scale* of work are safe to infer. "Managed hydrographic data" → "Managed hydrographic data collection for 4 NOAA research vessels". "Presented to leadership" → "Presented quarterly analytics to senior leadership". "Led project" → "Led cross-functional team of 6 engineers".
-   - **PROHIBITED:** Never invent dollar amounts, revenue percentages, or headcount statistics that aren't supported by the resume or JD. Never claim "increased revenue by 30%" without evidence.
-   - A bullet without a metric is NOT a failure — but a bullet that CAN safely carry one should.
+5. **METRICS — EVIDENCE ONLY (see "VERIFIED METRICS" in the user message):**
+   - Use a number ONLY when it appears in the verified metrics list, and keep the
+     value AND unit together. Write "30 hours", never a bare "30".
+   - The Job Description and research may guide relevance and vocabulary, but they
+     may NEVER supply accomplishments, durations, budgets, team sizes, or outcomes.
+   - A requirement is not evidence: "5+ years of SQL" in the JD does not become
+     "5+ years of SQL experience" in the resume unless the candidate's own profile
+     states it.
+   - If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
+     infer, or round.
+   - A bullet without a metric is NOT a failure.
 
 6. **STRONG BULLETS REQUIRED:**
    - Each bullet should be 15-25 words, starting with a strong action verb
    - Include specific technologies, tools, and methods from the user's input
    - Lead with the impact or result when metrics are available
    - BAD: "Applied technical skills to achieve measurable results" (generic, no specifics)
-   - GOOD: "Led analysis and interpretation of sensor data for 13-vessel research fleet; built metrics dashboards reducing manual reporting overhead by 40%"
+   - GOOD: "<Strong verb> <specific task> for <N> <unit from VERIFIED METRICS>; <second outcome>"
 
 7. **DATE FORMAT & PRESERVATION (IMPORTANT):**
    - Copy the EXACT start and end dates from the User Input "Duration" field into the output `duration` field. Do NOT invent, approximate, or omit dates.
@@ -184,7 +306,7 @@ Output JSON Schema:
         "Strong Action Verb + Problem Solved + Benefit",
         "Strong Action Verb + Specific Tech + Business Outcome"
       ],
-      "metrics_used": ["90% latency reduction", "10k+ assets", "$500K funding"],
+      "metrics_used": ["<value> <unit from VERIFIED METRICS>"],
       "style_transfer_rationale": "Mapped user's edge computing note to the Golden Bullet about 'High-availability distributed systems'."
     }}
   ],
@@ -193,6 +315,76 @@ Output JSON Schema:
 }}
 """
     return system_prompt
+
+def _build_drafter_prompts(
+    experiences: List[Dict],
+    job_ad: str,
+    research_data: Dict[str, Any],
+    golden_bullets: Optional[List[str]] = None,
+    resume_text: str = "",
+    extracted_job_title: Optional[str] = None,
+) -> tuple:
+    """Build (system_prompt, user_prompt) without calling a model.
+
+    Extracted so R-5 (prompt policy regression, SPEC.v2 §9) can assert on the
+    exact prompt text offline, at zero cost. Behaviour is identical to what
+    Drafter.draft() sends.
+    """
+    seniority_level, seniority_config = get_seniority_config(job_ad)
+    system_prompt = create_drafter_prompt(
+        experiences=experiences,
+        job_ad=job_ad,
+        research_data=research_data,
+        seniority_level=seniority_level,
+        allowed_verbs=seniority_config["verbs"],
+        golden_bullets=golden_bullets,
+        tone_instruction="Maintain a standard, professional corporate tone.",
+        extracted_job_title=extracted_job_title,
+    )
+
+    _search_text = (resume_text or "") + "\n" + json.dumps(experiences)
+    _found_metrics = _extract_metrics(_search_text, limit=12)
+
+    if _found_metrics:
+        _metrics_block = "\n".join(
+            f"- {m['value']} {m['unit']} ({m['kind']})"
+            + (f" — from: …{m['source_text']}…" if m.get("source_text") else "")
+            for m in _found_metrics
+        )
+    else:
+        _metrics_block = "- (none found — leave bullets unquantified; never estimate)"
+
+    user_prompt = f"""
+User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
+Each experience has a 'bullets' (or 'description') field containing the ORIGINAL bullet content.
+Mine this field for: metrics, technologies, action verbs, and domain-specific language.
+DO NOT fabricate anything not in these descriptions.
+
+{json.dumps(experiences, indent=2)}
+
+Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
+{job_ad[:3000]}
+
+Research Insights:
+- Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
+- Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
+- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
+
+=== VERIFIED METRICS (extracted from the candidate's own resume) ===
+{_metrics_block}
+
+METRIC RULE (evidence only):
+- You may use a number ONLY when it appears in the verified list above and you
+  keep its value AND unit together (write "30 hours", never a bare "30").
+- The Job Description and Research Insights may guide vocabulary and relevance.
+  They may NEVER supply accomplishments, durations, budgets, team sizes, or
+  outcomes. A requirement in the JD is not evidence of the candidate's history.
+- If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
+  infer, round, or extrapolate a number.
+- A bullet without a metric is completely acceptable and is NOT a failure.
+"""
+    return system_prompt, user_prompt
+
 
 # ============================================================================
 # DRAFTER CLASS
@@ -266,25 +458,27 @@ class Drafter:
         ) + sparse_instruction
         
         # Pre-extract metrics from BOTH the raw resume text and structured experiences.
-        # The 3-TIER METRICS POLICY allows JD-implied and reasonable-scale numbers
-        # in addition to explicit resume metrics. We extract explicit ones here
-        # so the LLM sees them alongside the JD context.
-        import re as _re
+        #
+        # R-2 fix (2026-10-30): use the normalized-quantity extractor so every
+        # metric arrives with its unit ("30 hours", not "30") and $500K / 13
+        # vessels / 10+ TB are no longer silently dropped (evidence C5).
         _search_text = (resume_text or '') + '\n' + json.dumps(experiences)
-        _metric_patterns = [
-            (r'(\d+(\.\d+)?%)', 'percentage'),
-            (r'\$[\d,]+(\.[\d]+)?\s*(million|billion|thousand|K|M|B)?', 'dollar_amount'),
-            (r'(\d+[\d,]*)\s*(users|customers|clients|devices|assets|records|rows|documents|models|servers)', 'count_with_unit'),
-            (r'(reduced|increased|improved|decreased|cut|saved|grew|boosted|lowered|accelerated|shortened|expanded)\s+\w+\s+by\s+\d+', 'verb_metric'),
-            (r'(\d+[\d,]*)\s*(hours|days|weeks|months|years)', 'time_unit'),
-        ]
-        _found_metrics = []
-        for _pat, _label in _metric_patterns:
-            for _m in _re.findall(_pat, _search_text, _re.IGNORECASE):
-                _val = _m[0] if isinstance(_m, tuple) else _m
-                if _val and len(str(_val)) > 1:
-                    _found_metrics.append(str(_val).strip())
-        _found_metrics = list(dict.fromkeys(_found_metrics))[:10]  # dedupe, limit to 10
+        _found_metrics = _extract_metrics(_search_text, limit=12)
+
+        # R-5 fix (2026-10-30): the previous prompt contained a "3-TIER METRICS
+        # POLICY" that explicitly authorised turning a JD requirement into a
+        # candidate claim (TIER 2) and inventing team sizes / vessel counts
+        # (TIER 3), plus a mandatory "METRIC INJECTION" block with a real
+        # candidate's numbers hardcoded. That is the licence to fabricate.
+        # Replaced below with an evidence-only rule.
+        if _found_metrics:
+            _metrics_block = "\n".join(
+                f"- {m['value']} {m['unit']} ({m['kind']})"
+                + (f" — from: …{m['source_text']}…" if m.get("source_text") else "")
+                for m in _found_metrics
+            )
+        else:
+            _metrics_block = "- (none found — leave bullets unquantified; never estimate)"
 
         user_prompt = f"""
 User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
@@ -302,18 +496,18 @@ Research Insights:
 - Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
 - Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
 
-YOUR EXISTING METRICS (extracted from your resume):
-{chr(10).join('- ' + m for m in _found_metrics) if _found_metrics else '- (None found — use qualitative achievements only, do NOT fabricate numbers)'}
+=== VERIFIED METRICS (extracted from the candidate's own resume) ===
+{_metrics_block}
 
-⚠️  METRIC INJECTION REQUIREMENT (CRITICAL — FAILURE = INCOMPLETE OUTPUT):
-You MUST weave AT LEAST 2 of the metrics listed above into your rewritten bullets.
-- If the metric is "13-vessel", write "13-vessel fleet" or "fleet of 13 research vessels"
-- If the metric is "40%", write "reduced reporting overhead by 40%"
-- If the metric is "500K", write "secured $500K in federal R&D funding"
-- If the metric is "30 hours", write "saving 30 hours per week"
-- If the metric is "10+ TB", write "processed 10+ TB of maritime data"
-You have PERMISSION to use these exact values in your bullets. They were extracted from the user's OWN resume. USING them is NOT fabrication — it's faithful reproduction.
-DO NOT skip this step. Every experience must carry at least one concrete metric where available.
+METRIC RULE (evidence only):
+- You may use a number ONLY when it appears in the verified list above and you
+  keep its value AND unit together (write "30 hours", never a bare "30").
+- The Job Description and Research Insights may guide vocabulary and relevance.
+  They may NEVER supply accomplishments, durations, budgets, team sizes, or
+  outcomes. A requirement in the JD is not evidence of the candidate's history.
+- If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
+  infer, round, or extrapolate a number.
+- A bullet without a metric is completely acceptable and is NOT a failure.
 """
         
         try:
@@ -394,20 +588,50 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
                 rewritten = []
             
             # Validate each experience
+            #
+            # R-6 fix (2026-10-30): join on a stable experience_id instead of
+            # list position. The previous code used original_experiences[i],
+            # so a model that reordered or dropped a role attached one job's
+            # dates/location to another job — the most damaging resume error
+            # and invisible to any keyword scorer.
+            _by_id = {}
+            _by_company = {}
+            for _idx, _orig in enumerate(original_experiences):
+                if not isinstance(_orig, dict):
+                    continue
+                _eid = _orig.get("experience_id") or _orig.get("id")
+                if _eid:
+                    _by_id[str(_eid)] = _orig
+                _co = (_orig.get("company") or "").strip().lower()
+                if _co:
+                    _by_company.setdefault(_co, _orig)
+
             validated_experiences = []
             for i, exp in enumerate(rewritten):
                 if isinstance(exp, dict):
-                    # Preserve duration and location from original experience if available
-                    original_exp = original_experiences[i] if i < len(original_experiences) else {}
-                    # Build duration: prefer LLM's output, then original's duration,
-                    # then reconstruct from start_date/end_date if those are split fields.
-                    # IMPORTANT: only default to "Present" when the ORIGINAL experience
-                    # has no end_date AND the experience is the most recent one (index 0).
-                    # For past jobs (index > 0 or explicit end_date), never inject "Present".
+                    # Resolve the ORIGINAL entry: id first, then company name,
+                    # then (last resort) positional — never blindly by index.
+                    _eid = exp.get("experience_id") or exp.get("id")
+                    original_exp = None
+                    if _eid and str(_eid) in _by_id:
+                        original_exp = _by_id[str(_eid)]
+                    if original_exp is None:
+                        _co = (exp.get("company") or "").strip().lower()
+                        original_exp = _by_company.get(_co)
+                    if original_exp is None:
+                        original_exp = (
+                            original_experiences[i]
+                            if i < len(original_experiences)
+                            else {}
+                        )
+                    # Identity fields are owned by the ORIGINAL record. The model
+                    # may rewrite bullets; it may not move dates between jobs.
+                    _orig_company = original_exp.get("company") or ""
+                    _orig_role = original_exp.get("role") or original_exp.get("title") or ""
                     _dur = (
-                        exp.get("duration")
-                        or original_exp.get("duration")
+                        original_exp.get("duration")
                         or original_exp.get("dates", "")
+                        or exp.get("duration", "")
                     )
                     if not _dur and original_exp.get("start_date"):
                         _start = original_exp.get("start_date", "")
@@ -422,13 +646,17 @@ DO NOT skip this step. Every experience must carry at least one concrete metric 
                         else:
                             _end = ""
                         _dur = f"{_start} – {_end}" if _end else _start
+                    if not _dur:
+                        _dur = exp.get("duration", "")
                     validated = {
-                        "company": exp.get("company", ""),
-                        "role": exp.get("role", ""),
+                        "experience_id": _eid or original_exp.get("experience_id", ""),
+                        "company": _orig_company or exp.get("company", ""),
+                        "role": _orig_role or exp.get("role", ""),
                         "duration": _dur,
                         "start_date": original_exp.get("start_date", ""),
                         "end_date": original_exp.get("end_date", ""),
-                        "location": exp.get("location") or original_exp.get("location", ""),
+                        "location": original_exp.get("location")
+                        or exp.get("location", ""),
                         "bullets": exp.get("bullets", []),
                         "metrics_used": exp.get("metrics_used", []),
                         "style_transfer_rationale": exp.get("style_transfer_rationale", "")

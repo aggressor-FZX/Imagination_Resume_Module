@@ -14,6 +14,17 @@ import logging
 from typing import Dict, Any, List, Optional
 from pipeline_config import OR_SLUG_STAR_EDITOR, TEMPERATURES, TIMEOUTS, contains_hallucination
 
+# Metric surfaces checked for source support (R-3). Value in group 1, unit in
+# group 2 where a unit exists. Applied to the WHOLE document, not just bullet
+# lines — the previous version only inspected lines starting with "-".
+_OUTPUT_METRIC_RE = re.compile(
+    r'(\d+(?:\.\d+)?)\s*'
+    r'(%|percent|\$|k\b|thousand|million|billion|hours?|days?|weeks?|months?|'
+    r'years?|man[\- ]?hours|vessels?|TB|GB|MB|users?|records?|projects?|teams?|'
+    r'employees?|x\b)',
+    re.IGNORECASE,
+)
+
 logger = logging.getLogger(__name__)
 
 # ============================================================================
@@ -1206,89 +1217,89 @@ class StarEditor:
         }
     
     def _validate_metrics_against_input(self, result: Dict[str, Any], original_resume_text: str = "") -> Dict[str, Any]:
+        """Report metrics that lack source support — WITHOUT mutating the prose.
+
+        R-3 fix (2026-10-30). The previous implementation deleted any metric
+        whose literal "value+unit" string was absent from the original resume
+        text, and only inspected lines starting with "-". Two opposite failures:
+
+          1. Real, source-backed metrics were silently deleted.
+             Measured: "Reduced reporting overhead by 40% for the 13-vessel
+             research fleet" became "Reduced reporting overhead for the
+             13-vessel research fleet" (evidence C6).
+          2. Invented metrics outside bullet lines (Summary, Skills, Projects)
+             were never checked at all.
+
+        Deleting facts from finished prose is the wrong remedy: it destroys
+        correct content and hides the problem. This version leaves the text
+        byte-identical and emits an ``unsupported_metrics`` list for review,
+        which is what SPEC.v2 §5.6 / T-1 require.
+
+        Args:
+            result: Editor result containing final_markdown
+            original_resume_text: Source resume text used for support checking
+
+        Returns:
+            The same result object, with ``unsupported_metrics`` populated and
+            ``final_markdown`` untouched.
         """
-        Remove fabricated metrics that weren't in the original input.
-        
-        Looks for percentage/dollar/time metrics in output and validates they exist in input.
-        """
-        markdown = result.get("final_markdown", "")
-        original_text_lower = original_resume_text.lower() if original_resume_text else ""
-        
-        # Find all metrics in the output
-        metric_pattern = re.compile(
-            r'(\d+(?:\.\d+)?)\s*(%|percent|\$\d+|k\b|thousand|million|billion|'
-            r'hours|days|weeks|months|years|man[\- ]?hours|vessels?)',
-            re.IGNORECASE,
+        markdown = result.get("final_markdown", "") or ""
+        original_text_lower = (
+            original_resume_text.lower() if original_resume_text else ""
         )
 
-        # Pre-extract numeric tokens from the original input so we can do a
-        # quick membership test. The Drafter may rephrase the unit (e.g. "13
-        # oceanographic research vessels" -> "13‑vessel fleet"); we accept
-        # the bare numeric value as a fallback so we don't drop real metrics.
-        orig_numeric_tokens = set()
-        for _tm in re.finditer(r'\d+(?:\.\d+)?', original_text_lower):
-            orig_numeric_tokens.add(_tm.group(0))
+        # Normalized numeric tokens present in the source.
+        orig_numeric_tokens = {
+            m.group(0)
+            for m in re.finditer(r'\d+(?:\.\d+)?', original_text_lower)
+        }
 
-        def is_metric_in_original(match):
+        unsupported: List[Dict[str, Any]] = []
+
+        if not markdown:
+            result["unsupported_metrics"] = unsupported
+            result["metrics_support_checked"] = bool(original_resume_text)
+            result.setdefault("hallucination_checked", True)
+            return result
+
+        for match in _OUTPUT_METRIC_RE.finditer(markdown):
             value = match.group(1)
-            unit = match.group(2).lower().replace(' ', '').replace('-', '')
-            # Build all the variants the original resume might have used
-            # for the same fact. Examples: "30%", "30 percent", "30 man-hours",
-            # "30 man hours", "500K", "500,000", "2.3 million", "13 vessels".
-            search_patterns = [
-                f"{value}{unit}",
-                f"{value} {unit}",
-                f"{value}k",
-                f"{value} thousand",
-                f"{value}m",
-                f"{value} million",
-                f"{value}b",
-                f"{value} billion",
-                f"{value}%",
-                f"{value} percent",
-                f"{value} man-hours",
-                f"{value} manhours",
-                f"{value} man hours",
-                f"{value} vessels",
-                f"{value} hours",
-                f"{value} days",
-                f"{value} weeks",
-                f"{value} months",
-                f"{value} years",
-                f"{int(float(value)):,}" if '.' in value else f"{int(value):,}",
-            ]
-            for pattern in search_patterns:
-                if pattern in original_text_lower:
-                    return True
-            # Fallback: bare numeric value appears in the original (the LLM
-            # may have rephrased the unit). This is permissive but correct
-            # for the drafter's "PRESERVE METRIC VALUES" instruction.
-            if value in orig_numeric_tokens:
-                return True
-            return False
-        
-        # Remove metrics not in original
-        new_lines = []
-        for line in markdown.split('\n'):
-            if line.strip().startswith('-'):
-                # Check each metric in this line
-                new_line = line
-                for match in metric_pattern.finditer(line):
-                    if not is_metric_in_original(match):
-                        metric_str = match.group(0)
-                        # Clean removal: remove metric but also " by" if it leads to nothing after
-                        new_line = new_line.replace(metric_str, "").replace(" by", "").replace("  ", " ").strip()
-                        # Remove trailing prepositions that are now orphaned
-                        new_line = re.sub(r'\b(by|,)\s*$', '', new_line).strip()
-                        logger.warning(f"[STAR_EDITOR] Removed fabricated metric: {metric_str}")
-                new_lines.append(new_line)
-            else:
-                new_lines.append(line)
-        
-        result["final_markdown"] = "\n".join(new_lines)
-        result["final_plain_text"] = re.sub(r'\*\*|\*|##|- ', '', result["final_markdown"])
-        result["hallucination_checked"] = True
-        
+            unit = (match.group(2) or "").lower().replace(" ", "").replace("-", "")
+            surface = match.group(0).strip()
+
+            supported = False
+            if original_text_lower:
+                variants = [
+                    f"{value}{unit}", f"{value} {unit}",
+                    f"{value}%", f"{value} percent",
+                    f"{value}k", f"{value} thousand",
+                    f"{value}m", f"{value} million",
+                    f"{value}b", f"{value} billion",
+                    f"{value} vessels", f"{value} hours", f"{value} days",
+                    f"{value} weeks", f"{value} months", f"{value} years",
+                    f"{value} tb", f"{value} gb",
+                    (f"{int(float(value)):,}" if '.' in value
+                     else f"{int(value):,}"),
+                ]
+                supported = any(v in original_text_lower for v in variants) or (
+                    value in orig_numeric_tokens
+                )
+
+            if not supported:
+                unsupported.append({
+                    "surface": surface,
+                    "value": value,
+                    "unit": unit,
+                    "reason": (
+                        "no_candidate_evidence" if original_text_lower
+                        else "no_source_text_supplied"
+                    ),
+                })
+
+        result["unsupported_metrics"] = unsupported
+        result["metrics_support_checked"] = bool(original_text_lower)
+        result.setdefault("hallucination_checked", True)
+        # NOTE: final_markdown is deliberately NOT modified.
         return result
     
     def _create_fallback_output(self, experiences: List[Dict], seniority: str) -> Dict[str, Any]:
