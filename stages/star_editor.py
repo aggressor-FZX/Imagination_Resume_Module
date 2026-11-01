@@ -191,15 +191,15 @@ class StarEditor:
                 "quantification_check": self._check_quantification(result.get("final_markdown", ""))
             })
             
-            # Validate metrics - remove any that weren't in the original input
-            result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
-            
             # POST-PROCESSING: Ensure all required sections are present
             result = self._ensure_all_sections(
                 result, education=education, certifications=certifications,
                 skills=skills, projects=projects,
                 original_resume_text=original_resume_text
             )
+
+            # Verify the final document, including any appended sections.
+            result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
             
             # Ensure we have at least some data
             if not result.get("final_markdown"):
@@ -639,8 +639,8 @@ class StarEditor:
             (r'\*Present - Present\*', ''),  # Invalid date range
             (r'\*N/A \| N/A\*', ''),  # N/A placeholder
             (r'\*Unknown \| Unknown\*', ''),  # Unknown placeholder
-            (r'\*Dates \| [A-Za-z\s,]+\*', ''),  # Partial placeholder
-            (r'\*[A-Za-z\s]+ \| Location\*', ''),  # Partial placeholder
+            (r'\*Dates \| [A-Za-z \t,]+\*', ''),  # Partial placeholder
+            (r'\*[A-Za-z \t]+ \| Location\*', ''),  # Partial placeholder
             (r'\b20XX\b', ''),  # Placeholder year tokens
             (r'\bXX/XX\b', ''),  # Placeholder date fragments
             (r'\(Year\)', ''),  # (Year) placeholder
@@ -659,9 +659,9 @@ class StarEditor:
             result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
         # Clean up separators left behind after placeholder removal.
-        result = re.sub(r'\|\s*\|', '|', result)
-        result = re.sub(r'\*\s*\|\s*', '*', result)
-        result = re.sub(r'\s{2,}', ' ', result)
+        result = re.sub(r'\|[ \t]*\|', '|', result)
+        result = re.sub(r'\*[ \t]*\|[ \t]*', '*', result)
+        result = re.sub(r'[ \t]{2,}', ' ', result)
         
         # Post-cleanup validation: if known placeholders remain, run a second pass
         leftover_patterns = [r'\(Year\)', r'\(Duration\)', r'\*Dates \|', r'20XX', r'XX/XX']
@@ -698,7 +698,7 @@ class StarEditor:
             match = re.search(rf'##\s*{re.escape(section_name)}\s*\n(.*?)(?=##\s|\Z)', md, re.IGNORECASE | re.DOTALL)
             if match:
                 body = match.group(1).strip()
-                if body and len(body) > 5:
+                if body:
                     sections_with_content.add(section_name.lower())
                 elif match:
                     # Header exists but empty — remove the empty header
@@ -890,7 +890,7 @@ class StarEditor:
 
         # --- Phase 1: Insert newlines before long (multi-word) phrases ---
         for name in _SECTION_NAMES_LONG:
-            pattern = rf'(?<!\n)\b({re.escape(name)})\s+([A-Z0-9*])'
+            pattern = rf'(?<!\n)(?<!# )\b({re.escape(name)})[ \t]+([A-Z0-9*])'
             def _add_newline_long(m: "re.Match[str]") -> str:
                 return "\n" + m.group(0)
             result = re.sub(pattern, _add_newline_long, result)
@@ -898,7 +898,7 @@ class StarEditor:
         # --- Phase 2: Insert newlines before single-word names,
         #     SKIPPING those already part of a multi-word phrase ---
         for name in _SECTION_NAMES_SHORT:
-            pattern = rf'(?<!\n)\b({re.escape(name)})\s+([A-Z0-9*])'
+            pattern = rf'(?<!\n)(?<!# )\b({re.escape(name)})[ \t]+([A-Z0-9*])'
 
             def _add_newline_short(m: "re.Match[str]", _name: str = name) -> str:
                 """Only insert newline if this word is NOT part of a longer phrase."""
