@@ -1046,7 +1046,10 @@ class StarEditor:
             # Inside experience section: detect unmarked lines that look like bullets
             if in_experience_section and stripped:
                 is_already_bullet = bool(re.match(r'^[-•*▪●►◦]\s', stripped))
-                is_bold_header = bool(re.match(r'^\*\*.*\*\*$', stripped))
+                # A company heading can have location after its closing bold
+                # run. Do not turn it into a bullet: the export parser relies
+                # on the leading bold heading to preserve employer boundaries.
+                is_bold_header = bool(re.match(r'^\*\*[^*]+\*\*', stripped))
                 is_italic_header = bool(re.match(r'^\*.*\*$', stripped))
                 is_section_header = bool(re.match(r'^##\s', stripped))
 
