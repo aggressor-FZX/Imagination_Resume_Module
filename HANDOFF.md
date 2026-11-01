@@ -1,6 +1,27 @@
 # Handoff — premerge safety review and test runtime
 
-## Current: bounded rev7 (supersedes remaining local steps below)
+## START HERE — current owner: `../resume_bench/HANDOFF.md`
+
+This file holds Imaginator-side detail. **Current status and remaining work live
+in the harness handoff**: `../resume_bench/HANDOFF.md` (§0 documentation map,
+§2 remaining tasks). Related documents:
+
+- `../resume_bench/STAGING_RUN.rev9.md` — last staging outcome (stopped before
+  spend; all staging resources deleted; acceptance not passed).
+- `../resume_bench/BOUNDED_BLOCKERS.rev7.md` — the five bounded defects.
+- `../resume_bench/STAGING_APPROVAL.rev8.md` — approved release decisions.
+- `../resume_bench/REPRODUCE.md` — offline verification commands.
+
+Branch `feat/hybrid-resume-ingest-phase1`. Reviewed head
+`d17a4b67dd3e39dfb81dc53373190751b7ba24a7`. **Do not merge to `master`** —
+production tracks `master` and would auto-deploy.
+
+Known open item owned by this repository: the completion transport has **no
+atomic pre-call attempt/USD reservation** across retries/fallbacks/timeouts
+(`openrouter_safe_client.py`, `llm_client_adapter.py`). That is why R9 made zero
+paid calls. See §2 of the harness handoff before editing those files.
+
+## Historical: bounded rev7 (supersedes remaining local steps below)
 
 Branch remains `feat/hybrid-resume-ingest-phase1`; base `72a76e4`. Final commit
 is recorded after commit in delivery (`git rev-parse HEAD`).
