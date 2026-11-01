@@ -76,6 +76,14 @@ def unsupported_entities(markdown, source):
     for raw in (markdown or "").splitlines():
         line = raw.strip()
         label = re.sub(r"[^a-z]", "", plain(line.lstrip("#")).lower())
+        # A different section must end the previous entity-checking context.
+        # For example, bold skill-category labels are not employers or schools.
+        if re.match(r"^#{1,6}\s+", line):
+            current = label if label in {
+                "professionalexperience", "workexperience", "experience",
+                "projects", "education", "certifications"
+            } else None
+            continue
         if label in {"professionalexperience", "workexperience", "experience",
                      "projects", "education", "certifications"}:
             current = label
