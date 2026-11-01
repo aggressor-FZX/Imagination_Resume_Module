@@ -444,9 +444,19 @@ async def _analyze_resume_impl(
             # The request correlation ID is operational metadata from the proxy.
             diagnostic_key = os.environ.get("PUBLICATION_RECEIPT_SECRET", "")
             if missing_entities and len(diagnostic_key) >= 16:
+                # Exact, repository-owned synthetic fixture signatures only:
+                # never emit real-user headings or infer synthetic status from
+                # a client-supplied flag.
+                synthetic_marker = (
+                    "Cascade Power Solutions, LLC" in payload.resume_text
+                    and "Example Community Services" in payload.resume_text
+                    and "alex.electrician@example.com" in payload.resume_text
+                    and "jordan.admin@example.com" in payload.resume_text
+                )
                 logger.info("publication.entity_check %s", json.dumps({
                     "correlation_id": request.headers.get("x-correlation-id"),
                     "missing_count": len(missing_entities),
+                    "synthetic_headings": missing_entities if synthetic_marker else None,
                     "digests": [hmac.new(diagnostic_key.encode(),
                         ("entity-diagnostic-v1:" + value.lower().strip()).encode(),
                         hashlib.sha256).hexdigest() for value in missing_entities],
