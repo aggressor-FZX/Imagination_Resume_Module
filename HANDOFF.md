@@ -12,9 +12,11 @@ in the harness handoff**: `../resume_bench/HANDOFF.md` (§0 documentation map,
 - `../resume_bench/STAGING_APPROVAL.rev8.md` — approved release decisions.
 - `../resume_bench/REPRODUCE.md` — offline verification commands.
 
-Branch `feat/hybrid-resume-ingest-phase1`. Reviewed head
-`d17a4b67dd3e39dfb81dc53373190751b7ba24a7`. **Do not merge to `master`** —
-production tracks `master` and would auto-deploy.
+Branch `feat/hybrid-resume-ingest-phase1`. Reviewed **code** head
+`d17a4b67dd3e39dfb81dc53373190751b7ba24a7` (R9 deployed exactly this SHA).
+This handoff's own edits are doc-only commits after that SHA; check
+`git log --oneline -3` and ignore commits touching only `HANDOFF.md`.
+**Do not merge to `master`** — production tracks `master` and would auto-deploy.
 
 Known open item owned by this repository: the completion transport has **no
 atomic pre-call attempt/USD reservation** across retries/fallbacks/timeouts
