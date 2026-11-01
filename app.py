@@ -6,6 +6,8 @@ Based on Context7 research findings for FastAPI best practices
 import os
 import time
 import json
+import hashlib
+import hmac
 from typing import Callable, Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
@@ -436,6 +438,19 @@ async def _analyze_resume_impl(
             # Previously this logic was duplicated here and in the legacy path,
             # and absent entirely from /api/analysis/multi-file — which is how
             # an unverified resume was publishable from that route.
+            missing_entities = unsupported_entities(
+                analysis_result.get("final_written_section_markdown"), payload.resume_text)
+            # Record only keyed fingerprints, never the candidate's headings.
+            # The request correlation ID is operational metadata from the proxy.
+            diagnostic_key = os.environ.get("PUBLICATION_RECEIPT_SECRET", "")
+            if missing_entities and len(diagnostic_key) >= 16:
+                logger.info("publication.entity_check %s", json.dumps({
+                    "correlation_id": request.headers.get("x-correlation-id"),
+                    "missing_count": len(missing_entities),
+                    "digests": [hmac.new(diagnostic_key.encode(),
+                        ("entity-diagnostic-v1:" + value.lower().strip()).encode(),
+                        hashlib.sha256).hexdigest() for value in missing_entities],
+                }))
             _decision = publication_gate.decide(
                 resume_markdown=analysis_result.get(
                     "final_written_section_markdown"),
@@ -443,8 +458,7 @@ async def _analyze_resume_impl(
                 fallback_used=bool(analysis_result.get("pipeline_status")
                                    == "failed"),
                 finish_reason=analysis_result.get("finish_reason"),
-                required_facts_missing=unsupported_entities(
-                    analysis_result.get("final_written_section_markdown"), payload.resume_text),
+                required_facts_missing=missing_entities,
                 approved_entities=_approved_entities_from_payload(
                     analysis_result, body, source_snapshot),
             )
