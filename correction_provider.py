@@ -2,6 +2,7 @@
 import asyncio
 import json
 import re
+import time
 
 import aiohttp
 
@@ -12,6 +13,9 @@ from source_correction import PrivacyReviewRequired, ProviderCallTimeout, Source
 
 MAX_REQUEST_BYTES = 96_000
 MAX_RESPONSE_BYTES = 512_000
+# Output allowance per provider call. Inventory and review must copy or cite every
+# span, so output grows with input; see docs/CORRECTION_TIMEOUT_DIAGNOSIS_2026-11-02.md.
+MAX_OUTPUT_TOKENS = 12000
 # Per-request read timeout. Live runs timed out at 30s: the inventory call for
 # a ~1KB source returns 12000 max_tokens of JSON from a reasoning model, which
 # regularly exceeds 30s. The orchestrator allows 180s for the whole analyze
@@ -86,10 +90,12 @@ def _strict_json(text):
 
 
 class CorrectionProvider:
-    def __init__(self, api_key, session, *, model=OR_SLUG_DRAFTER):
+    def __init__(self, api_key, session, *, model=OR_SLUG_DRAFTER, observer=None):
         self.api_key = api_key
         self.session = session
         self.model = model
+        # Optional sanitized event sink (see correction_events); receives no text.
+        self.observer = observer
         self.calls = 0
         self.usage = {"calls": [], "total_prompt_tokens": 0,
                       "total_completion_tokens": 0, "total_tokens": 0,
@@ -109,7 +115,7 @@ class CorrectionProvider:
                 {"role": "user", "content": serialized_payload},
             ],
             "temperature": 0.1,
-            "max_tokens": 12000,
+            "max_tokens": MAX_OUTPUT_TOKENS,
             "stream": False,
             "provider": {"allow_fallbacks": False},
         }
@@ -127,6 +133,10 @@ class CorrectionProvider:
         self.calls += 1
         # POST is not retried by aiohttp; redirects and model fallbacks are disabled.
         recorded = False
+        started = time.monotonic()
+        outcome = "provider_error"
+        finish = None
+        request_index = self.calls
         try:
             async with self.session.post(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -154,7 +164,8 @@ class CorrectionProvider:
             if type(choices) is not list or len(choices) != 1:
                 raise ValueError("invalid provider choices")
             choice = choices[0]
-            if type(choice) is not dict or choice.get("finish_reason") != "stop":
+            finish = choice.get("finish_reason") if type(choice) is dict else None
+            if type(choice) is not dict or finish != "stop":
                 raise ValueError("incomplete provider response")
             message = choice.get("message")
             if type(message) is not dict or type(message.get("content")) is not str:
@@ -162,14 +173,17 @@ class CorrectionProvider:
             parsed = _strict_json(message["content"])
             if type(parsed) is not dict:
                 raise ValueError("invalid provider response")
+            outcome = "ok"
             return parsed
         except asyncio.CancelledError:
+            outcome = "cancelled"
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "cancelled", "usage_unknown": not recorded})
             raise
         except (asyncio.TimeoutError, TimeoutError) as exc:
             # A single-call read timeout is NOT the overall deadline expiring.
             # Tag it so `correct()` can report which failure actually happened.
+            outcome = "provider_call_timeout"
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "provider_call_timeout",
                                             "usage_unknown": not recorded})
@@ -178,6 +192,29 @@ class CorrectionProvider:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "provider_error", "usage_unknown": not recorded})
             raise
+        finally:
+            self._emit(phase, request_index, outcome, started, recorded, finish)
+
+    def _emit(self, phase, request_index, outcome, started, recorded, finish):
+        """Report one call's timing and token counts. Never includes request or response text."""
+        if self.observer is None:
+            return
+        event = {"event": "provider.call", "phase": phase, "outcome": outcome,
+                 "model": self.model, "request_index": request_index,
+                 "elapsed_ms": int(round((time.monotonic() - started) * 1000)),
+                 "max_tokens": MAX_OUTPUT_TOKENS,
+                 "call_timeout_ms": int(PROVIDER_TIMEOUT_SECONDS * 1000)}
+        if finish is not None:
+            event["finish_reason"] = finish if finish in {"stop", "length"} else "other"
+        if recorded and self.usage["calls"]:
+            last = self.usage["calls"][-1]
+            event.update(prompt_tokens=last["prompt_tokens"],
+                         completion_tokens=last["completion_tokens"],
+                         total_tokens=last["total_tokens"], cost_usd=last["cost_usd"])
+        try:
+            self.observer(event)
+        except Exception:
+            pass
 
     def _record_usage(self, data, phase):
         if not isinstance(data, dict) or not isinstance(data.get("usage"), dict):

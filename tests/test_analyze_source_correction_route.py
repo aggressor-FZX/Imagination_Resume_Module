@@ -259,8 +259,9 @@ def test_overall_deadline_cancels_inflight_provider_without_retry(offline, monke
             return Response()
     session = HangingSession()
     app.app.state.http_session = session
-    async def short_deadline(markdown, sources, provider):
-        return await original_correct(markdown, sources, provider, timeout_seconds=0.02)
+    async def short_deadline(markdown, sources, provider, **kwargs):
+        kwargs.pop("timeout_seconds", None)
+        return await original_correct(markdown, sources, provider, timeout_seconds=0.02, **kwargs)
     monkeypatch.setattr(app, "correct", short_deadline)
     result = post(client).json()
     assert result["correction_reason"] == "timeout_source_inventory" and result["requires_review"]
@@ -272,7 +273,7 @@ def test_overall_deadline_cancels_inflight_provider_without_retry(offline, monke
 def test_real_final_verifiers_veto_changed_correction_result(offline, monkeypatch, mutation):
     client, _ = offline
     pipeline(monkeypatch)
-    async def artificial_approval(markdown, sources, provider):
+    async def artificial_approval(markdown, sources, provider, **kwargs):
         if mutation == "numeric":
             final = SOURCE.replace("30% using", "30% in 6 months using")
         elif mutation == "entity":

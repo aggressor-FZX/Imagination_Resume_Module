@@ -456,7 +456,80 @@ def _silence_task(task: asyncio.Task[Any]) -> None:
         task.exception()
 
 
-async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeout: float) -> Any:
+class PhaseDeadline(TimeoutError):
+    """The overall correction deadline expired while a provider phase was in flight."""
+
+
+def _ms(seconds: Any) -> int:
+    """Milliseconds for logging only; invalid or unrepresentable values become 0."""
+    if type(seconds) not in (int, float):
+        return 0
+    try:
+        value = float(seconds)
+    except OverflowError:
+        return 0
+    if not math.isfinite(value):
+        return 0
+    return max(0, int(round(value * 1000)))
+
+
+class _Events:
+    """Sanitized phase timing for an optional observer. Never raises into correction.
+
+    Only numbers and fixed identifiers are emitted; see ``correction_events``.
+    """
+
+    def __init__(self, observer: Callable[[dict[str, Any]], None] | None, loop: Any,
+                 timeout_seconds: Any) -> None:
+        self.observer = observer
+        self.loop = loop
+        self.started = loop.time()
+        self.deadline_ms = _ms(timeout_seconds)
+        self.calls = 0
+
+    def emit(self, event: str, **fields: Any) -> None:
+        if self.observer is None:
+            return
+        try:
+            self.observer({"event": event, **fields})
+        except Exception:
+            pass
+
+    def elapsed_ms(self) -> int:
+        return _ms(self.loop.time() - self.started)
+
+    def start_phase(self, phase: str, budget: float) -> None:
+        self.calls += 1
+        self.emit("correction.phase_start", phase=phase, request_index=self.calls,
+                  budget_ms=_ms(budget), elapsed_ms=self.elapsed_ms(),
+                  deadline_ms=self.deadline_ms)
+
+    def end_phase(self, phase: str, outcome: str, budget: float, phase_elapsed: float) -> None:
+        self.emit("correction.phase_end", phase=phase, outcome=outcome,
+                  request_index=self.calls, elapsed_ms=_ms(phase_elapsed),
+                  budget_left_ms=_ms(budget - phase_elapsed))
+
+    def end(self, result: CorrectionResult) -> None:
+        self.emit("correction.end", status=result.status, reason=result.reason,
+                  reviews=result.review_calls, repairs=result.repair_calls,
+                  request_index=self.calls, elapsed_ms=self.elapsed_ms(),
+                  deadline_ms=self.deadline_ms)
+
+
+async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeout: float,
+                  events: _Events | None = None) -> Any:
+    """Run one provider phase under the remaining overall budget.
+
+    Expiry of ``timeout`` raises ``PhaseDeadline`` (overall deadline). A single
+    provider request exceeding its own timeout raises ``ProviderCallTimeout``.
+    The two are distinct outcomes and are reported as distinct reasons.
+    """
+    loop = asyncio.get_running_loop()
+    phase_started = loop.time()
+    if events is not None:
+        events.start_phase(phase, timeout)
+    outcome = "ok"
+
     async def call() -> Any:
         return await callback(phase, copy.deepcopy(payload))
 
@@ -466,25 +539,61 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
         if not done:
             task.cancel()
             task.add_done_callback(_silence_task)
-            raise TimeoutError
+            raise PhaseDeadline
         if task.cancelled():
             raise RuntimeError("Callback cancelled")
         return task.result()
+    except PhaseDeadline:
+        outcome = "deadline"
+        raise
+    except ProviderCallTimeout:
+        outcome = "provider_call_timeout"
+        raise
+    except PrivacyReviewRequired:
+        outcome = "privacy"
+        raise
+    except TimeoutError:
+        outcome = "callback_timeout"
+        raise
     except asyncio.CancelledError:
+        outcome = "cancelled"
         task.cancel()
         task.add_done_callback(_silence_task)
         raise
+    except Exception:
+        outcome = "callback_error"
+        raise
+    finally:
+        if events is not None:
+            events.end_phase(phase, outcome, timeout, loop.time() - phase_started)
 
 
 async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
-                  *, timeout_seconds: float = 120.0) -> CorrectionResult:
+                  *, timeout_seconds: float = 120.0,
+                  observer: Callable[[dict[str, Any]], None] | None = None) -> CorrectionResult:
+    """Run the correction and report sanitized phase events to ``observer``.
+
+    ``observer`` receives dicts whose values are numbers or fixed identifiers only
+    (no document, prompt, model or exception text). Observer failures are ignored.
+    """
+    loop = asyncio.get_running_loop()
+    events = _Events(observer, loop, timeout_seconds)
+    result = await _correct_body(markdown, sources, callback, timeout_seconds, events)
+    events.end(result)
+    return result
+
+
+async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
+                        timeout_seconds: float, events: _Events) -> CorrectionResult:
     """Review, optionally patch, and re-review; failures never return the draft.
 
     Sources must be a nonempty tuple of uniquely identified candidate documents.
     ``timeout_seconds`` is one finite positive deadline, at most
     ``MAX_TIMEOUT_SECONDS``, for the entire operation. Each individual provider
-    call has its own timeout (30s); the deadline is the outer bound so a run
-    with repairs still has room. The callback receives unredacted local data; it
+    call has its own timeout (``correction_provider.PROVIDER_TIMEOUT_SECONDS``);
+    the deadline is the outer bound. A call that exceeds the deadline is reported
+    as ``timeout_<phase>``; a call that exceeds its own timeout is reported as
+    ``provider_call_timeout_<phase>``. The callback receives unredacted local data; it
     must not transmit it without an independently approved disclosure policy.
     ``review_calls`` counts draft reviews, excluding the source inventory call.
     Commentary and failure reasons contain no input, model output, or exception text.
@@ -529,9 +638,9 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     try:
         response = await _invoke(callback, "source_inventory",
                                  {"contract": _INVENTORY_CONTRACT, "sources": source_payload},
-                                 deadline - loop.time())
+                                 deadline - loop.time(), events)
         if loop.time() >= deadline:
-            return blocked("timeout")
+            return blocked("timeout_source_inventory")
         inventory = _validate_inventory(response, source_map)
         if any(item["classification"] == "uncertain" for item in inventory):
             return blocked("source_completeness_uncertain")
@@ -564,7 +673,7 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
             if remaining <= 0:
                 return blocked(f"timeout_{phase}")
             reviews += 1
-            response = await _invoke(callback, phase, payload, remaining)
+            response = await _invoke(callback, phase, payload, remaining, events)
             if loop.time() >= deadline:
                 return blocked(f"timeout_{phase}")
             claims, incomplete = _validate_review(response, lines, source_map, inventory)
@@ -605,7 +714,7 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
                               "source_claims": inventory, "lines": payload["lines"], "claims": claims,
                               "flagged_claim_ids": [claim["id"] for claim in flagged]}
             repairs += 1
-            edit_response = await _invoke(callback, "repair", repair_payload, remaining)
+            edit_response = await _invoke(callback, "repair", repair_payload, remaining, events)
             if loop.time() >= deadline:
                 return blocked("timeout_repair")
             markdown = _apply_edits(markdown, edit_response, claims, lines)

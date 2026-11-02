@@ -63,7 +63,25 @@ so no commentary or download could be inspected — the required end-state was
 (10 matches), ATS display, the publication gate correctly withholding, and the
 new commentary UI path rendering the review notice.
 
-## Diagnosis of the two failures
+## Correction after log review (2026-11-02)
+
+The diagnosis below is partly superseded. Render logs, read with explicit UTC
+windows, show:
+
+- Run 1 returned 30.0 s after the pipeline stage. That matches the 30 s whole-
+  operation deadline of commit `b486af0`.
+- Run 2 returned 30.8 s after the pipeline stage. Only one provider request
+  reaching its own 30 s timeout fits that timing, because the 120 s deadline could
+  not have expired. No log identifies which phase it was.
+- `200 OK` lines are access-log entries written when a request starts. They do not
+  show that the analysis completed.
+- Run 1 went through the multi-file endpoint with one file, not a single-file
+  endpoint.
+
+See `docs/CORRECTION_TIMEOUT_DIAGNOSIS_2026-11-02.md` for the timeline, budget
+analysis, output-allowance estimate and the approval-gated live-run plan.
+
+## Diagnosis of the two failures (original, partly superseded)
 
 The pipeline never failed. `timeout` came from source correction:
 

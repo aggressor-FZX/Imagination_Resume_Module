@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import re
 import math
+import uuid
 from typing import Callable, Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
@@ -59,6 +60,7 @@ import publication_gate
 from approved_resume import unsupported_entities
 import tier_a_verifier
 from correction_provider import CorrectionProvider
+from correction_events import log_event
 from source_correction import SourceDocument, correct
 
 # Configure global logger for this service
@@ -271,7 +273,50 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
     )
 
 
-async def _run_source_correction(markdown, source_documents, api_key, request):
+# The orchestrator calls this endpoint with a 180s client timeout
+# (Login_Landing_page/backend/services/mlAuthMiddleware.js, makeAuthenticatedRequest;
+# it retries any failed attempt, including a timeout, up to three times). That
+# clock starts before this handler runs, so correction may only spend what is
+# left after the pipeline. Keep these in step with the orchestrator.
+UPSTREAM_CLIENT_TIMEOUT_SECONDS = 180.0
+UPSTREAM_RESPONSE_RESERVE_SECONDS = 20.0
+MAX_CORRECTION_DEADLINE_SECONDS = 120.0
+# Below this, one provider call (60s per-call timeout) cannot finish meaningfully;
+# do not start it.
+MIN_CORRECTION_BUDGET_SECONDS = 30.0
+
+
+def correction_budget_seconds(pipeline_elapsed_seconds):
+    """Overall correction deadline left after the pipeline, or None if too little remains.
+
+    Guarantee when a budget is returned:
+    pipeline_elapsed + budget + UPSTREAM_RESPONSE_RESERVE_SECONDS <= UPSTREAM_CLIENT_TIMEOUT_SECONDS.
+    """
+    if type(pipeline_elapsed_seconds) not in (int, float) or not math.isfinite(pipeline_elapsed_seconds):
+        return None
+    remaining = (UPSTREAM_CLIENT_TIMEOUT_SECONDS - UPSTREAM_RESPONSE_RESERVE_SECONDS
+                 - pipeline_elapsed_seconds)
+    budget = min(MAX_CORRECTION_DEADLINE_SECONDS, remaining)
+    return budget if budget >= MIN_CORRECTION_BUDGET_SECONDS else None
+
+
+def _join_correlation_id(request, request_id):
+    """Prefer the orchestrator's x-correlation-id so both services' logs can be joined."""
+    value = request.headers.get("x-correlation-id", "") if request is not None else ""
+    if re.fullmatch(r"[A-Za-z0-9-]{1,64}", value or ""):
+        return value
+    return request_id or str(uuid.uuid4())
+
+
+def _correction_observer(correlation_id):
+    """Sanitized phase events for one request; see correction_events."""
+    def observe(event):
+        log_event(logger, {**event, "correlation_id": correlation_id})
+    return observe
+
+
+async def _run_source_correction(markdown, source_documents, api_key, request, *,
+                                 timeout_seconds=120.0, observer=None):
     """Use the application session when available, otherwise close a local session."""
     from disclosure import redact_sources
 
@@ -285,8 +330,9 @@ async def _run_source_correction(markdown, source_documents, api_key, request):
     session = getattr(request.app.state, "http_session", None)
 
     async def run(session):
-        provider = CorrectionProvider(api_key, session)
-        result = await correct(markdown, sources, provider)
+        provider = CorrectionProvider(api_key, session, observer=observer)
+        result = await correct(markdown, sources, provider,
+                               timeout_seconds=timeout_seconds, observer=observer)
         # Allow a cancelled provider coroutine to record its usage state.
         await asyncio.sleep(0)
         return result, provider
@@ -542,9 +588,26 @@ async def _analyze_resume_impl(
                 return _withhold_correction(reason="provider_unavailable",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
 
+            # The orchestrator's clock started before the pipeline ran, so the
+            # correction deadline is what remains of the upstream budget now.
+            pipeline_elapsed = time.time() - start_time
+            correction_budget = correction_budget_seconds(pipeline_elapsed)
+            correlation_id = _join_correlation_id(request, request_id)
+            log_event(logger, {"event": "correction.budget", "correlation_id": correlation_id,
+                               "pipeline_elapsed_ms": int(pipeline_elapsed * 1000),
+                               "budget_ms": int((correction_budget or 0) * 1000),
+                               "upstream_timeout_ms": int(UPSTREAM_CLIENT_TIMEOUT_SECONDS * 1000),
+                               "reserve_ms": int(UPSTREAM_RESPONSE_RESERVE_SECONDS * 1000)})
+            if correction_budget is None:
+                # Not enough upstream time remains for one provider call; send nothing.
+                return _withhold_correction(reason="pipeline_budget_exhausted",
+                    pipeline_status=status, metrics=metrics, start_time=start_time)
+
             try:
                 correction, provider = await _run_source_correction(
-                    draft, source_documents_snapshot, api_keys[0], request)
+                    draft, source_documents_snapshot, api_keys[0], request,
+                    timeout_seconds=correction_budget,
+                    observer=_correction_observer(correlation_id))
             except Exception:
                 metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
                 return _withhold_correction(reason="provider_error", pipeline_status=status,
