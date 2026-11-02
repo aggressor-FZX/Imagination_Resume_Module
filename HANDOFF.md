@@ -1,5 +1,29 @@
 # Handoff — premerge safety review and test runtime
 
+## Current continuation — local only, do not deploy
+
+- Branch `feat/hybrid-resume-ingest-phase1`; base `c879a24`. Check `git log -1`
+	for the current continuation WIP commit. No push or paid calls.
+- [x] Partially contained provider, adapter and stage parse-error logging; added
+	synthetic privacy and correction controls. Offline isolated selection passed
+	147 tests; see `CORRECTION_EVIDENCE.md` for exact command and limitations.
+- [ ] Correction privacy boundary remains closed; do not deploy this WIP. The
+	wrong-attribution characterization explicitly demonstrates that valid citations
+	do not establish semantic correctness.
+- Next steps:
+	1. Review and contain remaining Node proxy, normal pipeline and legacy raw or
+		 exception logging; synthetic tests must cover error and streaming paths.
+	2. Develop independently anchored source relationships, missing-fact repair,
+		 safe disclosure policy and correction explanations without weakening gates.
+	3. Complete renderer identity/fidelity, real-model evaluation and synthetic
+		 artifact bundle; request explicit authorization before deploy/live tests.
+	4. Owner should assess and rotate/revoke the exposed credential-like literal if
+		 valid; its value and validity were not checked. Account for Git history.
+- Dirty files: check `git status --short`; Login's pre-existing handoff/docs edits
+	and the local non-Git e2e runner are intentionally preserved, not staged.
+- Verification command: the exact isolated command in `CORRECTION_EVIDENCE.md`
+	under “Additional offline work”.
+
 ## Current correction WIP — do not deploy
 
 - Active branch `feat/hybrid-resume-ingest-phase1`; pre-WIP commit

@@ -624,3 +624,131 @@ def test_review_after_patch_must_account_for_original_inventory_again():
     assert result.reason == "source_facts_missing" and result.markdown is None
     assert calls == ["source_inventory", "initial_review", "repair", "post_patch_review"]
     assert (result.review_calls, result.repair_calls) == (2, 1)
+
+
+# Independent synthetic answer key: each whole source line is required, while the
+# job advertisement is never candidate evidence. The scripted reviewer decisions
+# below exercise orchestration, not a real model's ability to recognize claims.
+MATRIX_SOURCE = (SourceDocument("candidate", (
+    "Alex Example\n"
+    "Alpha: engineer, 2019–2021\n"
+    "Alpha: improved accuracy 30% over 6 months\n"
+    "Beta: engineer, 2022–Present\n"
+)),)
+MATRIX_ANSWER_KEY = (
+    "# Alex Example\n## Experience\nAlpha: engineer, 2019–2021\n"
+    "Alpha: improved accuracy 30% over 6 months\nBeta: engineer, 2022–Present\n"
+)
+
+
+def matrix_review_with_invented_suffixes(payload, suffixes):
+    """Explicitly flag suffixes while independently accounting for source lines."""
+    shortened = copy.deepcopy(payload)
+    changed = {}
+    for line in shortened["lines"]:
+        for suffix in suffixes:
+            if line["text"].endswith(suffix):
+                original = line["text"]
+                line["text"] = original[:-len(suffix)]
+                changed[line["line_id"]] = original
+                break
+    response = complete_review(shortened)
+    for line_id, original in changed.items():
+        prefix = next(c for c in response["claims"] if c["line_id"] == line_id)
+        response["claims"].append(claim({"line_id": line_id}, prefix["end"], len(original), "unsupported"))
+    return response
+
+
+@pytest.mark.parametrize("suffix", ["", " within 2 weeks"])
+def test_scripted_duration_review_retains_source_duration(suffix):
+    calls = []
+    draft = MATRIX_ANSWER_KEY.replace("over 6 months", "over 6 months" + suffix)
+
+    async def callback(phase, payload):
+        calls.append(phase)
+        if phase == "source_inventory":
+            return complete_inventory(payload)
+        if phase == "repair":
+            return {"edits": [{"claim_id": cid, "replacement": ""} for cid in payload["flagged_claim_ids"]]}
+        return matrix_review_with_invented_suffixes(payload, [" within 2 weeks"])
+
+    result = run(draft, callback, sources=MATRIX_SOURCE, raw=True)
+    assert result.status == "approved" and result.markdown == MATRIX_ANSWER_KEY
+    assert (result.review_calls, result.repair_calls) == ((2, 1) if suffix else (1, 0))
+    assert calls[-1] == ("post_patch_review" if suffix else "initial_review")
+
+
+def test_scripted_year_only_review_removes_invented_months():
+    draft = MATRIX_ANSWER_KEY.replace("2019–2021", "2019–2021 (January–December)")
+    draft = draft.replace("2022–Present", "2022–Present (starting February)")
+    phases = []
+
+    async def callback(phase, payload):
+        phases.append(phase)
+        if phase == "source_inventory":
+            return complete_inventory(payload)
+        if phase == "repair":
+            return {"edits": [{"claim_id": cid, "replacement": ""} for cid in payload["flagged_claim_ids"]]}
+        return matrix_review_with_invented_suffixes(payload, [" (January–December)", " (starting February)"])
+
+    result = run(draft, callback, sources=MATRIX_SOURCE, raw=True)
+    assert result.status == "approved" and result.markdown == MATRIX_ANSWER_KEY
+    assert phases == ["source_inventory", "initial_review", "repair", "post_patch_review"]
+
+
+def test_scripted_job_ad_requirement_is_not_candidate_evidence():
+    job_ad_only = "5 years Kubernetes"
+    draft = MATRIX_ANSWER_KEY.replace("Beta: engineer, 2022–Present",
+                                      "Beta: engineer, 2022–Present; " + job_ad_only)
+    phases = []
+
+    async def callback(phase, payload):
+        phases.append(phase)
+        assert [source["text"] for source in payload["sources"]] == [MATRIX_SOURCE[0].text]
+        assert all(job_ad_only not in source["text"] for source in payload["sources"])
+        if phase == "source_inventory":
+            return complete_inventory(payload)
+        if phase == "repair":
+            return {"edits": [{"claim_id": cid, "replacement": ""} for cid in payload["flagged_claim_ids"]]}
+        return matrix_review_with_invented_suffixes(payload, ["; " + job_ad_only])
+
+    result = run(draft, callback, sources=MATRIX_SOURCE, raw=True)
+    assert result.status == "approved" and result.markdown == MATRIX_ANSWER_KEY
+    assert phases == ["source_inventory", "initial_review", "repair", "post_patch_review"]
+
+
+def test_scripted_wrong_employer_and_swapped_dates_are_withheld():
+    drafts = [MATRIX_ANSWER_KEY.replace("Alpha: improved", "Beta: improved"),
+              MATRIX_ANSWER_KEY.replace("2019–2021", "SWAP").replace("2022–Present", "2019–2021").replace("SWAP", "2022–Present")]
+    for draft in drafts:
+        result = run(draft, complete_callback(), sources=MATRIX_SOURCE, raw=True)
+        assert (result.status, result.reason, result.markdown) == ("withheld", "source_facts_missing", None)
+        assert result.repair_calls == 0
+
+
+def test_known_limitation_valid_citation_does_not_prove_employer_attribution():
+    draft = MATRIX_ANSWER_KEY.replace("Alpha: improved", "Beta: improved")
+
+    async def dishonest_callback(phase, payload):
+        if phase == "source_inventory":
+            return complete_inventory(payload)
+        # Fabricate a semantic representation with valid source and draft offsets.
+        substituted = copy.deepcopy(payload)
+        for line in substituted["lines"]:
+            if line["text"].startswith("Beta: improved"):
+                line["text"] = line["text"].replace("Beta: improved", "Alpha: improved")
+        response = complete_review(substituted)
+        target = next(line for line in payload["lines"] if line["text"].startswith("Beta: improved"))
+        old = next(c for c in response["claims"] if c["line_id"] == target["line_id"])
+        old_end = old["end"]
+        old["end"] = len(target["text"])
+        old["id"] = f"{old['line_id']}:{old['start']}:{old['end']}"
+        for mapping in response["representations"]:
+            for span in mapping["spans"]:
+                if span["line_id"] == target["line_id"] and span["end"] == old_end:
+                    span["end"] = old["end"]
+        return response
+
+    result = run(draft, dishonest_callback, sources=MATRIX_SOURCE, raw=True)
+    assert result.status == "approved" and result.markdown == draft
+    assert result.coverage.level == "model_assisted_not_proof"

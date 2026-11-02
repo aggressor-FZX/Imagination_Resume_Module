@@ -553,8 +553,8 @@ METRIC RULE (evidence only):
             
             return result
             
-        except Exception as e:
-            logger.error(f"[DRAFTER] Failed to draft experiences: {e}")
+        except Exception:
+            logger.error("[DRAFTER] Failed to draft experiences")
             # Return safe fallback
             return self._create_fallback_output(experiences, seniority_level)
     
@@ -722,7 +722,6 @@ METRIC RULE (evidence only):
         except json.JSONDecodeError as e:
             logger.error(f"[DRAFTER] Failed to parse JSON response: {e}")
             logger.error(f"[DRAFTER] Raw response length: {len(response) if response else 0}")
-            logger.error(f"[DRAFTER] Raw response preview: {(response or '')[:500]}")
             
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)

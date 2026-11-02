@@ -93,8 +93,8 @@ class OpenRouterSafeClient:
             print(f"✅ Loaded {len(models)} available models from OpenRouter")
             return models
 
-        except Exception as e:
-            print(f"⚠️  Failed to fetch model list: {e}")
+        except Exception:
+            print("⚠️  Failed to fetch model list")
             # Return cached list or empty dict
             return self._model_cache or {}
 
@@ -150,7 +150,7 @@ class OpenRouterSafeClient:
                 return False
             valid_roles = {'system', 'user', 'assistant', 'tool'}
             if msg['role'] not in valid_roles:
-                print(f"❌ Message {i} has invalid role '{msg['role']}'")
+                print(f"❌ Message {i} has invalid role")
                 return False
 
         print(f"✅ Request format valid ({len(messages)} messages)")
@@ -311,7 +311,7 @@ class OpenRouterSafeClient:
                             "model_used": None,
                         }
                     else:
-                        last_error = f"HTTP {response.status_code}: {response.text[:100]}"
+                        last_error = f"HTTP {response.status_code}"
                         print(f"   ⚠️  {last_error}")
                     continue
 
@@ -345,7 +345,7 @@ class OpenRouterSafeClient:
                             }
 
                     # If we get here, response was 200 but malformed
-                    last_error = f"Malformed response: {data}"
+                    last_error = "Malformed response"
                     print(f"   ⚠️  {last_error}")
 
                 elif response.status_code == 429:
@@ -363,19 +363,18 @@ class OpenRouterSafeClient:
 
                 elif response.status_code in (400, 404):
                     # Model doesn't exist or bad request
-                    err_data = response.json() if response.text else {}
-                    last_error = err_data.get('error', {}).get('message', str(response.status_code))
+                    last_error = f"HTTP {response.status_code}"
                     print(f"   ❌ Model error: {last_error}")
 
                 else:
-                    last_error = f"HTTP {response.status_code}: {response.text[:100]}"
+                    last_error = f"HTTP {response.status_code}"
                     print(f"   ⚠️  {last_error}")
 
             except requests.exceptions.Timeout:
                 last_error = f"{model_id} timed out"
                 print(f"   ⏱️  {last_error}")
-            except Exception as e:
-                last_error = f"Exception: {str(e)}"
+            except Exception:
+                last_error = "Provider request failed"
                 print(f"   💥 {last_error}")
 
         # All attempts failed

@@ -164,14 +164,14 @@ class Researcher:
             
             return result
             
-        except Exception as e:
-            logger.error(f"[RESEARCHER] Failed to analyze job ad: {e}")
+        except Exception:
+            logger.error("[RESEARCHER] Failed to analyze job ad")
             # Return safe defaults
             return {
                 "implied_metrics": ["Improve system performance", "Scale to handle increased load"],
                 "domain_vocab": ["Technical skills relevant to the role"],
                 "insider_tips": "Focus on quantifiable achievements and relevant technologies.",
-                "error": str(e)
+                "error": "research_failed"
             }
     
     def _parse_response(self, response: str) -> Dict[str, Any]:
@@ -239,7 +239,6 @@ class Researcher:
         except json.JSONDecodeError as e:
             logger.error(f"[RESEARCHER] Failed to parse JSON response: {e}")
             logger.error(f"[RESEARCHER] Raw response length: {len(response) if response else 0}")
-            logger.error(f"[RESEARCHER] Raw response preview: {(response or '')[:500]}")
             
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)

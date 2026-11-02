@@ -112,8 +112,6 @@ class LLMClientAdapter:
             
             # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)
             model_used = result.get("model_used")
-            import logging
-            logger = logging.getLogger(__name__)
             logger.info(f"[LLM_ADAPTER] Model requested: {model} | Model actually used: {model_used}")
             
             # Extract response text and track usage
@@ -175,17 +173,17 @@ class LLMClientAdapter:
                     
                     return content
             
-            # Fallback on error - log the actual error for debugging
-            logger.error(f"[LLM_ADAPTER] LLM call failed - result.success=False, error: {result.get('error', 'unknown')}")
+            # Provider errors may contain source text, credentials, or response bodies.
+            logger.error("[LLM_ADAPTER] LLM call failed")
             if response_format and response_format.get("type") == "json_object":
                 return '{"error": "llm_call_failed", "fallback": true}'
             return ""
             
-        except Exception as e:
-            logger.error(f"[LLM_ADAPTER] Exception during LLM call: {e}", exc_info=True)
+        except Exception:
+            logger.error("[LLM_ADAPTER] Exception during LLM call")
             # Return error JSON on error so stages can detect and handle
             if response_format and response_format.get("type") == "json_object":
-                return f'{{"error": "{str(e)[:100]}", "fallback": true}}'
+                return '{"error": "llm_call_failed", "fallback": true}'
             return ""
     
     def _estimate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
