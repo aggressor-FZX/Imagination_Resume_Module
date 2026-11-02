@@ -166,6 +166,7 @@ class OpenRouterSafeClient:
         timeout: int = 90,
         stream: bool = False,
         on_token: Optional[TokenCallback] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Call OpenRouter with proper request formatting and failsafe fallback.
@@ -179,6 +180,11 @@ class OpenRouterSafeClient:
             timeout: HTTP read timeout in seconds for each attempt
             stream: When True, use SSE streaming and accumulate content
             on_token: Optional callback invoked with each content delta (stream only)
+            response_format: Provider structured-output request, e.g.
+                ``{"type": "json_object"}``. Forwarded verbatim. It was previously
+                accepted by the adapter but never placed on the wire, so every
+                "strict JSON" stage silently ran unstructured — the StarEditor's
+                malformed-envelope failures were the visible cost.
 
         Returns:
             Response dict with 'success', 'data', 'error', and 'model_used'
@@ -239,6 +245,8 @@ class OpenRouterSafeClient:
                     "temperature": temperature,
                     "stream": bool(stream),
                 }
+                if response_format:
+                    payload["response_format"] = response_format
 
                 print(f"   📤 Request payload keys: {list(payload.keys())} stream={bool(stream)}")
 

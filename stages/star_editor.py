@@ -439,7 +439,27 @@ class StarEditor:
                     "parse_error": "invalid_json",
                     "fallback_used": True
                 }
-            
+
+            # An envelope that was cut short is recoverable: the resume body is
+            # already in hand, and only the closing quote/brace is missing. This is
+            # the observed failure shape ("Expecting ',' delimiter" at a fixed
+            # offset while the markdown itself is intact). Recovery is deliberately
+            # narrow — it only accepts a *complete* `final_markdown` string value
+            # that was terminated by the closing quote, so a body truncated
+            # mid-sentence is rejected rather than published as a resume.
+            recovered = self._recover_truncated_markdown(response)
+            if recovered:
+                logger.warning("[STAR_EDITOR] Recovered final_markdown from a truncated envelope")
+                return {
+                    "final_markdown": self._normalize_section_boundaries(
+                        self._remove_placeholders(
+                            self._clean_analysis_metadata(recovered))),
+                    "final_plain_text": re.sub(r'\*\*|\*|##|- ', '', recovered),
+                    "editorial_notes": "Recovered from a truncated JSON envelope",
+                    "parse_error": "truncated_json",
+                    "fallback_used": False
+                }
+
             # Return empty result with error flag
             logger.error("[STAR_EDITOR] No usable content from editor, returning empty result")
             return {
@@ -449,6 +469,52 @@ class StarEditor:
                 "error": "invalid_json",
                 "fallback_used": True
             }
+
+    def _recover_truncated_markdown(self, response: str) -> Optional[str]:
+        """Extract a complete ``final_markdown`` value from a cut-short envelope.
+
+        Returns the decoded markdown only when the string literal was closed before
+        the text ran out. Anything else returns None so the caller keeps its
+        existing fallback behaviour.
+        """
+        if not response:
+            return None
+        marker = response.find('"final_markdown"')
+        if marker == -1:
+            return None
+        colon = response.find(":", marker)
+        if colon == -1:
+            return None
+        opening = response.find('"', colon)
+        if opening == -1:
+            return None
+        # Scan for the closing quote, honouring JSON escapes so a legitimate
+        # `\"` inside the resume does not end the value early.
+        index = opening + 1
+        characters: list[str] = []
+        while index < len(response):
+            char = response[index]
+            if char == "\\":
+                if index + 1 >= len(response):
+                    return None
+                escape = response[index + 1]
+                try:
+                    characters.append(json.loads(f'"{char}{escape}"'))
+                except Exception:
+                    characters.append(escape)
+                index += 2
+                continue
+            if char == '"':
+                break
+            characters.append(char)
+            index += 1
+        else:
+            # The string literal never closed: the body was cut mid-sentence.
+            return None
+        markdown = "".join(characters)
+        if not markdown.strip() or "## " not in markdown:
+            return None
+        return markdown
     
     def _extract_json_from_text(self, text: str) -> Optional[str]:
         """

@@ -108,6 +108,11 @@ class LLMClientAdapter:
                 timeout=http_timeout,
                 stream=bool(stream_tokens and on_token),
                 on_token=on_token if stream_tokens else None,
+                # Forward the structured-output request. Accepting it here and not
+                # putting it on the wire made every "json_object" stage run
+                # unstructured, which is what the StarEditor's malformed-envelope
+                # failures looked like from the outside.
+                response_format=response_format,
             )
             
             # Model identifiers are untrusted and may contain candidate data.
