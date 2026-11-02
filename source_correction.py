@@ -792,23 +792,40 @@ def _pick_target_line(lines: list[dict[str, Any]], item_quote: str,
     """
     if not lines:
         return None
+
+    def _dates(text: str) -> set[str]:
+        """Date-like tokens (MM/YYYY, years, Present) — the record's fingerprint."""
+        return {token for token in re.findall(r"[0-9]{2,4}/[0-9]{2,4}|[0-9]{4}|Present",
+                                              text or "")}
+
+    wanted_dates = _dates(source_line) | _dates(item_quote)
     for quote in (item_quote, source_line):
         if not quote or not quote.strip():
             continue
-        candidates: list[tuple[int, int, dict[str, Any]]] = []
         words = _content_words(quote)
+        candidates: list[tuple[int, int, int, dict[str, Any]]] = []
         for index, line in enumerate(lines):
             text = line["text"]
             if not text.strip() or text.lstrip().startswith("#"):
                 continue
             shared = _content_words(text) & words
-            candidates.append((len(shared), index, line))
+            # A record's dates are its strongest fingerprint. Without this, a
+            # summary sentence that happens to contain the job word ("journeyman
+            # electrician with 8+ years…") outscored the header line the title
+            # actually belongs on, and a restoration would have rewritten the
+            # summary instead of the header.
+            date_bonus = len(_dates(text) & wanted_dates) if wanted_dates else 0
+            candidates.append((date_bonus, len(shared), index, line))
         if not candidates:
             continue
-        candidates.sort(key=lambda entry: (-entry[0], entry[1]))
-        if candidates[0][0] == 0:
+        candidates.sort(key=lambda entry: (-entry[0], -entry[1], entry[2]))
+        best_dates, best_shared = candidates[0][0], candidates[0][1]
+        if best_shared == 0:
             continue
-        return candidates[0][2]
+        if wanted_dates and best_dates == 0:
+            # No line carries the record's dates, so there is no faithful anchor.
+            continue
+        return candidates[0][3]
     return None
 
 

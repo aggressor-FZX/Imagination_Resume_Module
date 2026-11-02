@@ -238,6 +238,18 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 
 {golden_section}
 
+### STYLE TRANSFER RULES (MANDATORY):
+1. **Strong Verbs:** Use "Deployed," "Engineered," "Refactored," "Optimized," "Led," "Built" — NOT "Strategized," "Pioneered," "Worked on"
+2. **NORMALIZE TERMINOLOGY ONLY:** You MAY restate an activity the candidate's own input
+   already describes using a clearer term for the SAME activity (e.g. "created embeddings in
+   Pinecone" -> "vector search with Pinecone"). You may NOT add a tool, technology, platform
+   or activity that the candidate's input does not contain. "database work" does NOT license
+   "Python and SQL" unless the candidate's input or verified skills say so — that is an
+   invention, not context.
+3. **Only Use Real Metrics:** Only include metrics (%, $, time) that appear EXPLICITLY in the user's input. Do NOT invent "increased revenue by X%" unless the user said it.
+4. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
+5. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
+
 ### *** TRUTH CONSTRAINTS (VIOLATION = FAILURE) ***
 1. **COMPANY NAMES:** You must ONLY use the companies provided in the User Input.
    - ALLOWED COMPANIES (MUST USE EXACTLY): {json.dumps(original_companies)}
@@ -376,10 +388,13 @@ DO NOT fabricate anything not in these descriptions.
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
 {job_ad[:3000]}
 
-Research Insights:
-- Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
-- Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
-- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
+=== EVIDENCE BOUNDARY ===
+Web research about this occupation is NOT included in this prompt, deliberately.
+Research describing what people in this role typically do is not evidence about
+this candidate. You may align vocabulary with the job description, but you may
+never introduce a tool, platform, method, credential, project or accomplishment
+that the User Experiences above do not contain. If the job description asks for
+something the candidate's material does not mention, leave it out.
 
 === VERIFIED METRICS (extracted from the candidate's own resume) ===
 {_metrics_block}
@@ -387,9 +402,9 @@ Research Insights:
 METRIC RULE (evidence only):
 - You may use a number ONLY when it appears in the verified list above and you
   keep its value AND unit together (write "30 hours", never a bare "30").
-- The Job Description and Research Insights may guide vocabulary and relevance.
-  They may NEVER supply accomplishments, durations, budgets, team sizes, or
-  outcomes. A requirement in the JD is not evidence of the candidate's history.
+- The Job Description may guide vocabulary and relevance. It may NEVER supply
+  accomplishments, durations, budgets, team sizes, or outcomes. A requirement in
+  the JD is not evidence of the candidate's history.
 - If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
   infer, round, or extrapolate a number.
 - A bullet without a metric is completely acceptable and is NOT a failure.
@@ -502,10 +517,13 @@ DO NOT fabricate anything not in these descriptions.
 Target Job Description - FOR CONTEXT ONLY (DO NOT COPY):
 {job_ad[:3000]}
 
-Research Insights:
-- Expected Metrics: {', '.join(research_data.get('implied_metrics', [])[:3])}
-- Domain Vocabulary: {', '.join(research_data.get('domain_vocab', [])[:5])}
-- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:5])}
+=== EVIDENCE BOUNDARY ===
+Web research about this occupation is NOT included in this prompt, deliberately.
+Research describing what people in this role typically do is not evidence about
+this candidate. You may align vocabulary with the job description, but you may
+never introduce a tool, platform, method, credential, project or accomplishment
+that the User Experiences above do not contain. If the job description asks for
+something the candidate's material does not mention, leave it out.
 
 === VERIFIED METRICS (extracted from the candidate's own resume) ===
 {_metrics_block}
@@ -513,9 +531,9 @@ Research Insights:
 METRIC RULE (evidence only):
 - You may use a number ONLY when it appears in the verified list above and you
   keep its value AND unit together (write "30 hours", never a bare "30").
-- The Job Description and Research Insights may guide vocabulary and relevance.
-  They may NEVER supply accomplishments, durations, budgets, team sizes, or
-  outcomes. A requirement in the JD is not evidence of the candidate's history.
+- The Job Description may guide vocabulary and relevance. It may NEVER supply
+  accomplishments, durations, budgets, team sizes, or outcomes. A requirement in
+  the JD is not evidence of the candidate's history.
 - If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
   infer, round, or extrapolate a number.
 - A bullet without a metric is completely acceptable and is NOT a failure.
