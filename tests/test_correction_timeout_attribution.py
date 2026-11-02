@@ -13,7 +13,11 @@ import pytest
 
 import app
 import correction_events
-from correction_provider import MAX_OUTPUT_TOKENS, PROVIDER_TIMEOUT_SECONDS
+from correction_provider import (
+    MAX_OUTPUT_TOKENS,
+    PROVIDER_TIMEOUT_CEILING_SECONDS,
+    PROVIDER_TIMEOUT_SECONDS,
+)
 from pipeline_config import OR_SLUG_DRAFTER
 from source_correction import MAX_SOURCE_CHARS
 from tests.test_analyze_source_correction_route import (  # noqa: F401
@@ -354,7 +358,13 @@ def test_events_carry_phase_timing_and_token_metadata_for_a_completed_run(
         assert line["outcome"] == "ok" and line["finish_reason"] == "stop"
         assert line["prompt_tokens"] == 10 and line["completion_tokens"] == 4
         assert line["max_tokens"] == MAX_OUTPUT_TOKENS
-        assert line["call_timeout_ms"] == int(PROVIDER_TIMEOUT_SECONDS * 1000)
+        # The per-call timeout is sized from the budget the engine still has, not a
+        # fixed ceiling: a review that needs 38s is not abandoned at 60s while 12s
+        # of its own budget sits unused. Bounded below by the floor, above by the
+        # ceiling so one slow phase cannot eat the whole correction.
+        assert (PROVIDER_TIMEOUT_SECONDS * 1000
+                <= line["call_timeout_ms"]
+                <= PROVIDER_TIMEOUT_CEILING_SECONDS * 1000)
     end = named(lines, "correction.end")[0]
     assert end["status"] == "approved" and end["reviews"] == 2 and end["repairs"] == 1
     correlation = {line["correlation_id"] for line in lines}

@@ -1,6 +1,7 @@
 """Single-request, no-retry correction adapter. Never log request or response data."""
 import asyncio
 import json
+import math
 import re
 import time
 
@@ -28,12 +29,22 @@ MAX_RESPONSE_BYTES = 512_000
 # Output allowance per provider call. Inventory and review must copy or cite every
 # span, so output grows with input; see docs/CORRECTION_TIMEOUT_DIAGNOSIS_2026-11-02.md.
 MAX_OUTPUT_TOKENS = 12000
-# Per-request read timeout. Live runs timed out at 30s: the inventory call for
-# a ~1KB source returns 12000 max_tokens of JSON from a reasoning model, which
-# regularly exceeds 30s. The orchestrator allows 180s for the whole analyze
-# request, and source_correction.MAX_TIMEOUT_SECONDS bounds the operation, so
-# this must be well below that but comfortably above observed call latency.
+# Ceiling for one provider request. The orchestrator allows 180s (JSON) or 300s
+# (SSE) for the whole analyze request and the engine caps the operation itself, so
+# this must sit below those.
+#
+# Measured 2026-11-02: the initial review of a 4KB draft is a 13.6KB request that
+# answered in 38.3s warm, and the live run spent ~48s on inventory first. A fixed 60s
+# ceiling therefore killed a review that was still working, with ~12s of the granted
+# ^120s budget unspent, and reported provider_call_timeout_initial_review as if the
+# request were too slow. The ceiling is now the larger of its own floor and the
+# budget actually remaining, so a call is only abandoned when the correction could
+# not have finished anyway.
 PROVIDER_TIMEOUT_SECONDS = 60.0
+# Never give a single call more than this, however much budget is left: one slow
+# phase must not be able to consume the whole correction and leave no time for the
+# review-and-repair cycle that the answer exists to enable.
+PROVIDER_TIMEOUT_CEILING_SECONDS = 120.0
 # Hard ceiling on provider calls for one correction. Six is the documented
 # two-repair path (inventory + review + repair + re-review + repair + re-review).
 REPAIR_PATH_CALLS = 6
@@ -116,10 +127,35 @@ class CorrectionProvider:
         self.model = model
         # Optional sanitized event sink (see correction_events); receives no text.
         self.observer = observer
+        # Remaining overall budget offered by the engine, and the timeout actually
+        # applied to the last call (for the sanitized event).
+        self._remaining_seconds = None
+        self._last_call_timeout = PROVIDER_TIMEOUT_SECONDS
         self.calls = 0
         self.usage = {"calls": [], "total_prompt_tokens": 0,
                       "total_completion_tokens": 0, "total_tokens": 0,
                       "estimated_cost_usd": 0.0, "failures": []}
+
+    def set_budget(self, remaining_seconds):
+        """Offer the engine's remaining overall budget for the next call.
+
+        The engine calls this before each phase. Spending the whole remaining budget
+        on one call is only correct when that call is the last thing that can
+        usefully happen, and it is not: a review that finishes late still needs a
+        repair pass and a re-review. So a call may use the remaining budget up to
+        ``PROVIDER_TIMEOUT_CEILING_SECONDS`` and never less than the fixed floor.
+        """
+        if (type(remaining_seconds) in (int, float)
+                and math.isfinite(remaining_seconds) and remaining_seconds > 0):
+            self._remaining_seconds = float(remaining_seconds)
+
+    def _call_timeout(self):
+        """Timeout for this call, sized from the budget the engine offered."""
+        remaining = self._remaining_seconds
+        if remaining is None:
+            return PROVIDER_TIMEOUT_SECONDS
+        return max(PROVIDER_TIMEOUT_SECONDS,
+                   min(remaining, PROVIDER_TIMEOUT_CEILING_SECONDS))
 
     async def __call__(self, phase, payload):
         # A direct caller past the ceiling is rejected before the disclosure gate so
@@ -141,6 +177,8 @@ class CorrectionProvider:
         # A payload without the engine's shape is passed through untouched so
         # direct callers and their error paths behave as before.
         original_payload = payload
+        call_timeout = self._call_timeout()
+        self._last_call_timeout = call_timeout
         translated = None
         try:
             if phase == "source_inventory" and "sources" in original_payload:
@@ -212,7 +250,7 @@ class CorrectionProvider:
             async with self.session.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                json=request, timeout=aiohttp.ClientTimeout(total=PROVIDER_TIMEOUT_SECONDS),
+                json=request, timeout=aiohttp.ClientTimeout(total=call_timeout),
                 allow_redirects=False,
             ) as response:
                 if response.status == 429:
@@ -303,7 +341,7 @@ class CorrectionProvider:
                  "model": self.model, "request_index": request_index,
                  "elapsed_ms": int(round((time.monotonic() - started) * 1000)),
                  "max_tokens": MAX_OUTPUT_TOKENS,
-                 "call_timeout_ms": int(PROVIDER_TIMEOUT_SECONDS * 1000)}
+                 "call_timeout_ms": int(self._last_call_timeout * 1000)}
         if finish is not None:
             event["finish_reason"] = finish if finish in {"stop", "length"} else "other"
         if recorded and self.usage["calls"]:

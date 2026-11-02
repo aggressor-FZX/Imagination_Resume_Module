@@ -608,12 +608,24 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
     Expiry of ``timeout`` raises ``PhaseDeadline`` (overall deadline). A single
     provider request exceeding its own timeout raises ``ProviderCallTimeout``.
     The two are distinct outcomes and are reported as distinct reasons.
+
+    The remaining budget is offered to the adapter out-of-band, via ``set_budget``
+    when it has one, so it can size its per-request timeout from the time that
+    actually exists instead of a fixed ceiling. The payload keeps exactly the keys
+    the contract defines — several tests pin those — and an adapter without
+    ``set_budget`` behaves exactly as before.
     """
     loop = asyncio.get_running_loop()
     phase_started = loop.time()
     if events is not None:
         events.start_phase(phase, timeout)
     outcome = "ok"
+    offer_budget = getattr(callback, "set_budget", None)
+    if callable(offer_budget):
+        try:
+            offer_budget(timeout)
+        except Exception:
+            pass
 
     async def call() -> Any:
         return await callback(phase, copy.deepcopy(payload))

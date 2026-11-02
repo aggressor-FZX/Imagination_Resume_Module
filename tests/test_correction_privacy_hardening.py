@@ -117,7 +117,11 @@ def test_synthetic_local_transport_preserves_offsets_output_and_evidence(monkeyp
                for position, segment in zip([0] + [s["end"] for s in sent], sent))
     assert "".join(segment["text"] for segment in sent) == SOURCE
     assert source.text == SOURCE
-    assert all(req["timeout"].total == correction_provider.PROVIDER_TIMEOUT_SECONDS
+    # The timeout is derived from the remaining budget now, so assert the bounds
+    # rather than a constant that no longer exists.
+    assert all(correction_provider.PROVIDER_TIMEOUT_SECONDS
+               <= req["timeout"].total
+               <= correction_provider.PROVIDER_TIMEOUT_CEILING_SECONDS
                for req in session.requests)
 
 
