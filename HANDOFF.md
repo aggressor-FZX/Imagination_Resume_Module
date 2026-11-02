@@ -1,4 +1,54 @@
-# Handoff — live delivery attempts (2026-11-02, session 4)
+# Handoff — transient-failure resilience (2026-11-02, session 5)
+
+- **Tests:** 757 passed, 3 skipped.
+- **New report:** `docs/RETRY_RESILIENCE_2026-11-02.md`.
+- **Live:** capture OFF (`CORRECTION_LIVE_CAPTURE=0`), disclosure ON, retry code deployed.
+
+## Done this session
+
+- [x] Retry classification: `429`/`502`/`503`/`504` retried; `400`/`401`/`403`/`404`/`422`
+      never retried; malformed and factual verdicts never retried.
+- [x] Retry lives in the adapter so **completed phases are never re-run** and the engine's
+      phase budget is untouched by transport retries.
+- [x] Bounded allowance: 3 attempts, `Retry-After` honoured and capped, backoff otherwise,
+      and no attempt started without 10 s of remaining budget.
+- [x] Per-attempt telemetry: `attempt`, `http_status`, `elapsed_ms`, serving `provider` —
+      no content. Failed attempts record `usage_unknown: true`.
+- [x] Read timeouts deliberately NOT retried (they consume the budget they would need).
+- [x] Publication checks unchanged: gate, verifier, disclosure and protocol are
+      byte-for-byte identical; a test proves a retried success still faces the verifier.
+- [x] 30 tests, mutation-checked (un-retrying 429, or retrying 401, both fail).
+- [x] Fixed two defects in earlier work: `provider_rate_limited` was dropped by the
+      sanitizer vocabulary; a served-but-unusable 200 was reported both as `ok` and as a
+      transport failure.
+
+## Live verification — and its limit
+
+The exact captured run-3 review request, driven through the deployed adapter: 4
+invocations, all `200` on the **first** attempt (37.6 s, 60.9 s, 54.0 s, 47.4 s). No real
+504 occurred, so **the retry was not exercised live**. Invocation 2 at 60.9 s would have
+been killed by the old fixed 60 s ceiling, which is why that ceiling was replaced.
+
+## Remaining — needs an allowance, not more code
+
+1. **One single-file delivery on the live website is still unproven.** Three authorized
+   analyses were consumed before this work. Per the agreed order, single-file delivery
+   must pass before any multi-file acceptance run.
+2. Nothing about approved output is proven: no receipt, no displayed commentary, no
+   actual PDF/DOCX bytes.
+3. Multi-file does not run source correction, so retry resilience does not apply to it.
+
+## Verification
+
+```bash
+cd Imagination_Resume_Module
+../.venv/bin/python -m pytest -o addopts="" -q      # 757 passed, 3 skipped
+```
+
+---
+
+# Previous session (4) — live delivery attempts, superseded
+
 
 - **Live:** `master` tracks the deploy; see `git log -1`.
 - **Tests:** 727 passed, 3 skipped.
