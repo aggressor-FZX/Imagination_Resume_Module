@@ -3,9 +3,13 @@
 Commit `51affd2`. Deploy `dep-dbkdd6vb9u1s73fdrdtg`.
 
 This session did **not** restart the audit. It closed the specific defects named in
-the request, made the live failure replayable, and corrected the timing model from
+the request, made real-provider probes replayable, and corrected the timing model from
 measurements. Everything below is either a measurement or a test result; nothing is
 inferred from a passing faithful-source probe.
+
+**Scope of this document:** it records *implementation* acceptance only. Live delivery
+acceptance — the website producing an approved, commented, receipted resume with
+working PDF/DOCX downloads — is reported separately and was **not** achieved here.
 
 ## 1. Correction-boundary regressions closed
 
@@ -98,11 +102,20 @@ Two deliberate orderings, both pinned by tests:
 * the gate is evaluated against the **transmitted** structure, not the caller's
   claim about `sources`.
 
-## 2. The synthetic failure is replayable
+## 2. Real-provider probes are replayable
 
-`correction_capture.py` records provider exchanges for one case and replays them
-through the **real** `CorrectionProvider` and the **real** `source_correction.correct`,
-so the decision is recomputed rather than compared to a stored verdict.
+> **Evidence labelling (corrected).** The two recordings below are **real-provider
+> probes driven by constructed synthetic drafts**, produced by
+> `tools/capture_correction_case.py` against the correction engine directly. They are
+> **not** captures of the original failed website runs: no `/analyze` request, no
+> `/resume-builder` UI, and no writer-generated draft was involved. The original live
+> failures were never captured, and their exact exchanges remain unrecovered. Nothing
+> in this section is evidence about what the website did on 2026-11-02.
+
+What the probes do establish is narrower and still useful: the recorder round-trips a
+real provider exchange through the **real** `CorrectionProvider` and the **real**
+`source_correction.correct`, so the decision is recomputed from provider bytes rather
+than compared against a stored verdict.
 
 Safety properties, each tested:
 
@@ -112,19 +125,20 @@ Safety properties, each tested:
 * refuses a capture whose text does not match its own digest, or an unknown schema;
 * replay blocks sockets entirely and asserts no connection is opened.
 
-Two real synthetic cases were captured (spend: **$0.00226** total, 11,890 tokens):
+Two probes were recorded (spend: **$0.00226** total, 11,890 tokens):
 
-| Case | Live result | Cause |
+| Probe | Result | Mechanism observed |
 |---|---|---|
 | `live-rewrite-01` | **approved**, 2 reviews + 1 repair, 4 calls | — |
-| `live-rewrite-02` | withheld, 3 calls | **2 lines left unjudged** |
+| `live-rewrite-02` | withheld, 3 calls, reported `malformed_output` | **2 lines left unjudged** |
 
-`live-rewrite-01` is the first time a paraphrased rewrite with added sections and a
-repair has been approved by the real validator.
+`live-rewrite-01` shows a paraphrased rewrite with added sections surviving a repair
+and being approved by the validator. It says nothing about the website's own drafts.
 
-### The demonstrated rejection, and its fix
+### A mechanism that produces the `malformed_output` reason
 
-Replaying `live-rewrite-02` from the captured bytes showed the model answered with
+`malformed_output` was the reported reason on website runs 2 and 3. Replaying probe
+`live-rewrite-02` shows **one** way that reason arises: the model answered with
 `supported`, `unsupported`, `structural`, `evidence`, `represented`, `missing` — and
 **omitted `L000016` and `L000017`**, the two added Skills bullets, from every verdict
 list.
@@ -133,6 +147,11 @@ The old code treated an omitted line as `uncertain`. Those lines then went to th
 repair phase, where the model returned them **verbatim**, and `_apply_edits` correctly
 rejected the no-op. The failure surfaced as `malformed_output` and had burned a paid
 call.
+
+This is a *candidate* mechanism for runs 2 and 3, not a demonstrated one: those runs'
+provider responses were never captured, so the same reason code could have had a
+different cause. Treating it as the cause would repeat exactly the mistake this
+correction fixes.
 
 Fixed without weakening anything:
 
@@ -146,8 +165,8 @@ Fixed without weakening anything:
 Replay now consumes **2** calls instead of 3.
 
 Rejected and reverted: issuing one bounded completion re-review that names the
-unjudged lines. It would raise the documented six-call ceiling, and the capture ends
-at the omission, so its effectiveness against a real model **cannot be shown**. An
+unjudged lines. It would raise the documented six-call ceiling, and the probe ends at
+the omission, so its effectiveness against a real model **cannot be shown**. An
 unproven change to a safety bound is not a fix.
 
 ## 3. Execution time — measured, then bounded
@@ -197,27 +216,42 @@ of inventory, and the measured Drafter alone can consume 79 s of the caller's bu
 Streaming was *not* chosen — no measurement supports it, and the request explicitly
 forbids assuming it.
 
-## 4. Spend
+## 4. Spend (provider probes)
 
 | Item | Cost |
 |---|---|
-| Capture `live-rewrite-01` | $0.001268 |
-| Capture `live-rewrite-02` | $0.000995 |
+| Probe `live-rewrite-01` | $0.001268 |
+| Probe `live-rewrite-02` | $0.000995 |
 | Debug attempt that reached no provider | $0.00 |
-| **Total this session** | **$0.00226** |
+| **Total provider spend this session** | **$0.00226** |
 
-Well inside the $2 ceiling. No live `/analyze` run was made this session, so no credits
-were consumed.
+These are direct OpenRouter charges from the probes, recorded here because they are
+provider spend and must appear in the spending record. They are **separate** from
+website credit consumption: no `/analyze` run was made this session, so no user credits
+were spent. 1463→1265 credits were consumed by the six earlier website runs
+(6 × 33 = 198), all before this session.
 
-## 5. Honest status
+## 5. Status — two separate verdicts
 
-Delivered and verified locally: the boundary fixes, the capture/replay harness, the
-attribution fix for the demonstrated rejection, and the route-accurate budget.
+### Implementation acceptance: PASS
 
-**Not claimed:** live delivery of an approved, receipted, downloadable resume. That
-still requires a live `/analyze` run, which is outside this session's authorized work.
-A withheld draft remains a safety outcome, not successful delivery.
+Verified locally and deployed (`51affd2`, docs `166cc75`): the 22-doubles update, the
+retrieval/evidence separation, the negative controls and their documented gaps, the
+disclosure scope change, the probe capture/replay harness, the `incomplete_review` /
+`no_op_repair` attribution, and the route-accurate budget. 648 passed, 3 skipped.
 
-Known limitation to carry forward: the invented `label: body` employer gap in §1.3, and
-the possibility that review latency exceeds the remaining budget at large document
-sizes (§3).
+### Live delivery acceptance: NOT MET
+
+No live `/analyze` run was made this session. The website has **not** been shown to
+produce an approved resume, correction commentary, a valid publication receipt, or a
+working PDF/DOCX download. The last six website runs (2026-11-02, earlier) all
+withheld.
+
+A withheld draft is a safety outcome, not delivery. The mission is therefore open.
+
+Known limitations carried forward:
+
+* the invented `label: body` employer gap (§1.3);
+* review latency may exceed the remaining budget at large document sizes (§3);
+* the original website-run exchanges were never captured, so their root causes remain
+  unproven — the next live run must capture its own exchange.

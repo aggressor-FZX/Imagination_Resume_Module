@@ -362,6 +362,8 @@ def test_mocked_two_patches_and_rereviews_use_six_requests_and_budget(synthetic_
     provider = CorrectionProvider("fake-key", session)
     async def run():
         result = await correct(DRAFT, (SourceDocument("resume", SOURCE),), provider)
+        # The repair path itself must be capped; the extra headroom is reserved for
+        # the single bounded completion re-review and is tested separately.
         with pytest.raises(ValueError, match="budget exhausted"):
             await provider("post_patch_review", {"contract": "test"})
         return result
@@ -377,6 +379,9 @@ def test_mocked_two_patches_and_rereviews_use_six_requests_and_budget(synthetic_
     assert provider.usage["total_completion_tokens"] == 24
     assert provider.usage["total_tokens"] == 84
     assert provider.usage["estimated_cost_usd"] == pytest.approx(6 * estimate_cost(OR_SLUG_DRAFTER, 10, 4))
+    # The repair path consumes six of the seven permitted calls; exactly one is left
+    # for recovery, and it is not reachable once a repair has happened.
+    assert provider.calls == correction_provider.MAX_CALLS - 1
 
 
 def test_deadline_cancels_inflight_transport_without_retry(synthetic_disclosure_bypass):

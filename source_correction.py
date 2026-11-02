@@ -483,6 +483,44 @@ def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
     return markdown
 
 
+async def _recover_unjudged(phase: str, exc: UnjudgedReview,
+                            deadline: float, state: dict[str, Any]
+                            ) -> list[str] | str:
+    """Decide whether a partially answered review can be completed, at most once.
+
+    ``incomplete_review`` is a delivery failure, so withholding without trying to
+    finish the answer is only right when the gap is genuinely unrecoverable. It is
+    recoverable when the model returned a well-formed answer that simply omitted
+    some lines: the same question, re-asked with those lines named, can complete it.
+
+    Bounded by construction:
+
+    * at most one recovery per correction (``state["recovered"]``);
+    * never once a repair has happened, so the reviewed draft is the same document;
+    * never if the deadline leaves no room for a meaningful call;
+    * never a blind retry: the hint names the exact unanswered lines, and an
+      identical omission the second time means the model cannot answer.
+
+    Returns the line ids to require, or the reason string to withhold with. The
+    caller rebuilds the request from the current draft and carries the ids as
+    ``must_judge``; the recovered answer is then validated by the unchanged
+    ``_validate_review`` and the unchanged completeness and attribution checks, so
+    recovery can only add judgements -- never approval.
+    """
+    line_ids = list(exc.line_ids)
+    if state.get("recovered") or state.get("repaired") or not line_ids:
+        return "incomplete_review"
+    if state.get("last_unjudged") == line_ids:
+        # Same unanswered lines again: the model cannot judge them, so re-asking is
+        # a blind retry rather than recovery.
+        return "incomplete_review"
+    if deadline - asyncio.get_running_loop().time() <= 0:
+        return f"timeout_{phase}"
+    state["recovered"] = True
+    state["last_unjudged"] = line_ids
+    return line_ids
+
+
 def _silence_task(task: asyncio.Task[Any]) -> None:
     # Retrieve any late exception without exposing callback input or exception text.
     if not task.cancelled():
@@ -635,12 +673,18 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     corrected_spans = 0
     corrected_labels = 0
     current_phase = "source_inventory"
+    # Bounded recovery state for an incomplete review. Shared with the helper so the
+    # "at most once" and "never after a repair" rules cannot be bypassed.
+    recovery: dict[str, Any] = {"recovered": False, "repaired": False,
+                                "last_unjudged": None}
 
     def blocked(reason: str) -> CorrectionResult:
         detail = {
             "attribution_conflict": "A literal source record appears under a different label; independent review of the original record is required.",
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
+            "incomplete_review": "The reviewer did not judge every line of the draft, so the resume could not be fully verified.",
+            "no_op_repair": "The reviewer's correction did not change the flagged text, so the resume could not be verified.",
         }.get(reason, "Content withheld; independent review is required.")
         return CorrectionResult("withheld", None, reason,
                                 detail,
@@ -696,10 +740,16 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     # withheld after the complete review approves the draft.
     markdown, corrected_labels, ambiguous = _correct_unique_attribution(markdown, source_map)
     phase = "initial_review"
+    # Set only by the bounded recovery path; names the exact lines the previous
+    # answer omitted so the re-ask is a completion, not a blind retry.
+    must_judge: list[str] | None = None
     while True:
         lines = _lines(markdown)
         payload = {"contract": _REVIEW_CONTRACT, "sources": source_payload, "source_claims": inventory,
                    "lines": [{"line_id": line["line_id"], "text": line["text"]} for line in lines]}
+        if must_judge is not None:
+            payload["must_judge"] = list(must_judge)
+            must_judge = None
         try:
             current_phase = phase
             remaining = deadline - loop.time()
@@ -755,6 +805,9 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             repair_payload = {"contract": _REPAIR_CONTRACT, "sources": source_payload,
                               "source_claims": inventory, "lines": payload["lines"], "claims": claims,
                               "flagged_claim_ids": [claim["id"] for claim in flagged]}
+            # After a repair the draft is a different document, so finishing a
+            # previous partial review would judge stale text. Recovery is spent.
+            recovery["repaired"] = True
             repairs += 1
             edit_response = await _invoke(callback, "repair", repair_payload, remaining, events)
             if loop.time() >= deadline:
@@ -770,14 +823,20 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             return blocked(f"provider_call_timeout_{current_phase}")
         except TimeoutError:
             return blocked(f"timeout_{current_phase}")
-        except UnjudgedReview:
-            # Distinct from malformed_output: the answer parsed but skipped part of
-            # the draft. Withheld immediately rather than sent to repair, because a
-            # repair may only replace a *flagged* span and these lines were never
-            # judged, so no edit can address them. Measured on the captured live
-            # case: this is what produced the spurious repair call and the
-            # mis-attributed malformed_output.
-            return blocked("incomplete_review")
+        except UnjudgedReview as exc:
+            # An unresolved delivery failure, not a completed correction: the answer
+            # parsed but skipped part of the draft, and no repair edit can address a
+            # line that was never judged (repair may only replace a *flagged* span).
+            # Attempt the single bounded completion before withholding.
+            outcome = await _recover_unjudged(phase, exc, deadline, recovery)
+            if isinstance(outcome, str):
+                return blocked(outcome)
+            # Carry only the ids across the loop rebuild; the payload itself is
+            # reconstructed from the current draft. The re-review counts as a
+            # review call, exactly like any other.
+            must_judge = outcome
+            current_phase = phase
+            continue
         except NoOpRepair:
             return blocked("no_op_repair")
         except _Invalid:

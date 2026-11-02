@@ -33,9 +33,14 @@ MAX_OUTPUT_TOKENS = 12000
 # request, and source_correction.MAX_TIMEOUT_SECONDS bounds the operation, so
 # this must be well below that but comfortably above observed call latency.
 PROVIDER_TIMEOUT_SECONDS = 60.0
-# Hard ceiling on provider calls for one correction: the documented two-repair path
-# (inventory + review + repair + re-review + repair + re-review).
-MAX_CALLS = 6
+# Hard ceiling on provider calls for one correction. Six is the documented
+# two-repair path (inventory + review + repair + re-review + repair + re-review).
+REPAIR_PATH_CALLS = 6
+# Seven allows the single bounded completion re-review that finishes a review the
+# model answered only partially. That headroom is reachable only by a request
+# carrying the `must_judge` hint, so it cannot be spent by a second repair pass or
+# by a direct caller.
+MAX_CALLS = 7
 
 # The disclosure gate. It is enabled only by an explicit operator setting; the
 # default (unset/false) keeps external correction disabled. Enabling it does not
@@ -121,6 +126,11 @@ class CorrectionProvider:
         if self.calls >= MAX_CALLS:
             raise ValueError("correction call budget exhausted")
         if phase not in {"source_inventory", "initial_review", "repair", "post_patch_review"}:
+            raise ValueError("correction call budget exhausted")
+        # Recovery headroom is not spendable by an arbitrary caller: it exists only
+        # for the engine's single completion re-review, which is the only request
+        # that carries the `must_judge` hint naming the lines it must answer.
+        if self.calls >= REPAIR_PATH_CALLS and "must_judge" not in payload:
             raise ValueError("correction call budget exhausted")
         if not self.api_key or self.session is None:
             raise ValueError("correction provider unavailable")

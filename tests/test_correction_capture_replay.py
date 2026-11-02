@@ -1,17 +1,24 @@
-"""Replay of captured real-model synthetic cases through the real adapter.
+"""Replay of real-provider probe recordings through the real adapter.
 
-These tests need a capture on disk, which is deliberately git-ignored because it
-contains complete resume-shaped text. When no capture is present the tests skip
-rather than fail, so a fresh clone is green without the (synthetic) data; the
-capture is regenerated with ``tools/capture_correction_case.py``.
+**Evidence scope.** The recordings these tests load are probes: a real provider was
+called with a *constructed* synthetic draft, driven by
+``tools/capture_correction_case.py`` against the correction engine directly. They are
+not captures of website ``/analyze`` runs, which were never recorded. A test here
+proves how the engine handles the recorded provider bytes; it proves nothing about
+what the website did.
 
-What these prove:
+These tests need a recording on disk, which is deliberately git-ignored because it
+holds complete resume-shaped text. When none is present the tests skip rather than
+fail, so a fresh clone is green without the (synthetic) data; regenerate with
+``tools/capture_correction_case.py``.
+
+What these do prove:
 
 * the recorded provider bytes are consumed by the real ``CorrectionProvider`` and
   the real ``source_correction.correct`` validator, so the decision is recomputed;
 * replay is deterministic and makes no network call;
-* a failure that production reported as ``malformed_output`` is now attributed to
-  the model leaving lines unjudged, and no repair call is wasted on it.
+* an answer that leaves lines unjudged yields ``incomplete_review`` and no repair
+  call, rather than a wasted repair followed by ``malformed_output``.
 """
 import json
 import socket
@@ -85,20 +92,27 @@ def test_captured_case_replays_offline_and_deterministically(no_network, case_id
     assert provider.usage["total_tokens"] > 0
 
 
-def test_replay_stops_before_a_repair_that_production_wasted(no_network):
-    """Case 02 consumed 3 provider calls live; only 2 were justified.
+def test_probe_02_recorded_an_unjudged_answer_then_a_wasted_repair(no_network):
+    """Inspect what probe 02 actually recorded, without replaying past its end.
 
-    Production sent the unjudged draft to repair and the model returned it
-    unchanged, so the third exchange produced nothing. Replay performs the
-    justified work only, which is why it consumes fewer calls than were recorded.
+    The recording holds 3 exchanges: inventory, the review whose answer omitted two
+    lines, and a repair the model answered by echoing the lines unchanged. Those are
+    facts about this recording and are asserted directly.
     """
     capture = load("live-rewrite-02")
-    _, _, session = cc.replay(capture)
     assert len(capture.calls) == 3
-    assert session.calls == 2
-    # The recorded repair exchange is still on disk for audit; it is simply not
-    # needed to reproduce the corrected decision.
-    assert "flagged_claim_ids" in json.dumps(capture.calls[2]["request"])
+    review_request = capture.calls[1]["request"]
+    assert "lines" in review_request
+    judged: set[str] = set()
+    answer = json.loads(json.loads(capture.calls[1]["response_body"])
+                        ["choices"][0]["message"]["content"])
+    for key in ("supported", "unsupported", "uncertain", "structural"):
+        judged.update(answer.get(key, []))
+    omitted = [line["line_id"] for line in review_request["lines"]
+               if line["line_id"] not in judged]
+    assert omitted, "this probe is only meaningful if lines were omitted"
+    # The third exchange is a repair of the very lines that were never judged.
+    assert "flagged_claim_ids" in capture.calls[2]["request"]
 
 
 def test_paraphrased_capture_is_approved(no_network):
@@ -111,22 +125,27 @@ def test_paraphrased_capture_is_approved(no_network):
         "source_inventory", "initial_review", "repair", "post_patch_review"]
 
 
-def test_unjudged_line_capture_is_attributed_without_a_wasted_repair(no_network):
-    """The live failure was reported as malformed_output and burned a repair call.
+def test_probe_02_cannot_validate_recovery(no_network):
+    """Stated limitation: probe 02 was recorded *before* bounded recovery existed.
 
-    The captured answer parses but leaves two lines out of every verdict list. That
-    is an incomplete review, not a broken protocol, and no repair may be attempted
-    because a repair can only replace an already-flagged span.
+    The engine now attempts one completion re-review when an answer omits lines. That
+    request does not exist in the recording, so replay cannot answer it and the
+    correction ends withheld rather than approved. This is the honest outcome: the
+    probe cannot validate the recovery path, and it must not be read as doing so.
+    Recovery is covered by scripted tests (``test_correction_recovery.py``); only a
+    new live run can validate it against a real model.
     """
     capture = load("live-rewrite-02")
     result, provider, session = cc.replay(capture)
     assert result.status == "withheld"
-    assert result.reason == "incomplete_review"
+    # Not ``incomplete_review`` any more: recovery is attempted, and replay has no
+    # exchange to answer it with, so the honest outcome is a provider-side failure.
+    assert result.reason in {"provider_error", "incomplete_review"}
+    assert result.markdown is None
+    # The recording's third (wasted repair) exchange is not reproduced as a repair:
+    # no repair is performed on a draft with unjudged lines.
     assert result.repair_calls == 0
-    # Two calls: inventory + the one review whose answer was incomplete.
-    assert session.calls == 2
-    assert [call["phase"] for call in provider.usage["calls"]] == [
-        "source_inventory", "initial_review"]
+    assert session.calls <= len(capture.calls)
 
 
 def test_replay_never_reports_a_reason_outside_the_public_set(no_network):

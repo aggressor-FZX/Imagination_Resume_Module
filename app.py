@@ -59,6 +59,7 @@ from imaginator_new_integration import run_new_pipeline_async
 import publication_gate
 from approved_resume import unsupported_entities
 import tier_a_verifier
+import live_capture
 from correction_provider import CorrectionProvider
 from correction_events import log_event
 from source_correction import SourceDocument, correct
@@ -350,7 +351,7 @@ def _correction_observer(correlation_id):
 
 
 async def _run_source_correction(markdown, source_documents, api_key, request, *,
-                                 timeout_seconds=120.0, observer=None):
+                                 timeout_seconds=120.0, observer=None, capture=None):
     """Use the application session when available, otherwise close a local session."""
     from disclosure import redact_sources
 
@@ -362,9 +363,19 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
         return None, None
     sources = tuple(SourceDocument(source_id, text) for source_id, text in redacted)
     session = getattr(request.app.state, "http_session", None)
+    if capture is not None:
+        # Record what the live request actually used: the redacted sources that are
+        # about to be reviewed, and the writer's own draft. Both are read from the
+        # live path, never reconstructed from a fixture.
+        try:
+            capture.record_sources(redacted)
+            capture.record_draft(markdown)
+        except Exception:
+            pass
 
     async def run(session):
-        provider = CorrectionProvider(api_key, session, observer=observer)
+        wrapped = live_capture.CapturingSession(session, capture) if capture else session
+        provider = CorrectionProvider(api_key, wrapped, observer=observer)
         result = await correct(markdown, sources, provider,
                                timeout_seconds=timeout_seconds, observer=observer)
         # Allow a cancelled provider coroutine to record its usage state.
@@ -634,8 +645,49 @@ async def _analyze_resume_impl(
                                "upstream_timeout_ms": int(upstream_timeout * 1000),
                                "reserve_ms": int(UPSTREAM_RESPONSE_RESERVE_SECONDS * 1000),
                                "max_deadline_ms": int(MAX_CORRECTION_DEADLINE_SECONDS * 1000)})
+            # Opt-in, synthetic-only, access-controlled capture of this live exchange.
+            # ``live_capture.start`` returns None unless an operator enabled it, so the
+            # default request path pays nothing for this.
+            live_capture_record = live_capture.start(correlation_id)
+
+            def finish_capture(*, correction_result=None, decision=None, reason=None):
+                """Persist the capture. Never raises and never alters the response."""
+                if live_capture_record is None:
+                    return None
+                try:
+                    if correction_result is not None:
+                        live_capture_record.record_review({
+                            "status": correction_result.status,
+                            "reason": correction_result.reason,
+                            "review_calls": correction_result.review_calls,
+                            "repair_calls": correction_result.repair_calls,
+                            "commentary": correction_result.commentary,
+                            "coverage": (None if correction_result.coverage is None else {
+                                type(correction_result.coverage).__name__: True}),
+                        })
+                    if decision is not None:
+                        live_capture_record.record_gate(getattr(decision, "reason_codes", None))
+                    live_capture_record.record_timing(
+                        reason=reason,
+                        pipeline_elapsed_ms=int(pipeline_elapsed * 1000),
+                        budget_ms=int((correction_budget or 0) * 1000),
+                        upstream_timeout_ms=int(upstream_timeout * 1000),
+                        total_elapsed_ms=int((time.time() - start_time) * 1000))
+                    path = live_capture_record.write()
+                    logger.info("correction.capture", extra={
+                        "request_id": correlation_id,
+                        **live_capture.summarise(live_capture_record),
+                        "written": bool(path)})
+                    return path
+                except Exception:
+                    # Diagnostics must never break a user's request.
+                    logger.warning("correction.capture.failed",
+                                   extra={"request_id": correlation_id})
+                    return None
+
             if correction_budget is None:
                 # Not enough upstream time remains for one provider call; send nothing.
+                finish_capture(reason="pipeline_budget_exhausted")
                 return _withhold_correction(reason="pipeline_budget_exhausted",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
 
@@ -643,13 +695,16 @@ async def _analyze_resume_impl(
                 correction, provider = await _run_source_correction(
                     draft, source_documents_snapshot, api_keys[0], request,
                     timeout_seconds=correction_budget,
-                    observer=_correction_observer(correlation_id))
+                    observer=_correction_observer(correlation_id),
+                    capture=live_capture_record)
             except Exception:
                 metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
+                finish_capture(reason="provider_error")
                 return _withhold_correction(reason="provider_error", pipeline_status=status,
                     metrics=metrics, start_time=start_time)
             if correction is None or provider is None:
                 # Corresponding redaction could not be proven; nothing was sent.
+                finish_capture(reason="privacy_redaction_failed")
                 return _withhold_correction(reason="privacy_redaction_failed",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
             metrics = _correction_usage(pipeline_metrics, provider)
@@ -670,6 +725,7 @@ async def _analyze_resume_impl(
                     "provider_call_timeout_repair",
                     "provider_call_timeout_post_patch_review"}
                 reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
+                finish_capture(correction_result=correction, reason=reason)
                 return _withhold_correction(reason=reason, pipeline_status=status,
                     metrics=metrics, start_time=start_time)
 
@@ -682,6 +738,8 @@ async def _analyze_resume_impl(
                 required_facts_missing=missing_entities,
                 approved_entities=_approved_entities_from_payload(None, None, source_snapshot))
             if decision.blocked():
+                finish_capture(correction_result=correction, decision=decision,
+                               reason=decision.reason_codes[0])
                 return _withhold_correction(reason=decision.reason_codes[0],
                     pipeline_status=status, metrics=metrics, start_time=start_time,
                     decision=decision)
@@ -702,6 +760,8 @@ async def _analyze_resume_impl(
             owner = trusted_owner_identity(request)
             output = _issue_publication_receipt(output, owner=owner)
             if not owner or not output.get("publication_receipt") or not output.get("approved_export_payload"):
+                finish_capture(correction_result=correction, decision=decision,
+                               reason="receipt_unavailable")
                 return _withhold_correction(reason="receipt_unavailable",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
             # The compatibility experience alias must derive from the signed
@@ -711,6 +771,7 @@ async def _analyze_resume_impl(
                  "snippet": "\n".join(item.get("bullets", []))}
                 for item in output["approved_export_payload"]["experience"]
             ]
+            finish_capture(correction_result=correction, decision=decision, reason="approved")
             return AnalysisResponse(**output)
 
         # Step 2: Run Generation
