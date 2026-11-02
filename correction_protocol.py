@@ -271,9 +271,22 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
     for line in lines:
         text = line["text"]
         verdict = verdicts.get(line["line_id"], "uncertain")
+        chosen = list(line["source_segment_indices"])
+        if verdict == "supported" and not chosen:
+            # A rewrite paraphrases, so the adapter's exact/near-exact match can be
+            # empty even though the model judged the line supported. Cite the
+            # segment with the strongest lexical overlap; if nothing overlaps, the
+            # line has no textual basis and is downgraded to uncertain (withheld).
+            scores = [(candidate, _overlap_ratio(items[candidate]["quote"], text))
+                      for candidate in range(len(items))]
+            best = max(scores, key=lambda pair: pair[1]) if scores else (None, 0.0)
+            if best[1] <= 0:
+                verdict = "uncertain"
+            else:
+                chosen = [best[0]]
         citations = []
         if verdict == "supported":
-            for index in line["source_segment_indices"]:
+            for index in chosen:
                 item = items[index]
                 citations.append({key: item[key] for key in ("source_id", "start", "end", "quote")})
         claims.append({"id": f"{line['line_id']}:0:{len(text)}", "line_id": line["line_id"],
@@ -292,25 +305,25 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
                                     "status": status if status == "missing" else "uncertain",
                                     "spans": []})
             continue
-        quote = _fold(item["quote"])
         # The model decides completeness; this only attaches the claimable span.
-        # A rewrite paraphrases, so the draft line need not contain the source text
-        # verbatim: the span is the supported line the model itself marked as the
-        # carrier. Preference order keeps it checkable — a line that cites this
-        # segment, then the longest lexical overlap, then any supported line — and
-        # the strict validator still requires a supported claim citing the item.
-        candidates = [line["line_id"] for line in lines
-                      if verdicts.get(line["line_id"]) == "supported"]
-        if not candidates:
+        # The strict validator requires a *supported* claim that cites the item,
+        # so the span is chosen from claims whose citations actually cover it.
+        # A paraphrase still has a citation because the claim builder attaches the
+        # best-overlapping segment; a line with no textual basis was downgraded to
+        # uncertain and is therefore not eligible here.
+        carriers = [claim for claim in claims
+                    if claim["verdict"] == "supported"
+                    and any(cite["source_id"] == item["source_id"]
+                            and cite["start"] <= item["start"]
+                            and cite["end"] >= item["end"] for cite in claim["citations"])]
+        if not carriers:
             representations.append({"source_claim_id": item["id"],
                                     "status": "uncertain", "spans": []})
             continue
-        citing = [line_id for line_id in candidates
-                  if index in _cited_indices(lines, line_id, item)]
-        ranked = citing or sorted(candidates,
-                                  key=lambda line_id: -_overlap_ratio(item["quote"],
-                                                                      by_line[line_id]))
+        carriers.sort(key=lambda claim: -_overlap_ratio(item["quote"],
+                                                        by_line[claim["line_id"]]))
+        best = carriers[0]
         representations.append({"source_claim_id": item["id"], "status": "represented",
-                                "spans": [{"line_id": ranked[0], "start": 0,
-                                           "end": len(by_line[ranked[0]])}]})
+                                "spans": [{"line_id": best["line_id"], "start": 0,
+                                           "end": len(by_line[best["line_id"]])}]})
     return {"claims": claims, "representations": representations}
