@@ -73,6 +73,13 @@ def _overlap_ratio(quote: str, line: str) -> float:
 
 
 
+def _is_heading(text: str) -> bool:
+    """True for a Markdown heading line with no other content."""
+    stripped = text.strip()
+    return stripped.startswith("#") and "\n" not in stripped.strip("#").strip()
+
+
+
 class MalformedIndexedResponse(Exception):
     """The index-list answer could not be mapped onto the strict shape."""
 
@@ -165,9 +172,17 @@ def strict_inventory_from_indexed(response: Any, request: dict[str, Any]) -> dic
     items = []
     for segment in segments:
         sid, start, end = segment["source_id"], segment["start"], segment["end"]
+        classification = classified.get(segment["index"], "uncertain")
+        # A section heading asserts no fact, so it can never be "represented" by a
+        # draft line: a rewrite routinely renames or adds sections, and demanding
+        # coverage for a heading marks every non-matching heading uncertain and
+        # withholds an otherwise faithful resume. Headings are therefore reported
+        # as their own classification. All factual content stays required.
+        if _is_heading(segment["text"]) and classification == "required":
+            classification = "non_resume"
         items.append({"id": f"{sid}:{start}:{end}", "source_id": sid, "start": start,
                       "end": end, "quote": segment["text"],
-                      "classification": classified.get(segment["index"], "uncertain")})
+                      "classification": classification})
     return {"source_claims": items}
 
 
