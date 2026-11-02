@@ -7,9 +7,19 @@ import time
 import aiohttp
 
 import correction_protocol
-from disclosure import POLICY_ID, verify_disclosure
+from disclosure import (
+    POLICY_ID,
+    payload_disclosure_errors,
+    redact_payload,
+    verify_disclosure,
+)
 from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
-from source_correction import PrivacyReviewRequired, ProviderCallTimeout, SourceDocument
+from source_correction import (
+    PrivacyReviewRequired,
+    ProviderCallTimeout,
+    SourceDocument,
+    UnjudgedReview,
+)
 
 
 MAX_REQUEST_BYTES = 96_000
@@ -23,6 +33,9 @@ MAX_OUTPUT_TOKENS = 12000
 # request, and source_correction.MAX_TIMEOUT_SECONDS bounds the operation, so
 # this must be well below that but comfortably above observed call latency.
 PROVIDER_TIMEOUT_SECONDS = 60.0
+# Hard ceiling on provider calls for one correction: the documented two-repair path
+# (inventory + review + repair + re-review + repair + re-review).
+MAX_CALLS = 6
 
 # The disclosure gate. It is enabled only by an explicit operator setting; the
 # default (unset/false) keeps external correction disabled. Enabling it does not
@@ -103,7 +116,11 @@ class CorrectionProvider:
                       "estimated_cost_usd": 0.0, "failures": []}
 
     async def __call__(self, phase, payload):
-        if phase not in {"source_inventory", "initial_review", "repair", "post_patch_review"} or self.calls >= 6:
+        # A direct caller past the ceiling is rejected before the disclosure gate so
+        # "budget exhausted" is the reason it sees, not a privacy error.
+        if self.calls >= MAX_CALLS:
+            raise ValueError("correction call budget exhausted")
+        if phase not in {"source_inventory", "initial_review", "repair", "post_patch_review"}:
             raise ValueError("correction call budget exhausted")
         if not self.api_key or self.session is None:
             raise ValueError("correction provider unavailable")
@@ -125,8 +142,34 @@ class CorrectionProvider:
         if translated is not None:
             payload = translated
         outgoing = {key: value for key, value in payload.items() if not key.startswith("_")}
+        # Bound the request before anything else looks at it, so an oversized
+        # payload is rejected for being oversized regardless of its content.
+        if len(json.dumps(outgoing, ensure_ascii=True, allow_nan=False).encode("utf-8")) > MAX_REQUEST_BYTES:
+            raise ValueError("correction request too large")
+        # Never submit the original evidence or draft under an unspecified
+        # disclosure policy. The check runs against the EXACT structure about to be
+        # serialized, not against a caller's claim that it was redacted.
+        policy = approved_disclosure_policy()
+        if policy is None:
+            raise PrivacyReviewRequired
+        if not verify_disclosure(original_payload.get("sources"), approved_policy=policy):
+            raise PrivacyReviewRequired
+        # The caller redacts source documents, but draft lines, segment text and
+        # claim quotes travel in the same request and were never covered. Apply the
+        # same length-preserving substitution to every free-text value actually
+        # transmitted, then verify the result. Width is preserved, so the engine's
+        # code-point offsets stay valid; the reply carries only line ids and
+        # segment indices, never offsets or document text.
+        try:
+            outgoing, _redactions = redact_payload(outgoing)
+        except ValueError:
+            # Text that cannot be made PII-free without changing length is not sent
+            # at all: a shifted offset would invalidate every citation.
+            raise PrivacyReviewRequired
+        if payload_disclosure_errors(outgoing, approved_policy=policy):
+            raise PrivacyReviewRequired
         serialized_payload = json.dumps(outgoing, ensure_ascii=False, allow_nan=False)
-        system_content = payload["contract"] + " Return only a JSON object."
+        system_content = outgoing["contract"] + " Return only a JSON object."
         request = {
             "model": self.model,
             "messages": [
@@ -138,27 +181,10 @@ class CorrectionProvider:
             "stream": False,
             "provider": {"allow_fallbacks": False},
         }
-        # Measure the complete JSON envelope, including JSON escaping.
+        # The complete envelope is measured again after redaction, including
+        # JSON escaping, because the padded placeholders can change the byte size.
         if len(json.dumps(request, ensure_ascii=True, allow_nan=False).encode("utf-8")) > MAX_REQUEST_BYTES:
             raise ValueError("correction request too large")
-        # Never submit the original evidence or draft under an unspecified
-        # disclosure policy. The check runs against the EXACT sources about to be
-        # serialized, not against a caller's claim that they were redacted.
-        policy = approved_disclosure_policy()
-        if policy is None:
-            raise PrivacyReviewRequired
-        if not verify_disclosure(original_payload.get("sources"), approved_policy=policy):
-            raise PrivacyReviewRequired
-        # The indexed request carries the same source text in ``segments``; the
-        # gate above checked the caller's sources, so assert the exact bytes that
-        # will actually be transmitted are covered by the same policy too.
-        transmitted = payload.get("segments")
-        if type(transmitted) is list:
-            checkable = [{"source_id": "transmitted", "text": " ".join(
-                str(segment.get("text", "")) for segment in transmitted
-                if type(segment) is dict)}]
-            if not verify_disclosure(checkable, approved_policy=policy):
-                raise PrivacyReviewRequired
         self.calls += 1
         # POST is not retried by aiohttp; redirects and model fallbacks are disabled.
         recorded = False
@@ -216,7 +242,13 @@ class CorrectionProvider:
                 return parsed
             if phase == "source_inventory":
                 return correction_protocol.strict_inventory_from_indexed(parsed, payload)
-            return correction_protocol.strict_review_from_indexed(parsed, payload)
+            try:
+                return correction_protocol.strict_review_from_indexed(parsed, payload)
+            except correction_protocol.UnjudgedLines as exc:
+                # The answer parsed but skipped part of the draft. Report it as an
+                # incomplete review so the reason is accurate; a generic malformed
+                # output hid this live and sent the draft into a wasted repair.
+                raise UnjudgedReview(exc.line_ids) from exc
         except asyncio.CancelledError:
             outcome = "cancelled"
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,

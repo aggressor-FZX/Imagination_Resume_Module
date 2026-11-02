@@ -8,3 +8,7 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+
+# Real-model synthetic correction captures hold complete resume-shaped text;
+# never commit them. See correction_capture.py.
+captures/

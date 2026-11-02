@@ -109,7 +109,13 @@ def test_synthetic_local_transport_preserves_offsets_output_and_evidence(monkeyp
     result = asyncio.run(correct(DRAFT, (source,), provider))
     assert result.status == "approved" and result.markdown == SOURCE
     payload = json.loads(session.requests[0]["json"]["messages"][1]["content"])
-    assert payload["sources"] == [{"source_id": source.source_id, "text": SOURCE}]
+    # Offsets are the application's, so the transmitted segments must reconstruct
+    # the source exactly: concatenating them yields the source text unchanged.
+    sent = payload["segments"]
+    assert {segment["source_id"] for segment in sent} == {source.source_id}
+    assert all(segment["start"] == position
+               for position, segment in zip([0] + [s["end"] for s in sent], sent))
+    assert "".join(segment["text"] for segment in sent) == SOURCE
     assert source.text == SOURCE
     assert all(req["timeout"].total == correction_provider.PROVIDER_TIMEOUT_SECONDS
                for req in session.requests)

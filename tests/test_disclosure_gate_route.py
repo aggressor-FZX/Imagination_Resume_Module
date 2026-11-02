@@ -65,16 +65,40 @@ def test_flag_on_sends_only_redacted_sources_with_preserved_offsets(offline, mon
     assert session.requests, "correction should reach the provider with the flag on"
 
     first = json.loads(session.requests[0]["json"]["messages"][1]["content"])
-    sent_text = first["sources"][0]["text"]
+    # The wire carries the application's segments; concatenated they are the
+    # source, so offsets are preserved by construction. No `sources` array is sent.
+    assert "sources" not in first
+    sent_text = "".join(segment["text"] for segment in first["segments"])
     # Identifiers are removed; length (and therefore every citation offset) is not.
     for secret in ("alex.example@example.test", "555-010-0199"):
         assert secret not in sent_text
     assert len(sent_text) == len(PII_SOURCE)
     assert "Alpha Works" in sent_text and "30% over 6 months" in sent_text
+    # Offsets are the app's own: contiguous, gapless, and inside the source.
+    position = 0
+    for segment in first["segments"]:
+        assert segment["start"] == position and segment["end"] > segment["start"]
+        position = segment["end"]
+    assert position == len(PII_SOURCE)
 
-    # No secret is echoed back to the client either.
+    # The disclosure policy governs what leaves the platform. A secret appearing
+    # in the returned resume is the echo of the caller's own input (they uploaded
+    # it in resume_text), so the meaningful assertions are: nothing sensitive is
+    # sent to the provider, and no diagnostic surface repeats it.
+    diagnostics = {
+        "correction_commentary": result.get("correction_commentary"),
+        "review_message": result.get("review_message"),
+        "review_reason": result.get("review_reason"),
+        "review_reasons": result.get("review_reasons"),
+        "run_metrics": result.get("run_metrics"),
+    }
     for secret in ("alex.example@example.test", "555-010-0199"):
-        assert secret not in response.text
+        assert secret not in json.dumps(diagnostics)
+    # The approved document is the caller's own resume, so redaction must not have
+    # been applied to it: their contact details survive intact.
+    if result["correction_status"] == "approved":
+        md = result["final_written_section_markdown"]
+        assert "alex.example@example.test" in md and "555-010-0199" in md
     assert result["processing_status"] in {"completed", "needs_review"}
 
 

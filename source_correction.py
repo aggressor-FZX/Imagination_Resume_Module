@@ -108,6 +108,32 @@ class PrivacyReviewRequired(Exception):
     """External correction is disabled pending an approved disclosure policy."""
 
 
+class NoOpRepair(ValueError):
+    """A repair edit reproduced the flagged span unchanged."""
+
+    def __init__(self, claim_id: str = ""):
+        super().__init__("repair replaced a flagged span with identical text")
+        # The engine's own claim identifier; contains no document text.
+        self.claim_id = claim_id
+
+
+class UnjudgedReview(ValueError):
+    """The reviewer left lines out of every verdict list.
+
+    Raised by an adapter that can tell the difference between an answer it cannot
+    parse and an answer that simply skipped part of the draft. ``correct()`` uses
+    ``line_ids`` to complete the same question once, or reports
+    ``incomplete_review`` if it still cannot get a complete answer. A ``_Invalid``
+    response (malformed) is deliberately reported separately.
+    """
+
+    def __init__(self, line_ids: list[str] | None = None):
+        super().__init__("reviewer left lines unjudged")
+        # Engine-assigned line identifiers only; never document text.
+        self.line_ids = list(line_ids or [])
+        self.count = len(self.line_ids)
+
+
 class ProviderCallTimeout(TimeoutError):
     """One provider request exceeded its own timeout (not the overall deadline).
 
@@ -295,6 +321,9 @@ def _attribution_ambiguity(markdown: str, sources: dict[str, str]) -> bool:
     return False
 
 
+
+
+
 def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str, Any]]:
     if not _exact_dict(response, {"source_claims"}) or type(response["source_claims"]) is not list:
         raise _Invalid
@@ -439,7 +468,11 @@ def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
         line = line_map[claim["line_id"]]
         a, b = line["absolute_start"] + claim["start"], line["absolute_start"] + claim["end"]
         if markdown[a:b] == replacement:
-            raise _Invalid
+            # A repair that changes nothing is not a malformed envelope: the model
+            # was asked to fix a flagged span and returned it unchanged (a live
+            # model echoed the line verbatim). Reporting it separately stops the
+            # failure being mis-attributed to the wire format.
+            raise NoOpRepair(cid)
         edits.append((a, b, replacement))
     if seen != set(flagged):
         raise _Invalid
@@ -679,11 +712,20 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             claims, incomplete = _validate_review(response, lines, source_map, inventory)
             if all(claim["verdict"] == "structural" for claim in claims):
                 return blocked("no_supported_claims")
-            if "uncertain" in incomplete:
-                return blocked("source_completeness_uncertain")
+            flagged = [claim for claim in claims if claim["verdict"] in {"unsupported", "uncertain"}]
+            # A draft with unresolved claims is not final, so its completeness is
+            # not yet a decision. Answering "uncertain" because the only line
+            # carrying a fact is itself flagged is a symptom of the defect repair
+            # exists to fix, and withholding here made repair unreachable for the
+            # most common fixable case. Repair can only replace a flagged span, and
+            # the complete re-review that follows re-authenticates every fact, so
+            # deferring the coverage verdict cannot add unsupported content.
+            # "missing" is still decided immediately: no edit may introduce a fact,
+            # so a draft that omits one is never repairable.
             if "missing" in incomplete:
                 return blocked("source_facts_missing")
-            flagged = [claim for claim in claims if claim["verdict"] in {"unsupported", "uncertain"}]
+            if "uncertain" in incomplete and not flagged:
+                return blocked("source_completeness_uncertain")
             if not flagged:
                 supported = sum(c["verdict"] == "supported" for c in claims)
                 if not supported:
@@ -728,6 +770,16 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             return blocked(f"provider_call_timeout_{current_phase}")
         except TimeoutError:
             return blocked(f"timeout_{current_phase}")
+        except UnjudgedReview:
+            # Distinct from malformed_output: the answer parsed but skipped part of
+            # the draft. Withheld immediately rather than sent to repair, because a
+            # repair may only replace a *flagged* span and these lines were never
+            # judged, so no edit can address them. Measured on the captured live
+            # case: this is what produced the spurious repair call and the
+            # mis-attributed malformed_output.
+            return blocked("incomplete_review")
+        except NoOpRepair:
+            return blocked("no_op_repair")
         except _Invalid:
             return blocked("malformed_output")
         except PrivacyReviewRequired:

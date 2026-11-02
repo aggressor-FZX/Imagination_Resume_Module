@@ -104,11 +104,19 @@ def indexed_body_review(payload):
 
     Works from the wire payload (``segments`` + ``lines``), not the engine's
     internal ``source_claims``, because the adapter owns the translation.
+
+    ``candidates`` is only a lookup aid, so every supported line also names the
+    segment that establishes it in ``evidence``. That is what an honest reviewer
+    must do: retrieval proposes, the reviewer decides.
     """
     segments = payload.get("segments", [])
     lines = payload.get("lines", [])
     verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
-    supported_lines = []
+    evidence = {}
+
+    def norm(value):
+        return " ".join(value.split())
+
     for line in lines:
         text = line["text"]
         if text.startswith("## "):
@@ -116,19 +124,16 @@ def indexed_body_review(payload):
             continue
         fragment = next((part for part in (FRAGMENT, SECOND_FRAGMENT) if part in text), None)
         clean = text.replace(fragment, "", 1) if fragment else text
-        matches = any(segment["text"].strip() == clean for segment in segments
-                      if segment["index"] in line.get("source_segment_indices", []))
+        # The reviewer searches every segment it was shown, not just the retrieval
+        # shortlist: an exact source line is evidence regardless of ranking.
+        exact = [segment["index"] for segment in segments if segment["text"].strip() == clean]
         # The wire protocol has no per-span verdicts, so the whole line carries the
         # verdict. A line with an invented fragment is reported unsupported (that
-        # is the claim repair must remove); its underlying segment is still
-        # reported represented below.
-        verdict = "unsupported" if fragment or not matches else "supported"
+        # is the claim repair must remove).
+        verdict = "unsupported" if fragment or not exact else "supported"
         verdicts[verdict].append(line["line_id"])
-        if matches:
-            supported_lines.append(clean)
-    def norm(value):
-        return " ".join(value.split())
-
+        if verdict == "supported":
+            evidence[line["line_id"]] = exact
     represented, missing = [], []
     for segment in segments:
         quote = norm(segment["text"])
@@ -136,8 +141,17 @@ def indexed_body_review(payload):
         # them as their own classification, so they are not coverage questions.
         if not quote or segment["text"].startswith("## "):
             continue
-        (represented if any(quote == norm(supported) for supported in supported_lines)
-         else missing).append(segment["index"])
+        # The draft states this fact even when the same line also carries an
+        # addition that repair removes, so representation is judged on the line
+        # text with the scripted fragment taken back out.
+        carried = any(
+            segment["index"] in line["candidates"]
+            and norm(line["text"].replace(
+                next((part for part in (FRAGMENT, SECOND_FRAGMENT) if part in line["text"]),
+                     ""), "", 1)) == quote
+            for line in lines)
+        (represented if carried else missing).append(segment["index"])
+    verdicts["evidence"] = evidence
     verdicts["represented"], verdicts["missing"] = represented, missing
     return verdicts
 
@@ -183,14 +197,30 @@ class FakeSession:
             raise asyncio.TimeoutError("private provider error")
         payload = json.loads(kwargs["json"]["messages"][1]["content"])
         if "flagged_claim_ids" in payload:
-            # Default repair: drop the invented fragment from the flagged span, so
-            # the line becomes an exact source copy. An explicit repairs list (used
-            # to script repeated or no-op repairs) still takes precedence.
+            # The wire protocol carries one verdict per line, so a flagged claim
+            # spans the whole line and repair returns the corrected line text.
+            # Default repair drops the scripted fragment, making the line an exact
+            # source copy. An explicit repairs list keeps the line defective: a
+            # nonempty entry substitutes that fragment, and "" removes it, which
+            # reproduces the original fragment-level repair script exactly.
             if self.repairs:
-                replacement = self.repairs.pop(0)
+                scripted = self.repairs.pop(0)
+
+                def repaired(cid):
+                    line_id = cid.partition(":")[0]
+                    text = next(line["text"] for line in payload["lines"]
+                                if line["line_id"] == line_id)
+                    if scripted:
+                        return (text.replace(FRAGMENT, scripted)
+                                .replace(SECOND_FRAGMENT, scripted))
+                    return text.replace(FRAGMENT, "").replace(SECOND_FRAGMENT, "")
             else:
-                replacement = ""
-            body = {"edits": [{"claim_id": cid, "replacement": replacement}
+                def repaired(cid):
+                    line_id = cid.partition(":")[0]
+                    text = next(line["text"] for line in payload["lines"]
+                                if line["line_id"] == line_id)
+                    return text.replace(FRAGMENT, "").replace(SECOND_FRAGMENT, "")
+            body = {"edits": [{"claim_id": cid, "replacement": repaired(cid)}
                               for cid in payload["flagged_claim_ids"]]}
         elif "source_claims" in payload or "lines" in payload:
             # Review request translated to the index-list wire protocol.
@@ -269,7 +299,10 @@ def test_isolated_provider_correction_rechecks_and_preserves_usage(synthetic_dis
     assert provider.usage["total_tokens"] == 56
     assert provider.usage["estimated_cost_usd"] == pytest.approx(4 * estimate_cost(OR_SLUG_DRAFTER, 10, 4))
     inventory_payload = json.loads(session.requests[0]["json"]["messages"][1]["content"])
-    assert set(inventory_payload) == {"contract", "sources"}
+    # The inventory question carries source segments and no draft at all.
+    assert set(inventory_payload) == {"contract", "segments"}
+    assert not any("lines" in json.loads(req["json"]["messages"][1]["content"])
+                   for req in session.requests[:1])
     assert all(req["allow_redirects"] is False and req["json"]["provider"] == {"allow_fallbacks": False}
                and req["json"]["model"] == OR_SLUG_DRAFTER for req in session.requests)
 

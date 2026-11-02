@@ -46,6 +46,18 @@ class HangingResponse:
         return False
 
 
+def repaired_line(payload, claim_id):
+    """Corrected text for a whole-line claim: the invented line is deleted.
+
+    The wire protocol carries one verdict per line, so a flagged claim spans the
+    entire line and repair must replace that span. A scripted repair that returns
+    an empty string would blank the line instead of removing it.
+    """
+    line_id, _, _ = claim_id.partition(":")
+    text = next(line["text"] for line in payload["lines"] if line["line_id"] == line_id)
+    return "" if text.strip() == INVENTED else text
+
+
 def indexed_inventory(payload):
     """Classify the wire segments.
 
@@ -65,29 +77,35 @@ def indexed_inventory(payload):
 def indexed_review(payload):
     """Scripted reviewer for the wire protocol.
 
-    A line is supported when a cited segment is its exact text. A line that
+    A line is supported when a segment it names is its exact text. A line that
     differs only by inserted text is unsupported and is what repair removes; its
     underlying segment is still reported represented, because the segment text is
     present in the line. The engine independently verifies the span it records.
+
+    ``candidates`` is a retrieval aid only, so the reviewer names the segment it
+    relies on in ``evidence``; a supported line without that is withheld.
     """
     segments, lines = payload["segments"], payload["lines"]
-    by_index = {segment["index"]: segment for segment in segments}
     verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
+    evidence: dict[str, list[int]] = {}
     carried: set[str] = set()
     for line in lines:
         text = line["text"]
         if text.startswith("## "):
             verdicts["structural"].append(line["line_id"])
             continue
-        cited = [by_index[index] for index in line.get("source_segment_indices", [])
-                 if index in by_index]
-        exact = next((segment for segment in cited if segment["text"].strip() == text), None)
-        if exact is not None:
+        exact = [segment["index"] for segment in segments
+                 if segment["text"].strip() == text]
+        if exact:
             verdicts["supported"].append(line["line_id"])
-            carried.add(" ".join(exact["text"].split()))
+            evidence[line["line_id"]] = exact
+            carried.update(" ".join(segments[index]["text"].split()) for index in exact)
             continue
         verdicts["unsupported"].append(line["line_id"])
-        for segment in cited:
+        # The fact the unsupported line was derived from is still stated by the
+        # draft, so it stays represented while repair removes the addition.
+        for index in line.get("candidates", []):
+            segment = segments[index]
             if _overlap(segment["text"], text):
                 carried.add(" ".join(segment["text"].split()))
     represented = []
@@ -97,6 +115,7 @@ def indexed_review(payload):
             continue
         if normalized in carried:
             represented.append(segment["index"])
+    verdicts["evidence"] = evidence
     verdicts["represented"] = represented
     verdicts["missing"] = []
     return verdicts
@@ -127,7 +146,8 @@ class ScriptedSession:
             return HangingResponse(self)
         payload = json.loads(kwargs["json"]["messages"][1]["content"])
         if "flagged_claim_ids" in payload:
-            body = {"edits": [{"claim_id": cid, "replacement": ""}
+            body = {"edits": [{"claim_id": cid,
+                               "replacement": repaired_line(payload, cid)}
                               for cid in payload["flagged_claim_ids"]]}
         elif "lines" not in payload:
             body = indexed_inventory(payload)

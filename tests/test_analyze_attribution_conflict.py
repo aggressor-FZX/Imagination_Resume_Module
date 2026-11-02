@@ -57,106 +57,107 @@ def _record_body(text):
 
 
 def record_inventory(payload):
-    """Scripted inventory: explicit ``label: body`` lines are required.
+    """Scripted inventory: explicit ``label: body`` segments are required.
 
     Headings and blank lines are declared non_resume by this test double so the
     attribution contract can be observed in isolation; that is a fixture
-    decision, not a claim that headings are irrelevant in production. Blank
-    lines are folded into an adjacent nonblank span because the real validator
-    rejects whitespace-only items and requires an exact contiguous partition.
+    decision, not a claim that headings are irrelevant in production. The
+    adapter already folds blank runs into an adjacent nonblank segment, so every
+    index is classified exactly once.
     """
-    assert set(payload) == {"contract", "sources"}
-    items = []
-    for source in payload["sources"]:
-        text, sid = source["text"], source["source_id"]
-        start = position = 0
-        for part in text.splitlines(keepends=True):
-            position += len(part)
-            if not part.strip():
-                continue
-            classification = "required" if _record_body(part.strip()) else "non_resume"
-            items.append({"id": f"{sid}:{start}:{position}", "source_id": sid,
-                          "start": start, "end": position,
-                          "quote": text[start:position],
-                          "classification": classification})
-            start = position
-        if position > start:
-            # Trailing whitespace joins the final span rather than standing alone.
-            last = items[-1]
-            last["end"] = position
-            last["id"] = f"{sid}:{last['start']}:{position}"
-            last["quote"] = text[last["start"]:position]
-    return {"source_claims": items}
+    assert set(payload) == {"contract", "segments"}
+    required, non_resume, uncertain = [], [], []
+    for segment in payload["segments"]:
+        # Judge the last nonblank line: a segment may carry trailing blank lines.
+        line = segment["text"].strip().splitlines()[-1] if segment["text"].strip() else ""
+        if not segment["text"].strip():
+            uncertain.append(segment["index"])
+        elif _record_body(line):
+            required.append(segment["index"])
+        else:
+            non_resume.append(segment["index"])
+    return {"required": required, "non_resume": non_resume, "uncertain": uncertain}
+
+
+def _segment_record(segment):
+    """``(label_key, body)`` for a record segment, or ``None``.
+
+    The id is the label key: this double deliberately compares record *bodies*
+    only and never checks label ownership, which is exactly the adversarial gap
+    the deterministic attribution check must close.
+    """
+    text = segment["text"].strip()
+    if not text:
+        return None
+    body = _record_body(text.splitlines()[-1])
+    if body is None:
+        return None
+    stripped = text.splitlines()[-1][2:] if text.splitlines()[-1].startswith("- ") \
+        else text.splitlines()[-1]
+    return stripped.split(": ", 1)[0], body
 
 
 def body_review(payload):
-    """Approve draft lines by record body, citing every source owner.
+    """Approve draft lines by record body, naming every source owner.
 
     Schema-valid but semantically wrong: it never verifies that the label on the
-    draft line owns the body. It is the adversarial reviewer, not an oracle. An
-    inserted duration suffix is flagged at its exact offsets so the repair step
-    removes only that suffix.
+    draft line owns the body. It is the adversarial reviewer, not an oracle. A
+    line carrying an inserted duration suffix is reported unsupported so the
+    repair step rewrites it without the addition.
     """
-    claims = []
-    spans = {item["id"]: [] for item in payload["source_claims"]}
-    required = {item["id"]: _record_body(item["quote"].strip().splitlines()[-1])
-                for item in payload["source_claims"]
-                if item["classification"] == "required"}
-    for line in payload["lines"]:
+    segments, lines = payload["segments"], payload["lines"]
+    verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
+    evidence: dict[str, list[int]] = {}
+    owned: dict[str, list[int]] = {}
+    for segment in segments:
+        record = _segment_record(segment)
+        if record is not None:
+            owned.setdefault(record[1], []).append(segment["index"])
+    for line in lines:
         text, line_id = line["text"], line["line_id"]
         body = _record_body(text)
         if body is None:
-            claims.append({"id": f"{line_id}:0:{len(text)}", "line_id": line_id,
-                           "start": 0, "end": len(text), "verdict": "structural",
-                           "citations": []})
+            verdicts["structural"].append(line_id)
             continue
         suffix = next((part for part in (FRAGMENT, SECOND_FRAGMENT, REPAIR_FRAGMENT)
                        if part in body), None)
+        clean_body = body
         if suffix:
             start = text.index(suffix)
-            end = start + len(suffix)
-            clean_body = _record_body(text[:start] + text[end:])
-        else:
-            start = end = None
-            clean_body = body
-        owners = [item for item in payload["source_claims"]
-                  if item["id"] in required and required[item["id"]] == clean_body]
+            clean_body = _record_body(text[:start] + text[start + len(suffix):])
+        owners = owned.get(clean_body, [])
         if not owners:
             raise ValueError("unscripted synthetic draft line")
-        citation = [{key: item[key] for key in ("source_id", "start", "end", "quote")}
-                    for item in owners]
-        if suffix is None:
-            claims.append({"id": f"{line_id}:0:{len(text)}", "line_id": line_id,
-                           "start": 0, "end": len(text), "verdict": "supported",
-                           "citations": citation})
-            for item in owners:
-                spans[item["id"]].append({"line_id": line_id, "start": 0, "end": len(text)})
-        else:
-            claims.append({"id": f"{line_id}:0:{start}", "line_id": line_id, "start": 0,
-                           "end": start, "verdict": "supported", "citations": citation})
-            claims.append({"id": f"{line_id}:{start}:{end}", "line_id": line_id,
-                           "start": start, "end": end, "verdict": "unsupported",
-                           "citations": []})
-            claims.append({"id": f"{line_id}:{end}:{len(text)}", "line_id": line_id,
-                           "start": end, "end": len(text), "verdict": "supported",
-                           "citations": citation})
-            for item in owners:
-                spans[item["id"]].append({"line_id": line_id, "start": 0, "end": start})
-                spans[item["id"]].append({"line_id": line_id, "start": end,
-                                          "end": len(text)})
-    mappings = []
-    for item in payload["source_claims"]:
-        if item["classification"] == "non_resume":
-            mappings.append({"source_claim_id": item["id"], "status": "non_resume", "spans": []})
+        if suffix:
+            # The reviewer says the line overstates; the named segments are still
+            # what the line was derived from, which is what repair is given.
+            verdicts["unsupported"].append(line_id)
+            evidence[line_id] = list(owners)
             continue
-        if not spans[item["id"]]:
-            # Test-double policy: a required record whose exact body is absent is
-            # reported missing, never silently accepted.
-            mappings.append({"source_claim_id": item["id"], "status": "missing", "spans": []})
+        verdicts["supported"].append(line_id)
+        evidence[line_id] = list(owners)
+    carried = {index for indices in evidence.values() for index in indices}
+    represented, missing = [], []
+    for segment in segments:
+        if _segment_record(segment) is None:
             continue
-        mappings.append({"source_claim_id": item["id"], "status": "represented",
-                         "spans": spans[item["id"]]})
-    return {"claims": claims, "representations": mappings}
+        (represented if segment["index"] in carried else missing).append(segment["index"])
+    verdicts["evidence"] = evidence
+    verdicts["represented"], verdicts["missing"] = represented, missing
+    return verdicts
+
+
+def repaired_text(payload, claim_id):
+    """Corrected line text for a whole-line claim: drop the scripted duration.
+
+    The wire protocol carries one verdict per line, so a flagged claim spans the
+    entire line and repair must supply the replacement text for it.
+    """
+    line_id = claim_id.partition(":")[0]
+    text = next(line["text"] for line in payload["lines"] if line["line_id"] == line_id)
+    for part in (FRAGMENT, SECOND_FRAGMENT, REPAIR_FRAGMENT):
+        text = text.replace(part, "")
+    return text
 
 
 class ScriptedSession(FakeSession):
@@ -167,7 +168,7 @@ class ScriptedSession(FakeSession):
         payload = json.loads(kwargs["json"]["messages"][1]["content"])
         try:
             if "flagged_claim_ids" in payload:
-                body = {"edits": [{"claim_id": cid, "replacement": ""}
+                body = {"edits": [{"claim_id": cid, "replacement": repaired_text(payload, cid)}
                                   for cid in payload["flagged_claim_ids"]]}
             elif "lines" not in payload:
                 body = record_inventory(payload)

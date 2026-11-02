@@ -210,7 +210,10 @@ def test_explicit_source_document_is_used_for_inventory(offline, monkeypatch, sy
     result = post(client, docs=docs).json()
     assert result["final_written_section_markdown"] == SOURCE
     inventory = json.loads(session.requests[0]["json"]["messages"][1]["content"])
-    assert inventory["sources"] == [{"source_id": "candidate-one", "text": SOURCE}]
+    # The designated document is what gets inventoried, under its own id, and the
+    # segments reconstruct its text exactly rather than a re-derived copy.
+    assert {segment["source_id"] for segment in inventory["segments"]} == {"candidate-one"}
+    assert "".join(segment["text"] for segment in inventory["segments"]) == SOURCE
 
 
 def test_missing_source_representation_withholds_without_repair(offline, monkeypatch, synthetic_disclosure_bypass):

@@ -230,7 +230,10 @@ def test_bad_edits_never_trigger_retry(edit_type):
         return {"edits": [edit]}
 
     result = run(DRAFT, callback)
-    assert result.reason == "malformed_output" and result.markdown is None
+    # A no-op repair is reported as its own reason; every other malformed edit
+    # shape is still ``malformed_output``. All of them withhold and none retries.
+    expected = "no_op_repair" if edit_type == "noop" else "malformed_output"
+    assert result.reason == expected and result.markdown is None
     assert calls == ["initial_review", "repair"]
 
 

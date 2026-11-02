@@ -273,12 +273,23 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
     )
 
 
-# The orchestrator calls this endpoint with a 180s client timeout
-# (Login_Landing_page/backend/services/mlAuthMiddleware.js, makeAuthenticatedRequest;
-# it retries any failed attempt, including a timeout, up to three times). That
-# clock starts before this handler runs, so correction may only spend what is
-# left after the pipeline. Keep these in step with the orchestrator.
+# The orchestrator calls this endpoint on one of two paths, measured in
+# Login_Landing_page/backend:
+#
+# * JSON  -> mlAuthMiddleware.makeAuthenticatedRequest, which HARDCODES
+#            timeout: 180000 (services/mlAuthMiddleware.js) and retries up to 3
+#            attempts.
+# * SSE   -> server.cjs calls axios directly with timeout: 300000, no retry, and
+#            validateStatus: () => true. mlAuthMiddleware is bypassed entirely.
+#
+# Both clocks start before this handler runs, so correction may only spend what is
+# left. Using the JSON ceiling for an SSE caller understated the available budget by
+# 120s in every live run: run 6 spent 53,516ms of an actually-available 173,516ms,
+# then hit its own (correct) 120s cap. The caller's path is therefore detected from
+# the request rather than assumed, and the smaller ceiling remains the default
+# because it is the safe one to be wrong about.
 UPSTREAM_CLIENT_TIMEOUT_SECONDS = 180.0
+UPSTREAM_SSE_TIMEOUT_SECONDS = 300.0
 UPSTREAM_RESPONSE_RESERVE_SECONDS = 20.0
 MAX_CORRECTION_DEADLINE_SECONDS = 120.0
 # Below this, one provider call (60s per-call timeout) cannot finish meaningfully;
@@ -286,16 +297,39 @@ MAX_CORRECTION_DEADLINE_SECONDS = 120.0
 MIN_CORRECTION_BUDGET_SECONDS = 30.0
 
 
-def correction_budget_seconds(pipeline_elapsed_seconds):
+def _upstream_timeout_seconds(request=None):
+    """The client timeout actually governing this request, measured per route.
+
+    An SSE request is served by the orchestrator's direct-axios branch (300s); every
+    other request goes through mlAuthMiddleware (180s). Detection is by the Accept
+    header the orchestrator sets on the direct branch, and an ambiguous request
+    keeps the smaller ceiling.
+    """
+    if request is None:
+        return UPSTREAM_CLIENT_TIMEOUT_SECONDS
+    headers = getattr(request, "headers", None) or {}
+    try:
+        accept = headers.get("accept", "") or ""
+    except Exception:
+        return UPSTREAM_CLIENT_TIMEOUT_SECONDS
+    if "text/event-stream" in accept.lower():
+        return max(UPSTREAM_CLIENT_TIMEOUT_SECONDS, UPSTREAM_SSE_TIMEOUT_SECONDS)
+    return UPSTREAM_CLIENT_TIMEOUT_SECONDS
+
+
+def correction_budget_seconds(pipeline_elapsed_seconds, upstream_timeout_seconds=None):
     """Overall correction deadline left after the pipeline, or None if too little remains.
 
     Guarantee when a budget is returned:
-    pipeline_elapsed + budget + UPSTREAM_RESPONSE_RESERVE_SECONDS <= UPSTREAM_CLIENT_TIMEOUT_SECONDS.
+    pipeline_elapsed + budget + UPSTREAM_RESPONSE_RESERVE_SECONDS <= upstream timeout,
+    so the response still reaches the caller before their client gives up.
     """
     if type(pipeline_elapsed_seconds) not in (int, float) or not math.isfinite(pipeline_elapsed_seconds):
         return None
-    remaining = (UPSTREAM_CLIENT_TIMEOUT_SECONDS - UPSTREAM_RESPONSE_RESERVE_SECONDS
-                 - pipeline_elapsed_seconds)
+    upstream = upstream_timeout_seconds
+    if type(upstream) not in (int, float) or not math.isfinite(upstream):
+        upstream = UPSTREAM_CLIENT_TIMEOUT_SECONDS
+    remaining = upstream - UPSTREAM_RESPONSE_RESERVE_SECONDS - pipeline_elapsed_seconds
     budget = min(MAX_CORRECTION_DEADLINE_SECONDS, remaining)
     return budget if budget >= MIN_CORRECTION_BUDGET_SECONDS else None
 
@@ -589,15 +623,17 @@ async def _analyze_resume_impl(
                     pipeline_status=status, metrics=metrics, start_time=start_time)
 
             # The orchestrator's clock started before the pipeline ran, so the
-            # correction deadline is what remains of the upstream budget now.
+            # correction deadline is what remains of THIS route's upstream budget.
             pipeline_elapsed = time.time() - start_time
-            correction_budget = correction_budget_seconds(pipeline_elapsed)
+            upstream_timeout = _upstream_timeout_seconds(request)
+            correction_budget = correction_budget_seconds(pipeline_elapsed, upstream_timeout)
             correlation_id = _join_correlation_id(request, request_id)
             log_event(logger, {"event": "correction.budget", "correlation_id": correlation_id,
                                "pipeline_elapsed_ms": int(pipeline_elapsed * 1000),
                                "budget_ms": int((correction_budget or 0) * 1000),
-                               "upstream_timeout_ms": int(UPSTREAM_CLIENT_TIMEOUT_SECONDS * 1000),
-                               "reserve_ms": int(UPSTREAM_RESPONSE_RESERVE_SECONDS * 1000)})
+                               "upstream_timeout_ms": int(upstream_timeout * 1000),
+                               "reserve_ms": int(UPSTREAM_RESPONSE_RESERVE_SECONDS * 1000),
+                               "max_deadline_ms": int(MAX_CORRECTION_DEADLINE_SECONDS * 1000)})
             if correction_budget is None:
                 # Not enough upstream time remains for one provider call; send nothing.
                 return _withhold_correction(reason="pipeline_budget_exhausted",
@@ -623,6 +659,10 @@ async def _analyze_resume_impl(
                     "provider_error", "no_supported_claims", "source_facts_missing",
                     "unresolved_claims", "malformed_output", "privacy_review_required",
                     "privacy_redaction_failed", "attribution_conflict",
+                    # The reviewer answered incompletely (lines left unjudged) or
+                    # returned an edit that changed nothing; both are distinct from
+                    # malformed_output and reported so the cause is identifiable.
+                    "incomplete_review", "no_op_repair",
                     "timeout_source_inventory", "timeout_initial_review",
                     "timeout_repair", "timeout_post_patch_review",
                     "provider_call_timeout_source_inventory",

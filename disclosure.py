@@ -166,3 +166,70 @@ def verify_disclosure(
         if not item["text"].strip() or contains_pii(item["text"]):
             return False
     return True
+
+
+# Keys whose string values are free text and therefore must be redacted before
+# transmission. Enumerated rather than "every string" so a future identifier
+# field cannot be silently corrupted by the fixed-width padding.
+_TEXT_FIELDS = frozenset({"text", "quote", "contract"})
+
+
+def redact_payload(node: Any) -> tuple[Any, int]:
+    """Length-preserving redaction of every free-text value in a request payload.
+
+    Correspondence still holds because the substitution never changes length, so
+    the engine's code-point offsets stay valid. Replies are rebuilt with the same
+    shape; a value that cannot be redacted to a PII-free string aborts the whole
+    payload rather than sending a partially cleaned request.
+    """
+    if isinstance(node, str):
+        return node, 0
+    if isinstance(node, list):
+        rebuilt, total = [], 0
+        for item in node:
+            value, count = redact_payload(item)
+            rebuilt.append(value)
+            total += count
+        return rebuilt, total
+    if isinstance(node, dict):
+        rebuilt, total = {}, 0
+        for key, value in node.items():
+            if isinstance(value, str) and key in _TEXT_FIELDS:
+                cleaned, count = redact_text(value)
+                if len(cleaned) != len(value) or contains_pii(cleaned):
+                    raise ValueError("payload cannot be redacted without changing length")
+                rebuilt[key] = cleaned
+                total += count
+            else:
+                rebuilt[key], count = redact_payload(value)
+                total += count
+        return rebuilt, total
+    return node, 0
+
+
+def payload_disclosure_errors(value: Any, *, approved_policy: str | None) -> list[str]:
+    """List the free-text locations that would still disclose covered PII.
+
+    Walks the exact structure that will be serialized, so draft text, claim
+    quotes and citation quotes are checked on the same footing as source
+    documents. An empty list means only that no covered, unambiguous category was
+    found; it is not a proof that arbitrary text cannot identify someone.
+    """
+    if approved_policy != POLICY_ID:
+        return ["policy_not_approved"]
+
+    errors: list[str] = []
+
+    def walk(node: Any, path: str) -> None:
+        if isinstance(node, dict):
+            for key, item in node.items():
+                walk(item, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, item in enumerate(node):
+                walk(item, f"{path}[{index}]")
+        elif isinstance(node, str) and path.rsplit(".", 1)[-1].split("[")[0] in _TEXT_FIELDS:
+            if contains_pii(node):
+                errors.append(path)
+
+    walk(value, "")
+    return errors

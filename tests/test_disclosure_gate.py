@@ -59,46 +59,32 @@ class RecordingSession:
 
 
 def _inventory(payload):
-    assert set(payload) == {"contract", "sources"}
-    items = []
-    for source in payload["sources"]:
-        text, sid = source["text"], source["source_id"]
-        start = position = 0
-        for part in text.splitlines(keepends=True):
-            position += len(part)
-            if not part.strip():
-                continue
-            items.append({"id": f"{sid}:{start}:{position}", "source_id": sid,
-                          "start": start, "end": position,
-                          "quote": text[start:position], "classification": "required"})
-            start = position
-        if position > start:
-            last = items[-1]
-            last.update(end=position, quote=text[last["start"]:position],
-                        id=f"{sid}:{last['start']}:{position}")
-    return {"source_claims": items}
+    """Classify the wire segments by listing indices (index-list protocol)."""
+    assert set(payload) == {"contract", "segments"}
+    required = [segment["index"] for segment in payload["segments"] if segment["text"].strip()]
+    return {"required": required, "non_resume": [], "uncertain": []}
 
 
 def _review(payload):
-    claims, spans = [], {item["id"]: [] for item in payload["source_claims"]}
-    for line in payload["lines"]:
+    """Supported when a segment's exact text is the line; the reviewer names it."""
+    segments, lines = payload["segments"], payload["lines"]
+    verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
+    evidence, carried = {}, set()
+    for line in lines:
         text, line_id = line["text"], line["line_id"]
-        item = next((item for item in payload["source_claims"]
-                     if item["quote"].strip().splitlines()[-1] == text), None)
-        if item is None:
-            claims.append({"id": f"{line_id}:0:{len(text)}", "line_id": line_id,
-                           "start": 0, "end": len(text), "verdict": "unsupported",
-                           "citations": []})
+        exact = [segment["index"] for segment in segments
+                 if segment["text"].strip() == text]
+        if not exact:
+            verdicts["unsupported"].append(line_id)
             continue
-        citation = {key: item[key] for key in ("source_id", "start", "end", "quote")}
-        claims.append({"id": f"{line_id}:0:{len(text)}", "line_id": line_id,
-                       "start": 0, "end": len(text), "verdict": "supported",
-                       "citations": [citation]})
-        spans[item["id"]].append({"line_id": line_id, "start": 0, "end": len(text)})
-    mappings = [{"source_claim_id": item["id"],
-                 "status": "represented" if spans[item["id"]] else "missing",
-                 "spans": spans[item["id"]]} for item in payload["source_claims"]]
-    return {"claims": claims, "representations": mappings}
+        verdicts["supported"].append(line_id)
+        evidence[line_id] = exact
+        carried.update(exact)
+    verdicts["evidence"] = evidence
+    verdicts["represented"] = [segment["index"] for segment in segments
+                               if segment["index"] in carried]
+    verdicts["missing"] = []
+    return verdicts
 
 
 def _provider(session):
