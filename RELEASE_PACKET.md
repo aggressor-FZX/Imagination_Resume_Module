@@ -201,3 +201,63 @@ Nothing in this packet has been pushed, deployed, or billed.
 - The broad frontend publication suite has one **pre-existing** failure
   (`AnalysisPipeline.publication.test.tsx`, 36/37 both before and after these
   changes); it is unrelated to this work and is not claimed fixed.
+
+---
+
+## 9. Pre-deploy verification performed (still no push / no deploy / no spend)
+
+| Check | Result |
+|---|---|
+| `npm run build` (orchestrator-frontend production build) | **exit 0**, `dist/` produced (~18.7s) |
+| `tsc --noEmit -p tsconfig.json` | **exit 0** |
+| Backend integration (`analysisPrivacy`, `compositePublication`) | **48/48 passed** |
+| New UI commentary tests (`vitest.services.config.ts`) | **4/4 passed** |
+| Fast-forward check, both repos | `origin/master` is an ancestor → FF possible |
+| Gate default in shipped code | `_approved_disclosure_available() == False` (closed) |
+| Gate with `CORRECTION_PROVIDER_DISCLOSURE=1` | policy `length_preserving_pii_redaction_v1` |
+
+### Dry run of the shipped path, both flag states (scripted transport, no network)
+
+| Flag | Requests made | PII in request | Outcome |
+|---|---|---|---|
+| unset (default) | **0** | n/a | `withheld / privacy_review_required` |
+| `=1` | **2** | **no** (`alex@example.test` absent) | `withheld / source_facts_missing` |
+
+The enabled row is a *fixture* artifact, not a gate failure: the dry-run draft
+omitted the redacted contact line, so the reviewer correctly reported a missing
+required fact. The approved-path proof is
+`tests/test_disclosure_gate.py::test_real_adapter_with_redacted_sources_can_inventory`
+and the route test `test_flag_on_sends_only_redacted_sources_with_preserved_offsets`,
+both passing.
+
+---
+
+## 10. Blocker: three owner authorizations outstanding
+
+Deployment and live verification cannot proceed without explicit owner consent on
+the three items in §7. They were requested directly and the owner was unavailable
+("not available to respond … work autonomously"). I did not treat that as consent,
+because each item is specifically reserved:
+
+| Item | Why autonomous action is not appropriate |
+|---|---|
+| `CORRECTION_PROVIDER_DISCLOSURE=1` | Authorizes third-party processing of candidate PII. A generic "work autonomously" is not informed consent for that. |
+| Push to `master` | Production auto-deploys on commit; this changes the live site for real users. |
+| Two paid analyses, $2 | Spends the owner's money. A $2 target is not a provider-enforced cap. |
+
+**Alternatives already taken instead of deploying:** production build, typecheck,
+integration suites, gate-default verification, and a full dry run of both flag
+states through the real adapter — so the deploy is a mechanical step once
+approved.
+
+**Smallest decision needed** (one line each):
+
+1. `enable disclosure` / `gate closed`
+2. `deploy` / `hold`
+3. `authorize $2, 2 runs` / `no paid runs`
+
+If the owner wants the safest partial step, **"deploy gate-closed"** ships the
+attribution fix, log containment and UI commentary with no new disclosure; live
+analyses would still withhold at `privacy_review_required`, which is today's
+behavior plus better diagnostics.
+
