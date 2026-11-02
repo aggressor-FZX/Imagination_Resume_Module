@@ -18,6 +18,48 @@ from config import settings
 TokenCallback = Callable[[str], None]
 
 
+def _iter_sse_lines_utf8(response) -> List[str]:
+    """Yield decoded SSE lines, decoding UTF-8 explicitly.
+
+    ``requests`` sets ``response.encoding`` from the Content-Type charset, and for a
+    ``text/*`` media type with no charset parameter it falls back to ISO-8859-1 (the
+    historical HTTP default). OpenRouter returns ``text/event-stream``, so
+    ``iter_lines(decode_unicode=True)`` decoded UTF-8 bytes as Latin-1 and every
+    non-ASCII character became mojibake: an en dash arrived as ``â€“``, a
+    non-breaking hyphen as ``â€'``.
+
+    Server-Sent Events are defined as UTF-8, so decode that way and only fall back
+    when the bytes are genuinely not valid UTF-8. A lossy conversion is never applied
+    to text that already decoded correctly, so legitimate names and accented words
+    are left intact.
+
+    A response object that exposes no byte stream (a test double, or an already
+    decoded body) is read through ``iter_lines`` as before.
+    """
+    if not hasattr(response, "iter_content"):
+        return list(response.iter_lines(decode_unicode=True))
+
+    chunks: List[bytes] = []
+    for raw in response.iter_content(chunk_size=8192):
+        if not raw:
+            continue
+        chunks.append(raw)
+
+    blob = b"".join(chunks)
+    if not blob:
+        return []
+
+    try:
+        text = blob.decode("utf-8")
+    except UnicodeDecodeError:
+        # Not UTF-8 after all (or truncated mid-character on a bad connection).
+        # Replacing undecodable bytes is the only remaining honest option, and it is
+        # confined to this already-invalid stream.
+        text = blob.decode("utf-8", errors="replace")
+
+    return text.splitlines()
+
+
 class OpenRouterSafeClient:
     """
     Safe wrapper around OpenRouter API with model validation and failsafe fallback.
@@ -262,7 +304,15 @@ class OpenRouterSafeClient:
                     if response.status_code == 200:
                         content_parts: List[str] = []
                         usage: Dict[str, Any] = {}
-                        for raw_line in response.iter_lines(decode_unicode=True):
+                        # Decode the stream ourselves instead of relying on
+                        # ``iter_lines(decode_unicode=True)``. That helper uses the
+                        # response's inferred encoding, and ``requests`` infers
+                        # ISO-8859-1 for a ``text/*`` content type with no charset —
+                        # which is exactly what OpenRouter returns. UTF-8 punctuation
+                        # therefore arrived as mojibake ("03/2020 â<80><93> Present"),
+                        # and those corrupted bytes travelled into the writer draft
+                        # and through to the reviewer. SSE is UTF-8 by specification.
+                        for raw_line in _iter_sse_lines_utf8(response):
                             if not raw_line:
                                 continue
                             line = raw_line.strip()

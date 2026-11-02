@@ -626,8 +626,15 @@ def test_review_after_patch_must_account_for_original_inventory_again():
 
     result = run(draft, callback, sources=COMPLETE_SOURCES, raw=True)
     assert result.reason == "source_facts_missing" and result.markdown is None
-    assert calls == ["source_inventory", "initial_review", "repair", "post_patch_review"]
+    # The post-patch review reports Beta missing, so the engine now makes exactly one
+    # bounded restoration attempt before withholding. The scripted callback answers the
+    # "restore" phase with a review envelope, which cannot validate as a restoration,
+    # and the attempt fails closed: the diagnosis stays source_facts_missing rather
+    # than degrading into a provider error. Nothing is approved.
+    assert calls == ["source_inventory", "initial_review", "repair", "post_patch_review",
+                     "restore"]
     assert (result.review_calls, result.repair_calls) == (2, 1)
+    assert result.restore_calls == 0
 
 
 # Independent synthetic answer key: each whole source line is required, while the
