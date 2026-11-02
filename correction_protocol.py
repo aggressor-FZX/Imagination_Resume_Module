@@ -217,11 +217,24 @@ def indexed_review_request(payload: dict[str, Any]) -> dict[str, Any]:
             lines.append({"line_id": line["line_id"], "text": line["text"],
                           "source_segment_indices": sorted(set(indices))})
             continue
+        # Candidate segments are the evidence the reviewer is allowed to cite, so a
+        # line with none cannot be verified at all. A rewritten line is a
+        # paraphrase and can share no exact substring or 60% of words with its
+        # source, which left the reviewer with an empty list and made every rewrite
+        # unverifiable (the live source_completeness_uncertain). Each line is
+        # therefore guaranteed its single best-matching segment. This only widens
+        # what the reviewer may consider: it still decides supported/unsupported,
+        # and the engine still requires an exact source slice for any citation.
+        matched = [index for index, quote in enumerate(quotes) if quote.strip()
+                   and (_fold(quote) in _fold(line["text"]) or _overlap(quote, line["text"]))]
+        if not matched:
+            scored = [(index, _overlap_ratio(quote, line["text"]))
+                      for index, quote in enumerate(quotes) if quote.strip()]
+            best = max(scored, key=lambda pair: pair[1], default=(None, 0.0))
+            if best[0] is not None and best[1] > 0:
+                matched = [best[0]]
         lines.append({"line_id": line["line_id"], "text": line["text"],
-                      "source_segment_indices": [index for index, quote in enumerate(quotes)
-                                                if quote.strip()
-                                                and (_fold(quote) in _fold(line["text"])
-                                                     or _overlap(quote, line["text"]))]})
+                      "source_segment_indices": matched})
     return {"contract": REVIEW_CONTRACT,
             "segments": [{"index": index, "source_id": item["source_id"],
                           "start": item["start"], "end": item["end"],
