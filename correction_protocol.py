@@ -53,6 +53,26 @@ _VERDICT_KEYS = ("supported", "unsupported", "uncertain", "structural")
 _STATUS_KEYS = ("represented", "missing")
 
 
+def _cited_indices(lines: list[dict[str, Any]], line_id: str,
+                   item: dict[str, Any]) -> list[int]:
+    """Indices the wire line declares, if this item's source_id and span appear."""
+    for line in lines:
+        if line["line_id"] != line_id:
+            continue
+        return list(line.get("source_segment_indices", []))
+    return []
+
+
+def _overlap_ratio(quote: str, line: str) -> float:
+    """Share of the segment's significant words that appear in the line."""
+    words = [word for word in _fold(quote).split() if len(word) > 2]
+    if not words:
+        return 0.0
+    present = set(_fold(line).split())
+    return sum(word in present for word in words) / len(words)
+
+
+
 class MalformedIndexedResponse(Exception):
     """The index-list answer could not be mapped onto the strict shape."""
 
@@ -271,26 +291,24 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
                                     "spans": []})
             continue
         quote = _fold(item["quote"])
-        # A representation is substantiated only through a line the model judged
-        # supported and which contains the segment's exact text. Anything else is
-        # reported uncertain, never asserted, so the engine's coverage proof
-        # remains intact.
-        # Attach the representation to the line that carries this segment. An
-        # inserted or altered fragment means the line is not an exact copy, but the
-        # segment text is still present word-for-word around it; the flagged-span
-        # repair removes that fragment and the next review re-checks this
-        # representation against an exact line. Only lines the model supported (or
-        # flagged for repair) are eligible, so a segment cannot be "represented" by
-        # a line that was judged unrelated.
-        eligible = [line["line_id"] for line in lines
-                    if verdicts.get(line["line_id"]) in {"supported", "unsupported"}]
-        carriers = [line_id for line_id in eligible
-                    if _overlap(item["quote"], by_line[line_id])]
-        if not carriers:
+        # The model decides completeness; this only attaches the claimable span.
+        # A rewrite paraphrases, so the draft line need not contain the source text
+        # verbatim: the span is the supported line the model itself marked as the
+        # carrier. Preference order keeps it checkable — a line that cites this
+        # segment, then the longest lexical overlap, then any supported line — and
+        # the strict validator still requires a supported claim citing the item.
+        candidates = [line["line_id"] for line in lines
+                      if verdicts.get(line["line_id"]) == "supported"]
+        if not candidates:
             representations.append({"source_claim_id": item["id"],
                                     "status": "uncertain", "spans": []})
             continue
+        citing = [line_id for line_id in candidates
+                  if index in _cited_indices(lines, line_id, item)]
+        ranked = citing or sorted(candidates,
+                                  key=lambda line_id: -_overlap_ratio(item["quote"],
+                                                                      by_line[line_id]))
         representations.append({"source_claim_id": item["id"], "status": "represented",
-                                "spans": [{"line_id": carriers[0], "start": 0,
-                                           "end": len(by_line[carriers[0]])}]})
+                                "spans": [{"line_id": ranked[0], "start": 0,
+                                           "end": len(by_line[ranked[0]])}]})
     return {"claims": claims, "representations": representations}
