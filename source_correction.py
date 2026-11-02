@@ -289,6 +289,105 @@ def _content_words(text: str) -> set[str]:
     return words
 
 
+def _strip_markup(text: str) -> str:
+    """Remove markdown formatting characters that are not content."""
+    return re.sub(r"[*#`_]+", " ", text or "")
+
+
+def _stem(word: str) -> str:
+    """A deliberately small stemmer, used only to forgive inflection.
+
+    It removes the common verb/adjective endings that turn one word into a grammatical
+    variant of the same word: standardiz-ing / standardiz-ed → standardiz, deliver-s /
+    deliver-ed → deliver. It is NOT a general stemmer and must stay conservative — a
+    loose stemmer would let unrelated words collide and defeat the addition check.
+    """
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(word) - len(suffix) >= 4 and word.endswith(suffix):
+            return word[: -len(suffix)]
+    return word
+
+
+def _introduces_beyond(span: str, quotes: list[str], item_quote: str) -> list[str]:
+    """Named entities the span introduces that the source does not contain.
+
+    A shared word proves two texts are related; it does not prove the span is the item
+    restated. But ordinary rewriting legitimately changes verbs and vocabulary: a
+    faithful paraphrase introduces "delivered" for "installed", "reduced" for "cut",
+    "six" for "6". Flagging those would reject the very paraphrasing this system is
+    supposed to permit.
+
+    What a rewrite may never introduce is a *name*: a tool, platform, method, metric or
+    institution the candidate's record does not contain. Those are the capitalized
+    proper nouns that are not sentence-initial and not already present in the source.
+    The run-4 case is exactly this shape — "Agile", "Scrum", "Gantt" against an item
+    that says only "inspection checklists".
+
+    Returns the offending names, or an empty list.
+    """
+    known = _content_words(" ".join(quotes)) | _content_words(item_quote)
+    known_stems = {_stem(word) for word in known}
+
+    # A figure the span states must also appear in the source. Re-attributing a real
+    # number ("18%") to a different subject is as wrong as inventing one, and the
+    # capitalized-entity rule cannot see it.
+    #
+    # Compared by NUMERIC CORE, not by token: the source may write "40+" or "40" and a
+    # rewrite may write the other, which is the same fact. What must not happen is a
+    # number the source does not contain at all.
+    def _numeric_core(token: str) -> str:
+        digits = re.sub(r"[^0-9.]", "", token)
+        return digits.rstrip(".")
+
+    known_figures = {_numeric_core(w) for w in known
+                     if any(ch.isdigit() for ch in w)}
+    span_figures = {_numeric_core(w) for w in _content_words(span or "")
+                    if any(ch.isdigit() for ch in w)}
+    missing_figures = sorted(figure for figure in span_figures - known_figures if figure)
+    if missing_figures:
+        return missing_figures
+
+    # Disclosure redaction replaces PII with fixed-width bracketed placeholders such
+    # as "[F0]" or "[EMAIL removed]". Those are artefacts of the privacy step, not
+    # names the rewrite invented, so they are removed before the entity scan.
+    scan_span = re.sub(r"\[[^\]]*\]", " ", span or "")
+    # The redactor pads placeholders to the original width with U+2588 and may leave
+    # digits of the original token adjacent (the sentinel "SYNTHETIC_PRIVATE_29F0"
+    # becomes "...29[F0 removed]"). Strip the block padding and any residual
+    # alphanumeric fragment that is part of a redaction, so privacy artefacts are
+    # never mistaken for content the rewrite invented.
+    scan_span = scan_span.replace("\u2588", " ")
+    scan_span = re.sub(r"\b[A-Za-z0-9_]*\dF\d+\b", " ", scan_span)
+
+    introduced: list[str] = []
+    for raw in re.findall(r"[A-Za-z][A-Za-z0-9'’+.#/-]*", scan_span):
+        word = raw.strip(".-'’#/")
+        if len(word) < 2 or not word[0].isupper():
+            continue
+        lowered = word.lower()
+        if lowered in _EVIDENCE_STOPWORDS:
+            continue
+        if _stem(lowered) in known_stems or lowered in known:
+            continue
+        # The first word of a line is capitalized by grammar, not by being a name —
+        # but only when it is not part of a comma-separated list of terms. "Agile,
+        # Scrum, Gantt" is a list of technologies; "Delivered installation" is a verb
+        # phrase. Treat the first word as a name when it is followed by a comma.
+        #
+        # A past-tense action verb is never a name either: bullet points routinely
+        # begin "Delivered …", "Reduced …", and those are the rewrite's own verbs, not
+        # entities the candidate never had.
+        stripped = _strip_markup(scan_span).lstrip()
+        if stripped.startswith(word) and not re.match(
+                rf"{re.escape(word)}\s*,", stripped):
+            continue
+        if re.search(r"(ed|ing|es|s)$", word.lower()) and lowered not in known:
+            # Verb-shaped and absent from the source: a rewritten verb, not a name.
+            continue
+        introduced.append(word)
+    return sorted(set(introduced))
+
+
 def _quote_shares_content(quote: str, item_quote: str) -> bool:
     """True when a cited quote and the inventory item share a content word.
 
@@ -533,6 +632,7 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         if status == "represented":
             if not spans:
                 raise _Invalid
+            unsubstantiated = False
             span_ids: set[tuple[str, int, int]] = set()
             for span in spans:
                 if not _exact_dict(span, {"line_id", "start", "end"}):
@@ -560,8 +660,60 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 if not _quote_shares_content(by_line[line_id]["text"][start:end],
                                              item["quote"]):
                     raise _Invalid
+                # A shared word is necessary but NOT sufficient. The same case above
+                # shares "inspection" and would otherwise pass, presenting lexical
+                # overlap as proof of three additions. The span must also introduce no
+                # content word that neither the citations nor the item contains:
+                # "standardizing"→"standardized" is a paraphrase and passes, while
+                # "Agile", "Scrum" and "Gantt" are additions and do not.
+                #
+                # This is recorded for the caller rather than raised: an answer that
+                # over-claims is a semantic failure, not a malformed envelope, and
+                # treating it as malformed would discard the rest of a usable review.
+                # The representation is downgraded to "uncertain" after the span loop,
+                # which withholds publication while keeping the reason accurate.
+                # Only content the span introduces relative to the item it is said
+                # to represent. A span may legitimately restate several items at once
+                # (a heading line, a combined skills line), so words contributed by
+                # OTHER items this same claim cites are not additions. Passing the
+                # claim's own quotes keeps paraphrase and multi-item spans accepted
+                # while still catching "Agile, Scrum, Gantt" against checklists.
+                # The comparison basis is the SOURCE DOCUMENT the item came from,
+                # not just the covering quote. A citation may quote a substring of
+                # the source ("José" out of "José Example"), so treating the quote as
+                # the whole of the allowed vocabulary wrongly reports "example" as an
+                # addition. Using the document keeps the check aimed at what the
+                # candidate's record actually contains.
+                # An unbacked FIGURE is a claim-level defect, not a coverage defect:
+                # a number the source does not contain must be repaired or withheld,
+                # and the repair path exists for exactly that. Marking the *claim*
+                # unsupported (below) routes it there; marking the representation
+                # uncertain here would skip repair and withhold immediately.
+                introduced = _introduces_beyond(
+                    by_line[line_id]["text"][start:end],
+                    [sources[item["source_id"]]],
+                    item["quote"])
+                if not introduced:
+                    continue
+                # Content was introduced relative to the source. Whether that is a
+                # defect depends on what the reviewer already said about THIS span:
+                #
+                # * if the reviewer flagged any part of this line as unsupported or
+                #   uncertain, it has already localised the problem more precisely
+                #   than this lexical check can, and its verdict must stand;
+                # * otherwise the representation is being offered as fully supported
+                #   while carrying content the source never states, so it is not
+                #   accepted.
+                line_claims = [c for c in response["claims"]
+                               if c["line_id"] == line_id]
+                if any(c["verdict"] in {"unsupported", "uncertain"} for c in line_claims):
+                    continue
+                unsubstantiated = True
         elif spans:
             raise _Invalid
+        if status == "represented" and unsubstantiated:
+            status, spans = "uncertain", []
+
         if status in {"missing", "uncertain"}:
             incomplete.add(status)
         if status == "missing" and classification == "required":

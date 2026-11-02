@@ -245,7 +245,14 @@ class CorrectionProvider:
         # "budget exhausted" is the reason it sees, not a privacy error.
         if self.calls >= MAX_CALLS:
             raise ValueError("correction call budget exhausted")
-        if phase not in {"source_inventory", "initial_review", "repair", "post_patch_review"}:
+        # The engine's phases. `restore` and `post_restore_review` were missing: the
+        # engine could ask for a restoration and the adapter rejected it as an
+        # unknown phase, so the bounded restoration added for delivery run 4 could
+        # never run through the real provider. Both are ordinary provider calls and
+        # are treated as such below: same disclosure gate, same budget, same retry
+        # classification, same telemetry, same capture.
+        if phase not in {"source_inventory", "initial_review", "repair",
+                         "post_patch_review", "restore", "post_restore_review"}:
             raise ValueError("correction call budget exhausted")
         # Recovery headroom is not spendable by an arbitrary caller: it exists only
         # for the engine's single completion re-review, which is the only request
@@ -266,9 +273,13 @@ class CorrectionProvider:
         try:
             if phase == "source_inventory" and "sources" in original_payload:
                 translated = correction_protocol.indexed_inventory_request(original_payload)
-            elif (phase in {"initial_review", "post_patch_review"}
+            elif (phase in {"initial_review", "post_patch_review", "post_restore_review"}
                     and "sources" in original_payload and "source_claims" in original_payload):
+                # A post-restore review is a review: same question, same translation,
+                # same validation. It differs only in that the draft has changed.
                 translated = correction_protocol.indexed_review_request(original_payload)
+            elif phase == "restore" and "source_claims" in original_payload:
+                translated = correction_protocol.indexed_restore_request(original_payload)
         except correction_protocol.MalformedIndexedResponse:
             translated = None
         if translated is not None:
@@ -472,9 +483,18 @@ class CorrectionProvider:
             # Translate the index-list answer into the strict shape the engine
             # verifies. A model (or a transport double) may answer in that strict
             # shape directly; prefer it verbatim, the engine still validates it.
+            #
+            # A restoration is the exception: its wire form deliberately omits the
+            # internal source_claim_id and the `before` echo, so a wire answer whose
+            # only key is "restorations" is NOT the strict form even though the key
+            # matches. Skipping translation there returned answers the engine could
+            # never accept, and every restoration failed as source_facts_missing.
             if translated is None:
                 return parsed
-            strict = {"source_claims"} if phase == "source_inventory" else {"claims", "representations"}
+            if phase == "restore":
+                return correction_protocol.strict_restore_from_indexed(parsed, payload)
+            strict = ("source_claims" if phase == "source_inventory"
+                      else {"claims", "representations"})
             if type(parsed) is dict and set(parsed) == strict:
                 return parsed
             if phase == "source_inventory":

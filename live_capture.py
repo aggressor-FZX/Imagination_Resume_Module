@@ -333,6 +333,16 @@ class CapturingSession:
             payload = json.loads(messages[1]["content"])
         except Exception:
             return "unknown"
+        # Name the phase by the question being asked. Keying off "has lines" was
+        # wrong for a restoration, which also carries lines: every restore was
+        # recorded as a review, so a captured run could not be replayed through the
+        # restoration path it actually took.
+        contract = payload.get("contract")
+        if type(contract) is str:
+            if contract.startswith("Rewrite the named draft lines"):
+                return "restore"
+            if contract.startswith("Classify every numbered source segment"):
+                return "source_inventory"
         if "flagged_claim_ids" in payload:
             return "repair"
         if "lines" in payload:

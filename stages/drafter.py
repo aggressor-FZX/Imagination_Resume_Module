@@ -170,14 +170,20 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
         return re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', name).strip()
 
     def _extract_role(exp: Dict) -> str:
-        """Extract role from experience entry, checking all known key variants."""
-        return exp.get("title") or exp.get("role") or exp.get("title_line", "").split("|")[0].strip() or "Professional"
+        """Extract role from experience entry, checking all known key variants.
+
+        An entry with no recognizable title yields an EMPTY string, never the word
+        "Professional". Substituting a placeholder turns a missing fact into a
+        fabricated one, and downstream stages then treat it as the candidate's real
+        role — which is exactly how delivery run 4 lost both of its job titles.
+        """
+        return exp.get("title") or exp.get("role") or (exp.get("title_line") or "").split("|")[0].strip()
 
     original_companies = [
         _clean_company_name(exp.get("company", "")) or "Unknown"
-        for exp in experiences if exp.get("company") or _extract_role(exp) != "Professional"
+        for exp in experiences if exp.get("company") or _extract_role(exp)
     ]
-    original_titles = [_extract_role(exp) for exp in experiences if _extract_role(exp) != "Professional"]
+    original_titles = [_extract_role(exp) for exp in experiences if _extract_role(exp)]
     
     # 2. Format Golden Bullets as "Style Reference Only"
     # Raised 3→6 (2026-06-04): 6 references provide good style signal
@@ -208,7 +214,12 @@ REFERENCE PATTERNS (FICTIONAL - DO NOT COPY DATA):
 
 ### STYLE TRANSFER RULES (MANDATORY):
 1. **Strong Verbs:** Use "Deployed," "Engineered," "Refactored," "Optimized," "Led," "Built" — NOT "Strategized," "Pioneered," "Worked on"
-2. **Add Reasonable Context:** You MAY add context that is clearly implied by the role (e.g., "multi-source data" when user said "data pipelines", "Python and SQL" when user said "database work")
+2. **NORMALIZE TERMINOLOGY ONLY:** You MAY restate an activity the candidate's own input
+   already describes using a clearer term for the SAME activity (e.g. "created embeddings in
+   Pinecone" -> "vector search with Pinecone"). You may NOT add a tool, technology, platform
+   or activity that the candidate's input does not contain. "database work" does NOT license
+   "Python and SQL" unless the candidate's input or verified skills say so — that is an
+   invention, not context.
 3. **Only Use Real Metrics:** Only include metrics (%, $, time) that appear EXPLICITLY in the user's input. Do NOT invent "increased revenue by X%" unless the user said it.
 4. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
 5. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
@@ -234,7 +245,7 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
    - CRITICAL: If the only allowed company is "[UNKNOWN COMPANY - USE 'Current Employer' ONLY]", you MUST use "Current Employer" as the company name. Do NOT invent any other company.
 
 2. **JOB TITLES:** You must preserve the user's actual role hierarchy.
-   - ALLOWED: {json.dumps(original_titles) if original_titles else '["Professional"]'}
+   - ALLOWED: {json.dumps(original_titles) if original_titles else '[] (no title stated — leave the title out)'}
    - You may slightly polish titles (e.g., "Programmer" -> "Software Engineer"), but DO NOT promote a "Junior" to "VP".
 
 3. **TECHNOLOGY — EVIDENCE ONLY:**
@@ -287,7 +298,7 @@ TONE INSTRUCTION: {tone_instruction}{title_context}
 1. **One Thought Per Bullet:** Do not combine unrelated tasks. Keep bullets punchy (15-25 words max).
 2. **Front-Load the Impact:** Start with the Result or the strong Verb. (e.g., "Cut costs by 40%..." rather than "Responsible for cutting costs...")
 3. **No Hallucinations:** Use ONLY the user's actual companies listed above.
-4. **Concrete Tech:** Do not say "cutting-edge tech." Name the specific tool (e.g., "TensorFlow", "Kubernetes") if the user mentioned it or if it is heavily implied by the Research Data.
+4. **Concrete Tech:** Do not say "cutting-edge tech." Name the specific tool (e.g., "TensorFlow", "Kubernetes") ONLY if the user's input or the verified skills list names it. Research Data may suggest vocabulary for an activity the candidate already describes; it is never a source of tools the candidate did not use.
 
 BAD VS GOOD:
 ✗ Weak: "Strategized deployment of models." (Vague, passive)
@@ -822,7 +833,9 @@ METRIC RULE (evidence only):
             
             fallback_experiences.append({
                 "company": company or "Previous Company",
-                "role": role or "Professional Role",
+                # Never invent a role title. An empty title is honest; "Professional
+                # Role" is a fabricated fact that every later stage treats as real.
+                "role": role or "",
                 "duration": duration,
                 "location": location,
                 "bullets": [

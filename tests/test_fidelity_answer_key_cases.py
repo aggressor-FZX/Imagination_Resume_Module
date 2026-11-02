@@ -80,16 +80,26 @@ def test_apprentice_crews_claim_cannot_be_called_supported_by_the_apprentice_sou
           "spans": [{"line_id": line[0]["line_id"], "start": 0,
                      "end": len(line[0]["text"])}]}],
     )
-    # The substantiation rule requires a shared content word, and this line does share
-    # "apprentice"/"lockout". So this specific guard does not reject it. Recorded here
-    # deliberately: the *reviewer* is responsible for judging people-vs-crews, and the
-    # engine's protection is that the completion verdict is what blocks publication.
+    # HONEST LIMIT, recorded rather than papered over. The engine's addition rule
+    # catches introduced *names* (capitalized entities absent from the source) and
+    # figures absent from the source. "crews" is a lowercase common noun, so the
+    # lexical rule cannot distinguish it from a legitimate synonym like "team".
+    #
+    # What the engine does guarantee is that no edit may INTRODUCE the word: repair
+    # may only replace a flagged span, and a repair that adds "crews" would be
+    # reviewed again from scratch. The semantic judgement — six people are not six
+    # teams — remains the reviewer's, which is why this case is an acceptance
+    # criterion for a live run rather than a locally provable one.
     claims, incomplete, missing = _validate_review(
         response, line, {"candidate": SOURCE}, [item])
-    assert incomplete == set()
-    # The substantive assertion: "crews" is not in the source, so no edit may add it and
-    # no post-hoc rewrite may launder it. Assert the source really lacks the word.
+    assert incomplete == set(), (
+        "the shared content word means the lexical rule alone does not reject this")
+    # What is locally provable: the source lacks the word, so it is an addition the
+    # answer key records as altered rather than paraphrased.
     assert "crews" not in SOURCE.lower()
+    entry = facts.MISSING_SEGMENT_CLASSIFICATION[7]
+    assert entry["class"] == "altered"
+    assert "apprentice crews" in entry["reason"]
 
 
 def test_crews_wording_differs_from_the_answer_key_subject():
