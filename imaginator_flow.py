@@ -2481,24 +2481,26 @@ Your task: Draft an enhanced "Professional Experience" section that positions th
 
 Guidelines:
 1. **Use Candidate's ACTUAL Experiences** - Use real positions, companies, and accomplishments from their history
-2. **Incorporate Research Insights** - Weave in implied skills and industry metrics discovered via web research
-3. **Write Compelling Narratives** - Transform basic job duties into achievement stories with quantified impact where the candidate provided metrics
+2. **Separate Requirements from Evidence** - The job description says what the employer wants; it never proves what the candidate has done. Never restate a job requirement as a candidate achievement.
+3. **Write Compelling Narratives** - Transform basic job duties into achievement stories, using quantified impact ONLY where the candidate provided a number
 4. **Match Target Role** - Align language and focus with the job description requirements
-5. **Be Truthful and Accurate** - Enhance and expand on what exists based on actual experience, but never fabricate accomplishments or metrics
-6. **Use Provided Context Only** - Base all enhancements on the candidate's actual work history, extracted skills, and research insights
+5. **Be Truthful and Accurate** - Enhance wording, never fabricate accomplishments, technologies, projects, credentials or metrics
+6. **Use Provided Context Only** - Base every factual claim on the candidate's actual work history and extracted skills
 7. **Handle Chronological Positions Carefully**:
    - When a candidate has overlapping roles, prioritize the ONE most relevant to target job
    - Understand career progression and evolving responsibilities
    - In reverse chronological order (most recent first)
 
-Key principle: A candidate who worked as "Data Analyst" likely has experience with dashboards, SQL queries, stakeholder presentations, and data pipelines even if not explicitly listed. Surface these implied skills.
+Key principle: improve how the candidate's real work is DESCRIBED. Do not expand what the
+candidate is claimed to have done. A skill the job ad asks for but the candidate never
+mentions must not appear as though the candidate has it.
 
 Key keyword: "creative" - This triggers Gemini 2.5 Pro routing.
 
 Return the enhanced experience section in clean markdown format with:
 - Company name and dates (from original)
-- Enhanced position titles (if appropriate to the role's actual scope)
-- 4-6 achievement bullets per position with quantified impact where reasonable
+- The candidate's real position titles — never substitute a placeholder for a title
+- 4-6 achievement bullets per position, using only facts the candidate supplied
 - Focus on impact, results, and skills relevant to target role
 
 METRIC PRESERVATION (CRITICAL — Added 2026-06-12):
@@ -2511,11 +2513,6 @@ has NO metrics, you may use qualitative achievements only."""
     user_prompt = f"""PRIORITY DATA (Hermes + FastSVM Analysis):
 Extracted Skills: {', '.join(aggregate_skills[:50])}
 
-WEB RESEARCH INSIGHTS (DeepSeek Search):
-- Implied Skills: {', '.join(implied_skills[:30])}
-- Industry Metrics: {', '.join(industry_metrics[:20])}
-- Research Notes: {research_notes[:1000]}
-
 TARGET JOB DESCRIPTION:
 {job_ad[:9000]}
 
@@ -2527,12 +2524,20 @@ YOUR EXISTING METRICS (found in candidate's resume — USE THESE EXACT VALUES, d
 
 TASK:
 Draft an enhanced "Professional Experience" section using:
-1. Hermes/FastSVM extracted skills (PRIMARY SOURCE)
-2. Web research insights (implied skills & metrics)
-3. Candidate's actual experiences (fitted within context)
-4. Candidate's EXISTING METRICS (above) — preserve these verbatim
+1. Extracted skills (PRIMARY SOURCE — these describe the candidate)
+2. Candidate's actual experiences (the only source of facts)
+3. Candidate's EXISTING METRICS (above) — preserve these verbatim
 
-Use ACTUAL experiences only. Incorporate research insights naturally. Make it compelling and aligned with target role."""
+Use ACTUAL experiences only. Make it compelling and aligned with target role.
+
+EVIDENCE BOUNDARY — READ CAREFULLY:
+Every employer, job title, date, degree, credential, technology and number you write must
+already appear in CANDIDATE'S ACTUAL EXPERIENCES or YOUR EXISTING METRICS above. The job
+description describes what the EMPLOYER wants; it is never evidence of what the candidate
+has done. Do not import a technology, tool, certification, project or metric from the job
+description into the resume. If the candidate has no metric for a claim, write a
+qualitative achievement with no number — never estimate, never invent a percentage, and
+never add a project the candidate did not list."""
     
     try:
         if getattr(settings, "environment", "") == "test":
@@ -2618,12 +2623,17 @@ Return formatted experience section maintaining all original content but restruc
     user_prompt = f"""CREATIVE DRAFT TO FORMAT:
 {creative_draft}
 
-STAR SUGGESTIONS FROM RESEARCH:
+ILLUSTRATIVE STAR METRIC SHAPES FROM WEB RESEARCH:
 {star_context}
 
 TASK:
 Restructure the draft above into STAR-formatted bullets. Each bullet should clearly show Situation-Task-Action-Result.
-Focus on making metrics and outcomes prominent. Maintain authenticity - don't invent new achievements."""
+
+The metric shapes above are examples of what a strong bullet of this kind tends to look
+like. They are NOT facts about this candidate and must never be stated as one. Use a
+number only if the draft you are formatting already contains that exact number.
+
+Maintain authenticity. Do not invent achievements, metrics, technologies or projects."""
     
     try:
         if getattr(settings, "environment", "") == "test":
@@ -2753,16 +2763,30 @@ CREATIVE DRAFT (Stage 2):
 STAR-FORMATTED VERSION (Stage 3):
 {star_formatted[:1500]}
 
-RESEARCH INSIGHTS:
-- Implied Skills: {', '.join(research_data.get('implied_skills', [])[:15])}
-- Industry Metrics: {', '.join(research_data.get('industry_metrics', [])[:10])}
-- Research Notes: {research_data.get('research_notes', '')[:400]}
-
 TARGET JOB DESCRIPTION:
 {job_ad[:9000]}
 
 TASK:
-Create a complete professional resume. Use ONLY the provided information.
+Create a complete professional resume. Use ONLY the provided candidate information.
+
+EVIDENCE BOUNDARY — READ CAREFULLY:
+The CREATIVE DRAFT and STAR-FORMATTED VERSION above are editing material, not evidence.
+They were produced by other models and may contain invented content; do not promote a
+claim merely because it appears there.
+
+Every employer, job title, date, degree, institution, credential, technology and number
+must be traceable to the VERIFIED COMPANIES, the candidate's own text in the drafts, or
+the existing metrics. In particular:
+
+- Do NOT add a Projects section unless the candidate's material already contains projects.
+  A section heading may appear empty; filling it with invented projects is forbidden.
+- Do NOT add a GPA, honours, or coursework that is not already stated.
+- Do NOT add an issuer or an issue date to a credential that does not state one.
+- Do NOT add a technology or tool the candidate never mentions, even if the job ad asks
+  for it.
+- Do NOT restate a job requirement as a candidate achievement.
+
+If a fact is unknown, leave it out. An incomplete resume is correct; an invented one is not.
 
 OUTPUT REQUIREMENTS:
 1. Return VALID JSON with these exact keys:
