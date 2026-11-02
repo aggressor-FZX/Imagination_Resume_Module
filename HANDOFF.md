@@ -1,51 +1,61 @@
-# Handoff — correction boundary closed (2026-11-02, session 2)
+# Handoff — live capture ready, awaiting allowance (2026-11-02, session 3)
 
-- **Live:** `master` = `51affd2` on Imaginator (deploy `dep-dbkdd6vb9u1s73fdrdtg`, live 18:31:52Z).
-- **Branch:** `wip/correction-timeout-attribution` tracks `origin/master`.
-- **Full report:** `docs/CORRECTION_BOUNDARY_ACCEPTANCE_2026-11-02.md`.
+- **Live:** `master` = `11dad31`, Imaginator deploy `dep-dbke2ecs728c73col0l0`.
+- **Tests:** 703 passed, 3 skipped.
+- **Reports:** `docs/CORRECTION_BOUNDARY_ACCEPTANCE_2026-11-02.md`,
+  `docs/LIVE_CAPTURE_RUNBOOK.md`.
+
+## Corrected from the previous session
+
+The two earlier recordings (`captures/live-rewrite-0{1,2}.json`) are **real-provider
+probes driven by constructed synthetic drafts**, produced against the correction engine
+directly. They are **not** captures of the failed website runs, which were never
+recorded. Their unjudged-lines finding is a *candidate* mechanism for the
+`malformed_output` reason on website runs 2 and 3, not a demonstrated cause. This is now
+stated in the report, the test docstrings and the test names.
 
 ## Done this session
-- [x] All 22 retired-wire doubles updated; original acceptance assertions preserved.
-- [x] Retrieval separated from evidence: reviewer must name segments in `evidence`;
-      a supported line naming none is uncertain. Overlap can no longer establish support.
-- [x] Independent negative controls (altered metric / wrong employer / wrong education
-      pairing / omitted fact / irrelevant citation) with a maximally permissive reviewer,
-      plus a faithful non-vacuity control. Documented gaps asserted, not hidden.
-- [x] Disclosure gate now covers the whole outgoing payload: draft lines, segment text
-      and claim quotes, verified after redaction.
-- [x] `correction_capture.py` + replay tests: the synthetic failure is replayable offline
-      through the real adapter and validator, sockets blocked. `captures/` is gitignored.
-- [x] Replayed the live failure: the model left 2 lines **unjudged**. Was reported as
-      `malformed_output` and wasted a repair call of no-ops. Now `incomplete_review`
-      (no repair attempted) and `no_op_repair` is its own reason.
-- [x] Route timeout measured: SSE = 300s direct axios (middleware bypassed), JSON = 180s.
-      Budget is now computed from the route actually in use, not a single assumed 180s.
 
-## Remaining / next
-1. **Live proof still outstanding.** No live `/analyze` run this session, so approved
-   delivery, commentary, receipt and PDF/DOCX download remain unproven end to end.
-2. **Review latency is still unbounded.** The budget is no longer under-allocated, but the
-   Drafter alone measured 78.9s of 106.5s in run 6, so a large document can still leave
-   too little for the review phase. Streaming was deliberately NOT chosen: no measurement
-   supports it. Measure review duration against document size before changing the shape.
-3. **Known detection gap:** an invented `label: body` employer (not a bold heading) is
-   caught by no deterministic gate. Asserted by
-   `test_invented_record_label_is_not_detected_by_the_engine`.
-4. Consider caching the source inventory across a repair cycle: inventory is identical
-   for every review of the same draft and costs a full provider call.
+- [x] Live-path capture (`live_capture.py`): records the real source, the **writer's own
+      draft**, every outgoing request verbatim, every provider response body, the
+      normalized review, the gate decision, timings and the correlation id. Verified on
+      the deployed service: module present, `enabled: False` by default.
+- [x] Access controls, each tested: opt-in only; refuses unmarked sources; refuses an
+      unignored repository directory; `0600` in `0700`; summaries keep only
+      identifier-shaped strings and numbers; never alters a response; a write failure
+      cannot break a request.
+- [x] `live_capture.replay()` re-derives the decision offline from the recorded draft.
+      Incomplete recordings surface as `ReplayExhausted`, not empty success.
+- [x] Bounded recovery for `incomplete_review`: one completion re-ask naming the omitted
+      lines; at most once; never after a repair; never past the deadline; never a blind
+      retry. Unchanged completeness and factual checks still apply (both proved).
+- [x] Preflight tool that verifies capture readiness before a paid run; confirmed on the
+      live service via SSH (`python tools/live_capture_preflight.py`).
+- [x] Evidence labels corrected in docs, tests and commit messages.
+
+## Remaining — blocked on a specific decision
+
+1. **Additional live-test allowance is required.** The six-run allowance is exhausted
+   (1265 credits remain). I requested a narrowly scoped renewal and did **not** treat it
+   as granted; no live run was made this session, so live delivery is still unproven.
+   Proposed: 2 single-file runs (66 credits) with capture on.
+2. **Enable capture before the run** (requires a deploy, not a restart):
+   `CORRECTION_LIVE_CAPTURE=1`, `CORRECTION_LIVE_CAPTURE_DIR=/app/data/live-capture`
+   (the service has a 1 GB disk at `/app/data`). Run the preflight first.
+3. **If the run fails:** replay the exact capture offline before choosing a fix. Do not
+   choose a fix from a probe.
+4. **If it approves:** verify the displayed commentary, the receipt, and the actual
+   bytes of the downloaded PDF/DOCX.
+5. Known gaps: invented `label: body` employer not deterministically caught; review
+   latency may still exceed budget on large documents; capture covers correction only.
 
 ## Verification
+
 ```bash
 cd Imagination_Resume_Module
-../.venv/bin/python -m pytest -o addopts="" -q          # 648 passed, 3 skipped
-../.venv/bin/python -m pytest -o addopts="" -q tests/test_correction_capture_replay.py
+../.venv/bin/python -m pytest -o addopts="" -q        # 703 passed, 3 skipped
+PYTHONPATH=. python tools/live_capture_preflight.py  # 0 ready / 2 not ready / 3 disabled
 ```
-Capture replay needs `captures/live-rewrite-0{1,2}.json`; those tests skip when the
-captures are absent (they hold complete resume-shaped text and are git-ignored).
-Regenerate with `PROBE_OR_KEY=... PYTHONPATH=. python tools/capture_correction_case.py <id>`
-— this spends provider money and is never run by tests.
-
----
 
 ## Previous session (superseded)
 # Handoff — correction timeout attribution (2026-11-02)
