@@ -1,3 +1,52 @@
+# Handoff — delivery is the remaining milestone (2026-11-02, session 6)
+
+- **Tests:** 767 passed, 3 skipped. Latest commit `5d7f686`, deployed and healthy.
+- **New docs:** `docs/ROUTE_MAP.md`, `docs/SPENDING_RECONCILIATION_2026-11-02.md`,
+  `docs/RETRY_RESILIENCE_2026-11-02.md`, `docs/LIVE_CAPTURE_RUNBOOK.md`.
+- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`); preflight verified READY when forced on.
+
+## Done this session
+
+- [x] **Composed route test** replaces the detached verifier assertion. Drives the real
+      `/analyze` path: transient 503 -> retry -> unsupported claim -> withheld, no receipt,
+      nothing exportable, no streamed tokens on SSE. Asserts 4 attempts for 3 phases so the
+      retry demonstrably ran, and carries a positive control so "withhold everything after
+      a retry" cannot pass.
+- [x] **An explicit `Retry-After` is never shortened.** Uncapped; if it does not fit the
+      remaining budget the phase stops cleanly and records `retry_after_exceeded_budget`.
+      Our own backoff is still capped, because that is our choice, not an instruction.
+- [x] **Spending reconciled separately.** Website: 99 credits / 3 runs, none this session.
+      Provider: ~$0.0063 over 16 probe requests from recorded token counts; refused
+      requests charged at prompt cost, never $0.00; stated as a lower bound.
+- [x] **Route map verified, and an earlier claim withdrawn.** Both frontend paths reach the
+      same Imaginator handler (`/analyze`), which does run source correction. Multi-file is
+      **not** bypassed. The earlier claim came from confusing the orchestrator route
+      `/api/analysis/multi-file` with the Imaginator-local handler of the same name, which
+      no website traffic reaches. See `docs/ROUTE_MAP.md` for line-level evidence.
+
+## Remaining: one captured single-file website run (needs allowance)
+
+Everything is prepared; only the spending decision is outstanding.
+
+- Capture: `CORRECTION_LIVE_CAPTURE=1`, dir `/app/data/live-capture`. Enabling requires a
+  **deploy**, not a restart.
+- Preflight confirmed READY (`admitted_by: separate volume`, 1 GB free, writes 0600 in 0700).
+- Cost: **33 credits** for one single-file analysis. No provider probes will be made to
+  force an outage; that was explicitly excluded.
+- On success: inspect the résumé, the commentary, the receipt, and the actual PDF/DOCX.
+- On failure: replay that exact capture before touching code. A captured-request probe is
+  **not** a substitute for website acceptance.
+- Multi-file acceptance follows only after single-file delivery passes.
+
+## Verification
+
+```bash
+cd Imagination_Resume_Module
+../.venv/bin/python -m pytest -o addopts="" -q      # 767 passed, 3 skipped
+```
+
+---
+
 # Handoff — transient-failure resilience (2026-11-02, session 5)
 
 - **Tests:** 757 passed, 3 skipped.
