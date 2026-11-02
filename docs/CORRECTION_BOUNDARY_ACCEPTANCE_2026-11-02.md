@@ -216,6 +216,55 @@ of inventory, and the measured Drafter alone can consume 79 s of the caller's bu
 Streaming was *not* chosen — no measurement supports it, and the request explicitly
 forbids assuming it.
 
+## 3b. Live-path capture and bounded recovery (commit `0b7836f`)
+
+### Live capture answers the question the probes could not
+
+`live_capture.py` records a real `/analyze` exchange: the sources as the request used
+them, **the writer-generated draft**, every outgoing correction request verbatim, every
+provider response body, the normalized review, the final gate decision, timings, and the
+correlation id. A test asserts the stored draft differs from the source, which is what
+makes it the writer's output rather than a fixture.
+
+Controls, each tested:
+
+* **off by default**; requires `CORRECTION_LIVE_CAPTURE=1` and an explicit directory;
+* refuses any source without `SYNTHETIC-ONLY`;
+* refuses a repository directory that is not git-ignored;
+* writes `0600` in a `0700` directory, one file per correlation id;
+* summaries carry only machine-identifier-shaped strings, numbers and counts —
+  `PRIVATE_DRAFT_TEXT` is replaced by `<str:18>`, and a test asserts it;
+* **never changes the response**: a test compares responses with capture on and off;
+* a capture write failure cannot break a request.
+
+`live_capture.replay()` re-derives the decision offline through the real engine, adapter
+and validator, using the recorded draft. An incomplete recording raises
+`ReplayExhausted` inside the session rather than returning an empty success, and the
+engine's withheld result is asserted. Runbook: `docs/LIVE_CAPTURE_RUNBOOK.md`.
+
+The service has a 1 GB disk at `/app/data`, so a capture survives a deploy and can be
+retrieved over SSH.
+
+### `incomplete_review` is an unresolved delivery failure
+
+It is no longer a terminal outcome when the gap is recoverable. Recovery re-asks **once**
+with the omitted line ids named (`must_judge`), then re-validates with the unchanged
+validator, completeness and attribution checks. Bounded by construction and tested:
+
+| Bound | Test |
+|---|---|
+| at most once per correction | `test_recovery_happens_at_most_once` |
+| never a blind retry (same gap twice) | `test_a_second_identical_omission_is_not_retried_again` |
+| never after a repair (stale draft) | `test_recovery_is_unreachable_after_a_repair` |
+| never past the deadline | `test_recovery_is_refused_when_the_deadline_has_passed` |
+| headroom not spendable by a plain call | `test_recovery_headroom_cannot_be_spent_by_a_plain_call` |
+| an omitted fact still fails | `test_recovery_cannot_turn_an_omitted_fact_into_approval` |
+| unnamed support still uncertain | `test_recovery_does_not_soften_the_evidence_requirement` |
+
+`REPAIR_PATH_CALLS` stays 6. `MAX_CALLS` is 7, and the seventh call is reachable only by
+a request carrying the `must_judge` hint, so a second repair pass or a direct caller
+cannot spend it.
+
 ## 4. Spend (provider probes)
 
 | Item | Cost |
@@ -235,23 +284,43 @@ were spent. 1463→1265 credits were consumed by the six earlier website runs
 
 ### Implementation acceptance: PASS
 
-Verified locally and deployed (`51affd2`, docs `166cc75`): the 22-doubles update, the
-retrieval/evidence separation, the negative controls and their documented gaps, the
-disclosure scope change, the probe capture/replay harness, the `incomplete_review` /
-`no_op_repair` attribution, and the route-accurate budget. 648 passed, 3 skipped.
+Deployed and verified: code `0b7836f`, tests **698 passed, 3 skipped**. That covers the
+22-doubles update, the retrieval/evidence separation, the negative controls and their
+documented gaps, the disclosure scope change, the live-path capture with its access
+controls, the bounded recovery, and the route-accurate budget.
 
-### Live delivery acceptance: NOT MET
+### Live delivery acceptance: NOT MET — and blocked on allowance
 
-No live `/analyze` run was made this session. The website has **not** been shown to
-produce an approved resume, correction commentary, a valid publication receipt, or a
-working PDF/DOCX download. The last six website runs (2026-11-02, earlier) all
-withheld.
+No live `/analyze` run has been made since the six-run allowance was exhausted. The
+website has **not** been shown to produce an approved resume, correction commentary, a
+valid publication receipt, or working PDF/DOCX downloads.
 
-A withheld draft is a safety outcome, not delivery. The mission is therefore open.
+The previous six website runs all withheld. A withheld draft is a safety outcome, not
+delivery, so **the mission is open**.
+
+Awaiting a narrowly scoped additional live-test allowance before running again. The
+capability to capture and replay that run is deployed and ready.
 
 Known limitations carried forward:
 
 * the invented `label: body` employer gap (§1.3);
 * review latency may exceed the remaining budget at large document sizes (§3);
-* the original website-run exchanges were never captured, so their root causes remain
-  unproven — the next live run must capture its own exchange.
+* the capture covers the correction stage only — the Drafter's own provider calls are
+  visible only through the draft it produced;
+* the earlier probe recordings cannot validate bounded recovery, because they were made
+  before it existed; only a new live run can.
+
+## 6. Spending record
+
+| Item | Kind | Amount |
+|---|---|---|
+| Six earlier website runs (2026-11-02, before this session) | user credits | 198 credits (1463 → 1265) |
+| Probe `live-rewrite-01` | provider spend | $0.001268 |
+| Probe `live-rewrite-02` | provider spend | $0.000995 |
+| **Provider spend, this session** | provider spend | **$0.00226** |
+| Provider key cumulative (all time) | provider spend | $0.112089 |
+| **Website credit consumption, this session** | user credits | **0** |
+
+Provider-probe spend is reported separately from website credit consumption because they
+are different budgets charged by different mechanisms. The probe total is well inside the
+earlier $2 ceiling, which does not authorize further website runs.
