@@ -123,7 +123,9 @@ def indexed_inventory_request(payload: dict[str, Any]) -> dict[str, Any]:
         for segment in _segments(item["text"], item["source_id"]):
             segments.append({**segment, "index": len(segments)})
     return {"contract": INVENTORY_CONTRACT,
-            "segments": [{"index": s["index"], "text": s["text"]} for s in segments],
+            "segments": [{"index": s["index"], "source_id": s["source_id"],
+                          "start": s["start"], "end": s["end"], "text": s["text"]}
+                         for s in segments],
             "_segments": segments}
 
 
@@ -201,7 +203,10 @@ def indexed_review_request(payload: dict[str, Any]) -> dict[str, Any]:
                                                 and (_fold(quote) in _fold(line["text"])
                                                      or _overlap(quote, line["text"]))]})
     return {"contract": REVIEW_CONTRACT,
-            "segments": [{"index": index, "text": quote} for index, quote in enumerate(quotes)],
+            "segments": [{"index": index, "source_id": item["source_id"],
+                          "start": item["start"], "end": item["end"],
+                          "source_claim_id": item["id"], "text": quote}
+                         for index, (item, quote) in enumerate(zip(items, quotes))],
             "lines": lines, "_items": items, "_lines": lines}
 
 
