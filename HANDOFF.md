@@ -1,3 +1,34 @@
+# Handoff — live correction verification (2026-11-02, evening)
+
+- **Live:** `master` = `4059d12` on Imaginator (deploy `dep-dbk7c8lg1s2s738n2750`).
+- **Branch:** `wip/correction-timeout-attribution` tracks `origin/master`; working tree clean.
+- **Full report:** `LIVE_ACCEPTANCE_2026-11-02.md`.
+
+## Done
+- [x] `python-docx` restored from the declared pin; 76 previously blocked tests pass.
+- [x] Deadline = min(120s, 180-20-pipeline); no provider call under 30s remaining.
+- [x] Phase events (budget/start/end/provider.call/end), correlation-ID keyed, sanitized.
+- [x] Index-list wire protocol replaces exact offsets (the original live blocker).
+- [x] Paraphrase, citation and heading coverage defects fixed; faithful + rewritten
+      drafts approved, altered number withheld (real-model matrix, zero cost).
+
+## Remaining
+1. Live single-file is still withheld. Run 6 was cut off with 53.5s budget after a
+   106.5s pipeline: this is headroom, not correctness. Next fix = stream or
+   section-split the review so a slow call cannot exhaust the budget.
+2. Then one live single-file run, then the multi-file run.
+3. Convert the 22 scripted route doubles to the index-list wire shape.
+4. Disclosure gate still scans source documents only, not draft lines/claims.
+
+## Verification
+```bash
+cd Imagination_Resume_Module
+../.venv/bin/python -m pytest tests/test_correction_timeout_attribution.py tests/test_source_correction.py -p no:cacheprovider -q
+```
+Full suite: 590 passed, 3 skipped, 22 failed (scripted doubles only).
+
+---
+
 # Handoff — correction timeout attribution (2026-11-02)
 
 - **Active branch:** `wip/correction-timeout-attribution` (local, not pushed); base `10b20d8` on `master`.
