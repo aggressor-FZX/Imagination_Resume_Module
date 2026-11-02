@@ -264,6 +264,7 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "attribution_conflict": "A literal source record appears under a different label; independent review of the original record is required.",
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
+            "privacy_redaction_failed": "Personal identifiers could not be removed without changing the source text; independent review is required.",
         }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
         run_metrics=metrics, processing_time_seconds=time.time() - start_time,
@@ -272,7 +273,15 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
 
 async def _run_source_correction(markdown, source_documents, api_key, request):
     """Use the application session when available, otherwise close a local session."""
-    sources = tuple(SourceDocument(source_id, text) for source_id, text in source_documents)
+    from disclosure import redact_sources
+
+    # Length-preserving redaction keeps every code-point offset valid, so the
+    # engine's exact-citation contract still holds after the sensitive
+    # characters are removed. When correspondence cannot be proven, withhold.
+    redacted, attestation = redact_sources(source_documents)
+    if attestation is None:
+        return None, None
+    sources = tuple(SourceDocument(source_id, text) for source_id, text in redacted)
     session = getattr(request.app.state, "http_session", None)
 
     async def run(session):
@@ -540,13 +549,17 @@ async def _analyze_resume_impl(
                 metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
                 return _withhold_correction(reason="provider_error", pipeline_status=status,
                     metrics=metrics, start_time=start_time)
+            if correction is None or provider is None:
+                # Corresponding redaction could not be proven; nothing was sent.
+                return _withhold_correction(reason="privacy_redaction_failed",
+                    pipeline_status=status, metrics=metrics, start_time=start_time)
             metrics = _correction_usage(pipeline_metrics, provider)
             if correction.status != "approved" or not isinstance(correction.markdown, str):
                 allowed_reasons = {"invalid_input", "timeout", "malformed_source_inventory",
                     "source_completeness_uncertain", "no_required_source_claims",
                     "provider_error", "no_supported_claims", "source_facts_missing",
                     "unresolved_claims", "malformed_output", "privacy_review_required",
-                    "attribution_conflict"}
+                    "privacy_redaction_failed", "attribution_conflict"}
                 reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
                 return _withhold_correction(reason=reason, pipeline_status=status,
                     metrics=metrics, start_time=start_time)

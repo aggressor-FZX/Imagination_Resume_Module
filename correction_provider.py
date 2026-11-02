@@ -5,6 +5,7 @@ import re
 
 import aiohttp
 
+from disclosure import POLICY_ID, verify_disclosure
 from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
 from source_correction import PrivacyReviewRequired, SourceDocument
 
@@ -13,12 +14,32 @@ MAX_REQUEST_BYTES = 96_000
 MAX_RESPONSE_BYTES = 512_000
 PROVIDER_TIMEOUT_SECONDS = 30.0
 
+# The disclosure gate. It is enabled only by an explicit operator setting; the
+# default (unset/false) keeps external correction disabled. Enabling it does not
+# skip the checks: `verify_disclosure` still runs against the exact payload that
+# would be sent, per request, and any uncovered PII withholds the result.
+#
+# Scope of what this protects: candidate source documents (the raw uploaded
+# text), which the normal generation path never sends verbatim. Detection is the
+# same unambiguous category set already applied to the normal pipeline
+# (email/phone/SSN/street address/LinkedIn/contact header lines); names,
+# employers, schools and city/state are intentionally retained as resume
+# content. It is not a general proof that arbitrary text is non-identifying.
+DISCLOSURE_SETTING = "CORRECTION_PROVIDER_DISCLOSURE"
+_ENABLED_VALUES = {"1", "true", "yes", "on"}
+
 
 def _approved_disclosure_available():
-    # No policy or deterministic, correspondence-preserving anonymizer has
-    # been approved. Pattern-based PII detection cannot prove arbitrary text
-    # safe, and generic placeholders could falsely equate different people.
-    return False
+    """True only when an operator explicitly enabled the approved policy."""
+    import os
+
+    enabled = (os.getenv(DISCLOSURE_SETTING, "") or "").strip().lower()
+    return enabled in _ENABLED_VALUES
+
+
+def approved_disclosure_policy():
+    """Return the enforceable policy id, or None when disclosure is not approved."""
+    return POLICY_ID if _approved_disclosure_available() else None
 
 
 def snapshot_sources(resume_text, documents, supplied):
@@ -91,8 +112,12 @@ class CorrectionProvider:
         if len(json.dumps(request, ensure_ascii=True, allow_nan=False).encode("utf-8")) > MAX_REQUEST_BYTES:
             raise ValueError("correction request too large")
         # Never submit the original evidence or draft under an unspecified
-        # disclosure policy. Do not infer safety from absence of regex matches.
-        if not _approved_disclosure_available():
+        # disclosure policy. The check runs against the EXACT sources about to be
+        # serialized, not against a caller's claim that they were redacted.
+        policy = approved_disclosure_policy()
+        if policy is None:
+            raise PrivacyReviewRequired
+        if not verify_disclosure(payload.get("sources"), approved_policy=policy):
             raise PrivacyReviewRequired
         self.calls += 1
         # POST is not retried by aiohttp; redirects and model fallbacks are disabled.
