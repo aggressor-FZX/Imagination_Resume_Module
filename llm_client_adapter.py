@@ -110,9 +110,9 @@ class LLMClientAdapter:
                 on_token=on_token if stream_tokens else None,
             )
             
-            # LOG THE ACTUAL MODEL USED (Crucial for debugging instruction following)
+            # Model identifiers are untrusted and may contain candidate data.
             model_used = result.get("model_used")
-            logger.info(f"[LLM_ADAPTER] Model requested: {model} | Model actually used: {model_used}")
+            logger.info("[LLM_ADAPTER] Model call completed")
             
             # Extract response text and track usage
             if result.get("success"):
@@ -142,7 +142,8 @@ class LLMClientAdapter:
                     "cost_usd": cost,
                 })
                 
-                logger.info(f"[LLM_ADAPTER] Usage: {prompt_tokens} prompt + {completion_tokens} completion = {total_tokens} total tokens (~${cost:.4f})")
+                # Provider-supplied usage fields are untrusted; keep them out of logs.
+                logger.info("[LLM_ADAPTER] Usage recorded")
                 
                 if choices:
                     message = choices[0].get("message", {})

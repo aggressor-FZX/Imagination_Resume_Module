@@ -717,38 +717,50 @@ def test_scripted_job_ad_requirement_is_not_candidate_evidence():
     assert phases == ["source_inventory", "initial_review", "repair", "post_patch_review"]
 
 
-def test_scripted_wrong_employer_and_swapped_dates_are_withheld():
-    drafts = [MATRIX_ANSWER_KEY.replace("Alpha: improved", "Beta: improved"),
-              MATRIX_ANSWER_KEY.replace("2019–2021", "SWAP").replace("2022–Present", "2019–2021").replace("SWAP", "2022–Present")]
-    for draft in drafts:
-        result = run(draft, complete_callback(), sources=MATRIX_SOURCE, raw=True)
-        assert (result.status, result.reason, result.markdown) == ("withheld", "source_facts_missing", None)
-        assert result.repair_calls == 0
+def test_scripted_swapped_date_ranges_are_withheld():
+    # Two labels rewritten into each other is a cycle. Even before the label
+    # guard can report it, the reviewer's completeness check detects that the
+    # source date records are no longer represented, so publication is withheld.
+    draft = (MATRIX_ANSWER_KEY.replace("2019–2021", "SWAP")
+             .replace("2022–Present", "2019–2021").replace("SWAP", "2022–Present"))
+    result = run(draft, complete_callback(), sources=MATRIX_SOURCE, raw=True)
+    assert (result.status, result.reason, result.markdown) == (
+        "withheld", "source_facts_missing", None)
+    assert result.repair_calls == 0
 
 
-def test_known_limitation_valid_citation_does_not_prove_employer_attribution():
+def test_scripted_wrong_employer_is_corrected_without_losing_the_accomplishment():
     draft = MATRIX_ANSWER_KEY.replace("Alpha: improved", "Beta: improved")
+    result = run(draft, complete_callback(), sources=MATRIX_SOURCE, raw=True)
+    assert result.status == "approved"
+    assert result.markdown == MATRIX_ANSWER_KEY
+    assert "restored 1 source-owned record label" in result.commentary
+    assert "improved accuracy 30% over 6 months" in result.markdown
+    assert "2019–2021" in result.markdown and "2022–Present" in result.markdown
+
+
+def test_original_counterexample_reviewer_never_receives_wrong_employer_label():
+    # Original adversarial fixture: a reviewer approved Beta as the owner of an
+    # accomplishment whose source record belongs to Alpha. The deterministic
+    # label restoration runs first, so a reviewer cannot approve that wrong
+    # label, while the accomplishment and unrelated facts remain intact.
+    draft = MATRIX_ANSWER_KEY.replace("Alpha: improved", "Beta: improved")
+    wrong_line = "Beta: improved accuracy 30% over 6 months"
+    correct_line = "Alpha: improved accuracy 30% over 6 months"
+    reviewed = []
 
     async def dishonest_callback(phase, payload):
         if phase == "source_inventory":
             return complete_inventory(payload)
-        # Fabricate a semantic representation with valid source and draft offsets.
-        substituted = copy.deepcopy(payload)
-        for line in substituted["lines"]:
-            if line["text"].startswith("Beta: improved"):
-                line["text"] = line["text"].replace("Beta: improved", "Alpha: improved")
-        response = complete_review(substituted)
-        target = next(line for line in payload["lines"] if line["text"].startswith("Beta: improved"))
-        old = next(c for c in response["claims"] if c["line_id"] == target["line_id"])
-        old_end = old["end"]
-        old["end"] = len(target["text"])
-        old["id"] = f"{old['line_id']}:{old['start']}:{old['end']}"
-        for mapping in response["representations"]:
-            for span in mapping["spans"]:
-                if span["line_id"] == target["line_id"] and span["end"] == old_end:
-                    span["end"] = old["end"]
-        return response
+        lines = [line["text"] for line in payload["lines"]]
+        reviewed.append(lines)
+        assert wrong_line not in lines and correct_line in lines
+        return complete_review(payload)
 
     result = run(draft, dishonest_callback, sources=MATRIX_SOURCE, raw=True)
-    assert result.status == "approved" and result.markdown == draft
-    assert result.coverage.level == "model_assisted_not_proof"
+    assert result.status == "approved" and result.markdown == MATRIX_ANSWER_KEY
+    assert result.reason is None
+    assert reviewed == [[line for line in MATRIX_ANSWER_KEY.splitlines() if line.strip()]]
+    assert "restored 1 source-owned record label" in result.commentary
+    assert "30% over 6 months" in result.markdown
+    assert "2019–2021" in result.markdown and "2022–Present" in result.markdown

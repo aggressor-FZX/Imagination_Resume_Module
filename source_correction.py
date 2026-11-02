@@ -48,6 +48,13 @@ proves entailment, source ownership, completeness of factual segmentation, or
 truth. The reviewer can miss or misclassify facts, fabricate a semantic
 representation despite valid offsets, or cite unrelated text;
 human review and independent protections remain necessary.
+
+An independent, deliberately narrow check also withholds an approval when an
+exact explicit ``label: record`` draft line attributes a source record only
+found under different labels. Labels are lexical, not verified employers;
+unrelated colon-delimited fields can cause false positives. Paraphrases, other
+layouts and changed records are not detected. It is not a general employer or
+semantic parser.
 """
 from __future__ import annotations
 
@@ -99,6 +106,16 @@ class PrivacyReviewRequired(Exception):
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _VERDICTS = {"supported", "unsupported", "uncertain", "structural"}
+# Only explicit single-line labels and verbatim record bodies are compared.
+# The label grammar intentionally excludes colons and Markdown formatting.
+_LABELED_RECORD = re.compile(
+    r"^(?P<prefix>\s*(?:#{1,6}\s+|[-*+]\s+)?)\s*"
+    r"(?P<label>[^\W_][\w &.'’/-]{0,79}):\s+"
+    r"(?P<body>\S(?:.*\S)?)\s*$", re.UNICODE
+)
+# Generic resume section labels are not employer or institution identifiers.
+_SECTION_LABELS = {"skills", "skill", "tools", "technologies", "education", "experience",
+                   "summary", "profile", "certifications", "projects", "interests", "languages"}
 _INVENTORY_CONTRACT = (
     "Independently inventory the source documents without a draft. Partition every "
     "character of each source into contiguous nonblank spans, including whitespace; "
@@ -159,6 +176,107 @@ def _lines(markdown: str) -> list[dict[str, Any]]:
             lines.append({"line_id": f"L{number:06d}", "text": text,
                           "absolute_start": match.start()})
     return lines
+
+
+def _labeled_record(text: str) -> re.Match[str] | None:
+    """Match an explicit label/body record, without inferring its semantics."""
+    match = _LABELED_RECORD.fullmatch(text)
+    if not match:
+        return None
+    normalize = lambda value: " ".join(value.split()).casefold()
+    if normalize(match.group("label")) in _SECTION_LABELS:
+        return None
+    return match
+
+
+def _normalize(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _source_records(sources: dict[str, str]) -> tuple[set[str], dict[str, set[str]]]:
+    """Map normalized labels to source spelling and record bodies to owners."""
+    known: set[str] = set()
+    owners: dict[str, set[str]] = {}
+    for text in sources.values():
+        for line in text.splitlines():
+            match = _labeled_record(line)
+            if match:
+                label = _normalize(match.group("label"))
+                known.add(label)
+                owners.setdefault(_normalize(match.group("body")), set()).add(label)
+    return known, owners
+
+
+def _source_label_spelling(sources: dict[str, str]) -> dict[str, str]:
+    spelling: dict[str, str] = {}
+    for text in sources.values():
+        for line in text.splitlines():
+            match = _labeled_record(line)
+            if match:
+                original = match.group("label").strip()
+                spelling.setdefault(_normalize(original), original)
+    return spelling
+
+
+def _unowned_record(match: re.Match[str], known: set[str],
+                    owners: dict[str, set[str]]) -> bool:
+    """True when the record's label is a known non-owner of the same body."""
+    label = _normalize(match.group("label"))
+    body = _normalize(match.group("body"))
+    possible = owners.get(body, set())
+    return label in known and bool(possible) and label not in possible
+
+
+def _correct_unique_attribution(markdown: str, sources: dict[str, str]) -> tuple[str, int, bool]:
+    """Restore a uniquely owned label on exact-record lines; report ambiguity.
+
+    The rewrite is limited to source labels already present in explicit
+    ``label: body`` records. It never changes an unknown alias, never chooses
+    between multiple owners, and never rewrites anything other than the label
+    text. Source text is authoritative only for this lexical step.
+    """
+    known, owners = _source_records(sources)
+    spelling = _source_label_spelling(sources)
+    lines = markdown.splitlines(keepends=True)
+    changes: list[tuple[int, int, str]] = []
+    ambiguous = False
+    originals: set[str] = set()
+    replacements: set[str] = set()
+    for index, raw in enumerate(lines):
+        text = raw.rstrip("\r\n")
+        ending = raw[len(text):]
+        match = _labeled_record(text)
+        if not match or not _unowned_record(match, known, owners):
+            continue
+        possible = owners[_normalize(match.group("body"))]
+        if len(possible) != 1:
+            ambiguous = True
+            continue
+        owner = next(iter(possible))
+        label_span = match.span("label")
+        changes.append((index, label_span, owner))
+        originals.add(_normalize(match.group("label")))
+        replacements.add(owner)
+    # Rewriting two labels into each other is a swap, not an unambiguous repair:
+    # the draft could equally be two misattributed labels or two swapped
+    # records, and their accomplishments/dates would move between employers.
+    # Withhold that cycle instead of choosing one interpretation.
+    if len(changes) > 1 and originals == replacements:
+        return markdown, 0, True
+    for index, (start, end), owner in changes:
+        raw = lines[index]
+        text = raw.rstrip("\r\n")
+        lines[index] = text[:start] + spelling[owner] + text[end:] + raw[len(text):]
+    return "".join(lines), len(changes), ambiguous
+
+
+def _attribution_ambiguity(markdown: str, sources: dict[str, str]) -> bool:
+    known, owners = _source_records(sources)
+    for line in markdown.splitlines():
+        match = _labeled_record(line)
+        if match and _unowned_record(match, known, owners):
+            return True
+    return False
 
 
 def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str, Any]]:
@@ -354,10 +472,17 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     Commentary and failure reasons contain no input, model output, or exception text.
     """
     reviews = repairs = 0
+    corrected_spans = 0
+    corrected_labels = 0
 
     def blocked(reason: str) -> CorrectionResult:
+        detail = {
+            "attribution_conflict": "A literal source record appears under a different label; independent review of the original record is required.",
+            "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
+            "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
+        }.get(reason, "Content withheld; independent review is required.")
         return CorrectionResult("withheld", None, reason,
-                                "Content withheld; independent review is required.",
+                                detail,
                                 None, reviews, repairs)
 
     if (type(markdown) is not str or len(markdown) > MAX_DRAFT_CHARS
@@ -401,6 +526,10 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
         return blocked("privacy_review_required")
     except Exception:
         return blocked("provider_error")
+    # Restore uniquely owned, literal record labels before review, and again
+    # after each model repair. Ambiguous ownership is never rewritten and is
+    # withheld after the complete review approves the draft.
+    markdown, corrected_labels, ambiguous = _correct_unique_attribution(markdown, source_map)
     phase = "initial_review"
     while True:
         lines = _lines(markdown)
@@ -426,9 +555,20 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
                 supported = sum(c["verdict"] == "supported" for c in claims)
                 if not supported:
                     return blocked("no_supported_claims")
+                if ambiguous or _attribution_ambiguity(markdown, source_map):
+                    return blocked("attribution_conflict")
+                commentary = "Model-assisted review is not proof; independent review is required."
+                changes = []
+                if corrected_labels:
+                    changes.append(f"restored {corrected_labels} source-owned record label(s)")
+                if corrected_spans:
+                    changes.append(f"revised {corrected_spans} span(s) flagged by the reviewer as unsupported or uncertain")
+                if changes:
+                    commentary = ("Correction " + " and ".join(changes)
+                                  + "; the complete result was reviewed again. " + commentary)
                 return CorrectionResult(
                     "approved", markdown, None,
-                    "Model-assisted review is not proof; independent review is required.",
+                    commentary,
                     Coverage("model_assisted_not_proof", len(lines), len(claims), supported,
                              sum(c["verdict"] == "structural" for c in claims)), reviews, repairs)
             if repairs == 2:
@@ -444,6 +584,11 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
             if loop.time() >= deadline:
                 return blocked("timeout")
             markdown = _apply_edits(markdown, edit_response, claims, lines)
+            corrected_spans += len(flagged)
+            markdown, labels_here, ambiguous_here = _correct_unique_attribution(
+                markdown, source_map)
+            corrected_labels += labels_here
+            ambiguous = ambiguous or ambiguous_here
             phase = "post_patch_review"
         except TimeoutError:
             return blocked("timeout")

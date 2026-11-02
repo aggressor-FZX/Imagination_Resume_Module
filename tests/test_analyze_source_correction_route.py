@@ -99,7 +99,8 @@ def test_corrected_final_is_only_authority_for_aliases_receipt_and_export(offlin
     result = post(client).json()
     assert result["processing_status"] == "completed", result
     assert result["correction_status"] == "approved"
-    assert result["correction_commentary"] == "Model-assisted review is not proof; independent review is required."
+    assert "revised 1 span(s) flagged by the reviewer" in result["correction_commentary"]
+    assert "independent review is required" in result["correction_commentary"]
     for field in ("final_written_section_markdown", "final_written_section", "rewritten_resume"):
         assert result[field] == SOURCE
     assert FRAGMENT not in result["final_written_section_markdown"] and "30%" in SOURCE

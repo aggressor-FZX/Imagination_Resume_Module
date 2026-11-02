@@ -387,8 +387,8 @@ async def _scored_keyword_resolve(job_title: str) -> Dict[str, Any]:
                 if s > 0.20:
                     results.append({"candidate": c, "score": s})
             return results
-        except Exception as exc:
-            logger.warning("[NEW_PIPELINE] O*NET search failed for '%s': %s", keyword, exc)
+        except Exception:
+            logger.warning("[NEW_PIPELINE] O*NET search failed")
             return []
 
     gathered = await asyncio.gather(
@@ -484,12 +484,8 @@ Respond in JSON only:
             "source": "llm",
             "query": job_title,
         }
-    except Exception as llm_error:
-        logger.warning(
-            "[NEW_PIPELINE] LLM O*NET resolution failed for '%s': %s",
-            job_title,
-            llm_error,
-        )
+    except Exception:
+        logger.warning("[NEW_PIPELINE] LLM O*NET resolution failed")
         return {}
 
 
@@ -512,15 +508,9 @@ async def _resolve_onet_code(
         clean_code = (upstream_onet_code or "").strip()
         # Regex check for safety before network call
         if re.fullmatch(r"\d{2}-\d{4}\.\d{2}", clean_code):
-            logger.info(
-                "[NEW_PIPELINE] O*NET code %s provided upstream -> using as passthrough",
-                clean_code,
-            )
+            logger.info("[NEW_PIPELINE] Using upstream O*NET code")
             return {"code": clean_code, "source": "upstream_passthrough"}
-        logger.warning(
-            "[NEW_PIPELINE] Upstream O*NET code '%s' invalid; will resolve",
-            upstream_onet_code,
-        )
+        logger.warning("[NEW_PIPELINE] Upstream O*NET code invalid; will resolve")
 
     normalized_title = (job_title or "").strip()
     if not normalized_title:
@@ -542,37 +532,16 @@ async def _resolve_onet_code(
         llm_code = llm_result.get("code", "")
         if llm_code and llm_confidence >= confidence_floor:
             if await _validate_onet_code(llm_code):
-                logger.info(
-                    "[NEW_PIPELINE] O*NET resolved via LLM: '%s' -> %s (%s) confidence=%.2f",
-                    normalized_title,
-                    llm_code,
-                    llm_result.get("title", ""),
-                    llm_confidence,
-                )
+                logger.info("[NEW_PIPELINE] O*NET resolved via LLM")
                 _ONET_RESOLUTION_CACHE[cache_key] = llm_result
                 return llm_result
-            logger.warning(
-                "[NEW_PIPELINE] LLM suggested invalid/missing O*NET code '%s' for '%s'",
-                llm_code,
-                normalized_title,
-            )
+            logger.warning("[NEW_PIPELINE] LLM suggested invalid or missing O*NET code")
         elif llm_result:
-            logger.info(
-                "[NEW_PIPELINE] LLM confidence too low for '%s': %.2f < %.2f",
-                normalized_title,
-                llm_confidence,
-                confidence_floor,
-            )
+            logger.info("[NEW_PIPELINE] LLM O*NET confidence too low")
 
     keyword_result = await _scored_keyword_resolve(normalized_title)
     if keyword_result:
-        logger.info(
-            "[NEW_PIPELINE] O*NET resolved via scored keyword: '%s' -> %s (%s) score=%.2f",
-            normalized_title,
-            keyword_result.get("code", ""),
-            keyword_result.get("title", ""),
-            float(keyword_result.get("confidence", 0.0) or 0.0),
-        )
+        logger.info("[NEW_PIPELINE] O*NET resolved via scored keyword")
         _ONET_RESOLUTION_CACHE[cache_key] = keyword_result
         return keyword_result
 
@@ -913,62 +882,46 @@ async def run_new_pipeline_async(
     """
     logger.info("[NEW_PIPELINE] Starting 3-stage orchestrator")
     if golden_bullets:
-        logger.info(f"[NEW_PIPELINE] Received {len(golden_bullets)} golden bullets")
+        logger.info("[NEW_PIPELINE] Received golden bullets")
     if onet_code:
-        logger.info(f"[NEW_PIPELINE] Received upstream O*NET code: {onet_code}")
+        logger.info("[NEW_PIPELINE] Received upstream O*NET code")
     if experience:
-        logger.info(f"[NEW_PIPELINE] Received {len(experience)} structured experience entries")
+        logger.info("[NEW_PIPELINE] Received structured experience entries")
     if skills:
-        logger.info(f"[NEW_PIPELINE] Received {len(skills)} flat skills")
+        logger.info("[NEW_PIPELINE] Received flat skills")
     if classified_skills:
         logger.info("[NEW_PIPELINE] Received classified skills")
     if job_titles:
-        logger.info(f"[NEW_PIPELINE] Received {len(job_titles)} matching job titles")
+        logger.info("[NEW_PIPELINE] Received matching job titles")
     
     if location:
-        logger.info(f"[NEW_PIPELINE] Location provided for market intel: {location}")
+        logger.info("[NEW_PIPELINE] Location provided for market intel")
     if job_title:
-        logger.info(f"[NEW_PIPELINE] User-provided job title for O*NET: {job_title}")
-
-    # Sanitize resume_text to remove PII before processing
-    original_resume_len = len(resume_text) if resume_text else 0
-    resume_text = sanitize_resume_pii(resume_text) if resume_text else resume_text
-    if original_resume_len > 0:
-        sanitized_len = len(resume_text)
-        logger.info(f"[NEW_PIPELINE] PII sanitization: {original_resume_len} -> {sanitized_len} chars")
-
-    # Truncate to prevent OOM on Render Standard (1GB RAM). The 3-stage
-    # pipeline (Researcher->Drafter->StarEditor) holds full text in memory
-    # through 4 sequential LLM API calls. 4K chars captures the most important
-    # experiences while staying within memory budget.
-    MAX_RESUME_CHARS = 8000
-    if resume_text and len(resume_text) > MAX_RESUME_CHARS:
-        logger.warning(
-            f"[NEW_PIPELINE] Truncating resume from {len(resume_text)} "
-            f"to {MAX_RESUME_CHARS} chars"
-        )
-        resume_text = resume_text[:MAX_RESUME_CHARS]
+        logger.info("[NEW_PIPELINE] User-provided job title for O*NET")
 
     try:
+        # Sanitize before processing; failures use the same contained error path.
+        if resume_text:
+            resume_text = sanitize_resume_pii(resume_text)
+            logger.info("[NEW_PIPELINE] PII sanitization complete")
+
+        # Bound pipeline memory on Render.
+        MAX_RESUME_CHARS = 8000
+        if resume_text and len(resume_text) > MAX_RESUME_CHARS:
+            logger.warning("[NEW_PIPELINE] Truncating resume for memory budget")
+            resume_text = resume_text[:MAX_RESUME_CHARS]
+
         # Use provided experience if available, otherwise parse from text
         if experience:
             experiences = sanitize_experience_list(experience)
-            logger.info(f"[NEW_PIPELINE] Using {len(experiences)} provided professional experience entries")
+            logger.info("[NEW_PIPELINE] Using provided professional experience entries")
         else:
             experiences = parse_experiences(resume_text)
-            logger.info(f"[NEW_PIPELINE] Parsed {len(experiences)} experiences from resume text")
+            logger.info("[NEW_PIPELINE] Parsed experiences from resume text")
             
             # Deduplicate by company name (keep richest version per company)
             experiences = deduplicate_experiences(experiences)
-            logger.info(f"[NEW_PIPELINE] After dedup: {len(experiences)} unique experiences")
-            
-            # Log extracted companies for debugging
-            for i, exp in enumerate(experiences):
-                logger.info(
-                    f"[NEW_PIPELINE]   Exp[{i}] role={exp.get('role','?')!r}, "
-                    f"company={exp.get('company','?')!r}, "
-                    f"title_line={exp.get('title_line','?')[:60]!r}"
-                )
+            logger.info("[NEW_PIPELINE] Deduplicated experiences")
             
             # Fallback: if parsing found zero experiences OR every experience
             # is missing BOTH a company AND a role (meaning parse_experiences
@@ -988,11 +941,7 @@ async def run_new_pipeline_async(
             usable_exps = [e for e in experiences if _exp_is_usable(e)]
             
             if not usable_exps:
-                logger.warning(
-                    f"[NEW_PIPELINE] Experience parsing returned {len(experiences)} entries "
-                    f"but none are usable (missing role/company/title_line). "
-                    f"Falling back to raw text."
-                )
+                logger.warning("[NEW_PIPELINE] No usable parsed experience; falling back to raw text")
                 experiences = [{
                     "title_line": "Professional Experience",
                     "company": "Current Employer",
@@ -1002,13 +951,10 @@ async def run_new_pipeline_async(
                     "duration": "",
                     "raw": resume_text[:3000]
                 }]
-                logger.info(f"[NEW_PIPELINE] Created 1 fallback experience from raw resume text")
+                logger.info("[NEW_PIPELINE] Created fallback experience from resume text")
             else:
                 if len(usable_exps) < len(experiences):
-                    logger.info(
-                        f"[NEW_PIPELINE] Filtering {len(experiences)} parsed → "
-                        f"{len(usable_exps)} usable experiences (dropped {len(experiences) - len(usable_exps)} empty entries)"
-                    )
+                    logger.info("[NEW_PIPELINE] Filtered unusable experiences")
                 experiences = usable_exps
 
         provided_projects = kwargs.get("projects", [])
@@ -1032,27 +978,7 @@ async def run_new_pipeline_async(
             "certifications", []
         )
 
-        logger.info(
-            "[NEW_PIPELINE] Section inputs - projects: %s (%s), education: %s (%s), certifications: %s (%s)",
-            len(effective_projects),
-            (
-                "payload"
-                if projects_input
-                else ("resume_text" if effective_projects else "none")
-            ),
-            len(effective_education),
-            (
-                "payload"
-                if education_input
-                else ("resume_text" if effective_education else "none")
-            ),
-            len(effective_certifications),
-            (
-                "payload"
-                if certifications_input
-                else ("resume_text" if effective_certifications else "none")
-            ),
-        )
+        logger.info("[NEW_PIPELINE] Section inputs prepared")
 
         # Initialize LLM client
         if not openrouter_api_keys:
@@ -1073,9 +999,7 @@ async def run_new_pipeline_async(
         extracted_job_title = job_title  # Start with user-provided title
 
         if extracted_job_title:
-            logger.info(
-                f"[NEW_PIPELINE] Using user-provided job title: {extracted_job_title}"
-            )
+            logger.info("[NEW_PIPELINE] Using user-provided job title")
         else:
             # Extract Job Title (Gemini Flash Lite) - High Priority for Frontend Display
             logger.info(
@@ -1142,11 +1066,9 @@ async def run_new_pipeline_async(
                 extracted_job_title = title_data.get("job_title")
                 if extracted_job_title:
                     extracted_job_title = extracted_job_title.strip()
-                    logger.info(
-                        f"[NEW_PIPELINE] Extracted Job Title: {extracted_job_title}"
-                    )
-            except Exception as e:
-                logger.warning(f"[NEW_PIPELINE] Job title extraction failed: {e}")
+                    logger.info("[NEW_PIPELINE] Extracted job title")
+            except Exception:
+                logger.warning("[NEW_PIPELINE] Job title extraction failed")
 
         # Run orchestrator
         orchestrator = PipelineOrchestrator(llm_client)
@@ -1180,7 +1102,7 @@ async def run_new_pipeline_async(
             # Only attempt ATS scoring for small pipelines to avoid memory pressure
             pipeline_size = len(json.dumps(result, default=str))
             if pipeline_size > 50000:
-                logger.info(f"[NEW_PIPELINE] Skipping ATS scoring (pipeline {pipeline_size} bytes too large)")
+                logger.info("[NEW_PIPELINE] Skipping ATS scoring for large pipeline")
             else:
                 system_prompt = """You are an ATS scorer. Return JSON: {"score": float 0.0-1.0}"""
                 user_prompt = f"Job: {job_ad[:500]}\nResume: {final_output.get('final_written_section_markdown', '')[:1000]}\nScore:"
@@ -1197,16 +1119,14 @@ async def run_new_pipeline_async(
                     score_data = json.loads(response_clean)
                     critique_score = float(score_data.get("score", 0.75))
                     critique_score = max(0.0, min(1.0, critique_score))
-                    logger.info(f"[NEW_PIPELINE] ATS score: {critique_score}")
-        except Exception as e:
-            logger.warning(f"[NEW_PIPELINE] ATS scoring failed, using default 0.75: {e}")
+                    logger.info("[NEW_PIPELINE] ATS scoring complete")
+        except Exception:
+            logger.warning("[NEW_PIPELINE] ATS scoring failed, using default")
 
         # Build backward-compatible response with ALL expected fields
         errors = result.get("errors", [])
         if errors:
-            logger.error(
-                f"[NEW_PIPELINE] Pipeline encountered {len(errors)} errors: {errors}"
-            )
+            logger.error("[NEW_PIPELINE] Pipeline encountered errors")
 
         # Extract researcher data for domain insights
         researcher_data = result.get("stages", {}).get("researcher", {}).get("data", {})
@@ -1258,9 +1178,7 @@ async def run_new_pipeline_async(
 
         # Convert to list with deterministic ordering (sorted alphabetically) and limit to reasonable size
         aggregate_skills = sorted(list(all_skills_set))[:30]
-        logger.info(
-            f"[NEW_PIPELINE] Aggregated {len(aggregate_skills)} skills from all sources"
-        )
+        logger.info("[NEW_PIPELINE] Aggregated skills from all sources")
 
         # Build domain_insights from upstream data, researcher data, or intelligent defaults
         domain_insights = {}
@@ -1436,9 +1354,7 @@ async def run_new_pipeline_async(
                     == "true"
                 )
 
-                logger.info(
-                    f"[NEW_PIPELINE] Enriching with market intel for {job_title_for_market or 'O*NET role'} in {location}"
-                )
+                logger.info("[NEW_PIPELINE] Enriching with market intel")
                 logger.info(
                     f"[NEW_PIPELINE] Safe market fallback enabled: {safe_market_fallback}"
                 )
@@ -1446,9 +1362,7 @@ async def run_new_pipeline_async(
                 # Get geo ID for location
                 geo_id = get_geo_id(location)
                 if not geo_id:
-                    logger.warning(
-                        f"[NEW_PIPELINE] No geo ID found for location: {location}, using national data"
-                    )
+                    logger.warning("[NEW_PIPELINE] No geo ID found; using national data")
 
                 # Search O*NET for job title to get O*NET code
                 fallback_used = False
@@ -1476,9 +1390,7 @@ async def run_new_pipeline_async(
                         }
                     else:
                         fallback_used = True
-                        fallback_reason = (
-                            f"O*NET resolution failed for '{job_title_for_market}'"
-                        )
+                        fallback_reason = "O*NET resolution failed"
                 elif not onet_code:
                     fallback_used = True
                     fallback_reason = "No job title provided"
@@ -1498,10 +1410,8 @@ async def run_new_pipeline_async(
                 if onet_code:
                     try:
                         onet_summary = enricher._get_onet_summary(onet_code)
-                    except Exception as e:
-                        logger.warning(
-                            f"[NEW_PIPELINE] Failed to get O*NET summary for {onet_code}: {e}"
-                        )
+                    except Exception:
+                        logger.warning("[NEW_PIPELINE] Failed to get O*NET summary")
                         onet_summary = None
 
                 # Calculate market intel
@@ -1544,20 +1454,18 @@ async def run_new_pipeline_async(
                             else:
                                 domain_insights["salary_range"] = str(wage)
 
-                    logger.info(
-                        f"[NEW_PIPELINE] Added market intel: {market_intel.get('status')}"
-                    )
+                    logger.info("[NEW_PIPELINE] Added market intel")
                     
                     # ENRICH WITH CAREER PROGRESSION DATA (NEW IMPROVEMENT)
                     # Add career ladder data if available
                     if career_data.get("career_ladder"):
                         domain_insights["career_ladder"] = career_data["career_ladder"]
-                        logger.info(f"[NEW_PIPELINE] Added career ladder with {len(career_data['career_ladder'])} levels")
+                        logger.info("[NEW_PIPELINE] Added career ladder")
                     
                     # Add education progression data if available
                     if career_data.get("education_progression"):
                         domain_insights["education_progression"] = career_data["education_progression"]
-                        logger.info(f"[NEW_PIPELINE] Added education progression with {len(career_data['education_progression'])} levels")
+                        logger.info("[NEW_PIPELINE] Added education progression")
                     
                     # Add skill impact analysis if available
                     if career_data.get("skill_impact"):
@@ -1567,7 +1475,7 @@ async def run_new_pipeline_async(
                     # Add seniority information if available
                     if career_data.get("seniority"):
                         domain_insights["seniority"] = career_data["seniority"]
-                        logger.info(f"[NEW_PIPELINE] Added seniority: {career_data['seniority'].get('level', 'Unknown')}")
+                        logger.info("[NEW_PIPELINE] Added seniority")
                     
                     # Add top skills from O*NET (more accurate than domain vocab)
                     if career_data.get("core_skills"):
@@ -1608,7 +1516,7 @@ async def run_new_pipeline_async(
                             
                             if pivot_analysis.get("pivot_opportunities"):
                                 domain_insights["career_pivot_analysis"] = pivot_analysis
-                                logger.info(f"[NEW_PIPELINE] Added career pivot analysis with {len(pivot_analysis['pivot_opportunities'])} opportunities")
+                                logger.info("[NEW_PIPELINE] Added career pivot analysis")
                                 
                                 # Add summary to insights list for frontend
                                 summary = pivot_analysis.get("summary", {})
@@ -1617,14 +1525,12 @@ async def run_new_pipeline_async(
                                     if summary.get("best_match"):
                                         best = summary["best_match"]
                                         insights_list.append(f"Best match: {best.get('title')} ({best.get('match', 0):.0f}% qualified)")
-                        except Exception as e:
-                            logger.warning(f"[NEW_PIPELINE] Career pivot analysis failed: {e}")
+                        except Exception:
+                            logger.warning("[NEW_PIPELINE] Career pivot analysis failed")
                             # Non-critical feature, continue without it
                     
-                except Exception as e:
-                    logger.warning(
-                        f"[NEW_PIPELINE] Market intel calculation failed: {e}"
-                    )
+                except Exception:
+                    logger.warning("[NEW_PIPELINE] Market intel calculation failed")
                     # Fallback to basic market data
                     market_intel = {
                         "status": "fallback",
@@ -1665,13 +1571,9 @@ async def run_new_pipeline_async(
                             else:
                                 domain_insights["salary_range"] = str(wage)
 
-                    logger.info(
-                        f"[NEW_PIPELINE] Added fallback market intel: {market_intel.get('status')}"
-                    )
+                    logger.info("[NEW_PIPELINE] Added fallback market intel")
                 else:
-                    logger.warning(
-                        f"[NEW_PIPELINE] Fallback to resume-inferred: {fallback_reason}"
-                    )
+                    logger.warning("[NEW_PIPELINE] Fallback to resume-inferred market data")
                     # Resume fallback
                     inferred_domain = domain_insights.get("domain", "data")
                     fallback_role = _get_domain_fallback_occupation(
@@ -1708,15 +1610,10 @@ async def run_new_pipeline_async(
                         )
                         domain_insights["market_demand"] = "High"
                 # ...rest unchanged...
-            except Exception as e:
-                logger.error(
-                    f"[NEW_PIPELINE] Failed to enrich domain insights with market intel: {e}",
-                    exc_info=True,
-                )
+            except Exception:
+                logger.error("[NEW_PIPELINE] Failed to enrich domain insights with market intel")
         elif location:
-            logger.warning(
-                f"[NEW_PIPELINE] Location provided ({location}) but no job title extracted, skipping market intel"
-            )
+            logger.warning("[NEW_PIPELINE] No job title extracted; skipping market intel")
 
         # Build gap_analysis from researcher data - TAILORED TO SPECIFIC JOB
         gap_analysis = ""
@@ -1824,10 +1721,7 @@ async def run_new_pipeline_async(
             if section.startswith("has_") and not present
         ]
         if section_completeness["missing_sections"]:
-            logger.warning(
-                "[COMPLETENESS] Missing sections in rewrite: %s",
-                section_completeness["missing_sections"],
-            )
+            logger.warning("[COMPLETENESS] Sections missing from rewrite")
 
         # ── Capstone / sponsored-research detection ─────────────────────────────
         # If any experience looks like an academic capstone or sponsored research
@@ -1855,10 +1749,7 @@ async def run_new_pipeline_async(
         for exp in experiences:
             if _looks_like_project(exp):
                 promoted_to_projects.append(exp)
-                logger.info(
-                    "[NEW_PIPELINE] Promoted '%s' to Projects (capstone/sponsored)",
-                    exp.get("company", exp.get("role", "?")),
-                )
+                logger.info("[NEW_PIPELINE] Promoted experience to Projects")
             else:
                 remaining_experiences.append(exp)
 
@@ -1924,10 +1815,7 @@ async def run_new_pipeline_async(
                         cert_strings.append(" – ".join(parts))
             if cert_strings:
                 domain_insights["certifications"] = cert_strings[:6]
-                logger.info(
-                    "[NEW_PIPELINE] Populated domain_insights.certifications (%d) from user certs",
-                    len(cert_strings),
-                )
+                logger.info("[NEW_PIPELINE] Populated certifications from user input")
 
         # ── Populate domain_insights top_skills from aggregate if still empty ────
         if not domain_insights.get("top_skills") and aggregate_skills:
@@ -2066,14 +1954,10 @@ async def run_new_pipeline_async(
 
                     # Validate the onet_code before using it
                     if not await _validate_onet_code(target_onet):
-                        logger.warning(
-                            f"[NEW_PIPELINE] Invalid O*NET code {target_onet}, skipping pivot analysis"
-                        )
+                        logger.warning("[NEW_PIPELINE] Invalid O*NET code; skipping pivot analysis")
                         pivot_data = None
                     else:
-                        logger.info(
-                            f"[NEW_PIPELINE] Generating Pivot Analysis for Alchemy using code: {target_onet}"
-                        )
+                        logger.info("[NEW_PIPELINE] Generating Pivot Analysis for Alchemy")
                         try:
                             pivot_data = enricher.generate_career_pivot_analysis(
                                 current_onet_code=target_onet,
@@ -2087,15 +1971,11 @@ async def run_new_pipeline_async(
                                 location=current_location,
                                 max_pivots=3,
                             )
-                        except Exception as pivot_err:
-                            logger.warning(
-                                f"[NEW_PIPELINE] Pivot analysis failed: {pivot_err}"
-                            )
+                        except Exception:
+                            logger.warning("[NEW_PIPELINE] Pivot analysis failed")
                             pivot_data = None
-                except Exception as pivot_err:
-                    logger.warning(
-                        f"[NEW_PIPELINE] Alchemy pivot enrichment failed: {pivot_err}"
-                    )
+                except Exception:
+                    logger.warning("[NEW_PIPELINE] Alchemy pivot enrichment failed")
                     pivot_data = None
 
                 # Generate career alchemy
@@ -2107,38 +1987,30 @@ async def run_new_pipeline_async(
                         salary_data=salary_data,
                     )
                     logger.info("[NEW_PIPELINE] Career Alchemy generated successfully")
-                except Exception as e:
-                    logger.warning(
-                        f"[NEW_PIPELINE] Career Alchemy generation failed: {e}"
-                    )
+                except Exception:
+                    logger.warning("[NEW_PIPELINE] Career Alchemy generation failed")
                     career_alchemy_data = None
 
-            except Exception as e:
-                logger.warning(
-                    f"[NEW_PIPELINE] Career Alchemy generation failed: {e}",
-                    exc_info=True,
-                )
+            except Exception:
+                logger.warning("[NEW_PIPELINE] Career Alchemy generation failed")
                 career_alchemy_data = None
 
         # Add career_alchemy to response if generated
         if career_alchemy_data:
             response["career_alchemy"] = career_alchemy_data
 
-        llm_usage = response.get("run_metrics", {})
-        logger.info(
-            f"[NEW_PIPELINE] Completed successfully. Status: {response['pipeline_status']}, Critique Score: {critique_score}, Tokens: {llm_usage.get('total_tokens', 0)}"
-        )
+        logger.info("[NEW_PIPELINE] Processing complete")
         return response
 
-    except Exception as e:
-        logger.error(f"[NEW_PIPELINE] Failed: {e}", exc_info=True)
+    except Exception:
+        logger.error("[NEW_PIPELINE] Failed")
 
         # Return error response with all expected fields
         return {
             # Core fields
-            "final_written_section_markdown": f"## Error\n\nPipeline failed: {str(e)}",
-            "final_written_section": f"Error: Pipeline failed: {str(e)}",
-            "editorial_notes": f"Pipeline error: {str(e)}",
+            "final_written_section_markdown": "## Error\n\nPipeline failed.",
+            "final_written_section": "Error: Pipeline failed.",
+            "editorial_notes": "Pipeline error.",
             "seniority_level": "unknown",
             "domain_terms_used": [],
             "quantification_analysis": {},
@@ -2165,7 +2037,7 @@ async def run_new_pipeline_async(
             "pipeline_metrics": {
                 "total_duration_seconds": 0,
                 "stage_durations": {},
-                "errors": [str(e)],
+                "errors": ["Pipeline failed"],
             },
             # Empty run_metrics for consistency
             "run_metrics": {
@@ -2174,6 +2046,6 @@ async def run_new_pipeline_async(
                 "total_completion_tokens": 0,
                 "total_tokens": 0,
                 "estimated_cost_usd": 0.0,
-                "failures": [str(e)],
+                "failures": ["Pipeline failed"],
             },
         }

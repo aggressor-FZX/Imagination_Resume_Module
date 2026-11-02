@@ -126,7 +126,7 @@ class Researcher:
         Returns:
             Dictionary with implied_metrics, domain_vocab, implied_skills, and insider_tips
         """
-        logger.info(f"[RESEARCHER] Analyzing job ad ({len(job_ad)} chars)")
+        logger.info("[RESEARCHER] Analyzing job ad")
         
         user_prompt = f"Job Description:\n\n{job_ad[:1500]}"
         
@@ -153,8 +153,7 @@ class Researcher:
             # Parse and validate response
             result = self._parse_response(response)
             result["model_used"] = self.model # Track model in result
-            logger.info(f"[RESEARCHER] Extracted {len(result.get('implied_metrics', []))} metrics, "
-                       f"{len(result.get('domain_vocab', []))} domain terms")
+            logger.info("[RESEARCHER] Extraction complete")
             
             # Ensure we have at least some data
             if not result.get("implied_metrics"):
@@ -236,9 +235,8 @@ class Researcher:
                 
             return result
             
-        except json.JSONDecodeError as e:
-            logger.error(f"[RESEARCHER] Failed to parse JSON response: {e}")
-            logger.error(f"[RESEARCHER] Raw response length: {len(response) if response else 0}")
+        except json.JSONDecodeError:
+            logger.error("[RESEARCHER] Failed to parse JSON response")
             
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)
@@ -254,7 +252,7 @@ class Researcher:
                 "implied_skills": ["Problem Solving", "Communication"],
                 "work_archetypes": [],
                 "insider_tips": "Focus on quantifiable achievements and relevant technologies.",
-                "parse_error": str(e),
+                "parse_error": "invalid_json",
                 "fallback_used": True
             }
     

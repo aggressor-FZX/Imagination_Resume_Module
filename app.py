@@ -260,7 +260,11 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
         verification_coverage="none", publication_receipt=None,
         approved_export_payload=None, pipeline_status=pipeline_status,
         correction_status="withheld", correction_reason=reason,
-        correction_commentary="Content withheld; independent review is required.",
+        correction_commentary={
+            "attribution_conflict": "A literal source record appears under a different label; independent review of the original record is required.",
+            "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
+            "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
+        }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
         run_metrics=metrics, processing_time_seconds=time.time() - start_time,
     )
@@ -301,7 +305,7 @@ async def _analyze_resume_impl(
 
     # Parse incoming body and attach request_id
     body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
-    request_id = getattr(request.state, "request_id", None)
+    request_id = getattr(request.state, "log_request_id", None)
     source_documents_snapshot = _snapshot_original_documents(
         payload.resume_text, payload.source_documents,
         "source_documents" in getattr(payload, "model_fields_set", set()),
@@ -384,10 +388,8 @@ async def _analyze_resume_impl(
                     logger.warning(
                         "[COMPLIANCE] structured-skills-v1: Backend sent RAW skills (missing confidence/source) - will trigger fallback"
                     )
-        except Exception as e:
-            logger.warning(
-                f"[IMAGINATOR ENDPOINT] Could not parse extracted_skills_json: {e}"
-            )
+        except Exception:
+            logger.warning("[IMAGINATOR ENDPOINT] Could not parse extracted_skills_json")
             skills_data = None
     else:
         logger.info(
@@ -403,12 +405,11 @@ async def _analyze_resume_impl(
                 else payload.domain_insights_json
             )
             logger.info(
-                f"[IMAGINATOR ENDPOINT] Received domain_insights_json with keys: {list(insights_data.keys()) if isinstance(insights_data, dict) else 'not a dict'}"
+                "[IMAGINATOR ENDPOINT] Received domain_insights_json (object: %s)",
+                isinstance(insights_data, dict),
             )
-        except Exception as e:
-            logger.warning(
-                f"[IMAGINATOR ENDPOINT] Could not parse domain_insights_json: {e}"
-            )
+        except Exception:
+            logger.warning("[IMAGINATOR ENDPOINT] Could not parse domain_insights_json")
             insights_data = None
     else:
         logger.info("[IMAGINATOR ENDPOINT] No domain_insights_json provided")
@@ -544,7 +545,8 @@ async def _analyze_resume_impl(
                 allowed_reasons = {"invalid_input", "timeout", "malformed_source_inventory",
                     "source_completeness_uncertain", "no_required_source_claims",
                     "provider_error", "no_supported_claims", "source_facts_missing",
-                    "unresolved_claims", "malformed_output", "privacy_review_required"}
+                    "unresolved_claims", "malformed_output", "privacy_review_required",
+                    "attribution_conflict"}
                 reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
                 return _withhold_correction(reason=reason, pipeline_status=status,
                     metrics=metrics, start_time=start_time)
@@ -571,7 +573,7 @@ async def _analyze_resume_impl(
                 "metrics_support": support,
                 "pipeline_status": status,
                 "correction_status": "approved",
-                "correction_commentary": "Model-assisted review is not proof; independent review is required.",
+                "correction_commentary": correction.commentary,
                 "run_metrics": metrics,
                 "processing_time_seconds": time.time() - start_time,
             }, decision)

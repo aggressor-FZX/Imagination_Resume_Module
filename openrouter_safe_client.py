@@ -112,7 +112,7 @@ class OpenRouterSafeClient:
         models = self._get_available_models(force_refresh=force_refresh)
         available = model_id in models
         status = "✅" if available else "❌"
-        print(f"{status} Model {model_id} available: {available}")
+        print(f"{status} Model available: {available}")
         return available
 
     def _validate_request_format(self, messages: List[Dict[str, str]]) -> bool:
@@ -211,12 +211,12 @@ class OpenRouterSafeClient:
                 seen.add(m)
         models_to_try = unique_models
 
-        print(f"\n📋 Model fallback chain: {' → '.join(models_to_try)}")
+        print(f"\n📋 Model fallback chain: {len(models_to_try)} candidates")
 
         # Try each model in sequence
         last_error = None
         for attempt, model_id in enumerate(models_to_try, 1):
-            print(f"\n🔄 Attempt {attempt}/{len(models_to_try)}: {model_id}")
+            print(f"\n🔄 Attempt {attempt}/{len(models_to_try)}")
 
             # Verify model is available
             if not self._is_model_available(model_id):
@@ -284,7 +284,7 @@ class OpenRouterSafeClient:
                                         pass
                         content = "".join(content_parts)
                         if content.strip():
-                            print(f"   ✅ Stream success with {model_id} ({len(content)} chars)")
+                            print(f"   ✅ Stream success ({len(content)} chars)")
                             data = {
                                 "id": f"stream-{model_id}",
                                 "model": model_id,
@@ -336,7 +336,7 @@ class OpenRouterSafeClient:
                             if isinstance(reasoning, str) and reasoning.strip():
                                 content = reasoning
                         if content:
-                            print(f"   ✅ Success with {model_id}")
+                            print("   ✅ Success")
                             return {
                                 "success": True,
                                 "data": data,
@@ -371,7 +371,7 @@ class OpenRouterSafeClient:
                     print(f"   ⚠️  {last_error}")
 
             except requests.exceptions.Timeout:
-                last_error = f"{model_id} timed out"
+                last_error = "Provider request timed out"
                 print(f"   ⏱️  {last_error}")
             except Exception:
                 last_error = "Provider request failed"

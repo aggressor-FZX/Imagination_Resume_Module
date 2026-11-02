@@ -1,5 +1,202 @@
 # Handoff — premerge safety review and test runtime
 
+## 2026-11-01 local acceptance reached (uncommitted, still not deployable)
+
+- Branch `feat/hybrid-resume-ingest-phase1`, base `65198c9`; all changes below
+  remain uncommitted. No push, deploy or provider call was made.
+- [x] Wrong-employer attribution is now **corrected**, not merely rejected, when
+  an explicit `label: body` record has exactly one source owner. Ambiguous
+  multi-owner bodies and label rewrite cycles are withheld as
+  `attribution_conflict`. A correct-label control still passes.
+- [x] Evidence regenerated after the final code change: engine generator exit 0
+  (6/6 cases), route generator exit 0 (8 cases, 16 JSON+SSE requests, 411
+  assertions, 0 failed), full Python selection exit 0 (**340 passed**).
+- [x] Real `/resume/export` verified inside the route evidence: `pdflatex` PDF
+  and `python-docx` DOCX both contained the corrected content for all three
+  approved cases; the negative control produced no receipt/export.
+- [x] Inspectable bundle: `tests/fixtures/correction_acceptance/` — synthetic
+  sources, answer key, drafts, scripted decisions, route responses, export text,
+  expected-vs-actual checks, code SHA-256 binding. Commands, exit codes and the
+  PASS/NOT RUN matrix are in `CORRECTION_EVIDENCE.md`.
+- [x] Job Search storage isolation fixed: `JOB_SEARCH_SECURE_STORAGE_PATH` plus a
+  conftest redirect to a disposable temp path; `tests/test_analysis_log_privacy.py`
+  passed 15 and the tracked encrypted file hash was unchanged. The earlier
+  modified file is preserved/unstaged for an owner keep-or-restore decision.
+- [ ] Not live, not deployed. The provider disclosure gate stays closed, so the
+  current production path would still withhold normal results. No real model
+  behavior is proven. Credential-like literals remain in source/docs/Git history.
+- Next: 1. Owner decision on the preserved encrypted file. 2. Remove
+  credential-like literals safely and assess rotation. 3. Improve bounded
+  attribution beyond the literal layout (paraphrase/multiline). 4. Resolve
+  disclosure policy and receipt identity compatibility. 5. Explicit authorization
+  before deploy/paid tests.
+- Verification: exact commands and codes in `CORRECTION_EVIDENCE.md`.
+
+## 2026-11-01 offline outcome and storage incident
+
+- Branch `feat/hybrid-resume-ingest-phase1`, base commit `65198c9`; changes
+	remain uncommitted, including an existing credential-bearing source file that
+	must not be staged until the literal is removed safely. No push or deploy.
+- [x] Original valid-citation wrong-employer fixture now withholds on the
+	narrow explicit-label guard; positive control passes. Six engine cases and
+	16 actual in-process JSON/SSE route runs pass with scripted doubles. Artifacts
+	and exact commands: `tests/fixtures/correction_acceptance/README.md` and
+	`CORRECTION_EVIDENCE.md`. Combined Python selection 337 passed.
+- [x] Selected Python and Node provider/parser/proxy/error logs are sanitized;
+	serial Node suites 51 and 79 passed. See evidence for tested boundaries,
+	first failures, and why neither logs nor semantic accuracy are universally safe.
+- [ ] A Job Search privacy test unexpectedly changed tracked
+	`../Job_searcher/job_search_api/secure_storage.json.encrypted`. Its pre-test
+	state is not independently known. Do not read, stage, or restore it without
+	owner direction. Additional Job Search log changes need isolated testing that
+	cannot initialize or overwrite secure storage.
+- Next: 1. Obtain owner direction on restoring or preserving the encrypted file.
+	2. Remove credential-like literals safely without exposing values; owner must
+	independently assess revocation/rotation. 3. Rerun Job Search tests with a
+	proven disposable storage isolation. 4. Review literal attribution limits,
+	correction disclosure design, identity/export fidelity, and full legacy paths.
+	5. Do not deploy or make paid calls without explicit later authorization.
+- Uncommitted: this repository's listed source/tests/evidence; Login has both
+	this work and unrelated pre-existing docs/handoff edits; Job Search has the
+	encrypted file, source WIP, and pre-existing `.github/`; preserve all.
+- Verification: exact 337-test offline command in `CORRECTION_EVIDENCE.md`.
+
+## Synthetic actual-route evidence (2026-11-01; local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; last observed commit `65198c9`.
+- [x] Added `tests/fixtures/correction_acceptance/route_evidence.py` and
+	`route_results.json`; updated the fixture README without editing its existing
+	generator or correction/app/test sources.
+- [x] Eight synthetic cases in JSON and SSE: 16 requests, 314 checks, zero
+	unmet. Includes supported and corrected duration, two education records, wrong
+	attribution, bounded repairs, post-correction numeric veto and privacy control.
+- Next steps:
+	1. Re-run after concurrent changes are integrated; hashes bind only selected
+		 working-tree files. Review remaining cases in the fixture README.
+	2. Separately assess real model, privacy policy, full pipeline and rendering;
+		 this synthetic evidence is not production acceptance.
+- Intentionally unstaged: the new generator, route artifact, README and this
+	shared handoff. The fixture directory and other source/test files were already
+	dirty or are concurrent work; preserve them and check `git status --short`.
+	No commit, push or deployment; avoid bundling other agents' WIP.
+- Verification from this repository: `env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 /home/skystarved/Render_Dockers/.venv/bin/python tests/fixtures/correction_acceptance/route_evidence.py`
+
+## OpenRouter model-log privacy (2026-11-01; local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; last observed commit `65198c9`.
+- [x] Removed requested/fallback model IDs from client logs and timeout errors;
+	removed adapter model IDs and untrusted provider usage values from its logs.
+- [x] Offline synthetic availability, fallback, stream, timeout and adapter
+	tests: 16 passed including existing provider-error and streaming tests.
+- [ ] Credential-bearing example block remains unchanged. It was inadvertently
+	displayed during a file read; treat the credential as exposed, revoke/rotate
+	it and assess Git history. Do not paste it into a patch or diff review.
+- Next steps:
+	1. Owner removes the example with a secret-aware local process, and rotates
+		 the credential; address history using an approved remediation procedure.
+	2. Review other consumers of model IDs and usage stats: returned data and
+		 `get_usage_stats()` still intentionally contain model/provider values.
+- Uncommitted by request: `openrouter_safe_client.py`, `llm_client_adapter.py`,
+	`tests/test_openrouter_model_log_privacy.py`, and this handoff. Preserve all
+	existing/concurrent WIP; check `git status --short`. No commit or deploy.
+- Verification from this repository (network/DNS and dotenv disabled):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "tests/test_openrouter_model_log_privacy.py", "tests/test_provider_error_privacy.py", "tests/test_drafter_stream.py"]))'`
+
+## Researcher and editor fallback review fixes (2026-11-01; local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; last observed commit `65198c9`
+	(concurrent work continues). No commit, push, deployment or network calls.
+- [x] Unusable editor replies and editor exceptions retain all supplied draft
+	roles and bullets in an internal fallback; publication remains blocked.
+- [x] Researcher errors, exceptions, fallback flags, precomputed fallbacks and
+	the existing unmarked empty-response default shape propagate fallback status.
+- [x] Offline real-stage/orchestration/integration and JSON/SSE route tests;
+	144 passed, 1 skipped in the focused selection below. Healthy route control
+	reaches a stub correction callback; no real model or correction provider used.
+- Next steps:
+	1. Review the Researcher's unmarked default signature and replace the
+		 compatibility detection with an explicit flag when its contract can change.
+	2. Review remaining privacy/semantic concerns and rerun after concurrent work;
+		 do not deploy without separate approval.
+- Intentionally unstaged for the no-commit request: `orchestrator.py`,
+	`stages/star_editor.py`, `tests/test_normal_path_privacy_sentinels.py`,
+	`tests/test_research_editor_fallback_regressions.py` and this handoff.
+	Existing/concurrent WIP: `app.py`, `imaginator_new_integration.py`,
+	`logging_setup.py`, `source_correction.py`, `stages/drafter.py`,
+	`stages/researcher.py`, `tests/fixtures/correction_acceptance/`,
+	`tests/test_analyze_log_privacy.py`, `tests/test_network_log_privacy.py`,
+	`tests/test_source_correction_attribution_guard.py`; check status again.
+- Verification from this repository (network/DNS and dotenv disabled):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "tests/test_research_editor_fallback_regressions.py", "tests/test_normal_path_privacy_sentinels.py", "tests/test_fallback_and_experience_containment.py", "tests/test_editor_format_preservation.py", "tests/test_editor_render_heading.py", "tests/test_stage_cooldown.py", "tests/test_logic_mocks.py", "tests/test_analyze_source_correction_route.py", "tests/test_analyze_log_privacy.py", "tests/test_provider_error_privacy.py", "tests/test_publication_sse.py"]))'`
+
+## Network logging privacy (2026-11-01; local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; last observed commit `65198c9`;
+	check `git log -1` for concurrent changes.
+- [x] Configure `httpx`, `httpcore`, `urllib3`, and `aiohttp.client` at
+	WARNING; unrelated application logger configuration remains unchanged.
+- [x] Mock transport tests reproduce the unsafe HTTPX INFO event when enabled,
+	and prove sync HTTPX and the actual async O*NET keyword helper sent synthetic
+	query values while configured logs omitted them. No external traffic.
+- [x] Focused offline verification: 63 passed; scoped `git diff --check` passed.
+- Limits: WARNING+ is not sanitized; explicit child logger levels, existing
+	handlers, later reconfiguration, other loggers, application logs, third-party
+	infrastructure, and actual request payloads are outside this protection.
+- Next steps:
+	1. Review warnings/errors and other provider/network logs separately.
+	2. Rerun focused verification after integration; do not deploy without approval.
+- Uncommitted intentionally: `logging_setup.py`,
+	`tests/test_network_log_privacy.py`, and this shared handoff. Preserve other
+	concurrent WIP shown by `git status --short`; no commit or push requested.
+- Verification from this repo (dotenv, network sockets, DNS blocked):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "tests/test_network_log_privacy.py", "tests/test_analyze_log_privacy.py", "tests/test_analyze_source_correction_route.py", "tests/test_provider_error_privacy.py", "tests/test_publication_sse.py"]))'`
+
+## Attribution-conflict route tests (2026-11-01; local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; test commit `65198c9`.
+	Check `git log -1` for the current commit; concurrent work is in progress.
+- [x] Added `tests/test_analyze_attribution_conflict.py` for real `/analyze`
+	JSON and SSE, exercising actual `correct` and `CorrectionProvider` with
+	scripted in-memory transport. Initial and post-repair conflicts, approved
+	positive controls, and the default closed privacy boundary are covered.
+- [x] Isolated offline run: 44 passed, 4 failed. All four failures are the
+	expected route mapping `attribution_conflict` to `correction_failed`; the
+	actual guard and privacy/withholding assertions pass before that assertion.
+	The synthetic opt-in is not a production disclosure policy or semantic proof.
+- Next steps:
+	1. Main separately adds `attribution_conflict` to the route's allowed reasons.
+	2. Rerun the exact command below, including the SSE reason assertions; do not
+		 deploy or perform paid calls without separate authorization.
+- Dirty files: preserve concurrent pre-existing `app.py`, `source_correction.py`,
+	`imaginator_new_integration.py`, `logging_setup.py`, `orchestrator.py`,
+	`stages/drafter.py`, `stages/researcher.py`, `stages/star_editor.py`,
+	`tests/fixtures/correction_acceptance/`, `tests/test_analyze_log_privacy.py`,
+	`tests/test_network_log_privacy.py`, `tests/test_normal_path_privacy_sentinels.py`,
+	`tests/test_research_editor_fallback_regressions.py` and
+	`tests/test_source_correction_attribution_guard.py`; check `git status --short`
+	for ongoing changes. This shared `HANDOFF.md` remains unstaged to avoid
+	committing other agents' work.
+- Verification (from this repository, network/DNS and dotenv disabled):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "--show-capture=no", "tests/test_analyze_attribution_conflict.py", "tests/test_correction_privacy_hardening.py", "tests/test_source_correction_attribution_guard.py"]))'`
+
+## Normal-path privacy containment (local only)
+
+- Branch `feat/hybrid-resume-ingest-phase1`; last commit `a2a93d1`.
+- [x] Scoped normal-pipeline logs and propagated errors to fixed messages; added
+	synthetic offline sentinels. The focused selection below passed 84 tests.
+- Next steps:
+	1. Review the remaining privacy risks in `app.py`, upstream callers, providers,
+		 third-party modules and streaming; this is not a complete privacy boundary.
+	2. Review fallback classification and real-model behavior before deployment.
+- Uncommitted: `orchestrator.py`, `imaginator_new_integration.py`,
+	`stages/star_editor.py`, `stages/drafter.py`, `stages/researcher.py`,
+	`tests/test_normal_path_privacy_sentinels.py`, and this handoff; intentionally
+	not committed. Concurrent unrelated `source_correction.py` and correction
+	fixture/test changes are preserved; inspect `git status --short`.
+- Verification (from this repository; isolated environment, dotenv and network
+	disabled):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "tests/test_normal_path_privacy_sentinels.py", "tests/test_provider_error_privacy.py", "tests/test_fallback_and_experience_containment.py", "tests/test_editor_format_preservation.py", "tests/test_editor_render_heading.py", "tests/test_drafter_stream.py", "tests/test_stage_cooldown.py", "tests/test_analyze_source_correction_route.py"]))'`
+
 ## Current continuation — local only, do not deploy
 
 - Branch `feat/hybrid-resume-ingest-phase1`; base `c879a24`. Check `git log -1`

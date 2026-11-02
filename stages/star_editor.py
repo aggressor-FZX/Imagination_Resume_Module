@@ -144,18 +144,18 @@ class StarEditor:
         experiences = draft_data.get("rewritten_experiences", [])
         seniority = draft_data.get("seniority_applied", "mid")
         domain_vocab = research_data.get("domain_vocab", [])
-        
-        # EXTRACT TARGET COMPANY from Research Data (e.g., "Armada")
-        target_company = research_data.get("company_name", "")
-        
-        # Create prompt with ALL sections including education, projects, certifications, skills
-        user_prompt = self._create_user_prompt(
-            experiences, seniority, domain_vocab, target_company,
-            education=education, projects=projects, certifications=certifications,
-            skills=skills, location=location, job_ad=job_ad
-        )
-        
+
         try:
+            # EXTRACT TARGET COMPANY from Research Data (e.g., "Armada")
+            target_company = research_data.get("company_name", "")
+
+            # Create prompt with ALL sections including education, projects, certifications, skills
+            user_prompt = self._create_user_prompt(
+                experiences, seniority, domain_vocab, target_company,
+                education=education, projects=projects, certifications=certifications,
+                skills=skills, location=location, job_ad=job_ad
+            )
+
             # Call LLM with strict JSON schema
             temperature = temperature_override if temperature_override is not None else self.temperature
             response = await self.llm_client.call_llm_async(
@@ -173,6 +173,13 @@ class StarEditor:
             
             # Parse and validate response (full assembled content, stream or not)
             result = self._parse_response(response)
+            # The parser has no draft context. Replace fallback responses before
+            # section repair can turn unusable output into apparent content.
+            if (result.get("fallback") or result.get("fallback_used")
+                    or not result.get("final_markdown", "").strip()):
+                result = self._create_fallback_output(experiences, seniority)
+                result["model_used"] = self.model
+                return result
             result["model_used"] = self.model # Track model in result
             
             # Apply hallucination guard
@@ -202,18 +209,15 @@ class StarEditor:
             result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
             
             # Ensure we have at least some data
-            if not result.get("final_markdown"):
-                result["final_markdown"] = "## Professional Experience\n\nNo resume content generated."
-                result["final_plain_text"] = "No resume content generated."
-                result["editorial_notes"] = "Fallback resume generated due to processing error."
-                result["fallback"] = True
+            if not isinstance(result.get("final_markdown"), str) or not result["final_markdown"].strip():
+                result = self._create_fallback_output(experiences, seniority)
             
-            logger.info(f"[STAR_EDITOR] Created polished resume with {len(result.get('final_markdown', '').split())} words")
+            logger.info("[STAR_EDITOR] Created polished resume")
             
             return result
             
-        except Exception as e:
-            logger.error(f"[STAR_EDITOR] Failed to polish resume: {e}")
+        except Exception:
+            logger.error("[STAR_EDITOR] Failed to polish resume")
             # Return safe fallback
             return self._create_fallback_output(experiences, seniority)
     
@@ -380,7 +384,7 @@ class StarEditor:
             # Handle empty, whitespace-only, or empty JSON responses
             if not response or not response.strip() or response.strip() == "{}":
                 logger.warning("[STAR_EDITOR] Empty response from LLM")
-                return self._create_fallback_output([])
+                return self._create_fallback_output([], "mid")
 
             data = json.loads(response)
             
@@ -412,18 +416,14 @@ class StarEditor:
             
             return result
             
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)
             if json_match:
-                logger.warning(
-                    "[STAR_EDITOR] Direct JSON parse failed but markdown JSON extraction succeeded: %s",
-                    e,
-                )
+                logger.warning("[STAR_EDITOR] Direct JSON parse failed; JSON extraction succeeded")
                 return self._parse_response(json_match)
 
-            logger.error(f"[STAR_EDITOR] Failed to parse JSON response: {e}")
-            logger.error(f"[STAR_EDITOR] Raw response length: {len(response) if response else 0}")
+            logger.error("[STAR_EDITOR] Failed to parse JSON response")
             
             # A malformed JSON envelope is not Markdown, even when its encoded
             # string contains Markdown markers. Returning the envelope as the
@@ -436,7 +436,7 @@ class StarEditor:
                     "final_markdown": response,
                     "final_plain_text": re.sub(r'\*\*|\*|##|- ', '', response),
                     "editorial_notes": "Converted from direct markdown output",
-                    "parse_error": str(e),
+                    "parse_error": "invalid_json",
                     "fallback_used": True
                 }
             
@@ -446,7 +446,7 @@ class StarEditor:
                 "final_markdown": "",
                 "final_plain_text": "",
                 "editorial_notes": "Failed to parse editor response",
-                "error": str(e),
+                "error": "invalid_json",
                 "fallback_used": True
             }
     
@@ -673,7 +673,7 @@ class StarEditor:
         leftover_patterns = [r'\(Year\)', r'\(Duration\)', r'\*Dates \|', r'20XX', r'XX/XX']
         for pat in leftover_patterns:
             if re.search(pat, result, re.IGNORECASE):
-                logger.warning(f"[STAR_EDITOR] Placeholder still present after first pass: {pat}, running second pass")
+                logger.warning("[STAR_EDITOR] Placeholder present after first pass, running second pass")
                 result = re.sub(pat, '', result, flags=re.IGNORECASE)
         
         # Log if we removed placeholders
@@ -780,7 +780,7 @@ class StarEditor:
             added.append("Technical Skills")
 
         if added:
-            logger.warning(f"[STAR_EDITOR] LLM dropped/empty sections, appended from input: {added}")
+            logger.warning("[STAR_EDITOR] LLM dropped or emptied sections; appended from input")
             result["final_markdown"] = md
 
         return result
@@ -852,7 +852,7 @@ class StarEditor:
         return []
 
         if added:
-            logger.warning(f"[STAR_EDITOR] LLM dropped/empty sections, appended from input: {added}")
+            logger.warning("[STAR_EDITOR] LLM dropped or emptied sections; appended from input")
             result["final_markdown"] = md
 
         return result
@@ -1136,7 +1136,7 @@ class StarEditor:
                 pattern = re.compile(rf'\|\s*\**{re.escape(target_company)}\**', re.IGNORECASE)
                 
                 if pattern.search(markdown):
-                    logger.warning(f"[STAR_EDITOR] Target company '{target_company}' hallucinated as employer. Fixing...")
+                    logger.warning("[STAR_EDITOR] Target company hallucinated as employer; correcting")
                     
                     # Replace strictly prohibited company with actual employer or safe fallback
                     replacement = f"| **{original_companies[0] if original_companies else 'Previous Employer'}**"
@@ -1286,15 +1286,21 @@ class StarEditor:
         """
         markdown_lines = ["## Professional Experience"]
 
-        for exp in experiences[:3]:  # Limit to 3 experiences
-            raw_company = exp.get("company", "Company")
-            company = re.sub(r'\s+\d{1,2}/\d{4}\s*[-–]\s*(Present|\d{1,2}/\d{4})\s*$', '', raw_company).strip() or raw_company
+        for exp in experiences:
+            company = exp.get("company") or "Company"
             role = exp.get("title") or exp.get("role", "Role")
-            bullets = exp.get("bullets", [])
+            bullets = exp.get("bullets", []) or ([exp["snippet"]] if exp.get("snippet") else [])
+            duration = exp.get("duration") or exp.get("dates", "")
+            location = exp.get("location", "")
 
-            markdown_lines.append(f"\n**{role}** at *{company}*")
+            heading = f"\n**{role}** at *{company}*"
+            if location:
+                heading += f" -- {location}"
+            if duration and not self._is_placeholder_duration(duration):
+                heading += f" | {duration}"
+            markdown_lines.append(heading)
 
-            for bullet in bullets[:6]:  # Limit to 6 bullets per experience
+            for bullet in bullets:
                 markdown_lines.append(f"- {bullet}")
         
         markdown = "\n".join(markdown_lines)

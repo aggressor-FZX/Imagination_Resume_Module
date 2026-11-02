@@ -430,7 +430,7 @@ class Drafter:
         Returns:
             Dictionary with rewritten experiences and metadata
         """
-        logger.info(f"[DRAFTER] Drafting {len(experiences)} experiences for job ad")
+        logger.info("[DRAFTER] Drafting experiences for job ad")
         
         # Determine seniority level and get configuration
         seniority_level, seniority_config = get_seniority_config(job_ad)
@@ -539,8 +539,7 @@ METRIC RULE (evidence only):
             # Track model in result (Note: actual model used is logged in adapter)
             result["model_requested"] = self.model
             
-            logger.info(f"[DRAFTER] Created {self._count_bullets(result)} STAR bullets "
-                       f"with {seniority_level} seniority")
+            logger.info("[DRAFTER] Created STAR bullets")
             
             # Ensure we have at least some data
             if not result.get("rewritten_experiences"):
@@ -719,9 +718,8 @@ METRIC RULE (evidence only):
             
             return result
             
-        except json.JSONDecodeError as e:
-            logger.error(f"[DRAFTER] Failed to parse JSON response: {e}")
-            logger.error(f"[DRAFTER] Raw response length: {len(response) if response else 0}")
+        except json.JSONDecodeError:
+            logger.error("[DRAFTER] Failed to parse JSON response")
             
             # Try to extract JSON from text
             json_match = self._extract_json_from_text(response)
@@ -733,7 +731,7 @@ METRIC RULE (evidence only):
             logger.warning("[DRAFTER] Using fallback output due to JSON parse failure")
             fallback = self._create_fallback_output(original_experiences, "mid")
             fallback["fallback_used"] = True
-            fallback["parse_error"] = str(e)
+            fallback["parse_error"] = "invalid_json"
             return fallback
     
     def _extract_json_from_text(self, text: str) -> Optional[str]:

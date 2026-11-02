@@ -14,6 +14,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
         request.state.request_id = request_id
+        # Caller-controlled IDs may contain private text. Keep the existing
+        # response correlation contract but use a server ID for analyze logs.
+        if request.url.path == "/analyze":
+            request.state.log_request_id = str(uuid.uuid4())
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
         return response
@@ -38,6 +42,13 @@ class ServiceContextFilter(logging.Filter):
 def configure_logging(service_name: str = "imaginator"):
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_format = os.getenv("LOG_FORMAT", "json").lower()
+
+    # HTTPX logs complete request URLs at INFO, including query values derived
+    # from user input. Network debug logs can also contain URLs and headers.
+    # Do not rewrite root records: unrelated application logs must be unchanged.
+    # WARNING and above are not sanitized by this configuration.
+    for name in ("httpx", "httpcore", "urllib3", "aiohttp.client"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     root = logging.getLogger()
     # Remove default handlers to avoid duplicate logging

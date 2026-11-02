@@ -40,6 +40,28 @@ def stage_cooldown_seconds() -> float:
         return 1.5
     return value if math.isfinite(value) and value >= 0 else 1.5
 
+
+def research_used_fallback(research_data: Dict[str, Any]) -> bool:
+    """Classify explicit failure signals and the Researcher's unmarked empty defaults.
+
+    Empty responses currently return this distinctive default shape without a
+    fallback flag. Treat it as degraded until the Researcher can mark it itself.
+    """
+    return bool(
+        "error" in research_data
+        or research_data.get("fallback")
+        or research_data.get("fallback_used")
+        or (
+            research_data.get("implied_metrics") == [
+                "Improve system performance", "Scale to handle increased load"
+            ]
+            and research_data.get("domain_vocab") == ["Technical skills relevant to the role"]
+            and research_data.get("implied_skills") == ["Problem Solving", "Communication"]
+            and "has_projects_section" not in research_data
+            and "is_student_or_career_changer" not in research_data
+        )
+    )
+
 # ============================================================================
 # ORCHESTRATOR CLASS
 # ============================================================================
@@ -115,10 +137,7 @@ class PipelineOrchestrator:
         start_time = time.time()
         pipeline_start = datetime.utcnow().isoformat()
 
-        logger.info(
-            f"[ORCHESTRATOR] Starting pipeline for resume ({len(resume_text)} chars), "
-            f"job ad ({len(job_ad)} chars), {len(experiences)} experiences"
-        )
+        logger.info("[ORCHESTRATOR] Starting pipeline")
 
         result = {
             "pipeline_version": "3.0",
@@ -138,9 +157,7 @@ class PipelineOrchestrator:
             education = kwargs.get("education", [])
 
             if projects:
-                logger.info(
-                    f"[ORCHESTRATOR] Found {len(projects)} projects to potentially merge with experiences"
-                )
+                logger.info("[ORCHESTRATOR] Processing projects")
                 # Merge projects into experiences for students/career changers
                 # Each project should have: name, description, technologies, duration
                 for proj in projects[:3]:  # Limit projects
@@ -166,7 +183,7 @@ class PipelineOrchestrator:
                         experiences.append(project_exp)
 
             if education:
-                logger.info(f"[ORCHESTRATOR] Processing {len(education)} education entries for context")
+                logger.info("[ORCHESTRATOR] Processing education for context")
                 for edu in education:
                     if isinstance(edu, dict):
                         # Treat relevant coursework/theses as pseudo-experience for researchers
@@ -179,9 +196,7 @@ class PipelineOrchestrator:
                         }
                         experiences.append(edu_exp)
 
-            logger.info(
-                f"[ORCHESTRATOR] Total experiences after enrichment: {len(experiences)}"
-            )
+            logger.info("[ORCHESTRATOR] Experience enrichment complete")
 
             # STAGE 1: RESEARCHER - Extract metrics and domain vocabulary
             # When research_data is precomputed (orch job-ad fork), skip the LLM call.
@@ -201,12 +216,15 @@ class PipelineOrchestrator:
                         or [],
                         "domain_vocab": research_data.get("domain_vocab") or [],
                         "implied_skills": research_data.get("implied_skills") or [],
-                        "fallback": bool(research_data.get("fallback", True)),
+                        "fallback": True,
                     }
+                research_fallback = research_used_fallback(research_data)
+                if "error" in research_data:
+                    result["errors"].append("Researcher error")
                 stage1_duration = time.time() - stage1_start
                 result["stages"]["researcher"] = {
                     "status": "precomputed"
-                    if not research_data.get("fallback")
+                    if not research_fallback
                     else "precomputed_fallback",
                     "duration_seconds": stage1_duration,
                     "summary": self.researcher.get_metrics_summary(research_data),
@@ -222,25 +240,26 @@ class PipelineOrchestrator:
                         temperature_override=temperatures["researcher"],
                     )
                     if "error" in research_data:
-                        logger.error(
-                            f"[ORCHESTRATOR] Stage 1 returned error: {research_data['error']}"
-                        )
-                        result["errors"].append(
-                            f"Researcher Error: {research_data['error']}"
-                        )
-                except Exception as e:
-                    logger.exception(f"[ORCHESTRATOR] Stage 1 CRITICAL FAILURE: {e}")
-                    result["errors"].append(f"Researcher Exception: {str(e)}")
+                        logger.error("[ORCHESTRATOR] Stage 1 returned an error")
+                        result["errors"].append("Researcher error")
+                except Exception:
+                    logger.error("[ORCHESTRATOR] Stage 1 failed")
+                    result["errors"].append("Researcher exception")
                     research_data = {
                         "implied_metrics": [],
                         "domain_vocab": [],
                         "fallback": True,
                     }
 
+                research_fallback = research_used_fallback(research_data)
                 stage1_duration = time.time() - stage1_start
 
                 result["stages"]["researcher"] = {
-                    "status": "completed" if "error" not in research_data else "failed",
+                    "status": (
+                        "failed" if "error" in research_data
+                        else "fallback" if research_fallback
+                        else "completed"
+                    ),
                     "duration_seconds": stage1_duration,
                     "summary": self.researcher.get_metrics_summary(research_data),
                 }
@@ -251,10 +270,8 @@ class PipelineOrchestrator:
                 gc.collect()
                 await asyncio.sleep(stage_cooldown_seconds())
 
-            logger.info(f"[ORCHESTRATOR] Stage 1 completed in {stage1_duration:.2f}s")
-            logger.info(
-                f"[ORCHESTRATOR] Researcher extracted {len(research_data.get('implied_metrics', []))} metrics and {len(research_data.get('implied_skills', []))} implied skills"
-            )
+            logger.info("[ORCHESTRATOR] Stage 1 completed")
+            logger.info("[ORCHESTRATOR] Researcher extraction complete")
 
             # STAGE 2: DRAFTER - Create STAR-formatted bullets
             stage2_start = time.time()
@@ -271,18 +288,11 @@ class PipelineOrchestrator:
             prof_experiences = [e for e in experiences if not e.get("is_education")]
             edu_experiences = [e for e in experiences if e.get("is_education")]
             if len(prof_experiences) > MAX_DRAFTER_EXPERIENCES:
-                logger.warning(
-                    f"[ORCHESTRATOR] Truncating professional experiences from "
-                    f"{len(prof_experiences)} to {MAX_DRAFTER_EXPERIENCES} "
-                    f"for Drafter memory budget"
-                )
+                logger.warning("[ORCHESTRATOR] Truncating experiences for Drafter memory budget")
                 prof_experiences = prof_experiences[:MAX_DRAFTER_EXPERIENCES]
             experiences = prof_experiences
             if edu_experiences:
-                logger.info(
-                    f"[ORCHESTRATOR] Excluded {len(edu_experiences)} education "
-                    f"pseudo-entries from Drafter input"
-                )
+                logger.info("[ORCHESTRATOR] Excluded education pseudo-entries from Drafter input")
 
             # Retry logic — single attempt only to prevent OOM from retry holding memory
             attempt = 0
@@ -311,9 +321,9 @@ class PipelineOrchestrator:
                     on_token=draft_cb,
                 )
                 attempt = 1
-            except Exception as e:
-                logger.exception(f"[ORCHESTRATOR] Stage 2 CRITICAL FAILURE: {e}")
-                result["errors"].append(f"Drafter Exception: {str(e)}")
+            except Exception:
+                logger.error("[ORCHESTRATOR] Stage 2 failed")
+                result["errors"].append("Drafter exception")
                 draft_data = {"rewritten_experiences": [], "fallback": True}
 
             if draft_data.get("fallback"):
@@ -331,11 +341,8 @@ class PipelineOrchestrator:
                 "rewritten_experiences": draft_data.get("rewritten_experiences", []),
             }
 
-            logger.info(f"[ORCHESTRATOR] Stage 2 completed in {stage2_duration:.2f}s")
-            logger.info(
-                f"[ORCHESTRATOR] Drafter created {draft_data.get('total_bullets', 0)} bullets "
-                f"with {draft_data.get('quantification_score', 0):.1%} quantification"
-            )
+            logger.info("[ORCHESTRATOR] Stage 2 completed")
+            logger.info("[ORCHESTRATOR] Drafter generation complete")
             
             # Memory management: The Drafter LLM API response is the heaviest
             # single object in the pipeline (4000 tokens × model output ×
@@ -356,9 +363,7 @@ class PipelineOrchestrator:
             location = kwargs.get("location", "")
 
             if education or projects or certifications or skills_list:
-                logger.info(
-                    f"[ORCHESTRATOR] Additional sections: {len(education)} education, {len(projects)} projects, {len(certifications)} certifications, {len(skills_list)} skills"
-                )
+                logger.info("[ORCHESTRATOR] Additional sections provided")
 
             try:
                 editor_data = await self.star_editor.polish(
@@ -377,12 +382,10 @@ class PipelineOrchestrator:
                     logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
 
                 # Log the model used for the final output
-                logger.info(
-                    f"[ORCHESTRATOR] StarEditor completed. Model: {editor_data.get('model_used', 'unknown')}"
-                )
-            except Exception as e:
-                logger.exception(f"[ORCHESTRATOR] Stage 3 CRITICAL FAILURE: {e}")
-                result["errors"].append(f"StarEditor Exception: {str(e)}")
+                logger.info("[ORCHESTRATOR] StarEditor completed")
+            except Exception:
+                logger.error("[ORCHESTRATOR] Stage 3 failed")
+                result["errors"].append("StarEditor exception")
                 editor_data = {"final_markdown": "", "fallback": True}
 
             stage3_duration = time.time() - stage3_start
@@ -396,10 +399,8 @@ class PipelineOrchestrator:
                 "word_count": len(editor_data.get("final_markdown", "").split()),
             }
 
-            logger.info(f"[ORCHESTRATOR] Stage 3 completed in {stage3_duration:.2f}s")
-            logger.info(
-                f"[ORCHESTRATOR] StarEditor produced {len(editor_data.get('final_markdown', '').split())} word resume"
-            )
+            logger.info("[ORCHESTRATOR] Stage 3 completed")
+            logger.info("[ORCHESTRATOR] StarEditor output prepared")
             
             # Memory management: the StarEditor LLM response includes the final
             # markdown string. Force GC, then pause to let the OS reclaim
@@ -430,11 +431,9 @@ class PipelineOrchestrator:
                 seniority_result = self.seniority_detector.detect_seniority(
                     experiences, all_skills_for_seniority
                 )
-                logger.info(
-                    f"[ORCHESTRATOR] Detected seniority: {seniority_result.get('level')} ({seniority_result.get('confidence'):.2f})"
-                )
-            except Exception as e:
-                logger.error(f"[ORCHESTRATOR] Seniority detection failed: {e}")
+                logger.info("[ORCHESTRATOR] Seniority detection complete")
+            except Exception:
+                logger.error("[ORCHESTRATOR] Seniority detection failed")
                 seniority_result = {
                     "level": "mid-level",
                     "confidence": 0.5,
@@ -452,9 +451,7 @@ class PipelineOrchestrator:
                 "low_confidence": [],
                 "inferred_skills": job_implied_skills,  # Job ad requirements (NOT user's confirmed skills)
             }
-            logger.info(
-                f"[ORCHESTRATOR] Skills - Resume: {len(resume_skills)}, Job Implied: {len(job_implied_skills)}"
-            )
+            logger.info("[ORCHESTRATOR] Skills processed")
 
             # Combine results
             total_duration = time.time() - start_time
@@ -463,7 +460,7 @@ class PipelineOrchestrator:
             pipeline_status = "completed"
             errors = result.get("errors", [])
 
-            if draft_data.get("fallback") or editor_fallback:
+            if research_fallback or draft_data.get("fallback") or editor_fallback:
                 pipeline_status = "completed_with_fallback"
                 errors.append(
                     "Pipeline used fallback generation for one or more stages"
@@ -533,11 +530,11 @@ class PipelineOrchestrator:
                 }
             )
 
-            logger.info(f"[ORCHESTRATOR] Pipeline completed in {total_duration:.2f}s")
+            logger.info("[ORCHESTRATOR] Pipeline completed")
             return result
 
-        except Exception as e:
-            logger.error(f"[ORCHESTRATOR] Pipeline failed: {e}", exc_info=True)
+        except Exception:
+            logger.error("[ORCHESTRATOR] Pipeline failed")
 
             # Create emergency fallback output
             emergency_output = self._create_emergency_output(experiences, job_ad)
@@ -549,9 +546,9 @@ class PipelineOrchestrator:
                         "total_duration_seconds": time.time() - start_time,
                         "pipeline_status": "failed",
                         "pipeline_end": datetime.utcnow().isoformat(),
-                        "error": str(e),
+                        "error": "Pipeline failed",
                     },
-                    "errors": result.get("errors", []) + [f"Pipeline failed: {str(e)}"],
+                    "errors": result.get("errors", []) + ["Pipeline failed"],
                 }
             )
 
@@ -639,7 +636,7 @@ class PipelineOrchestrator:
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
-            logger.error(f"[ORCHESTRATOR] Pipeline timeout after {timeout}s")
+            logger.error("[ORCHESTRATOR] Pipeline timed out")
 
             # Create timeout output
             emergency_output = self._create_emergency_output(experiences, job_ad)
@@ -650,9 +647,9 @@ class PipelineOrchestrator:
                     "total_duration_seconds": timeout,
                     "pipeline_status": "timeout",
                     "pipeline_end": datetime.utcnow().isoformat(),
-                    "error": f"Pipeline timeout after {timeout}s",
+                    "error": "Pipeline timed out",
                 },
-                "errors": [f"Pipeline timeout after {timeout}s"],
+                "errors": ["Pipeline timed out"],
                 "stages": {
                     "researcher": {"status": "timeout"},
                     "drafter": {"status": "timeout"},
