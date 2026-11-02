@@ -33,6 +33,23 @@ Render → `imaginator-resume-cowriter` (`srv-d3nf73ur433s73bh9j00`) → Environ
 Enabling these requires a **deploy**, not a restart: environment changes do not apply
 to a running container.
 
+## 2b. Preflight before spending a run
+
+A capture that silently fails to write wastes the run it was meant to preserve, and you
+would not notice because capture never breaks a request. Run the preflight first:
+
+```bash
+PYTHONPATH=. python tools/live_capture_preflight.py
+```
+
+| Exit | Meaning |
+|---|---|
+| `0` | Ready: writes `0600` files in a `0700` directory, and free space is adequate |
+| `2` | Not ready — the message names the reason (missing dir, unsafe location, write failure) |
+| `3` | Capture disabled |
+
+It writes and removes its own probe file, and prints no document text.
+
 ## 3. Run exactly one synthetic analysis
 
 Use the same browser flow the user uses (`/app/resume-builder`) with a
