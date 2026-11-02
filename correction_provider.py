@@ -7,12 +7,17 @@ import aiohttp
 
 from disclosure import POLICY_ID, verify_disclosure
 from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
-from source_correction import PrivacyReviewRequired, SourceDocument
+from source_correction import PrivacyReviewRequired, ProviderCallTimeout, SourceDocument
 
 
 MAX_REQUEST_BYTES = 96_000
 MAX_RESPONSE_BYTES = 512_000
-PROVIDER_TIMEOUT_SECONDS = 30.0
+# Per-request read timeout. Live runs timed out at 30s: the inventory call for
+# a ~1KB source returns 12000 max_tokens of JSON from a reasoning model, which
+# regularly exceeds 30s. The orchestrator allows 180s for the whole analyze
+# request, and source_correction.MAX_TIMEOUT_SECONDS bounds the operation, so
+# this must be well below that but comfortably above observed call latency.
+PROVIDER_TIMEOUT_SECONDS = 60.0
 
 # The disclosure gate. It is enabled only by an explicit operator setting; the
 # default (unset/false) keeps external correction disabled. Enabling it does not
@@ -162,6 +167,13 @@ class CorrectionProvider:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "cancelled", "usage_unknown": not recorded})
             raise
+        except (asyncio.TimeoutError, TimeoutError) as exc:
+            # A single-call read timeout is NOT the overall deadline expiring.
+            # Tag it so `correct()` can report which failure actually happened.
+            self.usage["failures"].append({"stage": "source_correction", "phase": phase,
+                                            "reason": "provider_call_timeout",
+                                            "usage_unknown": not recorded})
+            raise ProviderCallTimeout(phase) from exc
         except Exception:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "provider_error", "usage_unknown": not recorded})

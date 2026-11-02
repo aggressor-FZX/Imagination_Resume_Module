@@ -99,13 +99,25 @@ MAX_SOURCE_CHARS = 48_000
 MAX_SOURCE_DOCUMENTS = 8
 # Hard ceiling for the whole correction operation. A clean pass is 2 provider
 # calls (inventory + review) and one repair adds 2 more, so the deadline must
-# comfortably exceed a single call's own timeout (PROVIDER_TIMEOUT_SECONDS=30).
-# A 30s total budget expired during a real run after the inventory call alone.
-MAX_TIMEOUT_SECONDS = 150.0
+# cover two calls at their individual timeout. Must stay below the
+# orchestrator's 180s client timeout, less the time the pipeline already spent.
+MAX_TIMEOUT_SECONDS = 140.0
 
 
 class PrivacyReviewRequired(Exception):
     """External correction is disabled pending an approved disclosure policy."""
+
+
+class ProviderCallTimeout(TimeoutError):
+    """One provider request exceeded its own timeout (not the overall deadline).
+
+    Subclasses ``TimeoutError`` so an adapter that does not distinguish the two
+    still fails closed, while ``correct()`` can report which one occurred.
+    """
+
+    def __init__(self, phase: str | None = None):
+        super().__init__("provider call timed out")
+        self.phase = phase
 
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
@@ -525,6 +537,8 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
             return blocked("source_completeness_uncertain")
         if not any(item["classification"] == "required" for item in inventory):
             return blocked("no_required_source_claims")
+    except ProviderCallTimeout:
+        return blocked("provider_call_timeout_source_inventory")
     except TimeoutError:
         # Distinguish a deadline expiry from a provider transport timeout so the
         # failing phase is identifiable in production without extra paid runs.
@@ -601,6 +615,8 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
             corrected_labels += labels_here
             ambiguous = ambiguous or ambiguous_here
             phase = "post_patch_review"
+        except ProviderCallTimeout:
+            return blocked(f"provider_call_timeout_{current_phase}")
         except TimeoutError:
             return blocked(f"timeout_{current_phase}")
         except _Invalid:
