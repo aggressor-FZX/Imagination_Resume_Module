@@ -1,3 +1,33 @@
+# Handoff — correction timeout attribution (2026-11-02)
+
+- **Active branch:** `wip/correction-timeout-attribution` (local, not pushed); base `10b20d8` on `master`.
+- **Last commit:** see `git log -1` on that branch. Do not push without approval: `master` auto-deploys.
+
+## Completed
+- [x] Nonbillable diagnosis of the two live runs from Render logs (explicit UTC windows, paginated).
+- [x] Phase-attributed deadline vs. per-request timeout reasons, verified through the real `/analyze` route.
+- [x] Budget = min(120s, 180s upstream − 20s reserve − pipeline elapsed); withheld with no provider call under 30s.
+- [x] Sanitized `correction_event` phase events keyed by the orchestrator `x-correlation-id`; no document text.
+- [x] Diagnosis and approval-gated live-run plan: `docs/CORRECTION_TIMEOUT_DIAGNOSIS_2026-11-02.md`.
+
+## Remaining / next steps (need owner approval)
+1. Approve deploying the branch to Imaginator (auto-deploy from `master`).
+2. Approve one paid synthetic run per the plan in section 10 of the diagnosis doc. Stop after one.
+3. Decide the output-allowance fix (size gate, per-source chunking, or local quote derivation). Do not just raise `max_tokens`.
+4. Login backend: `mlAuthMiddleware` retries timed-out `POST /analyze` (JSON and single-file paths). Recommend no retry on timeout.
+5. Disclosure gate still scans source documents only, not draft lines or claims (disclosed limitation).
+
+## Uncommitted/dirty files
+- None intentionally. `secure_storage.json.encrypted` in Job_searcher is untouched and out of scope.
+
+## Verification command
+```bash
+../.venv/bin/python -m pytest tests/test_correction_timeout_attribution.py tests/test_source_correction.py tests/test_analyze_source_correction_route.py -p no:cacheprovider -q
+```
+Full suite: 584 passed, 13 failed and 1 collection error, all `No module named 'docx'` in this venv (environment).
+
+---
+
 # Handoff — premerge safety review and test runtime
 
 ## 2026-11-01 local acceptance reached (uncommitted, still not deployable)
