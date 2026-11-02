@@ -205,11 +205,18 @@ class CorrectionProvider:
 
     @staticmethod
     def _retry_delay(response, attempt):
-        """Honour ``Retry-After`` when the provider supplies it, else back off.
+        """How long to wait before the next attempt, and whether the provider named it.
 
-        Only the integer-seconds form is used. An HTTP-date or a missing header falls
-        back to exponential backoff, and the result is capped so a large advertised
-        delay cannot pin the request past its deadline.
+        Returns ``(delay_seconds, named_by_provider)``.
+
+        An explicit ``Retry-After`` is returned **uncapped**. Shortening it to something
+        that fits would disobey the instruction the provider just gave, which in practice
+        earns another refusal and spends budget that cannot be recovered. The caller
+        compares the delay against the budget and stops cleanly when it does not fit, so
+        an absurd advertised value fails safe instead of pinning the request.
+
+        Only the integer-seconds form counts as an instruction. An HTTP-date or a missing
+        header falls back to backoff, which is our own choice and so may be capped.
         """
         raw = None
         try:
@@ -217,8 +224,9 @@ class CorrectionProvider:
         except Exception:
             raw = None
         if isinstance(raw, str) and raw.strip().isdigit():
-            return min(float(raw.strip()), RETRY_MAX_DELAY_SECONDS)
-        return min(RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)), RETRY_MAX_DELAY_SECONDS)
+            return float(raw.strip()), True
+        return (min(RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)), RETRY_MAX_DELAY_SECONDS),
+                False)
 
     def _record_transport_failure(self, phase, reason, attempt, status, usage_unknown=True):
         """Record one non-successful transport attempt without any content.
@@ -337,6 +345,7 @@ class CorrectionProvider:
                 attempt_recorded = False
                 attempt_started = time.monotonic()
                 retry_delay = None
+                delay_named = False
                 # True once a 200 body has parsed as JSON. Distinct from
                 # ``attempt_outcome == "ok"``, which additionally requires the whole
                 # envelope to validate: conflating the two made a served-but-unusable
@@ -358,7 +367,7 @@ class CorrectionProvider:
                             attempt_outcome = ("provider_rate_limited"
                                                if response.status == 429
                                                else "provider_unavailable")
-                            retry_delay = self._retry_delay(response, attempt)
+                            retry_delay, delay_named = self._retry_delay(response, attempt)
                             retryable = True
                         elif response.status in REJECTED_STATUSES:
                             attempt_outcome = "provider_rejected"
@@ -385,17 +394,25 @@ class CorrectionProvider:
                                 phase, "provider_rejected_request", attempt, attempt_status)
                             raise ProviderRejectedRequest(phase, attempt_status)
                         remaining = self._retry_budget(started)
-                        if (retryable and attempt < RETRY_MAX_ATTEMPTS
-                                and (remaining is None
-                                     or remaining - retry_delay >= RETRY_MIN_REMAINING_SECONDS)):
+                        fits = (remaining is None
+                                or remaining - retry_delay >= RETRY_MIN_REMAINING_SECONDS)
+                        if retryable and attempt < RETRY_MAX_ATTEMPTS and fits:
                             self._record_transport_failure(
                                 phase, attempt_outcome, attempt, attempt_status)
                             await _sleep(retry_delay)
                             continue
-                        # Allowance spent (or no room left): fail closed with the
-                        # reason that describes what actually happened.
+                        # Allowance spent, or the wait does not fit the remaining
+                        # budget. A delay the provider named is never shortened to make
+                        # it fit: waiting less than instructed usually earns another
+                        # refusal and burns budget that cannot be recovered, so stopping
+                        # cleanly with an accurate reason is the better outcome.
                         self._record_transport_failure(
                             phase, attempt_outcome, attempt, attempt_status)
+                        if retryable and delay_named and not fits:
+                            # Record why no further attempt was made, without content.
+                            self._record_transport_failure(
+                                phase, "retry_after_exceeded_budget", attempt,
+                                attempt_status, usage_unknown=False)
                         if attempt_outcome == "provider_rate_limited":
                             raise ProviderRateLimited(phase)
                         if attempt_outcome == "provider_unavailable":

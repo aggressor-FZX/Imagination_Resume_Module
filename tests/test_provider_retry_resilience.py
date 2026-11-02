@@ -399,17 +399,67 @@ def test_a_missing_or_unusable_retry_after_falls_back_to_backoff(disclosure, mon
     assert delays == [correction_provider.RETRY_BASE_DELAY_SECONDS]
 
 
-def test_an_oversized_retry_after_is_capped(disclosure, monkeypatch):
+def test_an_explicit_retry_after_is_not_shortened_to_fit():
+    """Requirement: stop cleanly rather than shortening the requested delay.
+
+    Waiting less than the provider instructed usually earns another refusal and spends
+    budget that cannot be recovered, so the delay is reported uncapped and the caller
+    decides. Shortening it would silently disobey the instruction.
+    """
+    class Answer:
+        status = 503
+        headers = {"Retry-After": "86400"}
+
+    delay, named = correction_provider.CorrectionProvider._retry_delay(Answer(), 1)
+    assert named is True
+    assert delay == 86400.0, "an explicit Retry-After must not be capped"
+
+
+def test_our_own_backoff_is_still_capped():
+    """Negative control: a delay we chose may be capped; only the provider's is not."""
+    class Answer:
+        status = 503
+        headers = {}
+
+    delay, named = correction_provider.CorrectionProvider._retry_delay(Answer(), 10)
+    assert named is False
+    assert delay == correction_provider.RETRY_MAX_DELAY_SECONDS
+
+
+def test_a_retry_after_beyond_the_budget_stops_cleanly(disclosure, monkeypatch):
+    """The decisive behaviour: no attempt is made when the wait does not fit.
+
+    A provider naming 300s inside a 120s budget must not be retried after a shortened
+    wait, and must not loop. The phase fails with its availability reason.
+    """
     delays = []
 
     async def capture(seconds):
         delays.append(seconds)
 
     monkeypatch.setattr(correction_provider, "_sleep", capture)
-    session = ScriptedWithHeaders(503, "86400")
+    session = ScriptedWithHeaders(503, "300")
     provider = CorrectionProvider("fake-key", session)
-    run_correction(provider)
-    assert delays == [correction_provider.RETRY_MAX_DELAY_SECONDS]
+    result = run_correction(provider)
+
+    assert delays == [], "no wait should occur when the delay cannot fit the budget"
+    assert (result.status, result.reason) == ("withheld", "provider_unavailable")
+    assert len(session.requests) == 1, "exactly one attempt, then a clean stop"
+
+
+def test_a_retry_after_that_fits_is_honoured_in_full(disclosure, monkeypatch):
+    """Negative control: the stop must not fire for a delay that does fit."""
+    delays = []
+
+    async def capture(seconds):
+        delays.append(seconds)
+
+    monkeypatch.setattr(correction_provider, "_sleep", capture)
+    session = ScriptedWithHeaders(503, "7")
+    provider = CorrectionProvider("fake-key", session)
+    result = run_correction(provider)
+    assert delays == [7.0], "the exact instructed delay is used"
+    assert result.reason != "provider_unavailable"
 
 
 def test_no_retry_is_started_without_room_left():
@@ -536,26 +586,10 @@ def test_a_hostile_outcome_is_still_dropped():
 
 
 # --- Publication checks are unchanged by retrying ---------------------------
-
-def test_a_retried_success_still_faces_the_metric_verifier(disclosure):
-    """Requirement: keep the publication checks unchanged.
-
-    A transient failure that is retried into a *successful* answer must not thereby
-    gain approval. The retry changes only how the answer was obtained; the returned
-    review is then validated by the same code path as a first-attempt answer, so an
-    invented metric is still caught downstream.
-    """
-    import tier_a_verifier
-
-    session = Scripted(504, failures=1)
-    provider = CorrectionProvider("fake-key", session)
-    run_correction(provider)
-
-    # The verifier is untouched by this work and still reports an invented figure.
-    source = "## Professional Experience\n**Synthetic Workshop**\n- Maintained the inventory."
-    markdown = "## Professional Experience\n**Synthetic Workshop**\n- Maintained the inventory by 47%."
-    verdict = tier_a_verifier.verify_metrics(markdown, source)
-    assert verdict["verdict"] != "PASS (tier A only)", "an invented metric must not pass"
+# The detached assertion that `tier_a_verifier` rejects an invented figure lived here.
+# It was true and not useful: it never involved the route, the retry or the gate. It is
+# replaced by tests/test_retry_route_composed.py, which drives a transient failure, a
+# retry, an unsupported claim and the resulting withheld publication end to end.
 
 
 def test_retrying_does_not_change_the_engine_call_ceiling(disclosure):
