@@ -189,6 +189,22 @@ def test_verify_disclosure_requires_approved_policy_and_clean_sources():
                              approved_policy=POLICY_ID) is False
 
 
+def test_correction_deadline_exceeds_a_single_provider_call():
+    """Regression: a live run timed out because the whole-operation deadline was
+    not larger than one provider call's own timeout."""
+    import correction_provider
+    import source_correction
+
+    assert source_correction.MAX_TIMEOUT_SECONDS > correction_provider.PROVIDER_TIMEOUT_SECONDS
+    # A clean pass is 2 calls and one repair is 4; the deadline must cover two
+    # calls even in the worst case of both consuming their full timeout.
+    assert source_correction.MAX_TIMEOUT_SECONDS >= 2 * correction_provider.PROVIDER_TIMEOUT_SECONDS
+    import inspect
+    default = inspect.signature(source_correction.correct).parameters["timeout_seconds"].default
+    assert default > correction_provider.PROVIDER_TIMEOUT_SECONDS
+    assert source_correction.MAX_TIMEOUT_SECONDS >= default
+
+
 def test_real_adapter_with_redacted_sources_can_inventory(monkeypatch):
     """End-to-end through the real adapter: only redacted text reaches transport."""
     monkeypatch.setenv(correction_provider.DISCLOSURE_SETTING, "1")

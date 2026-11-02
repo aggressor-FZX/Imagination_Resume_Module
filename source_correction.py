@@ -97,7 +97,11 @@ Callback = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 MAX_DRAFT_CHARS = 32_000
 MAX_SOURCE_CHARS = 48_000
 MAX_SOURCE_DOCUMENTS = 8
-MAX_TIMEOUT_SECONDS = 60.0
+# Hard ceiling for the whole correction operation. A clean pass is 2 provider
+# calls (inventory + review) and one repair adds 2 more, so the deadline must
+# comfortably exceed a single call's own timeout (PROVIDER_TIMEOUT_SECONDS=30).
+# A 30s total budget expired during a real run after the inventory call alone.
+MAX_TIMEOUT_SECONDS = 150.0
 
 
 class PrivacyReviewRequired(Exception):
@@ -461,12 +465,14 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
 
 
 async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
-                  *, timeout_seconds: float = 30.0) -> CorrectionResult:
+                  *, timeout_seconds: float = 120.0) -> CorrectionResult:
     """Review, optionally patch, and re-review; failures never return the draft.
 
     Sources must be a nonempty tuple of uniquely identified candidate documents.
-    ``timeout_seconds`` is one finite positive deadline, at most 60 seconds,
-    for the entire operation. The callback receives unredacted local data; it
+    ``timeout_seconds`` is one finite positive deadline, at most
+    ``MAX_TIMEOUT_SECONDS``, for the entire operation. Each individual provider
+    call has its own timeout (30s); the deadline is the outer bound so a run
+    with repairs still has room. The callback receives unredacted local data; it
     must not transmit it without an independently approved disclosure policy.
     ``review_calls`` counts draft reviews, excluding the source inventory call.
     Commentary and failure reasons contain no input, model output, or exception text.
