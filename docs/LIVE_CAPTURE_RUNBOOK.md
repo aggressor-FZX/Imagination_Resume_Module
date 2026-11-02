@@ -24,14 +24,29 @@ Render → `imaginator-resume-cowriter` (`srv-d3nf73ur433s73bh9j00`) → Environ
 | Key | Value | Why |
 |---|---|---|
 | `CORRECTION_LIVE_CAPTURE` | `1` | Explicit opt-in; anything else leaves capture off. |
-| `CORRECTION_LIVE_CAPTURE_DIR` | `/var/data/live-capture` | Must be a persistent disk or a path you can retrieve. |
+| `CORRECTION_LIVE_CAPTURE_DIR` | `/app/data/live-capture` | The 1 GB persistent disk on this service. |
 
 > The Render container's filesystem is ephemeral. Attach a **disk** mounted at a known
 > path, or the capture is lost on the next deploy. Do not use `/tmp` for a run you
-> intend to replay.
+> intend to replay. `/tmp` is also wiped on every deploy, including helper scripts you
+> copied there.
 
 Enabling these requires a **deploy**, not a restart: environment changes do not apply
-to a running container.
+> to a running container.
+
+### Why the path guard admits `/app/data`
+
+The image mounts its disk *inside* the application directory, so every writable path
+is technically "inside the repository". The container also ships with **no `.git` and
+no `git` binary**, so `git check-ignore` can never answer there. A path is admitted
+when it is outside the repository, git-ignored, or on a **different device** from the
+source tree — a separately mounted volume is not part of the deploy artifact and no
+commit can reach it. The preflight prints which guarantee applied:
+
+```
+admitted_by: separate volume
+READY: capture will write 0600 files in 0700 directory
+```
 
 ## 2b. Preflight before spending a run
 
@@ -101,6 +116,16 @@ If the recording ends before the engine is satisfied (for example because recove
 issues a request the live run never made), `ReplaySession` raises `ReplayExhausted`
 rather than returning an empty success. A withheld replay result is a real result; an
 exhausted replay is an incomplete recording.
+
+A replayed live failure usually surfaces as `withheld` / `provider_error` with the
+affected phase recorded in the failures list, because the engine absorbs adapter
+errors. That is the expected reproduction, not a replay bug.
+
+### After retrieving a capture, delete it from the disk
+
+The disk is small and accumulates resume-shaped files. Copy the capture out, verify it
+replays, then remove it from `/app/data/live-capture` and set
+`CORRECTION_LIVE_CAPTURE=0` with a redeploy.
 
 ## 6. Turn capture off
 
