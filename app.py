@@ -900,7 +900,7 @@ def _research_run_metrics(llm_client: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _issue_publication_receipt(output, owner=None):
+def _issue_publication_receipt(output, owner=None, identity=None):
     """Attach a signed approval receipt to a publishable result.
 
     Export verifies this against the content it is about to render, so a caller
@@ -910,6 +910,12 @@ def _issue_publication_receipt(output, owner=None):
     The receipt binds both approved Markdown and the exact career object the
     renderer consumes. The same object is returned as approved_export_payload,
     eliminating cross-parser claim-set alternatives at export time.
+
+    ``identity`` is the profile header (name/contact) that the caller supplied
+    with the analysis, if any. It is signed as part of the render content so a
+    later export cannot inject identity that was never approved. When no
+    identity was supplied, the signed header stays empty and export must send
+    the same empty header — the client may not invent a default name.
     """
     try:
         if not isinstance(output, dict):
@@ -934,6 +940,11 @@ def _issue_publication_receipt(output, owner=None):
             for field in publication_gate.DELIVERABLE_FIELDS:
                 output[field] = None
             return output
+        if isinstance(identity, dict):
+            for field in ("name", "location", "phone", "email", "linkedin", "github"):
+                value = identity.get(field)
+                if isinstance(value, str) and value.strip():
+                    approved_payload[field] = value.strip()
         receipt = publication_gate.issue_receipt(
             markdown=md, verdict=verdict, owner=owner,
             approved_payload=approved_payload)
