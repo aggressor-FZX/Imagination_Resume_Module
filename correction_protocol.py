@@ -85,8 +85,8 @@ def _fold(value: str) -> str:
     return " ".join(value.split()).casefold()
 
 
-def _index_list(response: dict[str, Any], key: str, upper: int) -> list[int]:
-    values = response.get(key)
+def _index_list(response: Any, key: str, upper: int) -> list[int]:
+    values = response if type(response) is list else response.get(key)
     if type(values) is not list:
         raise MalformedIndexedResponse
     for value in values:
@@ -230,9 +230,8 @@ def indexed_review_request(payload: dict[str, Any]) -> dict[str, Any]:
             "lines": lines, "_items": items, "_lines": lines}
 
 
-def _line_list(response: dict[str, Any], key: str, lines: list[dict[str, Any]]) -> list[str]:
+def _line_list(values: Any, key: str, lines: list[dict[str, Any]]) -> list[str]:
     """Read a verdict list of line ids (the contract's form) or of positions."""
-    values = response.get(key)
     if type(values) is not list:
         raise MalformedIndexedResponse
     resolved = []
@@ -251,17 +250,20 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
     items, lines = request.get("_items"), request.get("_lines")
     if type(items) is not list or type(lines) is not list:
         raise MalformedIndexedResponse
-    if type(response) is not dict or set(response) != set(_VERDICT_KEYS) | set(_STATUS_KEYS):
+    allowed = set(_VERDICT_KEYS) | set(_STATUS_KEYS)
+    if type(response) is not dict or not set(response) <= allowed:
         raise MalformedIndexedResponse
+    # A category the model omitted is "not judged", never approval: lines and
+    # required segments then default to uncertain, which withholds.
     verdicts: dict[str, str] = {}
     for verdict in _VERDICT_KEYS:
-        for line_id in _line_list(response, verdict, lines):
+        for line_id in _line_list(response.get(verdict, []), verdict, lines):
             if line_id in verdicts:
                 raise MalformedIndexedResponse
             verdicts[line_id] = verdict
     statuses: dict[int, str] = {}
     for status in _STATUS_KEYS:
-        for index in _index_list(response, status, len(items)):
+        for index in _index_list(response.get(status, []), status, len(items)):
             if index in statuses:
                 raise MalformedIndexedResponse
             statuses[index] = status
