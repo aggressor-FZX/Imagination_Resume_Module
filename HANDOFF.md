@@ -1,34 +1,53 @@
-# Handoff — live correction verification (2026-11-02, evening)
+# Handoff — correction boundary closed (2026-11-02, session 2)
 
-- **Live:** `master` = `4059d12` on Imaginator (deploy `dep-dbk7c8lg1s2s738n2750`).
-- **Branch:** `wip/correction-timeout-attribution` tracks `origin/master`; working tree clean.
-- **Full report:** `LIVE_ACCEPTANCE_2026-11-02.md`.
+- **Live:** `master` = `51affd2` on Imaginator (deploy `dep-dbkdd6vb9u1s73fdrdtg`, live 18:31:52Z).
+- **Branch:** `wip/correction-timeout-attribution` tracks `origin/master`.
+- **Full report:** `docs/CORRECTION_BOUNDARY_ACCEPTANCE_2026-11-02.md`.
 
-## Done
-- [x] `python-docx` restored from the declared pin; 76 previously blocked tests pass.
-- [x] Deadline = min(120s, 180-20-pipeline); no provider call under 30s remaining.
-- [x] Phase events (budget/start/end/provider.call/end), correlation-ID keyed, sanitized.
-- [x] Index-list wire protocol replaces exact offsets (the original live blocker).
-- [x] Paraphrase, citation and heading coverage defects fixed; faithful + rewritten
-      drafts approved, altered number withheld (real-model matrix, zero cost).
+## Done this session
+- [x] All 22 retired-wire doubles updated; original acceptance assertions preserved.
+- [x] Retrieval separated from evidence: reviewer must name segments in `evidence`;
+      a supported line naming none is uncertain. Overlap can no longer establish support.
+- [x] Independent negative controls (altered metric / wrong employer / wrong education
+      pairing / omitted fact / irrelevant citation) with a maximally permissive reviewer,
+      plus a faithful non-vacuity control. Documented gaps asserted, not hidden.
+- [x] Disclosure gate now covers the whole outgoing payload: draft lines, segment text
+      and claim quotes, verified after redaction.
+- [x] `correction_capture.py` + replay tests: the synthetic failure is replayable offline
+      through the real adapter and validator, sockets blocked. `captures/` is gitignored.
+- [x] Replayed the live failure: the model left 2 lines **unjudged**. Was reported as
+      `malformed_output` and wasted a repair call of no-ops. Now `incomplete_review`
+      (no repair attempted) and `no_op_repair` is its own reason.
+- [x] Route timeout measured: SSE = 300s direct axios (middleware bypassed), JSON = 180s.
+      Budget is now computed from the route actually in use, not a single assumed 180s.
 
-## Remaining
-1. Live single-file is still withheld. Run 6 was cut off with 53.5s budget after a
-   106.5s pipeline: this is headroom, not correctness. Next fix = stream or
-   section-split the review so a slow call cannot exhaust the budget.
-2. Then one live single-file run, then the multi-file run.
-3. Convert the 22 scripted route doubles to the index-list wire shape.
-4. Disclosure gate still scans source documents only, not draft lines/claims.
+## Remaining / next
+1. **Live proof still outstanding.** No live `/analyze` run this session, so approved
+   delivery, commentary, receipt and PDF/DOCX download remain unproven end to end.
+2. **Review latency is still unbounded.** The budget is no longer under-allocated, but the
+   Drafter alone measured 78.9s of 106.5s in run 6, so a large document can still leave
+   too little for the review phase. Streaming was deliberately NOT chosen: no measurement
+   supports it. Measure review duration against document size before changing the shape.
+3. **Known detection gap:** an invented `label: body` employer (not a bold heading) is
+   caught by no deterministic gate. Asserted by
+   `test_invented_record_label_is_not_detected_by_the_engine`.
+4. Consider caching the source inventory across a repair cycle: inventory is identical
+   for every review of the same draft and costs a full provider call.
 
 ## Verification
 ```bash
 cd Imagination_Resume_Module
-../.venv/bin/python -m pytest tests/test_correction_timeout_attribution.py tests/test_source_correction.py -p no:cacheprovider -q
+../.venv/bin/python -m pytest -o addopts="" -q          # 648 passed, 3 skipped
+../.venv/bin/python -m pytest -o addopts="" -q tests/test_correction_capture_replay.py
 ```
-Full suite: 590 passed, 3 skipped, 22 failed (scripted doubles only).
+Capture replay needs `captures/live-rewrite-0{1,2}.json`; those tests skip when the
+captures are absent (they hold complete resume-shaped text and are git-ignored).
+Regenerate with `PROBE_OR_KEY=... PYTHONPATH=. python tools/capture_correction_case.py <id>`
+— this spends provider money and is never run by tests.
 
 ---
 
+## Previous session (superseded)
 # Handoff — correction timeout attribution (2026-11-02)
 
 - **Active branch:** `wip/correction-timeout-attribution` (local, not pushed); base `10b20d8` on `master`.
