@@ -263,7 +263,7 @@ def test_overall_deadline_cancels_inflight_provider_without_retry(offline, monke
         return await original_correct(markdown, sources, provider, timeout_seconds=0.02)
     monkeypatch.setattr(app, "correct", short_deadline)
     result = post(client).json()
-    assert result["correction_reason"] == "timeout" and result["requires_review"]
+    assert result["correction_reason"] == "timeout_source_inventory" and result["requires_review"]
     assert session.calls == 1 and session.cancelled
     assert result["run_metrics"]["failures"][-1]["usage_unknown"] is True
 

@@ -266,7 +266,8 @@ def test_deadline_stops_all_further_calls(timeout_phase):
         return flagged_for_duration(payload) if phase == "initial_review" else review(payload)
 
     result = run(DRAFT, callback, timeout=0.02)
-    assert result.reason == "timeout" and result.markdown is None
+    # The reason names the phase so a production timeout is diagnosable.
+    assert result.reason == f"timeout_{timeout_phase}" and result.markdown is None
     assert calls[-1] == timeout_phase
     assert calls.count("repair") <= 1
 
@@ -370,7 +371,7 @@ def test_deadline_is_cumulative_across_phases():
         raise AssertionError("no other call is allowed")
 
     result = run(DRAFT, callback, timeout=0.08)
-    assert result.reason == "timeout" and result.markdown is None
+    assert result.reason == "timeout_repair" and result.markdown is None
     assert calls == ["initial_review", "repair"]
 
 
@@ -589,7 +590,7 @@ def test_source_inventory_timeout_stops_before_any_draft_review():
         await asyncio.Event().wait()
 
     result = run(COMPLETE_DRAFT, callback, sources=COMPLETE_SOURCES, timeout=0.02, raw=True)
-    assert result.reason == "timeout" and result.markdown is None
+    assert result.reason == "timeout_source_inventory" and result.markdown is None
     assert calls == ["source_inventory"] and (result.review_calls, result.repair_calls) == (0, 0)
 
 

@@ -480,6 +480,7 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     reviews = repairs = 0
     corrected_spans = 0
     corrected_labels = 0
+    current_phase = "source_inventory"
 
     def blocked(reason: str) -> CorrectionResult:
         detail = {
@@ -525,7 +526,9 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
         if not any(item["classification"] == "required" for item in inventory):
             return blocked("no_required_source_claims")
     except TimeoutError:
-        return blocked("timeout")
+        # Distinguish a deadline expiry from a provider transport timeout so the
+        # failing phase is identifiable in production without extra paid runs.
+        return blocked(f"timeout_{current_phase}")
     except _Invalid:
         return blocked("malformed_source_inventory")
     except PrivacyReviewRequired:
@@ -542,13 +545,14 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
         payload = {"contract": _REVIEW_CONTRACT, "sources": source_payload, "source_claims": inventory,
                    "lines": [{"line_id": line["line_id"], "text": line["text"]} for line in lines]}
         try:
+            current_phase = phase
             remaining = deadline - loop.time()
             if remaining <= 0:
-                return blocked("timeout")
+                return blocked(f"timeout_{phase}")
             reviews += 1
             response = await _invoke(callback, phase, payload, remaining)
             if loop.time() >= deadline:
-                return blocked("timeout")
+                return blocked(f"timeout_{phase}")
             claims, incomplete = _validate_review(response, lines, source_map, inventory)
             if all(claim["verdict"] == "structural" for claim in claims):
                 return blocked("no_supported_claims")
@@ -579,16 +583,17 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
                              sum(c["verdict"] == "structural" for c in claims)), reviews, repairs)
             if repairs == 2:
                 return blocked("unresolved_claims")
+            current_phase = "repair"
             remaining = deadline - loop.time()
             if remaining <= 0:
-                return blocked("timeout")
+                return blocked("timeout_repair")
             repair_payload = {"contract": _REPAIR_CONTRACT, "sources": source_payload,
                               "source_claims": inventory, "lines": payload["lines"], "claims": claims,
                               "flagged_claim_ids": [claim["id"] for claim in flagged]}
             repairs += 1
             edit_response = await _invoke(callback, "repair", repair_payload, remaining)
             if loop.time() >= deadline:
-                return blocked("timeout")
+                return blocked("timeout_repair")
             markdown = _apply_edits(markdown, edit_response, claims, lines)
             corrected_spans += len(flagged)
             markdown, labels_here, ambiguous_here = _correct_unique_attribution(
@@ -597,7 +602,7 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
             ambiguous = ambiguous or ambiguous_here
             phase = "post_patch_review"
         except TimeoutError:
-            return blocked("timeout")
+            return blocked(f"timeout_{current_phase}")
         except _Invalid:
             return blocked("malformed_output")
         except PrivacyReviewRequired:

@@ -305,7 +305,7 @@ def test_deadline_cancels_inflight_transport_without_retry(synthetic_disclosure_
         result = await correct(DRAFT, (SourceDocument("resume", SOURCE),), provider,
                                timeout_seconds=0.02)
         await asyncio.wait_for(cancelled.wait(), 1)
-        assert result.status == "withheld" and result.reason == "timeout"
+        assert result.status == "withheld" and result.reason == "timeout_source_inventory"
         assert session.calls == 1
         assert provider.usage["failures"][0]["usage_unknown"] is True
 

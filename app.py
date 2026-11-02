@@ -559,7 +559,9 @@ async def _analyze_resume_impl(
                     "source_completeness_uncertain", "no_required_source_claims",
                     "provider_error", "no_supported_claims", "source_facts_missing",
                     "unresolved_claims", "malformed_output", "privacy_review_required",
-                    "privacy_redaction_failed", "attribution_conflict"}
+                    "privacy_redaction_failed", "attribution_conflict",
+                    "timeout_source_inventory", "timeout_initial_review",
+                    "timeout_repair", "timeout_post_patch_review"}
                 reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
                 return _withhold_correction(reason=reason, pipeline_status=status,
                     metrics=metrics, start_time=start_time)
