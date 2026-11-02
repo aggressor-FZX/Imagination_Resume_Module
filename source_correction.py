@@ -160,6 +160,36 @@ class ProviderRateLimited(RuntimeError):
         self.phase = phase
 
 
+class ProviderUnavailable(RuntimeError):
+    """A retryable availability status remained after the retry allowance was spent.
+
+    ``502``/``503``/``504`` say the endpoint could not serve the request right now.
+    Measured 2026-11-02: the same valid review request returned ``504`` in ~8.5s on
+    some attempts and ``200`` in 26-39s on others, so these are transient by nature
+    and worth retrying inside the deadline. Distinct from ``provider_error``, which
+    means something unexpected happened and a retry would be guesswork.
+    """
+
+    def __init__(self, phase: str | None = None, status: int | None = None):
+        super().__init__("provider unavailable")
+        self.phase = phase
+        self.status = status
+
+
+class ProviderRejectedRequest(RuntimeError):
+    """The provider refused the request itself (auth, schema, unknown model).
+
+    ``400``/``401``/``403``/``404``/``422`` are not availability problems: repeating
+    an identical request would produce an identical refusal, and an ``401`` is a
+    credential fault that an operator must see rather than have retried away.
+    """
+
+    def __init__(self, phase: str | None = None, status: int | None = None):
+        super().__init__("provider rejected request")
+        self.phase = phase
+        self.status = status
+
+
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _VERDICTS = {"supported", "unsupported", "uncertain", "structural"}
 # Only explicit single-line labels and verbatim record bodies are compared.
@@ -756,6 +786,14 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
         # a defect in the request, so it gets its own reason rather than being
         # reported as a generic provider error.
         return blocked("provider_rate_limited")
+    except ProviderUnavailable:
+        # A retryable 5xx outlived the retry allowance: the endpoint could not
+        # serve the request, the request itself was fine.
+        return blocked("provider_unavailable")
+    except ProviderRejectedRequest:
+        # Auth, schema or unknown-model refusal. Retrying would repeat the refusal,
+        # so it is reported distinctly for an operator to act on.
+        return blocked("provider_rejected_request")
     except TimeoutError:
         # Distinguish a deadline expiry from a provider transport timeout so the
         # failing phase is identifiable in production without extra paid runs.
@@ -854,6 +892,10 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             return blocked(f"provider_call_timeout_{current_phase}")
         except ProviderRateLimited:
             return blocked("provider_rate_limited")
+        except ProviderUnavailable:
+            return blocked("provider_unavailable")
+        except ProviderRejectedRequest:
+            return blocked("provider_rejected_request")
         except TimeoutError:
             return blocked(f"timeout_{current_phase}")
         except UnjudgedReview as exc:

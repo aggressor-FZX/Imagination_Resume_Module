@@ -268,7 +268,9 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
             "privacy_redaction_failed": "Personal identifiers could not be removed without changing the source text; independent review is required.",
-            "provider_rate_limited": "The correction service was temporarily unavailable; no unverified rewrite was issued. Please retry.",
+            "provider_rate_limited": "The correction service was temporarily busy; no unverified rewrite was issued. Please retry.",
+            "provider_unavailable": "The correction service could not be reached after retrying; no unverified rewrite was issued. Please retry.",
+            "provider_rejected_request": "The correction service refused the request and retrying would repeat the refusal; this needs operator attention.",
         }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
         run_metrics=metrics, processing_time_seconds=time.time() - start_time,
@@ -723,6 +725,9 @@ async def _analyze_resume_impl(
                     # unrelated to the request, so it must not be reported as a
                     # generic correction failure.
                     "provider_rate_limited",
+                    # A retryable 5xx outlived the retry allowance, and a request
+                    # the provider refused outright (auth/schema/model).
+                    "provider_unavailable", "provider_rejected_request",
                     "timeout_source_inventory", "timeout_initial_review",
                     "timeout_repair", "timeout_post_patch_review",
                     "provider_call_timeout_source_inventory",

@@ -20,19 +20,25 @@ _FLOAT_FIELDS = {"cost_usd"}
 _IDENTIFIER = re.compile(r"[a-z0-9_]{1,64}\Z")
 _CORRELATION = re.compile(r"[A-Za-z0-9-]{1,64}\Z")
 _MODEL = re.compile(r"[a-z0-9_./-]{1,80}\Z")
+_PROVIDER = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}\Z")
 
 EVENTS = frozenset({"correction.budget", "correction.phase_start", "correction.phase_end",
                     "correction.end", "provider.call"})
 PHASES = frozenset({"source_inventory", "initial_review", "repair", "post_patch_review"})
 # Transport/callback outcomes only; validation results are reported as reasons.
+# ``provider_rate_limited`` and ``provider_unavailable`` were missing from this set
+# once they existed, so the sanitizer silently dropped the very events that explain
+# a retry sequence. Keep this list in step with what the adapter can emit.
 PHASE_OUTCOMES = frozenset({"ok", "deadline", "provider_call_timeout", "callback_timeout",
                             "callback_error", "privacy", "cancelled"})
 FINISH_REASONS = frozenset({"stop", "length", "other"})
-PROVIDER_OUTCOMES = frozenset({"ok", "provider_call_timeout", "provider_error", "cancelled"})
+PROVIDER_OUTCOMES = frozenset({"ok", "provider_call_timeout", "provider_error",
+                               "provider_rate_limited", "provider_unavailable",
+                               "provider_rejected", "cancelled"})
 
 _FIELDS = (_INTEGER_FIELDS | _FLOAT_FIELDS
            | {"event", "correlation_id", "phase", "outcome", "status", "reason",
-              "model", "finish_reason", "timeout_category"})
+              "model", "finish_reason", "timeout_category", "provider"})
 
 
 def _bounded_int(value):
@@ -58,6 +64,11 @@ def sanitize(event):
                 clean[key] = value
         elif key == "model":
             if type(value) is str and _MODEL.fullmatch(value):
+                clean[key] = value
+        elif key == "provider":
+            # Provider names are short identifiers ("Venice", "DeepInfra"). Anything
+            # that does not fit the pattern is dropped rather than logged.
+            if type(value) is str and _PROVIDER.fullmatch(value):
                 clean[key] = value
         elif key == "phase":
             if value in PHASES:

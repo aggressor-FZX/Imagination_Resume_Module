@@ -19,6 +19,8 @@ from source_correction import (
     PrivacyReviewRequired,
     ProviderCallTimeout,
     ProviderRateLimited,
+    ProviderRejectedRequest,
+    ProviderUnavailable,
     SourceDocument,
     UnjudgedReview,
 )
@@ -53,6 +55,32 @@ REPAIR_PATH_CALLS = 6
 # carrying the `must_judge` hint, so it cannot be spent by a second repair pass or
 # by a direct caller.
 MAX_CALLS = 7
+
+# --- Transient-failure retry allowance -------------------------------------
+# These are the statuses that mean "this endpoint cannot serve the request *right
+# now*". Measured 2026-11-02: the same valid 13.6KB review request returned 504 in
+# ~8.5s on some attempts and 200 in 26-39s on others, so they are transient by
+# nature and repeating them is the correct response.
+RETRYABLE_STATUSES = frozenset({429, 502, 503, 504})
+# These mean the request itself is wrong (auth, schema, unknown model). Repeating an
+# identical request produces an identical refusal, and a 401 must reach an operator
+# instead of being retried into silence.
+REJECTED_STATUSES = frozenset({400, 401, 403, 404, 422})
+# One initial attempt plus at most this many additional ones. Deliberately small: a
+# retry is for a transient blip, not for waiting out an outage.
+RETRY_MAX_ATTEMPTS = 3
+# Backoff when the provider does not say how long to wait. Chosen so two retries fit
+# inside a normal phase budget without crowding out the work itself.
+RETRY_BASE_DELAY_SECONDS = 1.5
+RETRY_MAX_DELAY_SECONDS = 15.0
+# Do not start another attempt with less than this left: it would mostly burn budget
+# that a later phase (or the engine's own deadline check) needs.
+RETRY_MIN_REMAINING_SECONDS = 10.0
+
+
+async def _sleep(seconds):
+    """Indirection so tests can prove retry behaviour without waiting it out."""
+    await asyncio.sleep(seconds)
 
 # The disclosure gate. It is enabled only by an explicit operator setting; the
 # default (unset/false) keeps external correction disabled. Enabling it does not
@@ -131,7 +159,14 @@ class CorrectionProvider:
         # applied to the last call (for the sanitized event).
         self._remaining_seconds = None
         self._last_call_timeout = PROVIDER_TIMEOUT_SECONDS
+        # Engine phase calls. This is what the call budget (MAX_CALLS) and the
+        # usage-accounting cross-check both count, so transport retries must NOT
+        # increment it: a retried inventory is still one phase, and letting retries
+        # eat the phase budget would discard the completed work they are meant to
+        # protect.
         self.calls = 0
+        # Transport attempts, including retries. Diagnostic only.
+        self.attempts = 0
         self.usage = {"calls": [], "total_prompt_tokens": 0,
                       "total_completion_tokens": 0, "total_tokens": 0,
                       "estimated_cost_usd": 0.0, "failures": []}
@@ -156,6 +191,46 @@ class CorrectionProvider:
             return PROVIDER_TIMEOUT_SECONDS
         return max(PROVIDER_TIMEOUT_SECONDS,
                    min(remaining, PROVIDER_TIMEOUT_CEILING_SECONDS))
+
+    def _retry_budget(self, phase_started):
+        """Seconds still available for retrying, or None when no budget was offered.
+
+        The engine's offer covers the whole phase, so time already spent counts
+        against it. Leaving ``RETRY_MIN_REMAINING_SECONDS`` in hand means an attempt
+        is only started when it has a realistic chance of finishing.
+        """
+        if self._remaining_seconds is None:
+            return None
+        return self._remaining_seconds - (time.monotonic() - phase_started)
+
+    @staticmethod
+    def _retry_delay(response, attempt):
+        """Honour ``Retry-After`` when the provider supplies it, else back off.
+
+        Only the integer-seconds form is used. An HTTP-date or a missing header falls
+        back to exponential backoff, and the result is capped so a large advertised
+        delay cannot pin the request past its deadline.
+        """
+        raw = None
+        try:
+            raw = response.headers.get("Retry-After") if response is not None else None
+        except Exception:
+            raw = None
+        if isinstance(raw, str) and raw.strip().isdigit():
+            return min(float(raw.strip()), RETRY_MAX_DELAY_SECONDS)
+        return min(RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)), RETRY_MAX_DELAY_SECONDS)
+
+    def _record_transport_failure(self, phase, reason, attempt, status, usage_unknown=True):
+        """Record one non-successful transport attempt without any content.
+
+        ``usage_unknown`` stays True: a refused or incomplete request may still have
+        been billed for its prompt, so treating it as free would understate spend.
+        """
+        entry = {"stage": "source_correction", "phase": phase, "reason": reason,
+                 "attempt": attempt, "usage_unknown": usage_unknown}
+        if type(status) is int:
+            entry["http_status"] = status
+        self.usage["failures"].append(entry)
 
     async def __call__(self, phase, payload):
         # A direct caller past the ceiling is rejected before the disclosure gate so
@@ -241,62 +316,149 @@ class CorrectionProvider:
             raise ValueError("correction request too large")
         self.calls += 1
         # POST is not retried by aiohttp; redirects and model fallbacks are disabled.
+        # A transient availability status is the ONE thing retried, and only here, so
+        # a late failure repeats just this phase instead of discarding the stages
+        # that already succeeded.
         recorded = False
         started = time.monotonic()
-        outcome = "provider_error"
         finish = None
+        provider_name = None
         request_index = self.calls
+        attempt = 0
         try:
-            async with self.session.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=request, timeout=aiohttp.ClientTimeout(total=call_timeout),
-                allow_redirects=False,
-            ) as response:
-                if response.status == 429:
-                    # Saturation, not a malformed request: report it as its own
-                    # reason so an operator does not hunt for a code defect.
-                    raise ProviderRateLimited(phase)
-                if response.status != 200:
-                    raise ValueError("provider HTTP failure")
-                chunks, size = [], 0
-                async for chunk in response.content.iter_chunked(65536):
-                    size += len(chunk)
-                    if size > MAX_RESPONSE_BYTES:
-                        raise ValueError("provider response too large")
-                    chunks.append(chunk)
-                raw = b"".join(chunks)
-                data = _strict_json(raw.decode("utf-8"))
-            if type(data) is not dict:
-                raise ValueError("invalid provider envelope")
-            self._record_usage(data, phase)
-            recorded = True
-            if data.get("model") != self.model:
-                raise ValueError("unexpected provider model")
-            choices = data.get("choices")
-            if type(choices) is not list or len(choices) != 1:
-                raise ValueError("invalid provider choices")
-            choice = choices[0]
-            finish = choice.get("finish_reason") if type(choice) is dict else None
-            if type(choice) is not dict or finish != "stop":
-                raise ValueError("incomplete provider response")
-            message = choice.get("message")
-            if type(message) is not dict or type(message.get("content")) is not str:
-                raise ValueError("missing provider content")
-            parsed = _strict_json(message["content"])
-            if type(parsed) is not dict:
-                raise ValueError("invalid provider response")
-            outcome = "ok"
-            # A model (or a transport double) may answer in the strict shape the
-            # engine verifies directly. Prefer that verbatim: it is the more
-            # specific contract, and the engine still validates it. Otherwise
-            # translate the index-list answer the production model is asked for.
+            while True:
+                attempt += 1
+                self.attempts += 1
+                # An attempt is only "ok" once the whole envelope has been
+                # validated. Setting it right after the JSON parse would report a
+                # 200 carrying an unusable envelope as a success.
+                attempt_outcome = "provider_error"
+                attempt_status = None
+                attempt_recorded = False
+                attempt_started = time.monotonic()
+                retry_delay = None
+                # True once a 200 body has parsed as JSON. Distinct from
+                # ``attempt_outcome == "ok"``, which additionally requires the whole
+                # envelope to validate: conflating the two made a served-but-unusable
+                # 200 look like a transport failure.
+                served = False
+                try:
+                    async with self.session.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        json=request, timeout=aiohttp.ClientTimeout(total=call_timeout),
+                        allow_redirects=False,
+                    ) as response:
+                        attempt_status = response.status if type(response.status) is int else None
+                        if response.status in RETRYABLE_STATUSES:
+                            # Availability, not a malformed request. Retry inside the
+                            # deadline; if the allowance runs out the phase fails as
+                            # rate-limited (429) or unavailable (502/503/504) rather
+                            # than as a generic error.
+                            attempt_outcome = ("provider_rate_limited"
+                                               if response.status == 429
+                                               else "provider_unavailable")
+                            retry_delay = self._retry_delay(response, attempt)
+                            retryable = True
+                        elif response.status in REJECTED_STATUSES:
+                            attempt_outcome = "provider_rejected"
+                            retryable = False
+                        elif response.status != 200:
+                            attempt_outcome = "provider_error"
+                            retryable = False
+                        else:
+                            chunks, size = [], 0
+                            async for chunk in response.content.iter_chunked(65536):
+                                size += len(chunk)
+                                if size > MAX_RESPONSE_BYTES:
+                                    raise ValueError("provider response too large")
+                                chunks.append(chunk)
+                            raw = b"".join(chunks)
+                            data = _strict_json(raw.decode("utf-8"))
+                            retryable = False
+                            served = True
+
+                    if not served:
+                        # Record the attempt, then decide whether to repeat it.
+                        if attempt_outcome == "provider_rejected":
+                            self._record_transport_failure(
+                                phase, "provider_rejected_request", attempt, attempt_status)
+                            raise ProviderRejectedRequest(phase, attempt_status)
+                        remaining = self._retry_budget(started)
+                        if (retryable and attempt < RETRY_MAX_ATTEMPTS
+                                and (remaining is None
+                                     or remaining - retry_delay >= RETRY_MIN_REMAINING_SECONDS)):
+                            self._record_transport_failure(
+                                phase, attempt_outcome, attempt, attempt_status)
+                            await _sleep(retry_delay)
+                            continue
+                        # Allowance spent (or no room left): fail closed with the
+                        # reason that describes what actually happened.
+                        self._record_transport_failure(
+                            phase, attempt_outcome, attempt, attempt_status)
+                        if attempt_outcome == "provider_rate_limited":
+                            raise ProviderRateLimited(phase)
+                        if attempt_outcome == "provider_unavailable":
+                            raise ProviderUnavailable(phase, attempt_status)
+                        raise ValueError("provider HTTP failure")
+
+                    if type(data) is not dict:
+                        raise ValueError("invalid provider envelope")
+                    self._record_usage(data, phase)
+                    attempt_recorded = recorded = True
+                    if data.get("model") != self.model:
+                        raise ValueError("unexpected provider model")
+                    choices = data.get("choices")
+                    if type(choices) is not list or len(choices) != 1:
+                        raise ValueError("invalid provider choices")
+                    choice = choices[0]
+                    finish = choice.get("finish_reason") if type(choice) is dict else None
+                    if type(choice) is not dict or finish != "stop":
+                        raise ValueError("incomplete provider response")
+                    message = choice.get("message")
+                    if type(message) is not dict or type(message.get("content")) is not str:
+                        raise ValueError("missing provider content")
+                    parsed = _strict_json(message["content"])
+                    if type(parsed) is not dict:
+                        raise ValueError("invalid provider response")
+                    # Fully validated: this is the one place an attempt becomes "ok".
+                    attempt_outcome = "ok"
+                    if type(data.get("provider")) is str:
+                        provider_name = data["provider"]
+                except asyncio.CancelledError:
+                    attempt_outcome = "cancelled"
+                    self.usage["failures"].append({"stage": "source_correction", "phase": phase,
+                                                    "reason": "cancelled",
+                                                    "attempt": attempt,
+                                                    "usage_unknown": not recorded})
+                    raise
+                except (asyncio.TimeoutError, TimeoutError) as exc:
+                    # A single-call read timeout is NOT the overall deadline expiring.
+                    # Tag it so `correct()` can report which failure actually happened.
+                    #
+                    # Deliberately NOT retried, even though it is availability-shaped.
+                    # A read timeout has already consumed most of a phase's budget, so
+                    # repeating it would usually guarantee the correction fails with
+                    # nothing left, instead of stopping cleanly with a reason that says
+                    # what happened. Only the statuses the endpoint itself reports as
+                    # transient (429/502/503/504) are worth another attempt.
+                    self._record_transport_failure(
+                        phase, "provider_call_timeout", attempt, attempt_status)
+                    raise ProviderCallTimeout(phase) from exc
+                finally:
+                    self._emit(phase, request_index, attempt_outcome, attempt_started,
+                               attempt_recorded, finish if attempt_outcome == "ok" else None,
+                               attempt, attempt_status,
+                               provider_name if attempt_outcome == "ok" else None)
+                break
+
+            # Translate the index-list answer into the strict shape the engine
+            # verifies. A model (or a transport double) may answer in that strict
+            # shape directly; prefer it verbatim, the engine still validates it.
             if translated is None:
                 return parsed
             strict = {"source_claims"} if phase == "source_inventory" else {"claims", "representations"}
             if type(parsed) is dict and set(parsed) == strict:
-                # A transport double (or a model) answered in the strict shape the
-                # engine verifies directly; the engine still validates it.
                 return parsed
             if phase == "source_inventory":
                 return correction_protocol.strict_inventory_from_indexed(parsed, payload)
@@ -306,35 +468,25 @@ class CorrectionProvider:
                 # The answer parsed but skipped part of the draft. Report it as an
                 # incomplete review so the reason is accurate; a generic malformed
                 # output hid this live and sent the draft into a wasted repair.
+                # Deliberately NOT retried: the answer was valid, just incomplete.
                 raise UnjudgedReview(exc.line_ids) from exc
-        except asyncio.CancelledError:
-            outcome = "cancelled"
-            self.usage["failures"].append({"stage": "source_correction", "phase": phase,
-                                            "reason": "cancelled", "usage_unknown": not recorded})
-            raise
-        except (asyncio.TimeoutError, TimeoutError) as exc:
-            # A single-call read timeout is NOT the overall deadline expiring.
-            # Tag it so `correct()` can report which failure actually happened.
-            outcome = "provider_call_timeout"
-            self.usage["failures"].append({"stage": "source_correction", "phase": phase,
-                                            "reason": "provider_call_timeout",
-                                            "usage_unknown": not recorded})
-            raise ProviderCallTimeout(phase) from exc
-        except ProviderRateLimited:
-            outcome = "provider_rate_limited"
-            self.usage["failures"].append({"stage": "source_correction", "phase": phase,
-                                            "reason": "provider_rate_limited",
-                                            "usage_unknown": not recorded})
+        except (ProviderRateLimited, ProviderUnavailable, ProviderRejectedRequest,
+                ProviderCallTimeout, UnjudgedReview, PrivacyReviewRequired):
             raise
         except Exception:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
-                                            "reason": "provider_error", "usage_unknown": not recorded})
+                                            "reason": "provider_error", "attempt": max(attempt, 1),
+                                            "usage_unknown": not recorded})
             raise
-        finally:
-            self._emit(phase, request_index, outcome, started, recorded, finish)
 
-    def _emit(self, phase, request_index, outcome, started, recorded, finish):
-        """Report one call's timing and token counts. Never includes request or response text."""
+    def _emit(self, phase, request_index, outcome, started, recorded, finish,
+              attempt=None, http_status=None, provider_name=None):
+        """Report one attempt's timing, status and token counts. Never any content.
+
+        ``attempt`` and ``http_status`` make a retry sequence legible after the fact:
+        the live 2026-11-02 runs could only be explained by re-sending captured
+        requests because the log did not say "this was attempt 2, it returned 504".
+        """
         if self.observer is None:
             return
         event = {"event": "provider.call", "phase": phase, "outcome": outcome,
@@ -342,6 +494,15 @@ class CorrectionProvider:
                  "elapsed_ms": int(round((time.monotonic() - started) * 1000)),
                  "max_tokens": MAX_OUTPUT_TOKENS,
                  "call_timeout_ms": int(self._last_call_timeout * 1000)}
+        if type(attempt) is int and attempt > 0:
+            event["attempt"] = attempt
+        if type(http_status) is int:
+            event["http_status"] = http_status
+        if type(provider_name) is str and provider_name:
+            # Which endpoint actually served the attempt. The 2026-11-02 runs could
+            # not be explained without this: the same request succeeded on one
+            # endpoint and 504'd on the other.
+            event["provider"] = provider_name
         if finish is not None:
             event["finish_reason"] = finish if finish in {"stop", "length"} else "other"
         if recorded and self.usage["calls"]:

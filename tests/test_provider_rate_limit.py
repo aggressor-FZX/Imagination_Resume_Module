@@ -66,6 +66,10 @@ class SaturatedSession:
 @pytest.fixture
 def disclosure(monkeypatch):
     monkeypatch.setattr(correction_provider, "_approved_disclosure_available", lambda: True)
+    # Prove retry behaviour without spending wall-clock time on backoff.
+    async def instant(seconds):
+        return None
+    monkeypatch.setattr(correction_provider, "_sleep", instant)
 
 
 def test_a_saturated_provider_is_its_own_reason_not_a_generic_error(disclosure):
@@ -75,9 +79,13 @@ def test_a_saturated_provider_is_its_own_reason_not_a_generic_error(disclosure):
                                  provider))
     assert (result.status, result.reason) == ("withheld", "provider_rate_limited")
     assert result.markdown is None
-    # No retry: a 429 that was not asked to fall back must not be re-spent.
-    assert len(session.requests) == 1
+    # A 429 is retried a bounded number of times, then reported as its own reason.
+    assert len(session.requests) == correction_provider.RETRY_MAX_ATTEMPTS
     assert provider.usage["failures"][0]["reason"] == "provider_rate_limited"
+    # Retries are transport attempts, not engine phase calls: letting them consume
+    # the phase budget would discard the completed work they exist to protect.
+    assert provider.calls == 1
+    assert provider.attempts == correction_provider.RETRY_MAX_ATTEMPTS
 
 
 def test_a_rate_limit_is_not_reported_as_a_privacy_or_malformed_failure(disclosure):
