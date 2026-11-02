@@ -164,6 +164,12 @@ def test_missing_section_blocks():
     assert any("missing_section" in r.value for r in d.reasons)
 
 
+def test_raw_json_envelope_is_not_approved_as_markdown():
+    wrapped = '{"final_markdown": "' + GOOD_RESUME.replace('\n', '\\n') + '"}'
+    d = decide(resume_markdown=wrapped, metrics_support=VERIFIED, approved_entities=[])
+    assert d.blocked()
+
+
 def test_placeholder_leak_blocks():
     leaky = GOOD_RESUME + "\n- Worked on [PLACEHOLDER] project\n"
     d = decide(resume_markdown=leaky, metrics_support=VERIFIED,

@@ -189,6 +189,10 @@ def decide(
 
     # ── 2. content shape ────────────────────────────────────────────────
     text = (resume_markdown or "").strip()
+    if re.match(r'^\s*(?:\{|\[|```json\b)', text, re.IGNORECASE):
+        # A structured model envelope is not the approved Markdown document.
+        # In particular, literal "\\n## Education" inside JSON is not a section.
+        reasons.append(Reason.CONVERSATIONAL_OUTPUT)
     if not text:
         reasons.append(Reason.EMPTY_OUTPUT)
     else:

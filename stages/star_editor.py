@@ -273,9 +273,12 @@ class StarEditor:
             for edu in education[:5]:
                 degree = edu.get("degree", "")
                 institution = edu.get("institution", "")
-                dates = edu.get("dates", "")
+                field = edu.get("field", "") or ""
+                dates = edu.get("dates") or edu.get("end_date") or edu.get("graduation_year") or ""
                 gpa = edu.get("gpa", "")
                 line = f"  {degree} -- {institution} ({dates})" if dates else f"  {degree} -- {institution}"
+                if field:
+                    line += f" | Field: {field}"
                 if gpa:
                     line += f" GPA: {gpa}"
                 prompt_parts.append(line)
@@ -421,10 +424,13 @@ class StarEditor:
 
             logger.error(f"[STAR_EDITOR] Failed to parse JSON response: {e}")
             logger.error(f"[STAR_EDITOR] Raw response length: {len(response) if response else 0}")
-            logger.error(f"[STAR_EDITOR] Raw response preview: {(response or '')[:500]}")
             
-            # Check if response looks like markdown directly
-            if response and ("## " in response or "**" in response or "- " in response):
+            # A malformed JSON envelope is not Markdown, even when its encoded
+            # string contains Markdown markers. Returning the envelope as the
+            # resume makes sections and metrics appear in the wrong context.
+            stripped = (response or "").lstrip()
+            looks_like_envelope = stripped.startswith(('{', '[', '```json'))
+            if response and not looks_like_envelope and ("## " in response or "**" in response or "- " in response):
                 logger.warning("[STAR_EDITOR] Using direct markdown output as fallback")
                 return {
                     "final_markdown": response,
@@ -720,7 +726,7 @@ class StarEditor:
             for edu in education[:5]:
                 degree = edu.get("degree", "")
                 inst = edu.get("institution", "")
-                dates = edu.get("dates", "")
+                dates = edu.get("dates") or edu.get("end_date") or edu.get("graduation_year") or ""
                 gpa = edu.get("gpa", "")
                 # Clean pipe-delimited data
                 if "|" in degree:
