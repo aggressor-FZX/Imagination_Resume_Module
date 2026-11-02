@@ -8,6 +8,8 @@ import time
 import json
 import hashlib
 import hmac
+import re
+import math
 from typing import Callable, Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 import aiohttp
@@ -56,6 +58,8 @@ from imaginator_new_integration import run_new_pipeline_async
 import publication_gate
 from approved_resume import unsupported_entities
 import tier_a_verifier
+from correction_provider import CorrectionProvider
+from source_correction import SourceDocument, correct
 
 # Configure global logger for this service
 logger = configure_logging(service_name="imaginator")
@@ -181,6 +185,105 @@ async def root():
     return {"status": "ok", "service": "Generative Resume Co-Writer"}
 
 
+def _snapshot_original_documents(resume_text, documents, supplied):
+    """Snapshot Node's ordered candidate texts, rejecting incomplete evidence."""
+    if not isinstance(resume_text, str) or not resume_text.strip():
+        return None
+    if not supplied:
+        return (("resume", resume_text),)
+    if type(documents) is not list or not documents:
+        return None
+    result, ids = [], set()
+    for doc in documents:
+        if (type(doc) is not dict or set(doc) != {"source_id", "text", "kind"}
+                or type(doc["source_id"]) is not str
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", doc["source_id"])
+                or doc["source_id"] in ids or type(doc["text"]) is not str
+                or not doc["text"].strip() or doc["kind"] != "candidate_document"):
+            return None
+        ids.add(doc["source_id"])
+        result.append((doc["source_id"], doc["text"]))
+    if "\n\n---\n\n".join(text for _, text in result) != resume_text:
+        return None
+    return tuple(result)
+
+
+def _correction_usage(pipeline_metrics, provider=None):
+    """Return known usage only; never forward provider errors or model content."""
+    base = pipeline_metrics if isinstance(pipeline_metrics, dict) else {}
+    result = {"calls": [], "failures": [], "total_prompt_tokens": 0,
+              "total_completion_tokens": 0, "total_tokens": 0,
+              "estimated_cost_usd": 0.0}
+    for key in ("total_prompt_tokens", "total_completion_tokens", "total_tokens"):
+        value = base.get(key)
+        if type(value) is int and value >= 0:
+            result[key] = value
+    cost = base.get("estimated_cost_usd")
+    if type(cost) in (int, float) and math.isfinite(cost) and cost >= 0:
+        result["estimated_cost_usd"] = float(cost)
+    for call in base.get("calls", []) if isinstance(base.get("calls"), list) else []:
+        if isinstance(call, dict):
+            clean = {}
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                value = call.get(key)
+                if type(value) is int and value >= 0:
+                    clean[key] = value
+            value = call.get("cost_usd")
+            if type(value) in (int, float) and math.isfinite(value) and value >= 0:
+                clean["cost_usd"] = float(value)
+            clean["stage"] = "pipeline"
+            result["calls"].append(clean)
+    if base.get("failures"):
+        result["failures"].append({"stage": "pipeline", "usage_unknown": True})
+    if provider is not None:
+        usage = provider.usage
+        result["calls"].extend(dict(call) for call in usage["calls"])
+        result["failures"].extend(dict(failure) for failure in usage["failures"])
+        for key in ("total_prompt_tokens", "total_completion_tokens", "total_tokens",
+                    "estimated_cost_usd"):
+            result[key] += usage[key]
+        # Cancellation may still be propagating when the overall deadline fires.
+        if provider.calls > len(usage["calls"]) + sum(
+                1 for failure in usage["failures"] if failure.get("usage_unknown")):
+            result["failures"].append({"stage": "source_correction", "usage_unknown": True})
+    return result
+
+
+def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decision=None,
+                         aggregate_skills=None):
+    """Only public, fixed metadata survives a withheld correction."""
+    reasons = decision.reason_codes if decision and decision.blocked() else [reason]
+    return AnalysisResponse(
+        processing_status="needs_review", requires_review=True,
+        review_reason=reasons[0], review_reasons=reasons,
+        review_message="The generated resume could not be verified and needs review.",
+        verification_coverage="none", publication_receipt=None,
+        approved_export_payload=None, pipeline_status=pipeline_status,
+        correction_status="withheld", correction_reason=reason,
+        correction_commentary="Content withheld; independent review is required.",
+        aggregate_skills=aggregate_skills,
+        run_metrics=metrics, processing_time_seconds=time.time() - start_time,
+    )
+
+
+async def _run_source_correction(markdown, source_documents, api_key, request):
+    """Use the application session when available, otherwise close a local session."""
+    sources = tuple(SourceDocument(source_id, text) for source_id, text in source_documents)
+    session = getattr(request.app.state, "http_session", None)
+
+    async def run(session):
+        provider = CorrectionProvider(api_key, session)
+        result = await correct(markdown, sources, provider)
+        # Allow a cancelled provider coroutine to record its usage state.
+        await asyncio.sleep(0)
+        return result, provider
+
+    if session is not None and not getattr(session, "closed", False):
+        return await run(session)
+    async with aiohttp.ClientSession() as session:
+        return await run(session)
+
+
 async def _analyze_resume_impl(
     payload: AnalysisRequest,
     request: Request,
@@ -199,7 +302,18 @@ async def _analyze_resume_impl(
     # Parse incoming body and attach request_id
     body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
     request_id = getattr(request.state, "request_id", None)
-
+    source_documents_snapshot = _snapshot_original_documents(
+        payload.resume_text, payload.source_documents,
+        "source_documents" in getattr(payload, "model_fields_set", set()),
+    )
+    if source_documents_snapshot is None:
+        return AnalysisResponse(
+            processing_status="needs_review", requires_review=True,
+            review_reason="source_documents_mismatch", review_reasons=["source_documents_mismatch"],
+            review_message="Source documents could not be verified.",
+            publication_receipt=None, approved_export_payload=None,
+            verification_coverage="none", processing_time_seconds=time.time() - start_time,
+        )
     # ── Immutable source evidence, captured at INGRESS (owner item 6) ────
     # Taken from the submitted body and the uploaded text, before any stage
     # runs. Every gate call below uses this snapshot instead of re-deriving
@@ -221,9 +335,6 @@ async def _analyze_resume_impl(
         f"[IMAGINATOR ENDPOINT] Job ad length: {len(payload.job_ad) if payload.job_ad else 0}"
     )
     logger.info(
-        f"[IMAGINATOR ENDPOINT] Location: {payload.location if payload.location else 'None'}"
-    )
-    logger.info(
         f"[IMAGINATOR ENDPOINT] Confidence threshold: {payload.confidence_threshold}"
     )
     logger.info("[IMAGINATOR ENDPOINT] Feature Flags:")
@@ -237,18 +348,6 @@ async def _analyze_resume_impl(
         "[IMAGINATOR ENDPOINT]   - VERBOSE_MICROSERVICE_LOGS: %s",
         settings.VERBOSE_MICROSERVICE_LOGS,
     )
-
-    if settings.VERBOSE_PIPELINE_LOGS:
-        logger.info(
-            json.dumps(
-                {
-                    "event": "proxy.request",
-                    "path": "/analyze",
-                    "payload": redact_for_logging(payload),
-                },
-                default=str,
-            )
-        )
 
     # Parse structured data from backend
     skills_data = None
@@ -271,9 +370,6 @@ async def _analyze_resume_impl(
                 f"[IMAGINATOR ENDPOINT] Skills structure type: {type(skills_data).__name__}"
             )
             if isinstance(skills_data, list) and len(skills_data) > 0:
-                logger.info(
-                    f"[IMAGINATOR ENDPOINT] First skill sample: {skills_data[0]}"
-                )
                 # Check if backend sent structured skills with confidence (COMPLIANCE)
                 first_skill = skills_data[0]
                 if (
@@ -283,11 +379,6 @@ async def _analyze_resume_impl(
                 ):
                     logger.info(
                         "[COMPLIANCE] structured-skills-v1: Backend sent STRUCTURED skills with confidence metadata"
-                    )
-                    logger.info(
-                        "[COMPLIANCE] structured-skills-v1: Sample confidence: %s, source: %s",
-                        first_skill.get("confidence"),
-                        first_skill.get("source"),
                     )
                 else:
                     logger.warning(
@@ -373,36 +464,19 @@ async def _analyze_resume_impl(
             job_titles=payload.job_titles,
             research_data=payload.research_data,
         )
-        if settings.VERBOSE_PIPELINE_LOGS:
-            logger.info(
-                json.dumps(
-                    {
-                        "event": "pipeline.stage_result",
-                        "path": "/analyze",
-                        "stage": "new_3stage_pipeline",
-                        "result": redact_for_logging(analysis_result),
-                    },
-                    default=str,
-                )
-            )
         analysis_duration_ms = int((time.time() - t0) * 1000)
         logger.info(
             "run_new_pipeline.end",
             extra={"request_id": request_id, "duration_ms": analysis_duration_ms},
         )
         RUN_METRICS.setdefault("durations_ms", {})["pipeline_ms"] = analysis_duration_ms
-        # If mocked test returns final success payload (v2 shape), return it directly
-        if (
-            isinstance(analysis_result, dict)
-            and "status" in analysis_result
-            and "analysis" in analysis_result
-        ):
-            return JSONResponse(status_code=200, content=analysis_result)
-
-        # CHECK FOR NEW PIPELINE RESULT (4-Stage)
-        if isinstance(analysis_result, dict) and analysis_result.get(
-            "final_written_section"
-        ):
+        # Only the normal completed pipeline may enter source-aware correction.
+        # A malformed or failed pipeline must not trigger additional paid calls.
+        if not isinstance(analysis_result, dict):
+            return _withhold_correction(
+                reason="pipeline_invalid", pipeline_status="failed",
+                metrics=_correction_usage(RUN_METRICS), start_time=start_time)
+        if isinstance(analysis_result, dict):
             logger.info(
                 "analyze.pipeline.fast_track",
                 extra={
@@ -411,90 +485,108 @@ async def _analyze_resume_impl(
                 },
             )
 
-            # Prefer run_metrics from analysis_result if it has actual data (from LLMClientAdapter)
-            # Otherwise fall back to global RUN_METRICS (for legacy pipeline paths)
             pipeline_metrics = analysis_result.get("run_metrics", {})
-            # Check if pipeline_metrics is a valid dict with useful data
-            # Note: calls list can be legitimately empty [], so check total_tokens or if dict is non-empty
-            # Use consistent condition: require total_tokens > 0 to ensure metrics have actual usage data
-            has_valid_metrics = (
-                isinstance(pipeline_metrics, dict)
-                and pipeline_metrics.get("total_tokens", 0) > 0
-            )
-            if has_valid_metrics:
-                merged_metrics = pipeline_metrics
-                logger.info(
-                    f"[METRICS] Using pipeline run_metrics: {pipeline_metrics.get('total_tokens', 0)} tokens"
-                )
-            else:
-                merged_metrics = RUN_METRICS.copy()
-                logger.info(
-                    f"[METRICS] Using global RUN_METRICS: {merged_metrics.get('total_tokens', 0)} tokens"
-                )
+            if not isinstance(pipeline_metrics, dict):
+                pipeline_metrics = RUN_METRICS
+            metrics = _correction_usage(pipeline_metrics)
+            status = analysis_result.get("pipeline_status")
+            status = status if status in {"completed", "failed", "timeout",
+                                          "completed_with_fallback"} else "unknown"
+            if status != "completed" and not metrics["failures"]:
+                metrics["failures"].append({"stage": "pipeline", "usage_unknown": True})
+            draft = analysis_result.get("final_written_section_markdown")
+            fallback = (status != "completed" or any(
+                analysis_result.get(key) is True for key in
+                ("fallback", "fallback_used", "emergency_fallback")))
+            if analysis_result.get("finish_reason") not in (None, "stop"):
+                fallback = True
+            if isinstance(draft, str) and draft.strip() == payload.resume_text.strip():
+                fallback = True
+            # Run structure checks before any correction requests; do not use the
+            # old numeric verdict, which pertains to a different document.
+            preflight = publication_gate.decide(
+                resume_markdown=draft if isinstance(draft, str) else None,
+                metrics_support={"verdict": "PASS (tier A only)", "checked": True},
+                fallback_used=fallback, finish_reason=analysis_result.get("finish_reason"),
+                approved_entities=[])
+            if preflight.blocked():
+                # The gate sees the original aliases but its output is never
+                # forwarded wholesale: unknown nested fields may hold drafts.
+                publication_gate.apply_to_payload(analysis_result, preflight)
+                skills = analysis_result.get("aggregate_skills")
+                safe_skills = ([skill for skill in skills
+                                if isinstance(skill, str) and skill.strip()
+                                and len(skill) <= 200
+                                and skill.lower() in payload.resume_text.lower()]
+                               if isinstance(skills, list) else None)
+                return _withhold_correction(reason=preflight.reason_codes[0],
+                    pipeline_status=status, metrics=metrics, start_time=start_time,
+                    decision=preflight, aggregate_skills=safe_skills)
+            try:
+                from approved_resume import export_payload
+                export_payload(draft)
+            except (ValueError, TypeError):
+                return _withhold_correction(reason="render_contract_ambiguous",
+                    pipeline_status=status, metrics=metrics, start_time=start_time)
+            if not api_keys:
+                return _withhold_correction(reason="provider_unavailable",
+                    pipeline_status=status, metrics=metrics, start_time=start_time)
 
-            # Construct final output from analysis_result
-            #
-            # Publication decision comes from ONE module (publication_gate).
-            # Previously this logic was duplicated here and in the legacy path,
-            # and absent entirely from /api/analysis/multi-file — which is how
-            # an unverified resume was publishable from that route.
-            missing_entities = unsupported_entities(
-                analysis_result.get("final_written_section_markdown"), payload.resume_text)
-            # Record only keyed fingerprints, never the candidate's headings.
-            # The request correlation ID is operational metadata from the proxy.
-            diagnostic_key = os.environ.get("PUBLICATION_RECEIPT_SECRET", "")
-            if missing_entities and len(diagnostic_key) >= 16:
-                logger.info("publication.entity_check %s", json.dumps({
-                    "correlation_id": request.headers.get("x-correlation-id"),
-                    "missing_count": len(missing_entities),
-                    "digests": [hmac.new(diagnostic_key.encode(),
-                        ("entity-diagnostic-v1:" + value.lower().strip()).encode(),
-                        hashlib.sha256).hexdigest() for value in missing_entities],
-                }))
-            _decision = publication_gate.decide(
-                resume_markdown=analysis_result.get(
-                    "final_written_section_markdown"),
-                metrics_support=(analysis_result or {}).get("metrics_support"),
-                fallback_used=bool(analysis_result.get("pipeline_status")
-                                   == "failed"),
-                finish_reason=analysis_result.get("finish_reason"),
+            try:
+                correction, provider = await _run_source_correction(
+                    draft, source_documents_snapshot, api_keys[0], request)
+            except Exception:
+                metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
+                return _withhold_correction(reason="provider_error", pipeline_status=status,
+                    metrics=metrics, start_time=start_time)
+            metrics = _correction_usage(pipeline_metrics, provider)
+            if correction.status != "approved" or not isinstance(correction.markdown, str):
+                allowed_reasons = {"invalid_input", "timeout", "malformed_source_inventory",
+                    "source_completeness_uncertain", "no_required_source_claims",
+                    "provider_error", "no_supported_claims", "source_facts_missing",
+                    "unresolved_claims", "malformed_output", "privacy_review_required"}
+                reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
+                return _withhold_correction(reason=reason, pipeline_status=status,
+                    metrics=metrics, start_time=start_time)
+
+            final_markdown = correction.markdown
+            support = tier_a_verifier.verify_metrics(final_markdown, payload.resume_text)
+            missing_entities = unsupported_entities(final_markdown, payload.resume_text)
+            decision = publication_gate.decide(
+                resume_markdown=final_markdown, metrics_support=support,
+                fallback_used=False, finish_reason=analysis_result.get("finish_reason"),
                 required_facts_missing=missing_entities,
-                approved_entities=_approved_entities_from_payload(
-                    analysis_result, body, source_snapshot),
-            )
-            output = publication_gate.apply_to_payload(
-                {
-                    **analysis_result,
-                    "run_metrics": merged_metrics,
-                    "processing_time_seconds": time.time() - start_time,
-                },
-                _decision,
-            )
-            output = _issue_publication_receipt(
-                output, owner=trusted_owner_identity(request))
+                approved_entities=_approved_entities_from_payload(None, None, source_snapshot))
+            if decision.blocked():
+                return _withhold_correction(reason=decision.reason_codes[0],
+                    pipeline_status=status, metrics=metrics, start_time=start_time,
+                    decision=decision)
 
-            # Fix nested domain_insights structure from upstream services (Hermes/FastSVM)
-            if "domain_insights" in output and isinstance(
-                output["domain_insights"], dict
-            ):
-                di = output["domain_insights"]
-                if "domain_insights" in di and isinstance(di["domain_insights"], dict):
-                    nested_di = di.pop("domain_insights")
-                    di.update(nested_di)
-                    logger.info("[SCHEMA_FIX] Merged nested domain_insights")
-
-            ## Validate output schema
-            validate_output_schema(output)
-
-            processing_time = time.time() - start_time
-            logger.info(
-                "analyze.request.completed",
-                extra={
-                    "request_id": request_id,
-                    "processing_time_seconds": processing_time,
-                    "run_metrics": RUN_METRICS.copy(),
-                },
-            )
+            # Do not forward any pipeline draft aliases, notes, or provenance.
+            # Receipt creation parses this exact markdown into the sole export object.
+            output = publication_gate.apply_to_payload({
+                "final_written_section_markdown": final_markdown,
+                "final_written_section": final_markdown,
+                "rewritten_resume": final_markdown,
+                "metrics_support": support,
+                "pipeline_status": status,
+                "correction_status": "approved",
+                "correction_commentary": "Model-assisted review is not proof; independent review is required.",
+                "run_metrics": metrics,
+                "processing_time_seconds": time.time() - start_time,
+            }, decision)
+            owner = trusted_owner_identity(request)
+            output = _issue_publication_receipt(output, owner=owner)
+            if not owner or not output.get("publication_receipt") or not output.get("approved_export_payload"):
+                return _withhold_correction(reason="receipt_unavailable",
+                    pipeline_status=status, metrics=metrics, start_time=start_time)
+            # The compatibility experience alias must derive from the signed
+            # render payload, never from the earlier Drafter output.
+            output["experiences"] = [
+                {"title_line": item.get("title", ""),
+                 "snippet": "\n".join(item.get("bullets", []))}
+                for item in output["approved_export_payload"]["experience"]
+            ]
             return AnalysisResponse(**output)
 
         # Step 2: Run Generation
@@ -620,8 +712,8 @@ async def _analyze_resume_impl(
         _decision = publication_gate.decide(
             resume_markdown=final_markdown,
             metrics_support=_support,
-            fallback_used=bool((analysis_result or {}).get("pipeline_status")
-                               == "failed"),
+            fallback_used=(analysis_result or {}).get("pipeline_status") in {
+                "failed", "completed_with_fallback", "timeout"},
             required_facts_missing=unsupported_entities(
                 final_markdown, payload.resume_text),
             approved_entities=_approved_entities_from_payload(
@@ -660,30 +752,13 @@ async def _analyze_resume_impl(
 
     except HTTPException as e:
         raise e
-    except Exception as e:
-        processing_time = time.time() - start_time
-        logger.exception(
-            "analyze.request.failed",
-            extra={
-                "request_id": getattr(request.state, "request_id", None),
-                "processing_time_seconds": processing_time,
-            },
-        )
-
-        # Return error response with partial results if available
-        return JSONResponse(
-            status_code=500,
-            content=ErrorResponse(
-                error=f"Analysis failed: {str(e)}",
-                error_code="ANALYSIS_FAILED",
-                details={
-                    "processing_time_seconds": processing_time,
-                    "run_metrics": (
-                        RUN_METRICS.copy() if RUN_METRICS.get("calls") else None
-                    ),
-                },
-            ).model_dump(),
-        )
+    except Exception:
+        # Exceptions can contain private draft, source, or provider data.
+        logger.error("analyze.request.failed", extra={"request_id": request_id})
+        known_metrics = locals().get("metrics") or _correction_usage(RUN_METRICS)
+        known_metrics["failures"].append({"stage": "pipeline", "usage_unknown": True})
+        return _withhold_correction(reason="analysis_failed", pipeline_status="failed",
+                                   metrics=known_metrics, start_time=start_time)
 
 
 class ResearchRequest(BaseModel):
@@ -1245,8 +1320,8 @@ async def analyze_resume(
         try:
             result = await _analyze_resume_impl(payload, request, api_key)
             await queue.put(("result", result))
-        except Exception as exc:
-            await queue.put(("error", str(exc)))
+        except Exception:
+            await queue.put(("error", "analysis_failed"))
         finally:
             reset_token_callback(token)
 
@@ -1304,7 +1379,12 @@ async def analyze_resume(
                     )
                     break
         finally:
-            await task
+            if not task.done():
+                task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(
         event_stream(),
@@ -1493,8 +1573,8 @@ async def analyze_multi_file(
         _mf_decision = publication_gate.decide(
             resume_markdown=final_markdown,
             metrics_support=_mf_support,
-            fallback_used=bool((analysis_result or {}).get("pipeline_status")
-                               == "failed"),
+            fallback_used=(analysis_result or {}).get("pipeline_status") in {
+                "failed", "completed_with_fallback", "timeout"},
             required_facts_missing=unsupported_entities(
                 final_markdown, resume_text),
             approved_entities=_approved_entities_from_payload(
@@ -1794,8 +1874,10 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
 
         from resume_builder.build_resume_from_export import build_resume_from_payload_base64
         
-        job_title = payload.get("job_title") or payload.get("headline", "resume")
-        result = build_resume_from_payload_base64(payload, job_title=job_title)
+        # The receipt verifier and renderer both parse this same payload.  Do
+        # not supply a separate headline override: with nested `data`, outer
+        # title fields are not part of the verified render content.
+        result = build_resume_from_payload_base64(payload)
         
         logger.info(
             "resume.export.complete",

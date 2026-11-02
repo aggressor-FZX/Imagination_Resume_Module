@@ -373,7 +373,7 @@ class PipelineOrchestrator:
                     location=location,
                     temperature_override=temperatures["star_editor"],
                 )
-                if editor_data.get("fallback"):
+                if editor_data.get("fallback") or editor_data.get("fallback_used"):
                     logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
 
                 # Log the model used for the final output
@@ -386,9 +386,12 @@ class PipelineOrchestrator:
                 editor_data = {"final_markdown": "", "fallback": True}
 
             stage3_duration = time.time() - stage3_start
+            editor_fallback = bool(
+                editor_data.get("fallback") or editor_data.get("fallback_used")
+            )
 
             result["stages"]["star_editor"] = {
-                "status": "completed",
+                "status": "fallback" if editor_fallback else "completed",
                 "duration_seconds": stage3_duration,
                 "word_count": len(editor_data.get("final_markdown", "").split()),
             }
@@ -460,7 +463,7 @@ class PipelineOrchestrator:
             pipeline_status = "completed"
             errors = result.get("errors", [])
 
-            if draft_data.get("fallback") or editor_data.get("fallback"):
+            if draft_data.get("fallback") or editor_fallback:
                 pipeline_status = "completed_with_fallback"
                 errors.append(
                     "Pipeline used fallback generation for one or more stages"

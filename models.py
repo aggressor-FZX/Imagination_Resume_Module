@@ -181,6 +181,9 @@ class AnalysisRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     resume_text: str = Field(..., min_length=0, description="Raw resume text content")
+    source_documents: Any = Field(
+        default=None, description="Optional original candidate documents, checked against resume_text"
+    )
     job_ad: str = Field(
         ...,
         min_length=1,
@@ -357,6 +360,12 @@ class AnalysisResponse(BaseModel):
     rewritten_resume: Optional[str] = Field(
         None, description="Backward-compatible alias for final_written_section"
     )
+    correction_commentary: Optional[str] = Field(
+        None, description="Separate source-review commentary; not resume content"
+    )
+    correction_status: Optional[str] = None
+    correction_reason: Optional[str] = None
+    pipeline_status: Optional[str] = None
     sectionCompleteness: Optional[Dict[str, Any]] = Field(
         None,
         description="Section coverage checks for education/projects/certifications/experience",

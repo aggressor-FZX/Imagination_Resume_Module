@@ -1978,7 +1978,8 @@ async def run_new_pipeline_async(
             "gap_analysis": gap_analysis_json,
             "suggestions": [],
             "pipeline_version": "3.0",
-            "pipeline_status": "completed",
+            # Do not overwrite the orchestrator's fallback/failure state.
+            "pipeline_status": (result.get("metrics") or {}).get("pipeline_status", "unknown"),
             "run_metrics": {**llm_client.get_usage_stats(), "failures": []},
         }
 

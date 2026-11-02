@@ -17,7 +17,7 @@ import tempfile
 import base64
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 DEFAULT_TEMPLATE = Path(__file__).parent / "main_template.tex"
@@ -150,10 +150,7 @@ def sanitize_export_text(text: str) -> str:
 
 
 def latex_escape(text: str) -> str:
-    escaped = sanitize_export_text(text)
-    for original, replacement in LATEX_SPECIAL_CHARS.items():
-        escaped = escaped.replace(original, replacement)
-    return escaped
+    return "".join(LATEX_SPECIAL_CHARS.get(char, char) for char in sanitize_export_text(text))
 
 
 def normalize_dash(text: str) -> str:
@@ -252,7 +249,7 @@ def format_education_entry(entry: Any) -> str:
     if isinstance(entry, str):
         return entry.strip()
     if not isinstance(entry, dict):
-        return str(entry)
+        return ""
 
     degree = first_nonempty(entry, ["degree", "title", "name"], "")
     field = first_nonempty(entry, ["field", "major"], "")
@@ -264,19 +261,19 @@ def format_education_entry(entry: Any) -> str:
     line = ", ".join(parts)
     if gpa:
         line = f"{line} | GPA: {gpa}" if line else f"GPA: {gpa}"
-    return line or str(entry)
+    return line
 
 
 def format_certification_entry(entry: Any) -> str:
     if isinstance(entry, str):
         return entry.strip()
     if not isinstance(entry, dict):
-        return str(entry)
+        return ""
     name = first_nonempty(entry, ["certification", "name", "title"], "")
     issuer = first_nonempty(entry, ["issuer", "organization", "company"], "")
     date = first_nonempty(entry, ["date", "year", "issued"], "")
     parts = [part for part in [name, issuer, date] if part]
-    return " ".join(parts) or str(entry)
+    return " ".join(parts)
 
 
 def _strip_md_markers(text: str) -> str:
@@ -302,15 +299,16 @@ def parse_skill_groups(source: Dict[str, Any]) -> List[Tuple[str, List[str]]]:
                 for key in ["items", "skills", "values"]:
                     raw = entry.get(key)
                     if isinstance(raw, list):
-                        values.extend([_strip_md_markers(str(item)) for item in raw if _strip_md_markers(str(item))])
+                        values.extend([_strip_md_markers(item) for item in raw if isinstance(item, str) and _strip_md_markers(item)])
                 if not values:
-                    values = [_strip_md_markers(str(entry.get("skill", "")))] if entry.get("skill") else []
+                    skill = entry.get("skill")
+                    values = [_strip_md_markers(skill)] if isinstance(skill, str) and _strip_md_markers(skill) else []
                 groups.append((label, values))
             return groups
 
     flat = source.get("user_skills") or source.get("aggregate_skills") or source.get("skills_list")
     if isinstance(flat, list):
-        items = [_strip_md_markers(str(item)) for item in flat if _strip_md_markers(str(item))]
+        items = [_strip_md_markers(item) for item in flat if isinstance(item, str) and _strip_md_markers(item)]
         if items:
             return [("Skills", items)]
 
@@ -393,10 +391,10 @@ def _build_section_title(entry: Dict[str, Any], fallback: str = "") -> str:
         # Last resort: keep only the first pipe-segment of title_line.
         title_line = entry.get("title_line", "")
         title = title_line.split("|")[0].strip() if isinstance(title_line, str) else ""
-        title = title or fallback or "Experience"
+        title = title or fallback
 
     location = first_nonempty(entry, ["location"], "")
-    return f"{title} -- {location}" if location else title
+    return f"{title} -- {location}" if title and location else title or location
 
 
 def parse_sections(source: Dict[str, Any], keys: Sequence[str]) -> List[ResumeSection]:
@@ -405,21 +403,21 @@ def parse_sections(source: Dict[str, Any], keys: Sequence[str]) -> List[ResumeSe
         value = source.get(key)
         if isinstance(value, list) and value:
             sections: List[ResumeSection] = []
-            for index, entry in enumerate(value):
+            for entry in value:
                 if isinstance(entry, dict):
-                    title = _build_section_title(entry, f"Entry {index + 1}")
+                    title = _build_section_title(entry)
                     body = format_entry_body(entry)
-                    if not body and entry.get("text"):
-                        body = [str(entry["text"]).strip()]
                     date_str = format_date_range(entry)
+                    if not title and not body and not date_str:
+                        continue
                     sections.append(ResumeSection(
                         title=title,
                         body_lines=body,
                         date_string=date_str,
                     ))
-                else:
+                elif isinstance(entry, str) and entry.strip():
                     sections.append(ResumeSection(
-                        title=f"Entry {index + 1}",
+                        title="",
                         body_lines=[str(entry).strip()],
                     ))
             return sections
@@ -534,7 +532,7 @@ def build_skill_block(resume: ResumePayload) -> str:
             continue
         lines.append(f"\\textbf{{{latex_escape(label)}:}} {latex_escape(', '.join(values))}")
     if not lines:
-        lines = ["\\textbf{Skills:} None provided"]
+        return ""
     return (
         "% TECHNICAL SKILLS-------------------------------\n"
         "\\vspace*{1mm}\n"
@@ -579,6 +577,9 @@ def generate_section_body(section: ResumeSection) -> str:
     """Render a section entry with optional right-aligned date."""
     title = latex_escape(section.title)
     bullet_content = bullet_block(section.body_lines)
+    if not title:
+        date = f"{latex_escape(section.date_string)}\n" if section.date_string else ""
+        return f"{date}{bullet_content}\n"
     if section.date_string:
         return f"\\textbf{{{title}}} \\hfill {latex_escape(section.date_string)}\n\\vspace*{{-2mm}}\n{bullet_content}\n"
     return f"\\textbf{{{title}}}\n\\vspace*{{-2mm}}\n{bullet_content}\n"
@@ -598,7 +599,7 @@ def generate_projects_block(resume: ResumePayload) -> str:
     if not resume.projects:
         return ""
     blocks = []
-    blocks.append("% ML AND ANALYTICS PROJECTS-------------------------------\n\\vspace*{2mm}\n\\section{ML and Analytics Projects}\n\\vspace*{1mm}\n")
+    blocks.append("% PROJECTS-------------------------------\n\\vspace*{2mm}\n\\section{Projects}\n\\vspace*{1mm}\n")
     for section in resume.projects:
         blocks.append(generate_section_body(section))
     return "".join(blocks)
@@ -739,14 +740,22 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     set_run(r, size=16, bold=True, color=COLOR_ACCENT)
     
     # Location line (centered, under name)
-    p, r = add_para(sp_before=0, sp_after=0, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    r.text = resume.location
-    set_run(r, size=9, color=COLOR_MUTED)
+    if resume.location:
+        p, r = add_para(sp_before=0, sp_after=0, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+        r.text = resume.location
+        set_run(r, size=9, color=COLOR_MUTED)
     
     # Contact line (centered)
-    p, r = add_para(sp_before=2, sp_after=0, alignment=WD_ALIGN_PARAGRAPH.CENTER)
-    r.text = f"{resume.phone}  |  {resume.email}  |  {resume.linkedin}  |  {resume.github}"
-    set_run(r, size=8, color=COLOR_MUTED)
+    contacts = [value for value in (resume.phone, resume.email, resume.linkedin, resume.github) if value]
+    if contacts:
+        p, r = add_para(sp_before=2, sp_after=0, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+        r.text = "  |  ".join(contacts)
+        set_run(r, size=8, color=COLOR_MUTED)
+
+    if resume.headline:
+        p, r = add_para(sp_before=4, sp_after=1, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+        r.text = resume.headline
+        set_run(r, size=9, italic=True)
     
     # ─── SUMMARY ───
     if resume.summary:
@@ -861,7 +870,7 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
             set_run(r, size=9)
     
     # ─── TECHNICAL SKILLS (last section, after experience/projects/education/certs) ───
-    if resume.skills:
+    if any(values for _, values in resume.skills):
         p, r = add_para(sp_before=8, sp_after=1)
         r.text = "Technical Skills"
         set_run(r, size=12, bold=True, color=COLOR_ACCENT)
@@ -886,6 +895,14 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
             set_run(r1, size=9, bold=True)
             r2 = p.add_run(", ".join(values))
             set_run(r2, size=9, bold=False)
+
+    if resume.publication:
+        p, r = add_para(sp_before=8, sp_after=1)
+        r.text = "Publication"
+        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
+        p, r = add_para(sp_before=1, sp_after=1)
+        r.text = resume.publication
+        set_run(r, size=9)
     
     docx_path = output_dir / f"{safe_title}.docx"
     doc.save(str(docx_path))
@@ -931,24 +948,21 @@ def build_resume_from_payload_base64(payload: Dict[str, Any], job_title: Optiona
     Returns:
         Dict with 'pdf_base64', 'docx_base64', 'filename' keys
     """
-    import base64
-    output_dir = DEFAULT_OUTPUT_DIR
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    pdf_path, docx_path = build_resume_from_payload(payload, output_dir, job_title)
-    
-    safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", job_title or "resume")
-    
-    with open(pdf_path, "rb") as f:
-        pdf_b64 = base64.b64encode(f.read()).decode("ascii")
-    with open(docx_path, "rb") as f:
-        docx_b64 = base64.b64encode(f.read()).decode("ascii")
-    
-    return {
-        "pdf_base64": pdf_b64,
-        "docx_base64": docx_b64,
-        "filename": safe_title,
-    }
+    # A per-call private directory keeps sensitive files and compiler artifacts
+    # isolated, including for concurrent requests with the same title.
+    with tempfile.TemporaryDirectory(prefix="resume-export-") as directory:
+        output_dir = Path(directory)
+        pdf_path, docx_path = build_resume_from_payload(payload, output_dir, job_title)
+
+        # The builder already chose a sanitized filename from the rendered title.
+        # In particular, without an override this is the receipt-bound headline.
+        safe_title = pdf_path.stem
+
+        return {
+            "pdf_base64": base64.b64encode(pdf_path.read_bytes()).decode("ascii"),
+            "docx_base64": base64.b64encode(docx_path.read_bytes()).decode("ascii"),
+            "filename": safe_title,
+        }
 
 
 def build_resume(input_path: Path, template_path: Path, output_dir: Path, job_title: Optional[str] = None) -> Tuple[Path, Path]:

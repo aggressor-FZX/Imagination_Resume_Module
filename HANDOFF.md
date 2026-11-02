@@ -1,5 +1,61 @@
 # Handoff — premerge safety review and test runtime
 
+## Current correction WIP — do not deploy
+
+- Active branch `feat/hybrid-resume-ingest-phase1`; pre-WIP commit
+	`271f25b39816b9db8cd9e0d819f6e00d2a2de2aa`; check `git log -1` for the
+	local WIP commit. See `../resume_bench/HANDOFF.md` for the current plan.
+- [x] Local correction, receipt/export and containment work has combined
+	synthetic/offline coverage: 282 passed. See `CORRECTION_EVIDENCE.md` for
+	the exact command and what was doubled.
+- [ ] Privacy boundary deliberately prevents external correction; do not deploy.
+	Missing source facts, semantic ownership, actual render equivalence, contact
+	identity, privacy-safe model inputs, full pipeline accounting and exact
+	correction commentary remain incomplete. Tests are not provider acceptance.
+- Next: complete the numbered steps in the harness handoff; obtain explicit
+	deployment and paid-test authorization only after local acceptance.
+- Dirty files: source changes and new synthetic tests are WIP; inspect Git
+	status after the local WIP commit. Do not commit local environment secrets.
+
+## Exact receipt binding (2026-11-01)
+
+- Branch: `feat/hybrid-resume-ingest-phase1`; last commit: `271f25b`.
+- [x] Version 4 binds exact UTF-8 Markdown and the complete parsed renderer
+	object, including identity and contact fields. Version 3 requires reanalysis.
+- [x] Focused offline verification: 201 passed; `git diff --check` passed.
+- Next steps:
+	1. Review the compatibility impact: the current analysis issuer leaves profile
+		 identity empty and late profile additions now invalidate the receipt.
+	2. Review actual PDF/DOCX fidelity separately; the receipt only binds renderer input.
+- Uncommitted intentionally: `publication_gate.py`,
+	`tests/test_receipt_v4_exact_binding.py`, and this handoff; no commit or deploy.
+	Pre-existing dirty: `app.py`, `imaginator_new_integration.py`, `models.py`,
+	`orchestrator.py`, `resume_builder/build_resume_from_export.py`,
+	`CORRECTION_BASELINE.md`, `correction_provider.py`, `source_correction.py`,
+	`tests/test_analyze_source_correction_route.py`, `tests/test_correction_integration_offline.py`,
+	`tests/test_correction_privacy_hardening.py`, `tests/test_export_isolation_and_parity.py`,
+	`tests/test_export_receipt_title_binding.py`, `tests/test_fallback_and_experience_containment.py`,
+	and `tests/test_source_correction.py`; left untouched.
+- Verification command, from this repository (network and dotenv disabled):
+	`env -i PATH=/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -c 'import sys,socket; sys.path.append("/home/skystarved/.local/lib/python3.12/site-packages"); import dotenv; dotenv.load_dotenv=lambda *a,**k: False; from pydantic_settings.sources import DotEnvSettingsSource; DotEnvSettingsSource._read_env_files=lambda self: {}; c=socket.socket.connect; e=socket.socket.connect_ex; socket.socket.connect=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else c(self,address); socket.socket.connect_ex=lambda self,address: (_ for _ in ()).throw(RuntimeError("network blocked")) if self.family in (socket.AF_INET,socket.AF_INET6) else e(self,address); socket.getaddrinfo=lambda *a,**k: (_ for _ in ()).throw(RuntimeError("DNS blocked")); import pytest; sys.exit(pytest.main(["-p", "pytest_asyncio.plugin", "-p", "no:cacheprovider", "-o", "addopts=", "-q", "--tb=short", "tests/test_receipt_v4_exact_binding.py", "tests/test_render_approval_contract.py", "tests/test_export_receipt_title_binding.py", "tests/test_publication_gate.py", "tests/test_publication_segments.py", "tests/test_renderer_no_defaults.py", "tests/test_export_isolation_and_parity.py", "tests/test_analyze_source_correction_route.py"]))'`
+
+## Receipt-bound export title fix (2026-11-01)
+
+- Active branch: `feat/hybrid-resume-ingest-phase1`; last commit: `271f25b`
+	(`fix(education): preserve parser fields and reject ambiguous claims`).
+- [x] Removed the route's unverified outer title override; renderer filename now
+	comes from the rendered title. Added offline route-to-renderer regressions.
+- [x] Focused verification below: 82 passed; `git diff --check` passed. PDF
+	compilation was replaced by a local double; generated LaTeX and DOCX were read.
+- Intentionally uncommitted: `app.py`, `resume_builder/build_resume_from_export.py`,
+	`tests/test_export_receipt_title_binding.py`, and this handoff (no-commit request).
+	Pre-existing untracked `CORRECTION_BASELINE.md` was left untouched.
+- Next steps:
+	1. Review the isolated diff; do not deploy without separate authorization.
+	2. Repeat the verification command below if the branch changes.
+- Verification command (from `/tmp`):
+	`env -i HOME=/tmp PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/venv/bin/python -m pytest /home/skystarved/Render_Dockers/Imagination_Resume_Module/tests/test_export_receipt_title_binding.py /home/skystarved/Render_Dockers/Imagination_Resume_Module/tests/test_render_approval_contract.py /home/skystarved/Render_Dockers/Imagination_Resume_Module/tests/test_renderer_no_defaults.py /home/skystarved/Render_Dockers/Imagination_Resume_Module/tests/test_sanitize_mojibake.py -o addopts='' -p no:cacheprovider -q --tb=short`
+
 ## START HERE — current owner: `../resume_bench/HANDOFF.md`
 
 This file holds Imaginator-side detail. **Current status and remaining work live
