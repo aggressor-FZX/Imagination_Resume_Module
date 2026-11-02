@@ -161,18 +161,57 @@ is what made every paraphrasing draft unrecoverable.
 
 ---
 
+## 5. Defect: the writer was *invited* to invent
+
+**File / function.** `imaginator_flow.py` → `run_creative_draft_async`,
+`run_final_editor_async`, `run_star_editor_async`.
+
+**What was wrong.** The gate caught run 4's inventions, but the prompts were asking for
+them. Three prompts offered non-evidence as candidate fact:
+
+- the creative drafter was given `WEB RESEARCH INSIGHTS: Implied Skills / Industry
+  Metrics` and told to "incorporate research insights naturally" and to "surface these
+  implied skills" for things the candidate never listed — the direct source of
+  technologies appearing in a resume whose owner never used them;
+- the final editor received the same block on top of two model drafts with no statement
+  of their status;
+- the STAR editor was given research `result_metrics` as though they were the
+  candidate's.
+
+**Fix.** Research is removed from the drafting prompt entirely and the "surface implied
+skills" instruction is reversed. The drafts are labelled *editing material, not
+evidence*. Each prompt states the boundary explicitly: the job description says what the
+employer wants and is never evidence of what the candidate has done; with no source
+metric the claim stays qualitative rather than estimated; a Projects heading may appear
+empty but filling it with inventions is forbidden; no GPA, issuer or issue date the
+source does not state.
+
+**Regression.** `tests/test_writer_evidence_boundary.py` (6 tests). Deliberately
+structural — it pins the boundary, not a blacklist of run-4's strings. Mutation:
+restoring the research block into the drafting prompt fails it.
+
+---
+
 ## Acceptance status, reported separately
 
 | Item | Status |
 |---|---|
-| Source-fidelity regressions | **PASS** — 12 fidelity tests, 4 fixes mutation-verified |
-| Real correction-and-publication route | **PASS (offline)** — integrated positive reaches `approved` through the real engine with a labelled scripted provider. Not yet proven against a real model. |
-| Real local PDF/DOCX content checks | **NOT RUN** |
-| Deployed revision verified | **NOT RUN** — `ef36ba4` pushed, deploy not yet confirmed in-container |
+| Source-fidelity regressions | **PASS** — 28 fidelity tests across 4 files; 5 fixes mutation-verified |
+| Real correction-and-publication route | **PASS (offline)** — integrated positive reaches `approved` through the real engine with a labelled scripted provider, no override. Not proven against a real model. |
+| Real local PDF/DOCX content checks | **PASS** — 6 tests render with the real LaTeX compiler and real DOCX writer, then read the text back. No mocked bytes. |
+| Deployed revision verified | **PASS** — container matches local: `_iter_sse_lines_utf8` present, `_STANDALONE_OCCUPATIONS` present, `_quote_shares_content` present, `EVIDENCE BOUNDARY` count 2, `Implied Skills` count 0, `CORRECTION_LIVE_CAPTURE=0`, `CORRECTION_PROVIDER_DISCLOSURE=1` |
 | Captured website delivery | **FAIL** — run 4 withheld; no successful delivery yet |
+| Paid website run for the fixes | **NOT RUN (blocked)** — see below |
 
-Full suite: **783 passed, 3 skipped**. The passing count is supporting evidence only;
-the completion claim rests on the four mutation-verified fixes above.
+Full suite: **805 passed, 3 skipped**. The passing count is supporting evidence only;
+the completion claim rests on the mutation-verified fixes above.
+
+### Spend allowance
+
+The authorization for **one** synthetic single-file website analysis (33 credits) was
+consumed by delivery run 4: 1166 → 1133, confirmed in the DB. Balance is 1133 credits,
+but the *authorization* is spent. No further paid run has been made, and none will be
+without explicit approval.
 
 ---
 
