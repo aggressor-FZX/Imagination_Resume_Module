@@ -85,6 +85,63 @@ def review(payload):
     return {"claims": claims, "representations": mappings}
 
 
+def indexed_body_inventory(payload):
+    """Classify index segments; headings are ignored, blank runs were merged."""
+    required, non_resume, uncertain = [], [], []
+    for segment in payload["segments"]:
+        text = segment["text"]
+        if text.lstrip().startswith("## "):
+            non_resume.append(segment["index"])
+        elif text.strip():
+            required.append(segment["index"])
+        else:
+            uncertain.append(segment["index"])
+    return {"required": required, "non_resume": non_resume, "uncertain": uncertain}
+
+
+def indexed_body_review(payload):
+    """Scripted verdicts by exact text, expressed as the index-list protocol.
+
+    Works from the wire payload (``segments`` + ``lines``), not the engine's
+    internal ``source_claims``, because the adapter owns the translation.
+    """
+    segments = payload.get("segments", [])
+    lines = payload.get("lines", [])
+    verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
+    supported_lines = []
+    for line in lines:
+        text = line["text"]
+        if text.startswith("## "):
+            verdicts["structural"].append(line["line_id"])
+            continue
+        fragment = next((part for part in (FRAGMENT, SECOND_FRAGMENT) if part in text), None)
+        clean = text.replace(fragment, "", 1) if fragment else text
+        matches = any(segment["text"].strip() == clean for segment in segments
+                      if segment["index"] in line.get("source_segment_indices", []))
+        # The wire protocol has no per-span verdicts, so the whole line carries the
+        # verdict. A line with an invented fragment is reported unsupported (that
+        # is the claim repair must remove); its underlying segment is still
+        # reported represented below.
+        verdict = "unsupported" if fragment or not matches else "supported"
+        verdicts[verdict].append(line["line_id"])
+        if matches:
+            supported_lines.append(clean)
+    def norm(value):
+        return " ".join(value.split())
+
+    represented, missing = [], []
+    for segment in segments:
+        quote = norm(segment["text"])
+        # Headings and blank separators make no factual claim; the engine reports
+        # them as their own classification, so they are not coverage questions.
+        if not quote or segment["text"].startswith("## "):
+            continue
+        (represented if any(quote == norm(supported) for supported in supported_lines)
+         else missing).append(segment["index"])
+    verdicts["represented"], verdicts["missing"] = represented, missing
+    return verdicts
+
+
 class Stream:
     def __init__(self, data):
         self.data = data
@@ -126,15 +183,26 @@ class FakeSession:
             raise asyncio.TimeoutError("private provider error")
         payload = json.loads(kwargs["json"]["messages"][1]["content"])
         if "flagged_claim_ids" in payload:
-            replacement = self.repairs.pop(0) if self.repairs else ""
+            # Default repair: drop the invented fragment from the flagged span, so
+            # the line becomes an exact source copy. An explicit repairs list (used
+            # to script repeated or no-op repairs) still takes precedence.
+            if self.repairs:
+                replacement = self.repairs.pop(0)
+            else:
+                replacement = ""
             body = {"edits": [{"claim_id": cid, "replacement": replacement}
                               for cid in payload["flagged_claim_ids"]]}
-        elif "lines" not in payload:
-            body = inventory(payload)
+        elif "source_claims" in payload or "lines" in payload:
+            # Review request translated to the index-list wire protocol.
+            body = indexed_body_review(payload)
+            if self.missing_representation and body["represented"]:
+                # Report the first represented segment as omitted, whatever its
+                # index: headings are skipped, so index 0 is not always factual.
+                index = body["represented"].pop(0)
+                body["missing"] = [value for value in body["missing"] if value != index]
+                body["missing"].append(index)
         else:
-            body = review(payload)
-            if self.missing_representation:
-                body["representations"][0].update(status="missing", spans=[])
+            body = indexed_body_inventory(payload)
         content = '{"claims":[],"claims":[]}' if self.malformed else json.dumps(body)
         return Response(json.dumps({"model": OR_SLUG_DRAFTER,
             "usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14},

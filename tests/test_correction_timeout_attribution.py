@@ -20,11 +20,16 @@ from tests.test_analyze_source_correction_route import (  # noqa: F401
     offline, pipeline, post, synthetic_disclosure_bypass,
 )
 from tests.test_correction_integration_offline import (
-    DRAFT, FRAGMENT, SOURCE, Response, inventory, review,
+    DRAFT, FRAGMENT, SOURCE, Response,
 )
+from correction_protocol import _overlap
 
 PHASES = ["source_inventory", "initial_review", "repair", "post_patch_review"]
 SENTINEL = "PRIVATE_SENTINEL_7731"
+# The invented text is its own line, so every source segment stays exactly
+# present in the draft while the reviewer still has a claim to repair.
+INVENTED = "- Managed payroll for 12 staff members"
+REPAIRABLE = SOURCE.replace("## Education", INVENTED + "\n## Education")
 
 
 class HangingResponse:
@@ -39,6 +44,62 @@ class HangingResponse:
 
     async def __aexit__(self, *args):
         return False
+
+
+def indexed_inventory(payload):
+    """Classify the wire segments.
+
+    Section headings and the blank separator are ``non_resume`` here: they make no
+    factual claim, and this fixture keeps the coverage question about facts.
+    """
+    required, non_resume, uncertain = [], [], []
+    for segment in payload["segments"]:
+        text = segment["text"]
+        if not text.strip() or text.startswith("## "):
+            non_resume.append(segment["index"])
+        else:
+            required.append(segment["index"])
+    return {"required": required, "non_resume": non_resume, "uncertain": uncertain}
+
+
+def indexed_review(payload):
+    """Scripted reviewer for the wire protocol.
+
+    A line is supported when a cited segment is its exact text. A line that
+    differs only by inserted text is unsupported and is what repair removes; its
+    underlying segment is still reported represented, because the segment text is
+    present in the line. The engine independently verifies the span it records.
+    """
+    segments, lines = payload["segments"], payload["lines"]
+    by_index = {segment["index"]: segment for segment in segments}
+    verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
+    carried: set[str] = set()
+    for line in lines:
+        text = line["text"]
+        if text.startswith("## "):
+            verdicts["structural"].append(line["line_id"])
+            continue
+        cited = [by_index[index] for index in line.get("source_segment_indices", [])
+                 if index in by_index]
+        exact = next((segment for segment in cited if segment["text"].strip() == text), None)
+        if exact is not None:
+            verdicts["supported"].append(line["line_id"])
+            carried.add(" ".join(exact["text"].split()))
+            continue
+        verdicts["unsupported"].append(line["line_id"])
+        for segment in cited:
+            if _overlap(segment["text"], text):
+                carried.add(" ".join(segment["text"].split()))
+    represented = []
+    for segment in segments:
+        normalized = " ".join(segment["text"].split())
+        if not normalized or segment["text"].startswith("## "):
+            continue
+        if normalized in carried:
+            represented.append(segment["index"])
+    verdicts["represented"] = represented
+    verdicts["missing"] = []
+    return verdicts
 
 
 class ScriptedSession:
@@ -69,9 +130,9 @@ class ScriptedSession:
             body = {"edits": [{"claim_id": cid, "replacement": ""}
                               for cid in payload["flagged_claim_ids"]]}
         elif "lines" not in payload:
-            body = inventory(payload)
+            body = indexed_inventory(payload)
         else:
-            body = review(payload)
+            body = indexed_review(payload)
         return Response(json.dumps({
             "model": OR_SLUG_DRAFTER,
             "usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14},
@@ -125,7 +186,7 @@ def scale_upstream(monkeypatch):
 def test_provider_call_timeout_is_reported_for_the_phase_that_failed(
         offline, monkeypatch, synthetic_disclosure_bypass, logger, index, phase):
     client, _ = offline
-    pipeline(monkeypatch)
+    pipeline(monkeypatch, draft=REPAIRABLE)
     session = ScriptedSession(["ok"] * index + ["provider_timeout"])
     app.app.state.http_session = session
 
@@ -143,7 +204,7 @@ def test_provider_call_timeout_is_reported_for_the_phase_that_failed(
 def test_overall_deadline_is_reported_for_the_phase_in_flight(
         offline, monkeypatch, synthetic_disclosure_bypass, logger, index, phase):
     client, _ = offline
-    pipeline(monkeypatch)
+    pipeline(monkeypatch, draft=REPAIRABLE)
     monkeypatch.setattr(app, "MAX_CORRECTION_DEADLINE_SECONDS", 0.5)
     monkeypatch.setattr(app, "MIN_CORRECTION_BUDGET_SECONDS", 0.05)
     session = ScriptedSession(["ok"] * index + ["hang"])
@@ -260,12 +321,12 @@ def test_budget_is_monotonic_and_withheld_below_the_minimum():
 def test_events_carry_phase_timing_and_token_metadata_for_a_completed_run(
         offline, monkeypatch, synthetic_disclosure_bypass, logger):
     client, _ = offline
-    pipeline(monkeypatch)
+    pipeline(monkeypatch, draft=REPAIRABLE)
     app.app.state.http_session = ScriptedSession([])
 
     result = post(client).json()
 
-    assert result["correction_status"] == "approved"
+    assert result["correction_status"] == "approved", result.get("correction_reason")
     lines = correction_lines(logger)
     phases = [line["phase"] for line in named(lines, "correction.phase_start")]
     assert phases == PHASES
@@ -347,7 +408,7 @@ def test_events_join_the_orchestrator_correlation_id_when_supplied(
 def test_observer_failures_never_change_the_correction_outcome(
         offline, monkeypatch, synthetic_disclosure_bypass):
     client, _ = offline
-    pipeline(monkeypatch)
+    pipeline(monkeypatch, draft=REPAIRABLE)
     app.app.state.http_session = ScriptedSession([])
 
     def broken_logger(*args, **kwargs):
@@ -364,24 +425,30 @@ def test_observer_failures_never_change_the_correction_outcome(
 # --- 4. Output allowance: why inventory and review need their output size --------
 
 def _inventory_output_chars(source_text):
-    payload = {"contract": "", "sources": [{"source_id": "resume", "text": source_text}]}
-    return len(json.dumps(inventory(payload), ensure_ascii=False))
+    """Characters in the index-list answer for one source, from the real wire request."""
+    import correction_protocol
+    request = correction_protocol.indexed_inventory_request(
+        {"contract": "", "sources": [{"source_id": "resume", "text": source_text}]})
+    return len(json.dumps(indexed_inventory(request), ensure_ascii=False))
 
 
-def test_output_allowance_covers_small_inputs_but_not_the_input_ceiling():
-    """Lower-bound estimate from the fixture's minimal inventory shape.
+def test_output_allowance_covers_small_inputs_and_the_maximum_source():
+    """Measure the real index-list answer, not the retired quote-copying shape.
 
-    The inventory must return every span with an id, offsets, a copied quote
-    and a classification, so output grows with input. A real model's output is
-    at least this long. Pessimistic 3 chars/token for the small case and
-    optimistic 4 chars/token for the maximum case keep both assertions robust.
+    The original contract asked the model to copy every span with offsets and
+    quotes, so the answer grew with the source and the 48 KB input ceiling could
+    not fit 12,000 output tokens. The index-list protocol answers with integers,
+    so a document of any accepted size costs a few hundred tokens. This test
+    pins that: the maximum accepted source must fit with a wide margin.
     """
     small_chars = _inventory_output_chars(SOURCE)
-    repeats = MAX_SOURCE_CHARS // len(SOURCE)
+    repeats = MAX_SOURCE_CHARS // len(SOURCE) + 1
     maximum_source = (SOURCE * repeats)[:MAX_SOURCE_CHARS]
-    assert len(maximum_source) <= MAX_SOURCE_CHARS
+    assert len(maximum_source) == MAX_SOURCE_CHARS
     maximum_chars = _inventory_output_chars(maximum_source)
 
-    assert small_chars / 3 < MAX_OUTPUT_TOKENS, "small sources fit the allowance"
-    assert maximum_chars / 4 > MAX_OUTPUT_TOKENS, (
-        "the maximum accepted source cannot fit the allowance; a truncated reply is withheld")
+    # Integers are not free: a 48 KB source has many segments. Four characters
+    # per token is the pessimistic end for JSON digits and punctuation.
+    assert maximum_chars / 4 < MAX_OUTPUT_TOKENS, (
+        "the maximum accepted source must fit the output allowance")
+    assert maximum_chars < 40 * small_chars

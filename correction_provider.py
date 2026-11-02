@@ -6,6 +6,7 @@ import time
 
 import aiohttp
 
+import correction_protocol
 from disclosure import POLICY_ID, verify_disclosure
 from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
 from source_correction import PrivacyReviewRequired, ProviderCallTimeout, SourceDocument
@@ -106,7 +107,25 @@ class CorrectionProvider:
             raise ValueError("correction call budget exhausted")
         if not self.api_key or self.session is None:
             raise ValueError("correction provider unavailable")
-        serialized_payload = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        # The engine asks for exact offsets and gapless partitions; live models
+        # cannot produce those reliably. Translate to index-only questions here,
+        # and translate the answers back to the strict shape the engine verifies.
+        # A payload without the engine's shape is passed through untouched so
+        # direct callers and their error paths behave as before.
+        original_payload = payload
+        translated = None
+        try:
+            if phase == "source_inventory" and "sources" in original_payload:
+                translated = correction_protocol.indexed_inventory_request(original_payload)
+            elif (phase in {"initial_review", "post_patch_review"}
+                    and "sources" in original_payload and "source_claims" in original_payload):
+                translated = correction_protocol.indexed_review_request(original_payload)
+        except correction_protocol.MalformedIndexedResponse:
+            translated = None
+        if translated is not None:
+            payload = translated
+        outgoing = {key: value for key, value in payload.items() if not key.startswith("_")}
+        serialized_payload = json.dumps(outgoing, ensure_ascii=False, allow_nan=False)
         system_content = payload["contract"] + " Return only a JSON object."
         request = {
             "model": self.model,
@@ -128,8 +147,18 @@ class CorrectionProvider:
         policy = approved_disclosure_policy()
         if policy is None:
             raise PrivacyReviewRequired
-        if not verify_disclosure(payload.get("sources"), approved_policy=policy):
+        if not verify_disclosure(original_payload.get("sources"), approved_policy=policy):
             raise PrivacyReviewRequired
+        # The indexed request carries the same source text in ``segments``; the
+        # gate above checked the caller's sources, so assert the exact bytes that
+        # will actually be transmitted are covered by the same policy too.
+        transmitted = payload.get("segments")
+        if type(transmitted) is list:
+            checkable = [{"source_id": "transmitted", "text": " ".join(
+                str(segment.get("text", "")) for segment in transmitted
+                if type(segment) is dict)}]
+            if not verify_disclosure(checkable, approved_policy=policy):
+                raise PrivacyReviewRequired
         self.calls += 1
         # POST is not retried by aiohttp; redirects and model fallbacks are disabled.
         recorded = False
@@ -174,7 +203,20 @@ class CorrectionProvider:
             if type(parsed) is not dict:
                 raise ValueError("invalid provider response")
             outcome = "ok"
-            return parsed
+            # A model (or a transport double) may answer in the strict shape the
+            # engine verifies directly. Prefer that verbatim: it is the more
+            # specific contract, and the engine still validates it. Otherwise
+            # translate the index-list answer the production model is asked for.
+            if translated is None:
+                return parsed
+            strict = {"source_claims"} if phase == "source_inventory" else {"claims", "representations"}
+            if type(parsed) is dict and set(parsed) == strict:
+                # A transport double (or a model) answered in the strict shape the
+                # engine verifies directly; the engine still validates it.
+                return parsed
+            if phase == "source_inventory":
+                return correction_protocol.strict_inventory_from_indexed(parsed, payload)
+            return correction_protocol.strict_review_from_indexed(parsed, payload)
         except asyncio.CancelledError:
             outcome = "cancelled"
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
