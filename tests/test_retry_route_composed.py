@@ -37,27 +37,20 @@ from tests.test_analyze_source_correction_route import (
 
 
 SOURCE = """## Professional Experience
-**Synthetic Workshop**
-- Maintained the workshop inventory and documented repair procedures for service technicians.
-- Improved diagnostic accuracy by 30% using structured test procedures and careful review
-  of repair records, with written documentation shared with colleagues during regular
-  team meetings throughout the year.
-- Coordinated inspection schedules with three external contractors, tracked every open
-  item to closure, and kept complete maintenance records for all routine equipment so
-  that audits could be answered without rework or follow-up requests.
+**Synthetic Workshop** -- Example City, WA
+- Maintained the workshop inventory and documented every repair procedure for the service technicians on site.
+- Improved diagnostic accuracy by 30% using structured test procedures and careful review of repair records.
+- Coordinated inspection schedules with three external contractors and tracked every open item to closure.
 
 ## Education
-**Synthetic College**
-- Completed technical training in electrical systems, equipment maintenance, safety
-  practices, and troubleshooting with practical instruction and supervised workshops
-  covering diagnostic methods, record keeping, and workplace safety fundamentals.
+**Synthetic College** -- Example City, WA
+- Completed technical training in electrical systems, equipment maintenance, safety practices, and troubleshooting.
 
 ## Technical Skills
-- Inventory control, repair documentation, inspection coordination, diagnostic testing,
-  maintenance scheduling, and safety compliance for workshop equipment.
+- Inventory control, repair documentation, inspection coordination, diagnostic testing, and maintenance scheduling.
 """
 
-DRAFT = SOURCE.replace("30% using", "30% in 6 months using")
+DRAFT = SOURCE.replace("by 30% using", "by 47% using")
 
 
 class TransientThenServed:
@@ -316,3 +309,126 @@ def test_a_retried_success_is_not_summarily_withheld(
         assert result["publication_receipt"] is not None
     else:
         assert result["publication_receipt"] is None
+
+
+# --- Focused positive control: retry -> supported content -> published ---------
+#
+# The negative controls above prove a retry cannot launder an unsupported claim. This is
+# their counterpart: the same transient failure, retried, on a draft that needs no
+# correction at all, must reach a completed response carrying a usable receipt.
+#
+# Correction is stubbed here on purpose. A scripted transport cannot produce the exact
+# span-level verdicts the engine demands, and the earlier attempts to make it do so were
+# testing the fixture rather than the route. What this test isolates is the part the
+# milestone actually depends on: after a retry, does the route publish what verification
+# approves, with a receipt the export endpoint accepts? The correction engine's own
+# behaviour is covered by tests/test_source_correction.py and the composed negatives.
+
+
+@pytest.fixture
+def scripted_approval(monkeypatch):
+    """Return the source unchanged as an approved correction, after the real retry runs."""
+
+    def install(document=SOURCE):
+        real_correct = app.correct
+
+        async def approve(markdown, sources, provider, **kwargs):
+            # Exercise the real adapter so the transient failure is genuinely retried.
+            await real_correct(markdown, sources, provider, **kwargs)
+            return CorrectionResult("approved", document, None,
+                                    "Model-assisted review is not proof.", None, 1, 0)
+
+        monkeypatch.setattr(app, "correct", approve)
+
+    return install
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_transient_failure_then_retry_then_supported_content_is_published(
+        offline, monkeypatch, disclosure, faster_retry, scripted_approval, status):  # noqa: F811
+    """transient failure -> successful retry -> supported content -> completed + receipt."""
+    client, session = offline
+    pipeline(monkeypatch, draft=DRAFT)
+    transport = TransientThenServed(status)
+    app.app.state.http_session = transport
+    scripted_approval(SOURCE)
+
+    result = post(client).json()
+
+    # 1 -> 2: the transient failure was retried and the run continued past it.
+    assert transport.attempts >= 4,         "1 retried attempt plus 3 correction phases must all have reached the transport"
+
+    # 3: the published content is the supported document, not the dangling draft.
+    assert result["processing_status"] == "completed", result.get("review_reasons")
+    assert result["requires_review"] is False
+    assert result["correction_status"] == "approved"
+    assert result["final_written_section_markdown"] == SOURCE
+    assert result["metrics_support"]["verdict"] == "PASS (tier A only)"
+
+    # 4: a receipt and an exportable payload were issued.
+    assert result["publication_receipt"] is not None
+    assert result["approved_export_payload"] is not None
+
+
+def test_the_published_positive_control_can_actually_be_exported(
+        offline, monkeypatch, disclosure, faster_retry, scripted_approval):  # noqa: F811
+    """The receipt must be usable, not merely present.
+
+    A positive control whose receipt the export endpoint then refuses would not
+    represent a customer receiving anything, so this renders the real export.
+    """
+    from unittest.mock import Mock
+
+    client, session = offline
+    pipeline(monkeypatch, draft=DRAFT)
+    app.app.state.http_session = TransientThenServed(503)
+    scripted_approval(SOURCE)
+
+    result = post(client).json()
+    assert result["publication_receipt"] is not None
+    assert result["processing_status"] == "completed"
+
+    renderer = Mock(return_value={"filename": "synthetic", "pdf_base64": "AA",
+                                  "docx_base64": "AA"})
+    monkeypatch.setattr(
+        "resume_builder.build_resume_from_export.build_resume_from_payload_base64",
+        renderer)
+    body = {**result["approved_export_payload"],
+            "final_written_section_markdown": result["final_written_section_markdown"],
+            "publication_receipt": result["publication_receipt"]}
+    export = client.post("/resume/export", json=body,
+                         headers={"X-Cogito-Owner-Id": "offline-owner"})
+    assert export.status_code == 200, export.text[:300]
+    renderer.assert_called_once()
+
+
+def test_the_invented_metric_veto_still_holds_after_a_retry(
+        offline, monkeypatch, disclosure, faster_retry):  # noqa: F811
+    """FAULT INJECTION: the verifier vetoes an invented figure even after a retry.
+
+    This is the labelled fault-injection counterpart to the positive control above. The
+    correction result is replaced with a document containing a figure the source does not
+    support — the fault — and the route must refuse to publish it despite the retry
+    having succeeded.
+    """
+    client, session = offline
+    pipeline(monkeypatch, draft=DRAFT)
+    app.app.state.http_session = TransientThenServed(503)
+
+    invented = SOURCE.replace("by 30%", "by 47%")
+    real_correct = app.correct
+
+    async def approve_invented(markdown, sources, provider, **kwargs):
+        await real_correct(markdown, sources, provider, **kwargs)
+        return CorrectionResult("approved", invented, None, "PRIVATE_COMMENTARY",
+                                None, 1, 0)
+
+    monkeypatch.setattr(app, "correct", approve_invented)
+
+    response = post(client)
+    result = response.json()
+    assert result["requires_review"] is True
+    assert result["publication_receipt"] is None
+    assert result["final_written_section_markdown"] is None
+    assert "unsupported_claims" in result["review_reasons"], result["review_reasons"]
+    assert "47%" not in response.text
