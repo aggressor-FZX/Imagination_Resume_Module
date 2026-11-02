@@ -40,6 +40,13 @@ def main() -> int:
     except live_capture.LiveCaptureRefused as exc:
         print(f"NOT READY: {exc}")
         return 2
+    # Say which guarantee admitted the path, so an operator can tell "the disk is
+    # mounted separately" from "the path is git-ignored" without reading code.
+    if live_capture._is_inside_repo(directory):
+        print("admitted_by: separate volume" if live_capture._separate_volume(directory)
+              else "admitted_by: git-ignored path")
+    else:
+        print("admitted_by: outside the repository")
 
     # Actually create it and prove a file can be written with owner-only permissions.
     try:

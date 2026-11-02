@@ -105,6 +105,38 @@ def test_git_ignored_repository_location_is_allowed():
     assert_writable_directory(Path(live_capture._REPO_ROOT) / "captures")
 
 
+def test_a_separately_mounted_volume_inside_the_app_is_allowed(monkeypatch, tmp_path):
+    """The deployed image mounts its disk at /app/data, inside the repo root.
+
+    The container ships without .git or a git binary, so git-ignore cannot be the
+    only admissible proof; a distinct device is an equivalent guarantee that the
+    file is not part of the checkout.
+    """
+    mounted = Path(live_capture._REPO_ROOT) / "data"
+    monkeypatch.setattr(live_capture, "_ignored_by_git", lambda path: False)
+    monkeypatch.setattr(live_capture, "_device_of",
+                        lambda path: 11 if Path(path) == mounted else 22)
+    assert_writable_directory(mounted)
+
+
+def test_a_same_device_repository_location_is_still_refused(monkeypatch):
+    """Negative control: the volume escape hatch must not open the source tree."""
+    source = Path(live_capture._REPO_ROOT) / "resume_builder"
+    monkeypatch.setattr(live_capture, "_ignored_by_git", lambda path: False)
+    monkeypatch.setattr(live_capture, "_device_of", lambda path: 22)
+    with pytest.raises(LiveCaptureRefused):
+        assert_writable_directory(source)
+
+
+def test_a_missing_directory_compares_against_its_existing_ancestor(monkeypatch, tmp_path):
+    """A capture directory that does not exist yet must still be classified."""
+    monkeypatch.setattr(live_capture, "_ignored_by_git", lambda path: False)
+    real = live_capture._device_of
+    monkeypatch.setattr(live_capture, "_device_of", real)
+    # tmp_path exists and is outside the repo, so the guard allows it outright.
+    assert_writable_directory(tmp_path / "live-capture")
+
+
 def test_capture_dir_returns_none_when_unset(monkeypatch):
     monkeypatch.delenv(SETTING_DIR, raising=False)
     assert live_capture.capture_dir() is None

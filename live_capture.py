@@ -86,11 +86,48 @@ def _ignored_by_git(path: Path) -> bool:
         return False
 
 
+def _device_of(path: Path) -> int | None:
+    """Device id of ``path``, falling back to its nearest existing ancestor."""
+    probe = Path(path)
+    for _ in range(64):
+        try:
+            return probe.stat().st_dev
+        except OSError:
+            parent = probe.parent
+            if parent == probe:
+                return None
+            probe = parent
+    return None
+
+
+def _separate_volume(path: Path, root: Path | None = None) -> bool:
+    """True when ``path`` is on a different filesystem than the source tree.
+
+    The deployed image mounts its persistent disk *inside* the application
+    directory (``/app/data``), so every writable location there is technically
+    "inside the repository". A separately mounted volume is not part of the deploy
+    artifact: nothing populates it from the checkout and the container ships with no
+    ``.git`` and no ``git`` binary at all, so no commit can reach a file written
+    there. Comparing device ids keeps the guard meaningful in a container, where
+    ``git check-ignore`` cannot answer.
+    """
+    path_device = _device_of(path)
+    root_device = _device_of(Path(root or _REPO_ROOT))
+    if path_device is None or root_device is None:
+        return False
+    return path_device != root_device
+
+
 def assert_writable_directory(directory: Path) -> None:
     """Refuse a location that would put a resume-shaped document into Git."""
-    if _is_inside_repo(directory) and not _ignored_by_git(directory):
-        raise LiveCaptureRefused(
-            "capture directory is inside the repository and not git-ignored")
+    if not _is_inside_repo(directory):
+        return
+    if _ignored_by_git(directory):
+        return
+    if _separate_volume(directory):
+        return
+    raise LiveCaptureRefused(
+        "capture directory is inside the repository and not git-ignored")
 
 
 def assert_synthetic(source_texts: list[str]) -> None:
