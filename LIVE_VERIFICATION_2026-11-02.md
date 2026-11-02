@@ -125,3 +125,26 @@ was the cause, it either approves (and the receipt/commentary/PDF/DOCX can be
 inspected) or returns a phase-specific
 `provider_call_timeout_*` / `timeout_*` reason that identifies the exact failing
 call. No code change is pending on that outcome.
+
+## Why this stopped here (blocked, not abandoned)
+
+The owner's authorization was for **two** paid analyses and said explicitly:
+*"If the first analysis fails, diagnose the demonstrated failure before using the
+second attempt. Do not spend additional attempts without approval."* Both
+authorized attempts are consumed, and a third-run approval request could not be
+answered ("user is not available … work autonomously"). A third charge was
+therefore **not** made: a generic autonomy instruction is not authorization to
+spend money. `429a6dd` is deployed and locally verified (251 + 358 offline tests)
+but remains **live-unverified**.
+
+**To resume:** authorize one single-file paid analysis. Nothing else is pending.
+
+## Production state left behind
+
+- All three services live at the release commits above; disclosure flag enabled.
+- The gate is intact: a withheld result still yields no receipt and no export.
+- No publication check was weakened, no rollback was needed, and the two failed
+  runs each consumed 33 credits (user-visible) without releasing content.
+- Synthetic fixtures live only in `/tmp` and the Windows temp copy; no real
+  candidate data was uploaded or stored.
+
