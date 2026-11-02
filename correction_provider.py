@@ -17,6 +17,7 @@ from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
 from source_correction import (
     PrivacyReviewRequired,
     ProviderCallTimeout,
+    ProviderRateLimited,
     SourceDocument,
     UnjudgedReview,
 )
@@ -189,7 +190,12 @@ class CorrectionProvider:
             "temperature": 0.1,
             "max_tokens": MAX_OUTPUT_TOKENS,
             "stream": False,
-            "provider": {"allow_fallbacks": False},
+            # Fallbacks must stay enabled. The correction model is served by two
+            # endpoints; pinning one meant a saturated provider (429
+            # ``engine_overloaded``) failed the whole correction instead of routing
+            # to the other. See ProviderRateLimited. Redirects remain disabled, so
+            # this cannot move the request to a third-party URL.
+            "provider": {"allow_fallbacks": True},
         }
         # The complete envelope is measured again after redaction, including
         # JSON escaping, because the padded placeholders can change the byte size.
@@ -209,6 +215,10 @@ class CorrectionProvider:
                 json=request, timeout=aiohttp.ClientTimeout(total=PROVIDER_TIMEOUT_SECONDS),
                 allow_redirects=False,
             ) as response:
+                if response.status == 429:
+                    # Saturation, not a malformed request: report it as its own
+                    # reason so an operator does not hunt for a code defect.
+                    raise ProviderRateLimited(phase)
                 if response.status != 200:
                     raise ValueError("provider HTTP failure")
                 chunks, size = [], 0
@@ -272,6 +282,12 @@ class CorrectionProvider:
                                             "reason": "provider_call_timeout",
                                             "usage_unknown": not recorded})
             raise ProviderCallTimeout(phase) from exc
+        except ProviderRateLimited:
+            outcome = "provider_rate_limited"
+            self.usage["failures"].append({"stage": "source_correction", "phase": phase,
+                                            "reason": "provider_rate_limited",
+                                            "usage_unknown": not recorded})
+            raise
         except Exception:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
                                             "reason": "provider_error", "usage_unknown": not recorded})

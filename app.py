@@ -268,6 +268,7 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
             "privacy_redaction_failed": "Personal identifiers could not be removed without changing the source text; independent review is required.",
+            "provider_rate_limited": "The correction service was temporarily unavailable; no unverified rewrite was issued. Please retry.",
         }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
         run_metrics=metrics, processing_time_seconds=time.time() - start_time,
@@ -718,6 +719,10 @@ async def _analyze_resume_impl(
                     # returned an edit that changed nothing; both are distinct from
                     # malformed_output and reported so the cause is identifiable.
                     "incomplete_review", "no_op_repair",
+                    # Every eligible upstream endpoint was saturated. Transient and
+                    # unrelated to the request, so it must not be reported as a
+                    # generic correction failure.
+                    "provider_rate_limited",
                     "timeout_source_inventory", "timeout_initial_review",
                     "timeout_repair", "timeout_post_patch_review",
                     "provider_call_timeout_source_inventory",

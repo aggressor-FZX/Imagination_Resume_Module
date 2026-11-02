@@ -113,7 +113,10 @@ def test_corrected_final_is_only_authority_for_aliases_receipt_and_export(offlin
         "source_inventory", "initial_review", "repair", "post_patch_review"]
     assert result["run_metrics"]["total_tokens"] == 61
     assert len(session.requests) == 4
-    assert all(req["json"]["provider"] == {"allow_fallbacks": False} and not req["allow_redirects"]
+    # Fallbacks must be enabled: the model is served by two endpoints, and pinning
+    # one turned a saturated provider into a total correction failure. Redirects
+    # stay disabled, so the request cannot be moved to another URL.
+    assert all(req["json"]["provider"] == {"allow_fallbacks": True} and not req["allow_redirects"]
                for req in session.requests)
 
     renderer = Mock(return_value={"filename": "synthetic", "pdf_base64": "AA", "docx_base64": "AA"})

@@ -303,7 +303,7 @@ def test_isolated_provider_correction_rechecks_and_preserves_usage(synthetic_dis
     assert set(inventory_payload) == {"contract", "segments"}
     assert not any("lines" in json.loads(req["json"]["messages"][1]["content"])
                    for req in session.requests[:1])
-    assert all(req["allow_redirects"] is False and req["json"]["provider"] == {"allow_fallbacks": False}
+    assert all(req["allow_redirects"] is False and req["json"]["provider"] == {"allow_fallbacks": True}
                and req["json"]["model"] == OR_SLUG_DRAFTER for req in session.requests)
 
 

@@ -288,6 +288,28 @@ class CapturingSession:
                 except Exception:
                     pass
 
+            async def text(self, *args, **kwargs):
+                # A provider that answers with an error status is read through
+                # ``text()`` and never reaches ``iter_chunked``. Without this the
+                # capture kept the request and dropped the answer, so a live 429
+                # recorded as "no response at all" — the one shape that cannot be
+                # diagnosed offline. Record it here as well.
+                body = await self._response.text(*args, **kwargs)
+                try:
+                    capture.record_response(index, self.status, body)
+                except Exception:
+                    pass
+                return body
+
+            async def read(self):
+                body = await self._response.read()
+                try:
+                    text = body.decode("utf-8", "replace") if isinstance(body, bytes) else str(body)
+                    capture.record_response(index, self.status, text)
+                except Exception:
+                    pass
+                return body
+
             async def __aenter__(self):
                 return self
 

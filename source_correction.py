@@ -146,6 +146,20 @@ class ProviderCallTimeout(TimeoutError):
         self.phase = phase
 
 
+class ProviderRateLimited(RuntimeError):
+    """The provider refused the call because no eligible endpoint had capacity.
+
+    Measured live 2026-11-02: the correction model was served by exactly two
+    endpoints, and the pinned one answered ``429 engine_overloaded`` from its
+    shared pool. Saturation is transient and says nothing about the request, so it
+    is reported as its own reason instead of a generic provider error.
+    """
+
+    def __init__(self, phase: str | None = None):
+        super().__init__("provider rate limited")
+        self.phase = phase
+
+
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _VERDICTS = {"supported", "unsupported", "uncertain", "structural"}
 # Only explicit single-line labels and verbatim record bodies are compared.
@@ -725,6 +739,11 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             return blocked("no_required_source_claims")
     except ProviderCallTimeout:
         return blocked("provider_call_timeout_source_inventory")
+    except ProviderRateLimited:
+        # Every eligible endpoint was saturated. Saturation is transient and is not
+        # a defect in the request, so it gets its own reason rather than being
+        # reported as a generic provider error.
+        return blocked("provider_rate_limited")
     except TimeoutError:
         # Distinguish a deadline expiry from a provider transport timeout so the
         # failing phase is identifiable in production without extra paid runs.
@@ -821,6 +840,8 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             phase = "post_patch_review"
         except ProviderCallTimeout:
             return blocked(f"provider_call_timeout_{current_phase}")
+        except ProviderRateLimited:
+            return blocked("provider_rate_limited")
         except TimeoutError:
             return blocked(f"timeout_{current_phase}")
         except UnjudgedReview as exc:
