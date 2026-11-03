@@ -102,12 +102,57 @@ workforce safety" is a claim the candidate never made. This is **not** a clean d
   run.
 - Real-model repair recovery remains unexercised: `repair_calls = 0`.
 
+> **CORRECTION, 2026-11-03 (later the same day).** The paragraph above was wrong, and the
+> error was mine. Two export requests *did* leave the browser and both succeeded. The
+> browser-side listener in that session was inspecting URLs for `/resume/export`, while the
+> actual request goes to the orchestrator proxy at `/api/ml/imagination/export`; a
+> `page.on('request')` handler registered after the click could not see it either. "No
+> request left the browser" was an instrumentation miss reported as a product failure.
+> Server logs settle it:
+>
+> | Stage | Evidence |
+> |---|---|
+> | Button interaction | `Download PDF (LaTeX)` / `Download DOCX` clicked at 16:26:12Z–16:27:26Z |
+> | Request | orchestrator `POST /api/ml/imagination/export` at **16:26:44.397Z** and **16:27:26.854Z** |
+> | Proxy → Imaginator | `[RESUME_EXPORT] Calling: …/resume/export` at 16:26:44.405Z and 16:27:26.861Z |
+> | Response | Imaginator `POST /resume/export 200 OK` at 16:26:46.414Z and 16:27:28.402Z; `resume.export.complete` logged for both |
+> | Document bytes | Response carried `pdf_base64` + `docx_base64` (the renderer ran: `pdfTeX` output) |
+> | Browser save | **Yes** — `/mnt/c/Users/jeffd/Downloads/resume.pdf` (128,226 B, `pdfTeX-1.40.26`, `moderncv`, CreationDate `2026-11-03 08:27:27 PST` = 16:27:27Z) and `Machine_Learning_EngineerTest.docx` (37,816 B, `python-docx`) |
+>
+> Both supplied artifacts correspond to this run's approved content: all **23 of 23**
+> approved content units appear in the PDF, and both artifacts contain all six appended
+> clauses. The receipt was therefore **accepted by export**, and it was accepted for the
+> *embellished* content — which is the correct behaviour of the receipt contract (it binds
+> approved content, not truthful content) and the reason the semantic defect is the
+> remaining problem rather than the export path.
+>
+> The filename `Machine_Learning_EngineerTest` does not match the "Senior Electrician" job
+> title typed into that form, so the artifact's *job title* provenance is unexplained. The
+> content provenance is not in doubt (23/23 units match, including six strings unique to
+> this run's sources). Recorded as an open question rather than resolved by assumption.
+
 ## Cost
 
 | | |
 |---|---|
 | Account credits | 33 (968 → 935) |
-| Provider cost, this run | **not established.** The capture records the review and inventory exchanges; per-run `usage.cost` was not read out before the remote file was purged, and the local copy retains the response bodies but not the aggregated cost field. Tracked as **unknown**, not as zero. |
+| Provider cost, this run | **correction calls measured: $0.002912976** |
+
+Reconciled from the preserved local capture after the fact — the provider's own
+`usage.cost` is in each recorded response body, so no provider export was needed:
+
+| Phase | Model / provider | prompt | completion | total | `usage.cost` |
+|---|---|---|---|---|---|
+| `source_inventory` | qwen/qwen3-coder · DeepInfra | 2,014 | 107 | 2,121 | $0.000704088 |
+| `review` | qwen/qwen3-coder · DeepInfra | 4,064 | 1,012 | 5,076 | $0.002208888 |
+| **total** | | 6,078 | 1,119 | 7,197 | **$0.002912976** |
+
+**Scope of that figure.** It covers the **correction stage only** — the two calls the
+capture records. It is *not* the whole pipeline: the researcher, drafter and star-editor
+calls happen outside the correction capture and their usage is not in this file. Total
+per-analysis provider cost is therefore **higher** and remains **unmeasured**. The earlier
+ledger entry saying the figure could not be obtained was correct about the aggregate and
+wrong about the correction portion, which was recoverable all along.
 
 ## Files
 

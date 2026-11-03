@@ -1,4 +1,128 @@
-# Handoff — two-file website run executed and approved; one defect class remains
+# Handoff — run-10 evidence reconciled; semantic work list added; fixtures awaiting review
+
+**2026-11-03, session 11** (supersedes the session-10 header below).
+
+- **Tests:** **1037 passed, 3 skipped** (was 996 — 41 new, all offline).
+- **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; **unchanged and not
+  moved**).
+- **Production code:** **none modified this session.** `git status` shows new files only;
+  `app.py`, `source_correction.py`, `source_preservation.py`, `stages/`,
+  `correction_*` are untouched.
+- **Deployed:** `47c4254` — **no new deployment made, none needed, none authorised.**
+- **Capture:** still **OFF** (`capture=0`); remote capture directory **empty**.
+- **Credits:** 935. **No analysis submitted this session.** Allowance remains exhausted.
+- **Run-10 evidence:** unchanged — capture, both source documents, approved response and
+  original hashes all preserved byte-for-byte.
+
+## Two earlier conclusions were wrong, and are corrected
+
+### 1. "No `/resume/export` request left the browser" — false
+
+An instrumentation miss reported as a product failure. The browser listener watched
+`/resume/export` while the real request goes to the orchestrator proxy
+`/api/ml/imagination/export`. Server logs settle it:
+
+| Stage | Evidence |
+|---|---|
+| Button | `Download PDF (LaTeX)` / `Download DOCX` clicked 16:26:12Z–16:27:26Z |
+| Request | orchestrator `POST /api/ml/imagination/export` at **16:26:44.397Z** and **16:27:26.854Z** |
+| Proxy → Imaginator | `[RESUME_EXPORT] Calling: …/resume/export` at 16:26:44.405Z / 16:27:26.861Z |
+| Response | Imaginator `POST /resume/export **200 OK**` at 16:26:46.414Z / 16:27:28.402Z; `resume.export.complete` ×2 |
+| Bytes | `pdf_base64` + `docx_base64` returned (`pdfTeX` ran) |
+| Save | **Yes** — `resume.pdf` 128,226 B `pdfTeX-1.40.26`/`moderncv` (CreationDate 16:27:27Z); `Machine_Learning_EngineerTest.docx` 37,816 B `python-docx` |
+
+**All 23 of 23** approved content units appear in the PDF. So the **receipt was accepted by
+export** — for the *embellished* content, which is correct behaviour: the receipt binds
+approved content, not truthful content. Export integrity is therefore **not** the
+remaining problem.
+
+Open question, not resolved by assumption: the exported filename
+`Machine_Learning_EngineerTest` does not match the "Senior Electrician" title typed into
+that form. Content provenance is not in doubt; job-title provenance is unexplained.
+
+### 2. "Run 10's provider cost is unrecoverable" — wrong for the correction stage
+
+The preserved local capture retains each response body with the provider's `usage.cost`:
+
+| Phase | Tokens | `usage.cost` |
+|---|---|---|
+| `source_inventory` | 2,121 | $0.000704088 |
+| `review` | 5,076 | $0.002208888 |
+| **total** | 7,197 | **$0.002912976** |
+
+**Correction stage only.** Researcher/drafter/star-editor usage is not in this capture, so
+whole-pipeline provider cost is higher and still **unmeasured**. Not $0.00, and not
+inferable from credits.
+
+## The six appended clauses are not one category
+
+`docs/live-runs/RUN_10_CLAIM_TABLE.md` judges each clause against the complete source and
+its attribution. Result: **five unsupported additions, one legitimate paraphrase.**
+
+| Clause | Verdict |
+|---|---|
+| `ensuring compliance with NFPA 70E standards` | unsupported addition — source ties NFPA 70E to training and the certificate, not to installation |
+| `improving workforce safety and code adherence` | unsupported addition — no measured outcome |
+| `increasing installation efficiency and quality control` | unsupported addition — different outcome from the sourced 18% |
+| `ensuring continuous operations` | unsupported addition — asserts an uptime guarantee no source describes |
+| `enhancing system reliability` | unsupported addition — reliability ≠ the sourced downtime figure |
+| `gaining hands‑on electrical construction experience` | **supported inference — keep it.** Adds no qualification; characterises sourced field work |
+
+Deleting all six would have removed a correct sentence. That is why they are judged
+individually.
+
+## What was added (offline only)
+
+| Path | Purpose |
+|---|---|
+| `appended_clauses.py` | **[tier-b-worklist]** reports, per supported line, trailing participial clauses that share no content word with the evidence **cited for that line**. Produces a work list for semantic review. **Does not gate publication, does not decide fabrication, not wired into the pipeline.** |
+| `tests/test_appended_clause_worklist.py` | 20 paired tests using verbatim run-10 text: faithful paraphrase approves, cross-document synthesis approves, 5 of 6 appends detected, wrong-employer transplant rejected, reviewer-said-supported shown not to be verification |
+| `tests/fixtures/realistic_candidate/` | **[realistic-fixture]** candidate pack — 2 source docs, 22-fact ownership ledger, 6 named traps. **Awaiting review; not frozen, not hashed for approval, not submitted** |
+| `tests/test_realistic_candidate_fixture.py` | 21 structural self-checks on that pack |
+
+**Why the measured basis matters.** Against the whole cited *document*, only **1 of 6**
+appends is detectable (`compliance`/`standard` occur elsewhere in `document-0`). Against
+the evidence cited *for that line*, **5 of 5** are. The document-scoped comparison is
+precisely what hid the defect. Mutation-tested: restoring document scope fails 8 of the
+new tests.
+
+**Vocabulary is not the test.** A "words absent from the source" rule would fire on 1 of 6
+and would delete the one clause that is correct. The work list reports questions; Tier B
+answers them.
+
+## Next work, in priority order
+
+1. **Wire the work list into the review** (not done). Decide whether a non-empty work list
+   should withhold, trigger a targeted re-review, or only annotate. Any of these changes
+   prompt or reviewer behaviour, which per SPEC.v2 requires **bounded real-model evidence
+   after** the offline tests — **not** an unapproved production retry.
+2. **Review the realistic candidate pack** (`tests/fixtures/realistic_candidate/README.md`).
+   Freeze and hash only after approval; record hashes there.
+3. **Explain the export filename** mismatch (`Machine_Learning_EngineerTest` vs "Senior
+   Electrician"). Cosmetic provenance question; no spend required.
+4. **Whole-pipeline provider cost** for run 10 remains unmeasured — the correction measure
+   is not the total.
+5. Real-model repair recovery still unexercised (`repair_calls = 0` in every run).
+
+**No submission is authorised.** The 1-analysis allowance is exhausted (credits 935). No
+production mutation and no deployment was made or is authorised by these changes.
+
+## Verification commands
+
+```
+source .venv/bin/activate && cd Imagination_Resume_Module
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider            # 1037 passed, 3 skipped
+python -m pytest tests/test_appended_clause_worklist.py -q -o addopts=""    # 20
+python -m pytest tests/test_realistic_candidate_fixture.py -q -o addopts="" # 21
+python -m pytest tests/test_route_two_documents.py -q -o addopts=""         # 22, real /analyze
+cd ../Login_Landing_page
+node node_modules/jest/bin/jest.js -c jest.integration.config.js \
+  backend/tests/integration/multiFileRoute.test.js                      # 6 passed
+```
+
+---
+
+# Session 10 — two-file website run executed and approved; one defect class remains
 
 **2026-11-03, session 10** (supersedes the session-9 header below).
 
