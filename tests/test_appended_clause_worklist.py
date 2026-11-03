@@ -483,13 +483,18 @@ SUPPORTED_RECOMBINATION = (
     "Cut average fault-response time from 4.5 hours to 2.75 hours, and reduced "
     "unplanned downtime by 22% through a preventive maintenance schedule.")
 
-# FALSE BY RECOMBINATION: the SAME words, the SAME two figures, no added vocabulary
-# — only the join changes. The comma plus "reducing" turns the second fact into a
-# participial clause modifying the first, so the sentence now says that cutting the
-# response time *brought about* the 22% downtime reduction. The record never links
-# them: they are two separate bullets, and the downtime reduction is attributed to
-# a preventive maintenance schedule, not to faster fault response.
-FALSE_RECOMBINATION = (
+# UNSUPPORTED / AMBIGUOUS BY RECOMBINATION: the SAME words, the SAME two figures,
+# no added vocabulary — only the join changes. The comma plus "reducing" makes the
+# second fact read as a consequence of the first, i.e. it invites the inference
+# that cutting response time contributed to the 22% downtime reduction.
+#
+# What is claimed here is deliberately narrower than "false". The record presents
+# these as two separate bullets and attributes the downtime reduction to a
+# preventive maintenance schedule, so the causal reading is unsupported by the
+# source and at best ambiguous — the two could share a cause. Whether it is
+# affirmatively false is a semantic judgement about the candidate's work, which
+# this module does not make and this test does not assert.
+UNSUPPORTED_CAUSAL_RECOMBINATION = (
     "Cut average fault-response time from 4.5 hours to 2.75 hours, reducing "
     "unplanned downtime by 22% through a preventive maintenance schedule.")
 
@@ -501,9 +506,13 @@ def test_control_the_recombination_pair_differs_only_in_the_asserted_relation():
     grammatical relation differs. This is asserted first, because without it the
     two cases below could be explained by wording rather than by the module's
     limits.
+
+    The difference between the two sentences is a difference in what a reader is
+    invited to infer (coordination vs consequence), not a difference in truth value
+    that grammar settles.
     """
     supported = appended_clauses._content_stems(SUPPORTED_RECOMBINATION)
-    false_claim = appended_clauses._content_stems(FALSE_RECOMBINATION)
+    false_claim = appended_clauses._content_stems(UNSUPPORTED_CAUSAL_RECOMBINATION)
     assert supported == false_claim, (
         "the two sentences must share every content stem; the difference is the "
         "relation, not the words")
@@ -527,19 +536,25 @@ def test_control_a_supported_recombination_is_not_reported():
     assert found == []
 
 
-def test_control_a_false_recombination_is_examined_and_still_not_detected():
-    """[tier-b-worklist] CONTROL 2c — FALSE: same words, invented causal link.
+def test_control_an_unsupported_causal_inference_is_examined_and_not_detected():
+    """[tier-b-worklist] CONTROL 2c — same words, unsupported causal inference.
 
     The detector DOES examine this sentence (the participial clause is located),
     and the finding list is still EMPTY, because every content stem comes from the
-    cited facts. The sentence is false — it claims a causal relationship the record
-    never draws — and no lexical test can see that.
+    cited facts. The sentence invites a causal reading the record does not support,
+    and no lexical test can see that.
 
-    This is the honest demonstration of the module's limit. It replaces an earlier
-    version of this control whose "false" sentence was malformed rather than
-    natural, and which therefore tested nothing.
+    Careful about what is claimed. This is **not** a proof of falsity. The record
+    reports the two facts separately and attributes the downtime reduction to a
+    preventive maintenance schedule, so the causal reading is unsupported and at
+    best ambiguous — the two outcomes could share a common cause. Whether the
+    sentence is affirmatively false is a semantic judgement about the candidate's
+    work that neither this module nor this test makes.
+
+    The test therefore asserts the *mechanical* fact — the clause is located and
+    produces no finding — and leaves the truth question open.
     """
-    located = appended_clauses.appended_clauses(FALSE_RECOMBINATION)
+    located = appended_clauses.appended_clauses(UNSUPPORTED_CAUSAL_RECOMBINATION)
     assert [text for _a, _b, text in located] == [
         "reducing unplanned downtime by 22% through a preventive maintenance "
         "schedule"], (
@@ -547,16 +562,16 @@ def test_control_a_false_recombination_is_examined_and_still_not_detected():
         "below is a true miss, not an unexamined sentence")
 
     found = appended_clauses.unattested_clauses(
-        FALSE_RECOMBINATION, FACT_POOL, FACT_POOL)
+        UNSUPPORTED_CAUSAL_RECOMBINATION, FACT_POOL, FACT_POOL)
     assert found == [], (
-        "a false causal recombination built entirely from source words passes the "
+        "a causal recombination built entirely from source words passes the "
         "lexical check — the documented blind spot, not a bug")
 
-    # The same sentence with a REAL causal link would be fine; the defect is that
-    # this link is not in the record. The module cannot tell the difference, which
-    # is why it reports coverage and never a verdict.
+    # Both facts really are in the record; it is the relation that is not.
     assert "preventive maintenance schedule" in SRC_DOWNTIME_22
     assert "4.5 hours" in SRC_SPEED
+    # And the module records no assessment either way.
+    assert all(f.get("semantic_status") == "not_assessed" for f in found) or not found
 
 
 # ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ merging the branch cannot change runtime behaviour.
 
 | Proposal | Rejected because |
 |---|---|
-| Wire the work list into the publication gate | Control 2 demonstrates a **false** causal claim built entirely from source vocabulary producing an **empty** work list. A gate on this field would ship that sentence. Also control 3 shows a false positive would delete a correct restatement. |
+| Wire the work list into the publication gate | Control 2 demonstrates an **unsupported causal inference** built entirely from source vocabulary producing an **empty** work list. A gate on this field would pass that sentence. Control 3 shows the opposite failure: a correct restatement is reported, so a gate would also delete sound writing. |
 | Add more coverage values / thresholds | The set-intersection already distinguishes what it can. `none`/`some`/`all` is the measurement; adding granularity would imply the field carries semantic weight it does not. |
 | Rename the fields again | They now state exactly what is measured. Further renaming is churn. |
 | Add a semantic classifier (embeddings, entailment model) | Out of scope for this pass, and it would need its own bounded real-model evidence before being trusted, per SPEC.v2 §2.2. |
@@ -32,17 +32,22 @@ The measurements that motivated freezing:
 
 | Case | Work list | Is the clause sound? |
 |---|---|---|
-| Supported recombination (coordination) | empty | **Yes** |
-| False recombination (same words, causal link) | **empty** | **No** |
-| Entailed restatement ("responding more quickly") | reported, coverage `none` | **Yes** |
-| Unentailed restatement ("reducing repeat visits") | reported, coverage `none` | **No** |
-| Paraphrase, evidence present elsewhere | reported, coverage `all` | **Yes** |
-| False claim, all words from source | empty | **No** |
+| Supported recombination (coordination) | empty | **Sound** |
+| Unsupported causal recombination (same words, invited inference) | **empty** | **Unsupported / ambiguous** |
+| Entailed restatement ("responding more quickly") | reported, coverage `none` | **Sound** |
+| Unentailed restatement ("reducing repeat visits") | reported, coverage `none` | **Unsupported** |
+| Paraphrase, evidence present elsewhere | reported, coverage `all` | **Sound** |
+| False claim, all words from source | empty | **Unsupported** |
 
-Four of six rows are wrong about meaning in one direction or the other. No amount of
-additional lexical machinery fixes that: the module measures word overlap, and the
-distinctions that matter here are semantic. Extending it would produce more confident
-answers to questions it cannot answer.
+Four of six rows mislead a reader who treats the work list as a verdict, in one
+direction or the other. No amount of additional lexical machinery fixes that: the module
+measures word overlap, and the distinctions that matter here are semantic. Extending it
+would produce more confident answers to questions it cannot answer.
+
+Note on the causal case specifically: the work list is empty and the sentence is
+*unsupported*, not proven false. Whether a causal reading is false, or merely one of
+several plausible readings the source leaves open, is a semantic judgement. That
+uncertainty is exactly why the module must not be promoted into a gate.
 
 ## What it is for, and the only sanctioned use
 
