@@ -1,31 +1,49 @@
 """Source preservation proven through the real route and the real renderers.
 
-The four defects this covers were all demonstrated by delivery run 7 and are all
-*silent*: the resume reads well, every token is sourced, and the candidate's record is
-still misrepresented. They are fixed deterministically in ``source_preservation`` and
-called from ``StarEditor.polish``, so the fix runs on the live path:
-
     POST /analyze
-      -> writer draft (run-7 output, defects intact, taken verbatim from the capture)
-      -> real StarEditor.polish  -> deterministic source preservation
+      -> writer draft (run-7 output, defects intact, verbatim from the capture)
+      -> real StarEditor.polish -> deterministic source preservation
       -> real CorrectionProvider -> real engine -> publication gate -> receipt
     POST /resume/export -> real LaTeX compiler + real python-docx
                         -> pdftotext / DOCX XML read back
 
-What is scripted, and labelled:
+What is scripted, and labelled
+------------------------------
 
 * the **writer** output — the input under test, verbatim from the capture;
-* the **reviewer** decisions — authored here from the source text.
+* the **reviewer** decisions — authored by hand from the source text, per line, and
+  given as an explicit table. They are NOT produced by a coverage threshold. An
+  earlier version scored similarity and lowered the threshold until the run approved,
+  which is indistinguishable from scripting the result: the reviewer stops being an
+  independent check the moment its verdict is tuned to the outcome. The table below
+  states, for each line of this one fixture, which source segments establish it, and
+  the test asserts the decisions were actually used.
 
 What is NOT done: ``CorrectionResult`` is never overridden, the answer key is never
-edited to match the output, and no PDF/DOCX bytes are mocked. The renderer assertions
-read files that the real toolchain produced.
+edited, and no PDF/DOCX bytes are mocked.
 
-Labelled **[route-preserve]** and **[renderer-real]**.
+Harness note — why the instrumentation lives in a fixture
+---------------------------------------------------------
+
+The request must be issued AFTER the spies are installed. This file previously built
+the response inside the ``preserved`` fixture and let tests install spies afterwards,
+so a spy could never observe anything: the route had already completed. That produced a
+long detour of "the validator was never called / maybe another module / perhaps cached"
+about code that was simply never observed. Two things prevent a repeat:
+
+* ``boundaries`` is a fixture that installs every recorder and then yields a *factory*;
+  the factory issues the request. Nothing can run before the recorders exist, because
+  the request is a call the test makes.
+* ``captured["boundaries"]`` holds the real values at each named seam, so a test reads
+  what happened instead of re-deriving it. No offsets or source ids are reconstructed by
+  hand.
+
+Labelled **[route-preserve]**, **[harness]** and **[renderer-real]**.
 """
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import re
 import shutil
@@ -41,8 +59,8 @@ from fastapi.testclient import TestClient
 import app
 import correction_provider
 import live_capture
+import source_correction
 import source_preservation
-from source_preservation import _stem
 from tests.fixtures.fidelity import expected_facts as facts
 
 RUN7 = Path("/home/skystarved/Render_Dockers/.live-run-2026-11-02/captures/"
@@ -59,18 +77,59 @@ def _recorded_draft() -> str:
 
 
 # ---------------------------------------------------------------------------
-# The controlled reviewer
-#
-# It answers every phase the engine can ask for and, after preservation has run, it
-# finds nothing to object to. That is the honest shape: the defects preservation fixes
-# are not reviewer-visible semantic faults once corrected, and inventing objections to
-# them would be scripting the result.
+# The controlled reviewer: an explicit, hand-authored decision table
 # ---------------------------------------------------------------------------
 
+# For each line of the PRESERVED run-7 document, which source segments establish it.
+#
+# Keyed by a substring unique to the line. Written by reading the source and the
+# preserved document side by side, not by scoring overlap. A line absent from this table
+# is reported `unsupported` — the reviewer declines to substantiate it.
+LINE_DECISIONS: dict[str, tuple[int, ...]] = {
+    # Summary restates the source summary, which is wrapped across segments 1 and 2.
+    "Journeyman electrician with 8+ years": (1, 2),
+    # Cascade record: employer line, role/date line, then its three bullets.
+    "**Cascade Power Solutions, LLC**": (4,),
+    "*Journeyman Electrician | 03/2020": (5,),
+    "Led installation and maintenance": (6,),
+    "Trained 6 apprentices": (7,),
+    "Optimized panel labeling": (8,),
+    # Harborline record.
+    "**Harborline Mechanical Contractors**": (9,),
+    "*Electrical Apprentice | 06/2016": (10,),
+    "Supported conduit bending": (11,),
+    "Completed 8,000 hours of supervised field work": (12,),
+    # Education: institution on its own line, then degree + field + date.
+    "**Example Technical College**": (14,),
+    "*Associate of Applied Science, Electrical Systems Technology | 2016*": (15,),
+    "- Washington Journey Level Electrician License": (17,),
+    "- NFPA 70E Arc Flash Safety": (18,),
+    # The combined skills line restates BOTH source skill bullets. This is the case that
+    # made a single-best-match reviewer wrong: it cited one and left the other uncited,
+    # the adapter then emitted `uncertain` for the uncited item, and three
+    # genuinely-represented items withheld the whole draft.
+    "**Electrical:**": (20, 21),
+}
+
+
+def decisions_for(text: str) -> tuple[int, ...] | None:
+    """The authored segments for a draft line, or None when it is not substantiated."""
+    for marker, segments in LINE_DECISIONS.items():
+        if marker in text:
+            return segments
+    return None
+
+
 class ControlledReviewer:
+    """Answers the correction phases from the authored table above.
+
+    Test-only. It is deliberately not "aggressive"; it states what the source says.
+    """
+
     def __init__(self):
         self.phases: list[str] = []
         self.requests: list[dict] = []
+        self.matched_decisions: list[str] = []
 
     async def close(self):
         pass
@@ -95,16 +154,12 @@ class ControlledReviewer:
 
     def _answer(self, phase, wire):
         if phase == "inventory":
-            # Headings are classified `non_resume`: they assert no candidate fact, so a
-            # representation cannot be demanded for them. The engine's own contract says
-            # a `required` item must be represented by a supported span, and no span can
-            # establish a heading — claiming one produced a representation with no
-            # supporting span, which the engine correctly downgraded to `uncertain`, and
-            # `uncertain` with nothing flagged is the withhold.
-            #
-            # Both alternatives are wrong in different ways: `required` demands the
-            # impossible, and `uncertain` blocks the run outright. `non_resume` is the
-            # accurate classification for a line that makes no claim about the candidate.
+            # Headings are `non_resume`: they assert no candidate fact, so demanding a
+            # representation for one demands the impossible. `required` for a heading
+            # produced a representation with no supporting span, which the engine
+            # correctly downgraded to `uncertain`; `uncertain` for a heading blocks the
+            # run outright. `non_resume` is the accurate classification for a line that
+            # makes no claim about the candidate.
             headings, body = [], []
             for segment in wire["segments"]:
                 stripped = segment["text"].strip()
@@ -112,34 +167,16 @@ class ControlledReviewer:
                  else body).append(segment["index"])
             return {"required": body, "non_resume": headings, "uncertain": []}
         if phase == "repair":
+            # Echo each flagged line unchanged. A no-op repair is reported as such rather
+            # than silently accepted; nothing in these fixtures needs a repair, so this
+            # path is only here so an unexpected repair is visible rather than a crash.
+            by_line = {line["line_id"]: line["text"] for line in wire["lines"]}
             return {"edits": [{"claim_id": cid,
-                               "replacement": self._replace(cid, wire)}
+                               "replacement": by_line[cid.split(":", 1)[0]]}
                               for cid in wire["flagged_claim_ids"]]}
         return self._review(wire)
 
-    @staticmethod
-    def _replace(claim_id, wire):
-        line_id = claim_id.split(":", 1)[0]
-        return next(line["text"] for line in wire["lines"]
-                    if line["line_id"] == line_id)
-
     def _review(self, wire):
-        """Support every line that shares content with a source segment.
-
-        Deliberately generous, and deliberately mechanical: this reviewer exists to let a
-        preserved draft reach the gate, not to model judgement.
-
-        Coverage is judged against the WHOLE document rather than line-by-line. A source
-        line can span two draft lines, and a section the draft legitimately consolidates
-        (the source's ``## Skills`` becoming ``## Technical Skills``) would otherwise read
-        as omitted purely because no single draft line matched it. Judging per line was
-        the first version of this and it reported 7 of 22 segments missing on a correctly
-        preserved document — a false objection, which is exactly the class of error the
-        answer key warns about.
-
-        Headings are ``structural``: they assert no candidate fact, so they are never
-        reported missing.
-        """
         segments = wire["segments"]
         verdicts = {"supported": [], "unsupported": [], "uncertain": [], "structural": []}
         evidence: dict[str, list[int]] = {}
@@ -151,59 +188,37 @@ class ControlledReviewer:
             if text.lstrip().startswith("#"):
                 verdicts["structural"].append(lid)
                 continue
-            words = {w.casefold() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", text)
-                     if len(w) > 3}
-            # Cite EVERY segment this line substantively covers, not just its single best
-            # match. One draft line routinely restates several source items — the summary
-            # sentence carries both halves of the wrapped paragraph, and a combined
-            # skills line carries both source skill bullets. Picking one best match left
-            # the others uncited, the translator then emitted `uncertain` for them, and
-            # three genuinely-represented items withheld the whole draft.
-            cited = []
-            for segment in segments:
-                seg_words = {w.casefold()
-                             for w in re.findall(r"[A-Za-z][A-Za-z\-]+", segment["text"])
-                             if len(w) > 3}
-                if not seg_words:
-                    continue
-                if len(words & seg_words) / len(seg_words) >= 0.5:
-                    cited.append(segment["index"])
-            if cited:
-                verdicts["supported"].append(lid)
-                evidence[lid] = sorted(set(cited))
-            else:
-                verdicts["uncertain"].append(lid)
-
-        # Stemmed, because a faithful paraphrase inflects: the source's
-        # "standardizing" appears as "standardized"/"optimized" and "checklists" as
-        # "workflows". Exact-word overlap scored two bullets the answer key calls
-        # "accepted, not missing" (segments 6 and 8) at 0.71 and 0.67 — a false
-        # objection of exactly the class the key warns about.
-        whole = {_stem(w) for w in re.findall(r"[A-Za-z][A-Za-z\-]+",
-                                              " ".join(line["text"]
-                                                       for line in wire["lines"]))
-                 if len(w) > 3}
-        represented, missing = [], []
-        for segment in segments:
-            stripped = segment["text"].strip()
-            if stripped.startswith("#") or not re.search(r"[A-Za-z]", stripped):
-                # A heading asserts no candidate fact. Tested by the leading "#" rather
-                # than by "has no content words": "## Professional Summary" DOES contain
-                # content words, so the word-based guard silently let headings through
-                # and they were reported `represented` with no support.
-                # The inventory classifies them `non_resume`, and the translator emits
-                # that status verbatim, so they must not appear here either.
+            authored = decisions_for(text)
+            if authored is None:
+                # Not in the table: the reviewer does not substantiate it. Deliberately
+                # listed as `unsupported` rather than `uncertain` so an unanticipated
+                # line is loudly visible instead of quietly withholding.
+                verdicts["unsupported"].append(lid)
                 continue
-            seg_words = {_stem(w)
-                         for w in re.findall(r"[A-Za-z][A-Za-z\-]+", stripped)
-                         if len(w) > 3}
-            if not seg_words:
-                continue
-            covered = len(seg_words & whole) / len(seg_words)
-            (represented if covered >= 0.6 else missing).append(segment["index"])
+            verdicts["supported"].append(lid)
+            evidence[lid] = sorted(set(authored))
+            for marker in LINE_DECISIONS:
+                if marker in text:
+                    self.matched_decisions.append(marker)
+                    break
 
+        # Coverage: every segment named by an authored decision is represented. Segments
+        # carrying a heading or only a provenance marker assert no candidate fact and are
+        # classified `non_resume` in the inventory, so they are not part of this list.
+        cited = {index for indices in evidence.values() for index in indices}
+        represented = sorted(cited)
+        missing = [s["index"] for s in segments
+                   if s["index"] not in cited
+                   and not s["text"].strip().startswith("#")
+                   and not decisions_for(s["text"]) and _is_required(s["text"])]
         return {**verdicts, "evidence": evidence,
                 "represented": represented, "missing": missing}
+
+
+def _is_required(text: str) -> bool:
+    """True for a source segment that states a candidate fact."""
+    stripped = text.strip()
+    return bool(stripped) and not stripped.startswith("#")
 
 
 def _envelope(answer):
@@ -245,12 +260,41 @@ def _response(status, body):
     return Response()
 
 
+# ---------------------------------------------------------------------------
+# [harness] every recorder installed BEFORE the request is issued
+# ---------------------------------------------------------------------------
+
 @pytest.fixture
-def preserved(monkeypatch):
-    """Run /analyze over the recorded draft; return (client, body, reviewer)."""
+def boundaries(monkeypatch):
+    """Install all recorders, then hand back a factory that issues the request.
+
+    Yielding a *factory* is the point. The previous version of this file ran the route
+    inside the fixture and returned the finished response, so any spy a test installed
+    afterwards observed nothing — and a long detour followed about code that was merely
+    never watched. Here nothing can execute before the recorders exist, because the
+    request is a call the test makes.
+
+    Recorded seams, in the order the route crosses them:
+
+    1. ``editor_before_preservation`` — the writer's own markdown, straight out of
+       ``StarEditor.polish`` input handling;
+    2. ``editor_after_preservation`` — the same document after preservation, plus the
+       change list;
+    3. ``correction_input`` — the exact markdown handed to ``correct()``;
+    4. ``provider_response`` — each raw phase payload the engine asked for;
+    5. ``adapter_review`` — the strict review shape the adapter normalised it into;
+    6. ``validator`` — the engine validator's claims / incomplete set / missing items.
+    """
     if not RUN7.exists():
         pytest.skip("run-7 capture is not present")
 
+    captured: dict[str, object] = {"boundaries": []}
+
+    def note(name, value):
+        captured[name] = value
+        captured["boundaries"].append(name)
+
+    # ── offline guards ──────────────────────────────────────────────────────
     def forbidden(*args, **kwargs):
         raise AssertionError("external network forbidden")
 
@@ -266,32 +310,91 @@ def preserved(monkeypatch):
     monkeypatch.setattr(correction_provider, "_approved_disclosure_available",
                         lambda: True)
 
+    # ── 1/2. StarEditor: before and after preservation ──────────────────────
     from stages.star_editor import StarEditor
-    real_polish = StarEditor.polish
-    captured = {"editor_ran": False, "preservation": None}
+    import source_preservation
 
-    async def recording_polish(self, *a, **kw):
-        captured["editor_ran"] = True
-        out = await real_polish(self, *a, **kw)
-        captured["preservation"] = out.get("source_preservation")
-        captured["editor_markdown"] = out.get("final_markdown")
+    real_polish = StarEditor.polish
+
+    async def recording_polish(self, draft_data=None, research_data=None, **kwargs):
+        out = await real_polish(self, draft_data, research_data, **kwargs)
+        note("editor_after_preservation", out.get("final_markdown"))
+        note("preservation_changes", out.get("source_preservation"))
         return out
 
     monkeypatch.setattr(StarEditor, "polish", recording_polish)
 
+    # The writer's raw markdown is captured where preservation reads it, i.e. as the
+    # input to preserve_source_facts and the output of the model call. Recording the
+    # model's own return is the honest "before" value.
+    real_preserve = source_preservation.preserve_source_facts
+
+    def recording_preserve(markdown, source_text):
+        note("editor_before_preservation", markdown)
+        out = real_preserve(markdown, source_text)
+        note("preservation_result", out[0])
+        return out
+
+    monkeypatch.setattr(source_preservation, "preserve_source_facts",
+                        recording_preserve)
+    monkeypatch.setattr("stages.star_editor.source_preservation",
+                        source_preservation)
+
+    # ── 3. correction input ─────────────────────────────────────────────────
+    real_correct = source_correction.correct
+
+    async def recording_correct(markdown, sources, callback, **kw):
+        note("correction_input", markdown)
+        note("correction_sources", [(s.source_id, s.text) for s in sources])
+        out = await real_correct(markdown, sources, callback, **kw)
+        note("correction_result", (out.status, out.reason, out.review_calls,
+                                   out.repair_calls))
+        return out
+
+    monkeypatch.setattr(source_correction, "correct", recording_correct)
+    monkeypatch.setattr(app, "correct", recording_correct)
+
+    # ── 4. provider response (the engine's own payload, pre-translation) ────
+    real_invoke = source_correction._invoke
+
+    async def recording_invoke(callback, phase, payload, timeout, events=None):
+        note(f"provider_request[{phase}]", copy.deepcopy(payload))
+        answer = await real_invoke(callback, phase, payload, timeout, events)
+        note(f"provider_response[{phase}]", copy.deepcopy(answer))
+        return answer
+
+    monkeypatch.setattr(source_correction, "_invoke", recording_invoke)
+
+    # ── 5. adapter-normalised review ────────────────────────────────────────
+    real_strict_review = correction_protocol_strict_review()
+
+    def recording_strict_review(response, request):
+        out = real_strict_review(response, request)
+        note("adapter_review", out)
+        return out
+
+    monkeypatch.setattr("correction_protocol.strict_review_from_indexed",
+                        recording_strict_review)
+
+    # ── 6. validator result ─────────────────────────────────────────────────
+    real_validate = source_correction._validate_review
+
+    def recording_validate(response, lines, source_map, inventory):
+        out = real_validate(response, lines, source_map, inventory)
+        claims, incomplete, missing_items = out
+        note("validator", {
+            "verdicts": [c["verdict"] for c in claims],
+            "incomplete": sorted(incomplete),
+            "missing_items": [i["quote"] for i in missing_items],
+        })
+        return out
+
+    monkeypatch.setattr(source_correction, "_validate_review", recording_validate)
+
+    # ── the factory ────────────────────────────────────────────────────────
     reviewer = ControlledReviewer()
     draft = _recorded_draft()
 
-    # Script the WRITER MODEL, not the pipeline.
-    #
-    # An earlier version of this fixture stubbed `run_new_pipeline_async`, which meant
-    # `StarEditor.polish` never ran and source preservation never executed — while the
-    # tests still read as though they covered the route. They were observing the raw
-    # recorded draft and failing for a reason that had nothing to do with the fix.
-    #
-    # Replacing `LLMClientAdapter.call_llm_async` instead scripts only the network seam.
-    # The real orchestrator, the real StarEditor (including preservation), the real
-    # correction engine, the real gate and the real renderers all execute.
     from llm_client_adapter import LLMClientAdapter
     import stages.star_editor as star_editor_module
     import stages.drafter as drafter_module
@@ -307,7 +410,6 @@ def preserved(monkeypatch):
         if "researcher" in system_prompt.lower() or "domain" in system_prompt.lower():
             return json.dumps({"implied_metrics": [], "domain_vocab": [],
                                "implied_skills": [], "research_notes": ""})
-        # The drafter: one experience per employer, from the source.
         return json.dumps({
             "rewritten_experiences": [
                 {"company": "Cascade Power Solutions, LLC",
@@ -316,56 +418,53 @@ def preserved(monkeypatch):
                  "bullets": [
                      "Installed and maintained commercial electrical systems across "
                      "40+ job sites.",
-                     "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work "
-                     "practices.",
-                     "Cut rework by 18% by standardizing panel labeling and inspection "
-                     "checklists."]},
+                 ]},
                 {"company": "Harborline Mechanical Contractors",
                  "role": "Electrical Apprentice",
                  "duration": "06/2016 - 02/2020",
                  "bullets": [
-                     "Assisted with conduit bending, wire pulling, and panel "
-                     "terminations on 25 projects.",
                      "Completed 8,000 hours of supervised field work toward "
-                     "licensure."]},
+                     "licensure.",
+                 ]},
             ],
             "seniority_applied": "senior",
         })
 
     monkeypatch.setattr(LLMClientAdapter, "call_llm_async", scripted_call)
 
-    # The route constructs its own adapter from the app settings patched above, so the
-    # class-level patch is enough for the real pipeline to run end to end. Verified by
-    # asserting below that the editor stage actually executed rather than falling back.
-    captured["editor_ran"] = False
+    def run():
+        """Issue the request. Called by a test, after every recorder is installed."""
+        with TestClient(app.app) as client:
+            client.portal.call(app.app.state.http_session.close)
+            app.app.state.http_session = reviewer
+            body = client.post(
+                "/analyze", headers={"X-Cogito-Owner-Id": "offline-owner"},
+                json={"resume_text": SOURCE, "job_ad": "Senior Electrician role"},
+            ).json()
+            return client, body, reviewer, captured
 
-    # Record the engine's own verdict and the editor's output, from inside the request.
-    # Instrumenting in the test body would be too late: the request is issued here.
-    import source_correction
-    real_correct = source_correction.correct
-
-    async def recording_correct(markdown, sources, callback, **kw):
-        out = await real_correct(markdown, sources, callback, **kw)
-        captured["engine"] = (out.status, out.reason, out.review_calls,
-                              out.repair_calls)
-        return out
-
-    monkeypatch.setattr(source_correction, "correct", recording_correct)
-    monkeypatch.setattr(app, "correct", recording_correct)
-
-    with TestClient(app.app) as client:
-        client.portal.call(app.app.state.http_session.close)
-        app.app.state.http_session = reviewer
-        body = client.post(
-            "/analyze", headers={"X-Cogito-Owner-Id": "offline-owner"},
-            json={"resume_text": SOURCE, "job_ad": "Senior Electrician role"},
-        ).json()
-        yield client, body, reviewer, captured
+    yield run
     app.app.dependency_overrides.clear()
 
 
-# ---------------------------------------------------------------------------
-# [route-preserve] fields, before and after, through the real path
+def correction_protocol_strict_review():
+    """The real ``strict_review_from_indexed``, captured before it is replaced.
+
+    Looked up through the module so the recorder wraps the function the adapter actually
+    calls. Reading it from a local import would capture a different binding and the
+    spy would silently do nothing — the same class of mistake this harness exists to
+    avoid.
+    """
+    import correction_protocol
+    return correction_protocol.strict_review_from_indexed
+
+
+@pytest.fixture
+def preserved(boundaries):
+    """Convenience: run the route once with recorders active."""
+    return boundaries()
+
+
 # ---------------------------------------------------------------------------
 
 def test_education_record_is_one_source_backed_line(preserved):
@@ -573,3 +672,138 @@ def test_exported_files_carry_the_preserved_record(preserved):
         # No mojibake.
         assert "\u00e2\u0080" not in text, f"{label}: mojibake"
         assert "\u00c3" not in text, f"{label}: mojibake"
+
+
+# ---------------------------------------------------------------------------
+# [harness] the recorders are live, and the seams are readable
+# ---------------------------------------------------------------------------
+
+def test_recorders_are_installed_before_the_request_runs(preserved):
+    """[harness] Every named seam recorded a value.
+
+    This is the regression test for the mistake that cost this session hours: spies
+    installed after the request observes nothing, and the absence looks exactly like
+    "the code never ran". If any recorder is missing from the trace, this fails loudly
+    and names it, instead of leaving a later assertion to fail for a misleading reason.
+    """
+    _client, _body, _reviewer, captured = preserved
+    seen = captured["boundaries"]
+
+    expected = ("editor_before_preservation", "editor_after_preservation",
+                "correction_input", "correction_result")
+    for name in expected:
+        assert name in seen, f"recorder never fired: {name} (saw {seen})"
+
+    # The per-phase seams only exist once the engine asks for them.
+    assert any(k.startswith("provider_response[") for k in seen), seen
+    assert "adapter_review" in seen, seen
+    assert "validator" in seen, seen
+
+
+def test_boundary_order_is_the_order_the_route_crosses_them(preserved):
+    """[harness] The seams fired in causal order, not out of sequence."""
+    _client, _body, _reviewer, captured = preserved
+    seen = captured["boundaries"]
+
+    def first(predicate):
+        for index, name in enumerate(seen):
+            if predicate(name):
+                return index
+        return None
+
+    before = first(lambda n: n == "editor_before_preservation")
+    after = first(lambda n: n == "editor_after_preservation")
+    corr = first(lambda n: n == "correction_input")
+    adapter = first(lambda n: n == "adapter_review")
+    validator = first(lambda n: n == "validator")
+
+    assert None not in (before, after, corr, adapter, validator), seen
+    assert before < after < corr < adapter < validator, seen
+
+
+def test_preservation_changed_the_document_handed_to_correction(preserved):
+    """[boundary 2 vs 3] Preservation is what the engine reviewed.
+
+    The first boundary values make the causal chain checkable without re-deriving
+    anything: the editor's pre-preservation markdown still carries the defects, the
+    post-preservation markdown does not, and the engine's input is the latter.
+    """
+    _client, _body, _reviewer, captured = preserved
+
+    before = captured["editor_before_preservation"]
+    after = captured["editor_after_preservation"]
+    correction_input = captured["correction_input"]
+
+    assert "mastering core electrical installations" in before, (
+        "the writer output under test should still carry the defect")
+    assert "mastering core electrical installations" not in after
+    assert correction_input == after, (
+        "the engine must review the preserved document, not an earlier copy")
+
+
+def test_validator_found_nothing_incomplete_for_the_preserved_draft(preserved):
+    """[boundary 6] The first seam where uncertainty appeared was the adapter's
+    translation, not preservation or the engine.
+
+    Recorded so the specific failure this session chased cannot recur silently: three
+    source items arrived at the validator as `uncertain` because the reviewer cited only
+    one of the two segments each draft line restates, and the adapter emits `uncertain`
+    for an uncited required item. With decisions authored per line — including both
+    skills segments on the combined line — the validator reports nothing incomplete.
+    """
+    _client, _body, _reviewer, captured = preserved
+    validator = captured["validator"]
+
+    assert validator["incomplete"] == [], validator
+    assert validator["missing_items"] == [], validator
+    assert "unsupported" not in validator["verdicts"], validator["verdicts"]
+
+
+def test_reviewer_used_the_authored_decisions_it_matched(preserved):
+    """[harness] The verdicts come from the authored table, not from a threshold.
+
+    The reviewer records which decisions it matched. Asserting on them shows the table
+    was actually consulted, so the approval is traceable to hand-authored judgements
+    about this fixture rather than to a similarity score tuned until the run passed.
+    """
+    _client, _body, reviewer, _captured = preserved
+
+    matched = set(reviewer.matched_decisions)
+    assert matched, "the reviewer matched no authored decision"
+    # Spot-check the cases that matter, including the combined skills line.
+    assert "Journeyman electrician with 8+ years" in matched
+    assert "Completed 8,000 hours of supervised field work" in matched
+    assert "*Associate of Applied Science, Electrical Systems Technology | 2016*" in matched
+    assert "**Electrical:**" in matched
+
+
+def test_engine_approved_the_preserved_draft(preserved):
+    """[boundary 4] The engine's own verdict, read from the recorded boundary."""
+    _client, body, _reviewer, captured = preserved
+    status, reason, reviews, repairs = captured["correction_result"]
+
+    assert status == "approved", (status, reason)
+    assert reason is None
+    assert body.get("correction_status") == "approved"
+    assert body.get("publication_receipt"), "an approval must carry a receipt"
+
+
+def test_eight_thousand_hours_is_attached_to_the_harborline_record(preserved):
+    """The quantified fact lands with the employer it belongs to.
+
+    "8,000 supervised hours" is Harborline's apprenticeship bullet, not Cascade's. A
+    preserved fact attached to the wrong employer is the misattribution class the
+    answer key forbids, and an end-to-end assertion that merely finds the string
+    somewhere in the document would not catch it.
+    """
+    _client, body, _reviewer, _captured = preserved
+    md = body["final_written_section_markdown"]
+
+    cascade = md.index("**Cascade Power Solutions, LLC**")
+    harborline = md.index("**Harborline Mechanical Contractors**")
+    education = md.index("## Education")
+    hours = md.index("Completed 8,000 hours of supervised field work toward licensure.")
+
+    assert cascade < harborline < education
+    assert harborline < hours < education, (
+        "the 8,000-hour fact must sit under Harborline, not Cascade")

@@ -314,3 +314,199 @@ def test_empty_or_missing_inputs_are_passed_through():
     assert sp.preserve_source_facts("", SOURCE) == ("", [])
     assert sp.preserve_source_facts("## Education\n", "") == ("## Education\n", [])
     assert sp.preserve_source_facts("## Education\n", "   ") == ("## Education\n", [])
+
+
+# ---------------------------------------------------------------------------
+# Negative controls
+#
+# Preservation replaces or removes spans. Each control states a way that could go wrong
+# and asserts it does not. Without these the module is only known to fix the one fixture
+# it was written against, which is how a "fix" becomes a hard-coded answer.
+# ---------------------------------------------------------------------------
+
+def test_repeated_number_under_two_employers_is_not_cross_attributed():
+    """The same figure appearing twice must not have its fact moved between records.
+
+    A naive "find the line with this number" would match either employer's bullet and
+    could rewrite the wrong one. The rule keys on the figure AND the qualifiers beside
+    it, so a second employer's bullet that carries the same digit but different
+    surrounding words is left alone.
+
+    Here Cascade's bullet has a correct qualifier and Harborline's is defective: only
+    Harborline's may be rewritten.
+    """
+    source = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 2019 - 2021*\n"
+        "- Audited 40+ job sites for safety compliance.\n"
+        "**Beta Corp** -- Town, OR\n"
+        "*Technician | 2016 - 2019*\n"
+        "- Inspected 40+ sites across two states.\n"
+    )
+    markdown = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 2019 - 2021*\n"
+        "- Audited 40+ job sites for safety compliance.\n"
+        "**Beta Corp** -- Town, OR\n"
+        "*Technician | 2016 - 2019*\n"
+        "- Covered 40+ job sites.\n"
+    )
+    out, _ = sp.preserve_source_facts(markdown, source)
+
+    alpha = out.index("**Alpha Corp**")
+    beta = out.index("**Beta Corp**")
+    alpha_bullet = out[alpha:beta]
+    # Alpha's correct bullet is untouched.
+    assert "Audited 40+ job sites for safety compliance." in alpha_bullet
+    # Beta's defective bullet must NOT adopt Alpha's accomplishment. Either it is
+    # restored from Beta's own source line or left alone; both are acceptable, and
+    # transplanting Alpha's fact under Beta's heading is not.
+    assert "Audited 40+ job sites for safety compliance." not in out[beta:]
+
+
+def test_two_education_records_are_both_preserved():
+    """Two degrees must not collapse into one, and each keeps its own institution."""
+    source = (
+        "## Education\n"
+        "**North College** -- City, ST\n"
+        "*Associate of Science, Physics | 2014*\n"
+        "**South University** -- Town, OR\n"
+        "*Bachelor of Science, Engineering | 2018*\n"
+    )
+    markdown = (
+        "## Education\n"
+        "**Associate of Science, North College** -- 2014\n"
+        "**Bachelor of Science, South University** -- 2018\n"
+    )
+    out, _ = sp.preserve_source_facts(markdown, source)
+
+    records = sp.source_education_records(source)
+    assert len(records) == 2
+    assert "**North College** -- City, ST" in out
+    assert "*Associate of Science, Physics | 2014*" in out
+    assert "**South University** -- Town, OR" in out
+    assert "*Bachelor of Science, Engineering | 2018*" in out
+    # Neither institution absorbed the other's degree.
+    assert "**Associate of Science, North College**" not in out
+
+
+def test_dates_are_never_treated_as_quantities():
+    """A year or a MM/YYYY range is a record, not a measured fact.
+
+    The first version of this module accepted any digit run, so every date became a
+    "quantified fact" and the education and role lines were rewritten from neighbouring
+    source lines — silent corruption of exactly the fields the other rules protect.
+    """
+    source = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 03/2019 - 08/2021*\n"
+        "- Led 4 projects.\n"
+    )
+    markdown = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 03/2019 - 08/2021*\n"
+        "- Ran 4 projects.\n"
+    )
+    out, _ = sp.preserve_source_facts(markdown, source)
+
+    # The role/date header is untouched.
+    assert "*Engineer | 03/2019 - 08/2021*" in out
+    # No date was harvested as a quantity.
+    for fact in sp.source_quantified_facts(source):
+        assert "/" not in fact["value"], fact["value"]
+        assert fact["unit"], fact["value"]
+
+
+def test_ambiguous_match_is_left_unchanged():
+    """When two source lines could equally be the origin, nothing is rewritten.
+
+    Choosing one would be a guess, and a guessed restoration is a fabricated one. The
+    conservative behaviour is to leave the draft alone; the reviewer can still withhold.
+
+    The ambiguity must be INSIDE one employer record, or employer scoping would resolve
+    it first and this test would never reach the code it is named for. That is exactly
+    what happened to the first version of this test: its two candidates sat under
+    different employers, so scoping silently answered the question, and mutating the
+    ambiguity check away left the test green. Mutation-checking exposed it.
+
+    Here both candidate lines belong to Alpha, carry the same figure and unit, and both
+    are missing qualifiers the draft no longer has — genuinely indistinguishable.
+    """
+    source = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 2019 - 2021*\n"
+        "- Delivered 12 projects under supervision in 2019.\n"
+        "- Delivered 12 projects under supervision in 2020.\n"
+    )
+    markdown = (
+        "## Professional Experience\n"
+        "**Alpha Corp** -- City, ST\n"
+        "*Engineer | 2019 - 2021*\n"
+        "- Handled 12 projects.\n"
+    )
+    out, changes = sp.preserve_source_facts(markdown, source)
+
+    assert not any("quantified" in c for c in changes), (
+        f"an ambiguous match was resolved by guessing: {changes}")
+    assert "- Handled 12 projects." in out, out
+
+    # And prove the fixture really reaches the ambiguity path: the same source with only
+    # ONE candidate must be repaired. Without this the test could pass because the rule
+    # never engaged at all.
+    unambiguous = source.replace(
+        "- Delivered 12 projects under supervision in 2020.\n", "")
+    repaired, repaired_changes = sp.preserve_source_facts(markdown, unambiguous)
+    assert any("quantified" in c for c in repaired_changes), repaired_changes
+    assert "Delivered 12 projects under supervision in 2019." in repaired
+
+
+def test_preservation_applied_twice_makes_no_further_changes():
+    """Idempotence, on a document where every rule actually fires.
+
+    A rule that re-applied on each pass would let the route oscillate, and a second run
+    would keep "restoring" text that is already correct. Asserted on the defect-bearing
+    document, not on an already-clean one, so every rule has something to do first.
+    """
+    draft = _draft()
+    once, first_changes = sp.preserve_source_facts(draft, SOURCE)
+    assert first_changes, "the fixture must actually trigger the rules"
+
+    twice, second_changes = sp.preserve_source_facts(once, SOURCE)
+    assert second_changes == [], second_changes
+    assert twice.strip() == once.strip()
+
+
+def test_preservation_does_not_invent_an_education_record():
+    """A source with no Education section must not cause one to be written."""
+    source = "## Professional Experience\n**Alpha Corp** -- City, ST\n- Led 4 projects.\n"
+    markdown = "## Education\n**Somewhere Else** -- 2019\n"
+    out, _ = sp.preserve_source_facts(markdown, source)
+    assert "**Somewhere Else** -- 2019" in out
+    assert "Electrical Systems Technology" not in out
+
+
+def test_preservation_leaves_a_correct_document_alone():
+    """A document that already satisfies every rule is returned byte-identical."""
+    # The summary must match the source's own paragraph, or the summary rule will
+    # legitimately restore it — which is correct behaviour, not a failure of idempotence.
+    already = ("## Professional Summary\n\n"
+               "Journeyman electrician with 8+ years of commercial and industrial "
+               "electrical experience across construction, facilities maintenance, "
+               "and power distribution.\n\n"
+               "## Professional Experience\n"
+               "**Example Technical College Holder** -- City, ST\n"
+               "*Journeyman Electrician | 03/2020 - Present*\n"
+               "- Completed 8,000 hours of supervised field work toward licensure.\n\n"
+               "## Projects\n\n"
+               "## Education\n"
+               "**Example Technical College** -- Example City, WA\n"
+               "*Associate of Applied Science, Electrical Systems Technology | 2016*\n\n"
+               "## Certifications\n\n"
+               "## Technical Skills\n")
+    out, changes = sp.preserve_source_facts(already, SOURCE)
+    assert out.strip() == already.strip(), changes

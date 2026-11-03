@@ -321,32 +321,43 @@ def _bolds_a_concatenation(body: list[str], record: dict) -> bool:
 # 3. Quantified qualifier + unsupported clause
 # ---------------------------------------------------------------------------
 
+def _employer_of(text: str, up_to: int) -> str:
+    """The most recent bold employer line above ``up_to``, normalised.
+
+    Used to keep a restoration inside the record it belongs to. A source bullet states an
+    accomplishment *for a particular employer*, and substituting it under a different
+    employer's heading moves a fact between records — the misattribution class the answer
+    key forbids, and something a figure-plus-unit match cannot see on its own.
+
+    Returns ``""`` when no employer line is found, which disables the scoping rather than
+    guessing at a boundary.
+    """
+    prefix = text[:up_to]
+    for raw in reversed(prefix.splitlines()):
+        match = _BOLD_LINE.match(raw.strip())
+        if match:
+            return _strip_markers(match.group("bold")).strip().casefold()
+    return ""
+
+
 def preserve_quantified_qualifiers(markdown: str, source_text: str) -> tuple[str, list[str]]:
     """Restore a quantified fact whose governing qualifier the draft lost.
 
-    The rule is deliberately narrow, and it was narrowed after measurement. A draft line
-    is replaced by the SOURCE line only when:
+    The rule is deliberately narrow, and every constraint below was added after a measured
+    failure, not in anticipation:
 
-    * it carries the same measured figure and unit as a source line;
-    * the source attaches a qualifier word to that figure which the draft line no longer
+    * the draft line must carry the same measured figure AND unit as a source line;
+    * the source must attach a qualifier to that figure which the draft line no longer
       carries (after stemming, so ``installation`` still counts as ``installed``);
-    * the source line is available to restore from.
+    * the source line must belong to the SAME employer record as the draft line — adding
+      this was necessary because "40+ job sites" matched one employer's source bullet and
+      would have been written under another employer's heading;
+    * the match must be unambiguous: two equally plausible source lines means no
+      restoration, because choosing one would be a guess.
 
     Replacement with the source line is the conservative move: the text is the
     candidate's own, verbatim. Reconstructing a "fixed" sentence would be composing
     prose, which this module must not do.
-
-    An earlier version ALSO reverted a line when it gained a content word the source
-    lacked. That was removed: on the recorded draft it rewrote
-    "Led installation and maintenance ... across 40+ job sites" back to the plainer
-    source bullet purely because "Led"/"ensuring" were new, discarding a legitimate
-    paraphrase the writer is explicitly asked to produce. Detecting a bad *addition* is
-    the reviewer's job; this module's job is the lost qualifier, which is checkable
-    deterministically.
-
-    Structural lines are skipped outright — headings, bold employer lines, italic
-    date/role records — because they carry no measured quantity and rewriting them
-    corrupts a different section.
     """
     facts = source_quantified_facts(source_text)
     if not facts:
@@ -354,25 +365,60 @@ def preserve_quantified_qualifiers(markdown: str, source_text: str) -> tuple[str
 
     by_key: dict[tuple[str, str], list[dict]] = {}
     for fact in facts:
+        fact = dict(fact)
+        fact["employer"] = _employer_of(source_text,
+                                        source_text.find(fact["source_line"]))
         by_key.setdefault((fact["value"].rstrip("+"), fact["unit"]), []).append(fact)
 
     changes: list[str] = []
     out_lines: list[str] = []
-    for raw in markdown.splitlines():
+    offset = 0
+    for raw in markdown.splitlines(keepends=True):
         stripped = raw.strip()
+        line_employer = _employer_of(markdown, offset)
+        offset += len(raw)
         if not stripped or stripped.startswith("#") or _BOLD_LINE.match(stripped) \
                 or _ITALIC_LINE.match(stripped) or _is_date_record_line(stripped):
             out_lines.append(raw)
             continue
-        replacement = _qualifier_repair_for(stripped, by_key)
+        replacement = _qualifier_repair_for(stripped, by_key, line_employer)
         if replacement is None:
             out_lines.append(raw)
             continue
         indent = raw[:len(raw) - len(raw.lstrip())]
         prefix = "- " if stripped.startswith("-") else ""
-        out_lines.append(f"{indent}{prefix}{replacement}")
+        newline = "\n" if raw.endswith("\n") else ""
+        out_lines.append(f"{indent}{prefix}{replacement}{newline}")
         changes.append("restored the source wording for a quantified bullet")
-    return "\n".join(out_lines), changes
+    return "".join(out_lines), changes
+
+
+def _qualifier_repair_for(line: str, by_key: dict[tuple[str, str], list[dict]],
+                          employer: str = "") -> str | None:
+    """The source line to substitute for ``line``, or None when it may stand.
+
+    Returns None when the evidence is ambiguous or belongs to another employer. Both
+    refusals were measured: the first version silently chose whichever candidate came
+    first, which could rewrite one employer's bullet with another's accomplishment.
+    """
+    words_here = _stemmed_words(line)
+    for match in _MEASURED_QUANTITY.finditer(line):
+        key = (match.group("value").rstrip("+"), match.group("unit").lower())
+        qualifying: list[str] = []
+        for fact in by_key.get(key, []):
+            if employer and fact["employer"] and fact["employer"] != employer:
+                # A different record's accomplishment. Never transplanted.
+                continue
+            lost = {_stem(word) for word in fact["qualifiers"]} - words_here
+            if lost:
+                qualifying.append(fact["source_line"])
+        distinct = sorted(set(qualifying))
+        if len(distinct) > 1:
+            # Equally plausible origins: refuse to choose.
+            return None
+        if distinct:
+            return distinct[0]
+    return None
 
 
 def _stem(word: str) -> str:
@@ -393,29 +439,6 @@ def _stem(word: str) -> str:
 def _stemmed_words(text: str) -> set[str]:
     return {_stem(word) for word in re.findall(r"[A-Za-z][A-Za-z\-]+", text)
             if len(word) > 3}
-
-
-def _qualifier_repair_for(line: str, by_key: dict[tuple[str, str], list[dict]]) -> str | None:
-    """The source line to substitute for ``line``, or None when it may stand."""
-    words_here = _stemmed_words(line)
-    for match in _MEASURED_QUANTITY.finditer(line):
-        key = (match.group("value").rstrip("+"), match.group("unit").lower())
-        for fact in by_key.get(key, []):
-            lost = {_stem(word) for word in fact["qualifiers"]} - words_here
-            if lost:
-                return fact["source_line"]
-    return None
-
-
-# Words that legitimately differ between a source bullet and its paraphrase and are not
-# evidence of an unsupported addition. Kept deliberately small and generic: anything
-# specific belongs in the source, and treating a specific word as generic would blind the
-# check that catches an invented outcome.
-_GENERIC_RESUME_WORDS = frozenset({
-    "ensuring", "compliance", "standards", "including", "supporting", "across",
-    "multiple", "various", "advanced", "improving", "reducing", "delivering",
-    "achieving", "contributing", "practices", "procedures", "systems",
-})
 
 
 # ---------------------------------------------------------------------------
