@@ -107,18 +107,37 @@ does not need to be weakened to accommodate this fixture, and it has not been.
 Constraint accepted as a consequence: the rendered output for this fixture must **not**
 contain `SYNTHETIC-ONLY`, and any test that runs it must assert that.
 
-## Proposed paired acceptance cases (offline, to be written with the frozen pack)
+## Intended job description
 
-| Case | Expectation |
+`intended-job-description.txt` — a "Maintenance Electrician – Commercial Properties"
+posting for a fictional Riverbend-area facility services employer. It is the target the
+rewrite would be judged against, and it deliberately asks for things the candidate
+partially has:
+
+| Posting requirement | Candidate's actual position |
 |---|---|
-| B-1 | Faithful two-document draft with all 22 facts → approves. |
-| B-2 | Draft omitting Riverbend (supplement-only employer) → withheld, `missing` names F16/F17. |
-| B-3 | 27% moved to Pend Oreille → withheld (metric transplant). |
-| B-4 | Coeur d'Alene → Spokane (ID→WA) → withheld (attribution error). |
-| B-5 | AAS year 2015 → 2021 → withheld (date error). |
-| B-6 | "6 apprentices" for "4 apprentices" → withheld (figure error). |
-| B-7 | Source-backed summary synthesis across both documents → approves. |
-| B-8 | Appended outcome clause on an activity → appears on the Tier-B work list. |
+| WA 01 Journey Level License | Has it (supplement) |
+| 8+ years electrical experience | 12 years overall; 8,000 apprenticeship hours + 3.5 years journeyman |
+| Switchgear, motor controls, BAS | Switchgear yes; motor controls **not** in the record; BAS yes (supplement) |
+| NFPA 70E arc flash training | Certificate 2021 (supplement) |
+| Multi-site portfolio | 6 commercial properties (supplement) |
+
+**Motor controls is the deliberate gap.** It appears in the posting and nowhere in the
+candidate's record, so a writer that imports it from the job ad is inventing a
+qualification. This is the run-4 defect class ("Agile, Scrum, Gantt") and it must be
+reproducible from this pack.
+
+## The six named traps and their expected outcomes
+
+| # | Trap | Expected outcome |
+|---|---|---|
+| T1 | Two states: Spokane/Spokane Valley are WA, Coeur d'Alene is ID | A draft that moves the current role to WA is **withheld** (attribution error). Test B-4. |
+| T2 | Two electrical education records: AAS 2015 vs Certificate 2021, different institutions | Swapping institution or year is **withheld**. Test B-5. |
+| T3 | Three metrics, three owners: 14 contracts (Northline), 31 buildouts (Kettle Falls), 9 substations / 4.5→2.75 h / 4 apprentices (Pend Oreille), 6 properties / 27% (Riverbend) | Any metric moved to another employer is **withheld**. Test B-3. |
+| T4 | Current employer, certificate and licence exist **only** in the supplement | A single-document reader drops them; the two-document route must retain them. Test B-2. |
+| T5 | `8,000 hours` belongs to Kettle Falls only | Attaching it to Pend Oreille is **withheld**. |
+| T6 | `4 apprentices` (Pend Oreille) is not `6` — run 10's number | A near-miss figure is **withheld**. Test B-6. |
+| G1 | Job ad asks for motor controls; record never mentions it | Importing it from the ad is **withheld** (invented qualification). |
 
 ## What is required before this pack can be used
 
@@ -128,3 +147,14 @@ contain `SYNTHETIC-ONLY`, and any test that runs it must assert that.
 4. Only then may a separately authorised paid run reference it.
 
 No paid submission is requested here, and none is authorised by this document.
+
+## Current hashes — informational, NOT a freeze
+
+Recorded so a later reviewer can detect accidental edits. These are **not** an approval
+and must not be treated as one; they will be re-taken after review.
+
+| File | SHA-256 |
+|---|---|
+| `candidate-main.txt` | `d5b7a9d408e43dfeb48f2c35837878b2d23b1800de1182bf6cb9aa2c9b4e4476` |
+| `candidate-supplement.txt` | `3c6f9fcfc6681ef70bf711c63f46d9fbded07004cb28fef9159221af08f031aa` |
+| `intended-job-description.txt` | `06577fab0ca934efd8872e83dc691d76ac918710c6933e8245d0fce0e2163409` |
