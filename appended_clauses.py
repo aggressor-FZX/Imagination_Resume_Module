@@ -201,7 +201,9 @@ def worklist(lines: Iterable[dict[str, Any]],
     line that names no evidence, so there is nothing here to add.
 
     ``available_evidence`` is passed through to :func:`unattested_clauses` so each
-    finding can be labelled ``insufficient_citation`` or ``unsupported``.
+    finding carries its ``citation_status`` (``unsupported``,
+    ``partially_attested`` or ``insufficient_citation``). The label describes the
+    evidence, never the claim's truth.
     """
     corpus = list(available_evidence) if available_evidence is not None else None
     items: list[dict[str, Any]] = []
