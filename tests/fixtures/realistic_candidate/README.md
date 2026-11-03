@@ -123,9 +123,33 @@ partially has:
 | Multi-site portfolio | 6 commercial properties (supplement) |
 
 **Motor controls is the deliberate gap.** It appears in the posting and nowhere in the
-candidate's record, so a writer that imports it from the job ad is inventing a
-qualification. This is the run-4 defect class ("Agile, Scrum, Gantt") and it must be
-reproducible from this pack.
+candidate's record.
+
+## Corrected expectation for the job-ad gap
+
+An earlier version of this document said importing motor controls would be "withheld".
+That was the wrong remedy and is corrected here.
+
+| Situation | Correct behaviour |
+|---|---|
+| Candidate genuinely lacks motor controls | The skill stays **absent from the résumé**, and **may appear in gap analysis** as a missing requirement. This is the normal, correct outcome — the résumé is truthful and the gap is reported to the user. |
+| The writer invents motor controls in the résumé | The contaminated clause must be **removed or repaired**, or the result **withheld** if repair fails. The defect is the invention, not the absence. |
+
+**A truthful résumé is never withheld merely because the job ad asks for a skill the
+candidate does not have.** Withholding in that case would punish correct output: every
+candidate lacks something the posting asks for, so that rule would reject nearly every
+résumé. What must be detected is the *invention*, which is the run-4 defect class
+("Agile, Scrum, Gantt" appearing against an item that only said "inspection
+checklists").
+
+So the B-case is:
+
+| Case | Expectation |
+|---|---|
+| G1-a | Draft omits motor controls entirely → **approves**; gap analysis may list it. |
+| G1-b | Draft claims motor controls experience → **repaired or withheld** (invented qualification). |
+
+Test G1-a is the one an earlier draft would have got wrong.
 
 ## The six named traps and their expected outcomes
 
@@ -137,7 +161,7 @@ reproducible from this pack.
 | T4 | Current employer, certificate and licence exist **only** in the supplement | A single-document reader drops them; the two-document route must retain them. Test B-2. |
 | T5 | `8,000 hours` belongs to Kettle Falls only | Attaching it to Pend Oreille is **withheld**. |
 | T6 | `4 apprentices` (Pend Oreille) is not `6` — run 10's number | A near-miss figure is **withheld**. Test B-6. |
-| G1 | Job ad asks for motor controls; record never mentions it | Importing it from the ad is **withheld** (invented qualification). |
+| G1 | Job ad asks for motor controls; record never mentions it | **Omitting it approves** (and gap analysis may flag it). **Inventing it is repaired or withheld.** See the corrected expectation above. |
 
 ## What is required before this pack can be used
 

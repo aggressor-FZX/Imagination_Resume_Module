@@ -1,28 +1,43 @@
-# Run 10 — claim-level findings table
+# Run 10 — claim-level findings table (revised)
 
 Correlation ID `850ee3ea-ca2e-4210-92b4-0e57ed5149eb`, revision `47c4254`.
 Evidence held unchanged in `.live-run-2026-11-02/captures/run10/`:
 
-| Artifact | Bytes | Hash |
+| Artifact | Bytes | SHA-256 |
 |---|---|---|
-| `850ee3ea-….json` (capture) | 30062 | sha256 `c141846a0d6ef29242e4cf24095978c52c1a88ae671bc84d639de8db4a98713f` |
-| `run10_approved.md` | 2079 | unchanged |
-| `run10_summary.json` | 866 | unchanged |
+| `850ee3ea-….json` (capture) | 30062 | `c141846a0d6ef29242e4cf24095978c52c1a88ae671bc84d639de8db4a98713f` |
+| `run10_approved.md` | 2079 | `23102b5114d3cf545d90c3a87d9dcd822c13e81ea55636f72e38d5a45996dac3` |
+| `run10_summary.json` | 866 | `3c930dc1b4c6bcef62f35ceb0ecf2f2d4d4751d3ad6d67c33cfedec8093704bc` |
 
-Nothing in this document altered the capture, the source documents, the approved
-response, or the original hashes.
+Nothing here altered the capture, the sources, the approved response, or the hashes.
 
-## Why this table exists
+## Revision note
 
-`SPEC.v2.md` separates **deterministic Tier-A checks** from **semantic Tier-B review**.
-Run 10 passed Tier A (publication gate `[]`, review `approved`) and still carries
-sentences that no source supports. Mechanical passage is not semantic proof.
+An earlier version of this table used a flatter classification and left
+"enhancing system reliability" unevaluated alongside clear additions. Two changes:
 
-**Vocabulary is not the test.** "Words absent from the source" is not a definition of
-fabrication: different words routinely express the same fact, and words individually
-present in the source can be combined into a claim the source never makes. Each row
-below is judged against the complete source text of both documents **and** its
-attribution, not against a word list.
+1. The categories are now the five SPEC.v2 asks for, applied per clause.
+2. **"enhancing system reliability" is reassessed.** The source bullet already
+   reports a measured reliability outcome — "Reduced unplanned downtime by 22%
+   through a preventive maintenance schedule." Unplanned downtime *is* a
+   reliability measure. Restating that reduction as an improvement in system
+   reliability is a qualitative restatement of the same measured fact, not a new
+   claim. The absence of a *second*, differently-worded statistic does not make the
+   restatement false.
+
+## Classification categories
+
+| Category | Meaning |
+|---|---|
+| **Faithful paraphrase** | Same facts, different words. No new proposition. |
+| **Supported qualitative restatement** | Generalises a fact the source measures, without adding a new measured quantity, entity, or causal link. |
+| **New causal or performance outcome** | Asserts an outcome, cause, or performance result the source does not state, or a causal link it does not draw. |
+| **Incorrect attribution** | The fact exists but is attached to the wrong employer, date, institution or role. |
+| **Uncertain** | The evidence does not settle it, or the judgement depends on information the record lacks. |
+
+A clause is judged against the **complete text of both documents** and its
+attribution — never against a word list. Words absent from the source are not
+fabrication; words present in the source can be combined into a false claim.
 
 Sources:
 - `document-0` (1232 chars) — Cascade Power Solutions (electrician), Harborline
@@ -34,59 +49,81 @@ Sources:
 
 ## 1. Professional Summary
 
-| Source | Output | Classification | Explanation | Remedy |
+| Source | Output | Category | Reasoning | Remedy |
 |---|---|---|---|---|
-| `document-0`: "SYNTHETIC-ONLY Journeyman electrician with 8+ years of commercial and industrial electrical experience across construction, facilities maintenance, and power distribution." | "Journeyman electrician with 8+ years of commercial and industrial electrical experience across construction, facilities maintenance, and power distribution." (line 3) | Faithful paraphrase | Only the provenance marker is removed. Every fact and every list member is present in the same order and attribution. | None |
-| `document-1`: "SYNTHETIC-ONLY Facilities maintenance technician focused on preventive maintenance of electrical and mechanical building systems." | "Facilities maintenance technician focused on preventive maintenance of electrical and mechanical building systems." (line 4) | Faithful paraphrase | Marker removed only. | None |
-| Both summaries above, no single source containing both | The two clauses appear **consecutively on two lines** inside one `Professional Summary` section | Supported cross-document synthesis | Each clause is independently attributable to its own document and each is preserved verbatim in meaning. Combining two supported summaries is legitimate; it is not itself an attribution error. | None |
+| `doc-0`: "SYNTHETIC-ONLY Journeyman electrician with 8+ years of commercial and industrial electrical experience across construction, facilities maintenance, and power distribution." | "Journeyman electrician with 8+ years of commercial and industrial electrical experience across construction, facilities maintenance, and power distribution." (L3) | Faithful paraphrase | Only the provenance marker is removed. Every fact and list member present, same order. | None |
+| `doc-1`: "SYNTHETIC-ONLY Facilities maintenance technician focused on preventive maintenance of electrical and mechanical building systems." | "Facilities maintenance technician focused on preventive maintenance of electrical and mechanical building systems." (L4) | Faithful paraphrase | Marker removed only. | None |
+| Both summaries, no single source containing both | The two clauses appear consecutively inside one summary section | Faithful paraphrase (cross-document synthesis) | Each clause is independently attributable and preserved. Combining supported summaries is legitimate, not an attribution error. | None |
 
-## 2. Cascade Power Solutions, LLC — Journeyman Electrician (source: `document-0`)
+## 2. Cascade Power Solutions, LLC — Journeyman Electrician (`document-0`)
 
-| Source | Output | Classification | Explanation | Remedy |
+| Source | Output | Category | Reasoning | Remedy |
 |---|---|---|---|---|
-| "Installed and maintained commercial electrical systems across 40+ job sites." | "Installed and maintained commercial electrical systems across 40+ job sites, **ensuring compliance with NFPA 70E standards**." (line 6) | Unsupported addition | The activity is faithful. The comma + participial clause asserts a *compliance outcome* of that installation work. `document-0` associates NFPA 70E with **apprenticeship training** (a different bullet) and with the **certification**, never with this installation activity. Activity does not establish its own outcome. | Repair: drop the clause, or withhold. **Not** a wording correction — no rewording makes the source state it. |
-| "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices." | "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices, **improving workforce safety and code adherence**." (line 7) | Unsupported addition | Training happened; the improvement in safety and "code adherence" is a measured outcome the source never states. It also implies evaluation the source does not describe. | Repair: drop the clause. |
-| "Cut rework by 18% by standardizing panel labeling and inspection checklists." | "Cut rework by 18% by standardizing panel labeling and inspection checklists, **increasing installation efficiency and quality control**." (line 8) | Unsupported addition | The 18% rework reduction *is* sourced. The appended "increasing installation efficiency and quality control" restates a **different** claimed outcome (efficiency, quality control) that the 18% figure does not measure. Two causal chains are being attributed to one activity. | Repair: drop the clause. The sourced 18% claim alone is faithful. |
+| "Installed and maintained commercial electrical systems across 40+ job sites." | "…across 40+ job sites, **ensuring compliance with NFPA 70E standards**." (L6) | **New causal or performance outcome** | The activity is faithful. The appended clause asserts a *compliance outcome* of that installation work. `doc-0` ties NFPA 70E to apprenticeship **training** and to the **certification**, never to this installation activity, and draws no causal link between installing and achieving compliance. | Repair: drop the clause. No rewording makes the source state it. |
+| "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices." | "…safe work practices, **improving workforce safety and code adherence**." (L7) | **New causal or performance outcome** | Training is sourced; the improvement in safety and code adherence is a measured outcome the source never reports, and the causal link from training to that improvement is not drawn. | Repair: drop the clause. |
+| "Cut rework by 18% by standardizing panel labeling and inspection checklists." | "…inspection checklists, **increasing installation efficiency and quality control**." (L8) | **New causal or performance outcome** | The 18% rework reduction is sourced. "Efficiency" and "quality control" are *different* performance measures that the rework figure does not report, and the clause presents them as further effects of the same activity. | Repair: drop the clause. The sourced 18% claim alone is faithful. |
 
-## 3. Harborline Mechanical Contractors — Electrical Apprentice (source: `document-0`)
+## 3. Harborline Mechanical Contractors — Electrical Apprentice (`document-0`)
 
-| Source | Output | Classification | Explanation | Remedy |
+| Source | Output | Category | Reasoning | Remedy |
 |---|---|---|---|---|
-| "Assisted with conduit bending, wire pulling, and panel terminations on 25 projects." | "**Supported** conduit bending, wire pulling, and panel terminations across 25 commercial projects **under licensed supervision**." (line 12) | Faithful paraphrase, with one supported inference | "Supported" for "Assisted" is a synonym in this context. "under licensed supervision" is **not** in this bullet, but it *is* in the same document's next bullet ("supervised field work toward licensure"), so the licence-supervision condition is attested for this employment relationship. The word "commercial" is inferred from the summary's "commercial and industrial electrical experience". Both are the kind of inference a reader makes from the record as a whole. | None. (Note: the `< 0.6` word-overlap on the trailing members is a lexical artefact, not an unsupported claim.) |
-| "Completed 8,000 hours of supervised field work toward licensure." | "Completed 8,000 hours of supervised field work toward journeyman licensure, **gaining hands-on electrical construction experience**." (line 13) | Supported inference (not an addition) | The clause does **not** introduce a new qualification, employer, date, metric or credential. It characterises the field work the same sentence has just described. `document-0` already establishes hands-on electrical construction work for this employer, and the summary states electrical construction experience. This is a reasonable paraphrase of supervised electrical field work. | **None.** Do not strip this clause. |
+| "Assisted with conduit bending, wire pulling, and panel terminations on 25 projects." | "**Supported** conduit bending, wire pulling, and panel terminations across 25 **commercial** projects **under licensed supervision**." (L12) | Faithful paraphrase | "Supported"/"Assisted" is a synonym here. "Under licensed supervision" is attested by the same document's next bullet ("supervised field work toward licensure"). "Commercial" is inferred from the summary's "commercial and industrial electrical experience". Neither adds a new proposition about this role. | None |
+| "Completed 8,000 hours of supervised field work toward licensure." | "…toward journeyman licensure, **gaining hands‑on electrical construction experience**." (L13) | **Supported qualitative restatement** | The clause adds no qualification, employer, date, metric or credential. It characterises the field work the same sentence describes, and the summary already states electrical construction experience. | **None — keep it.** See §7. |
 
-## 4. Bluegate Property Services — Facilities Maintenance Technician (source: `document-1`)
+## 4. Bluegate Property Services — Facilities Maintenance Technician (`document-1`)
 
-| Source | Output | Classification | Explanation | Remedy |
+| Source | Output | Category | Reasoning | Remedy |
 |---|---|---|---|---|
-| "Maintained electrical distribution and HVAC controls for 12 commercial buildings." | "Maintained electrical distribution systems and HVAC controls for 12 commercial buildings, **ensuring continuous operations**." (line 15) | Unsupported addition | Maintenance activity is faithful; the sentence now asserts an **operational continuity guarantee** for those buildings. No source describes uptime, continuity, or availability for this site. This is the strongest of the six: the appended clause is a substantive service-level claim. | Repair: drop the clause. |
-| "Reduced unplanned downtime by 22% through a preventive maintenance schedule." | "Reduced unplanned downtime by 22% through implementation of preventive maintenance schedules, **enhancing system reliability**." (line 16) | Unsupported addition | "Reduced unplanned downtime by 22%" is sourced. "enhancing system reliability" is a **separate, broader reliability outcome** the 22% downtime figure does not establish; availability and reliability are distinct properties. | Repair: drop the clause. |
+| "Maintained electrical distribution and HVAC controls for 12 commercial buildings." | "…for 12 commercial buildings, **ensuring continuous operations**." (L15) | **New causal or performance outcome** | Maintenance is faithful. The clause asserts an operational-continuity guarantee for those buildings. No source describes uptime, continuity or availability for this site. This is the clearest addition of the six. | Repair: drop the clause. |
+| "Reduced unplanned downtime by 22% through a preventive maintenance schedule." | "…preventive maintenance schedules, **enhancing system reliability**." (L16) | **Supported qualitative restatement** — **reassessed** | Directly entailed by the measured fact. Unplanned downtime is a reliability measure; a 22% reduction in it *is* improved reliability. The clause adds no new quantity, no new entity, no new causal claim — it names the property the source already measured. It is neither a new performance outcome nor an unbacked assertion. | **None — keep it.** |
 
 ## 5. Education, Certifications, Skills
 
-| Source | Output | Classification | Explanation | Remedy |
+| Source | Output | Category | Reasoning | Remedy |
 |---|---|---|---|---|
-| `document-0` "**SYNTHETIC-ONLY Example Technical College** -- Example City, WA / *Associate of Applied Science, Electrical Systems Technology \| 2016*" | "**Example Technical College** -- Example City, WA / *Associate of Applied Science, Electrical Systems Technology \| 2016*" | Faithful paraphrase | Marker removed; institution, degree, field and year intact and correctly paired. | None |
-| `document-1` "**SYNTHETIC-ONLY Example Community College** -- Sampletown, OR / *Certificate, Building Systems Maintenance \| 2013*" | "**Example Community College** -- Sampletown, OR / *Certificate, Building Systems Maintenance \| 2013*" | Faithful paraphrase | Same. No mixing with the Technical College record. | None |
-| `document-0` "SYNTHETIC-ONLY Washington Journey Level Electrician License" / "SYNTHETIC-ONLY NFPA 70E Arc Flash Safety" | "Washington Journey Level Electrician License" / "NFPA 70E Arc Flash Safety" | Faithful paraphrase | Markers removed only. No issuer, year, or credential added. | None |
-| `document-0` Skills (3 terms) + `document-1` Skills (3 terms) | One `Technical Skills` block listing all six source terms | Supported cross-document synthesis | Every listed term is present in a source skills block. Merging skills lists is not an attribution claim. | None |
-| `document-0` has **no** Projects section; `document-1` has none | Empty `## Projects` heading is emitted (lines 18–19) | Uncertain (structural, not fabrication) | An empty heading asserts nothing. It is carried through from the writer's section skeleton, not from a source claim. Cosmetic only. | Checker correction (optional): suppress empty sections at render. Not a correctness defect. |
+| `doc-0` Example Technical College — AAS, Electrical Systems Technology, 2016 | Same | Faithful paraphrase | Marker removed; institution, degree, field, year intact and correctly paired. | None |
+| `doc-1` Example Community College — Certificate, Building Systems Maintenance, 2013 | Same | Faithful paraphrase | Same. No mixing with the Technical College record. | None |
+| `doc-0` Washington Journey Level Electrician License; NFPA 70E Arc Flash Safety | Same | Faithful paraphrase | Markers removed only. No issuer, year or credential added. | None |
+| `doc-0` skills (3 terms) + `doc-1` skills (3 terms) | One Technical Skills block with all six source terms | Faithful paraphrase (cross-document synthesis) | Every listed term is in a source skills block. Merging skills lists asserts nothing new. | None |
+| Neither document has a Projects section | Empty `## Projects` heading (L18–19) | Uncertain (structural) | An empty heading asserts nothing but is carried from the writer's skeleton, not from a claim. Whether an empty section should render is a presentation decision, not a truth question. | Optional: suppress empty sections at render. |
 
 ---
 
-## Attribution check (independent of wording)
+## 6. Attribution check (independent of wording)
 
 | Test | Result |
 |---|---|
-| Employer→role pairing | Cascade→Journeyman Electrician, Harborline→Electrical Apprentice, Bluegate→Facilities Maintenance Technician. All correct. |
-| Employer→date pairing | `03/2020 – Present`, `06/2016 – 02/2020`, `01/2014 – 05/2016`. All correct, none exchanged. |
-| Institution→degree pairing | Technical College→AAS Electrical Systems Technology 2016; Community College→Certificate Building Systems Maintenance 2013. Correct, not mixed. |
-| Metric ownership | 40+ sites→Cascade; 18% rework→Cascade; 6 apprentices→Cascade; 25 projects / 8,000 hours→Harborline; 12 buildings / 22% downtime→Bluegate. Every figure stays under its own employer. |
-| Duplicate records | Each employer and institution appears exactly once. |
-| Invented capitalised entities | None. `_introduces_beyond` returns `[]` for every line, and a whole-document scan finds no capitalised name absent from both sources. |
+| Employer→role | Cascade→Journeyman Electrician; Harborline→Electrical Apprentice; Bluegate→Facilities Maintenance Technician. Correct. |
+| Employer→dates | `03/2020 – Present`, `06/2016 – 02/2020`, `01/2014 – 05/2016`. Correct, none exchanged. |
+| Institution→degree | Technical College→AAS Electrical Systems Technology 2016; Community College→Certificate Building Systems Maintenance 2013. Correct, not mixed. |
+| Metric ownership | 40+ sites, 18% rework, 6 apprentices→Cascade; 25 projects, 8,000 hours→Harborline; 12 buildings, 22% downtime→Bluegate. No figure crosses an employer. |
+| Duplicates | Each employer and institution appears exactly once. |
+| Invented capitalised entities | None. |
 
-**Conclusion:** the attribution layer is correct. The defect is confined to **six appended
-outcome clauses**, of which **five are unsupported additions** and **one
-("gaining hands-on electrical construction experience") is a supported inference that must
-be kept**. Treating all six as one category would delete a legitimate paraphrase —
-which is exactly why the table judges them individually rather than as a block.
+**No incorrect attribution was found in run 10.** All five categories appear in the
+table (uncertain via the empty Projects heading), but the attribution layer itself is
+clean.
+
+## 7. Summary of the six appended clauses
+
+| Clause | Category | Action |
+|---|---|---|
+| `ensuring compliance with NFPA 70E standards` | New causal/performance outcome | Repair |
+| `improving workforce safety and code adherence` | New causal/performance outcome | Repair |
+| `increasing installation efficiency and quality control` | New causal/performance outcome | Repair |
+| `gaining hands‑on electrical construction experience` | Supported qualitative restatement | **Keep** |
+| `ensuring continuous operations` | New causal/performance outcome | Repair |
+| `enhancing system reliability` | Supported qualitative restatement | **Keep** |
+
+**Four additions, two legitimate restatements.** The earlier version treated all six
+as one category; that was wrong in both directions — it would have deleted "enhancing
+system reliability", which is entailed by the sourced 22% downtime reduction.
+
+The pattern separating the two groups: an **addition** asserts an outcome or property
+the source never measured (compliance status, safety improvement, efficiency,
+operational continuity). A **restatement** names the property the source already
+measured (reliability via downtime) or characterises work the source already describes
+(field work → hands-on experience).
+
+The work list in `appended_clauses.py` reports all six and assesses **none** of them.
+That division is deliberate: the lexical layer localises; this table judges.

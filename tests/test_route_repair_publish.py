@@ -216,7 +216,15 @@ class RepairingReviewer:
 
 @pytest.fixture
 def published(monkeypatch):
-    """Run /analyze through the repair path; return the published result body."""
+    """Run /analyze through the repair path; return the published result body.
+
+    DEPENDENT ON THE ARCHIVAL RUN-7 CAPTURE. Skips when
+    `.live-run-2026-11-02/` is absent, which is normal on a clean checkout. These
+    are replay tests over recorded evidence, not required gate tests: anything that
+    must always run lives in the portable suites.
+    """
+    if not RUN7.exists():
+        pytest.skip("run-7 capture absent; archival replay only")
     yield from _published_with_draft(monkeypatch, _draft())
 
 

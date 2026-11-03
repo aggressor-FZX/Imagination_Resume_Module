@@ -247,3 +247,45 @@ def test_the_chronology_is_consistent_and_has_no_overlap_or_gap():
     ]
     rows = re.findall(r"\*[^*|]+\|\s*(\d{2}/\d{4})\s*-\s*(\d{2}/\d{4}|Present)", _combined())
     assert rows == expected
+
+
+# ---------------------------------------------------------------------------
+# The job-ad gap: absent is correct, invented is not
+# ---------------------------------------------------------------------------
+
+def test_the_job_ad_asks_for_a_skill_the_candidate_does_not_have():
+    """[realistic-fixture] The gap exists in the posting and nowhere in the record.
+
+    This is the precondition for the G1 case. If "motor controls" appeared in a
+    source document the trap would be meaningless.
+    """
+    ad = (PACK / "intended-job-description.txt").read_text(encoding="utf-8")
+    assert "motor controls" in ad.lower()
+    assert "motor control" not in _combined().lower()
+
+
+def test_the_stated_expectation_is_that_omission_approves_and_invention_does_not():
+    """[realistic-fixture] The corrected G1 rule, asserted so it cannot silently revert.
+
+    An earlier draft said importing the missing skill would be "withheld", which was
+    the wrong remedy: it implied a truthful résumé omitting an absent skill should be
+    withheld too. The corrected rule has two halves, and this test pins both.
+
+    A test cannot execute the engine's decision here — the pack is not frozen and no
+    route case exists yet — so what is asserted is the documented expectation itself,
+    and that it contains both halves. That keeps the rule reviewable and prevents a
+    later edit from quietly restoring the single, wrong outcome.
+    """
+    package = (PACK / "REVIEW_PACKAGE.md").read_text(encoding="utf-8")
+
+    # Half 1: omission is correct, and gaps may surface in gap analysis.
+    assert "A truthful résumé is never withheld because the ad requests an absent skill" \
+        in package
+    assert "**Must be absent**" in package
+    assert "**May be listed**" in package
+
+    # Half 2: invention must be repaired or withheld.
+    assert "removed or repaired" in package or "repaired or withheld" in package
+
+    # And the wrong, single-outcome rule must not be present as the stated remedy.
+    assert "Importing it from the ad is **withheld**" not in package

@@ -43,12 +43,14 @@ What this module therefore does
 -------------------------------
 
 It does **not** decide fabrication and it does **not** gate publication. It produces
-a *work list*: for each supported line, the comma-delimited clauses that share no
-content word with the evidence cited for that line. That is exactly the set a
-semantic reviewer must justify, per SPEC.v2's separation of deterministic Tier-A
-checks from semantic Tier-B review.
+a *work list*: for each supported line, the clauses that share no content word with
+the evidence cited for that line. That is exactly the set a semantic reviewer must
+look at, per SPEC.v2's separation of deterministic Tier-A checks from semantic Tier-B
+review.
 
-Two consequences are deliberate:
+Every finding carries ``semantic_status: "not_assessed"``. This module measures one
+thing — whether a clause's content stems appear in the cited evidence — and refuses to
+be read as having judged the clause. Two consequences are deliberate:
 
 * a faithful paraphrase whose every word is attested produces an empty list, so the
   check costs a correct draft nothing;
@@ -56,6 +58,10 @@ Two consequences are deliberate:
   false positive to be suppressed; it is the question Tier B has to answer, and
   answering it in the engine would be exactly the "mechanical check passed,
   therefore it is supported" error SPEC.v2 warns about.
+
+The converse also holds and is why this can never become a gate: a false claim built
+entirely from source vocabulary produces an **empty** list. Both error directions are
+asserted in the tests.
 
 Labelled **[tier-b-worklist]**.
 """
@@ -120,27 +126,27 @@ def unattested_clauses(line: str, cited_evidence: Iterable[str],
     filter the module docstring rejects.
 
     ``available_evidence`` — when supplied — is the material the reviewer *could*
-    have cited (typically every source passage for the line's own record). It
-    changes nothing about *whether* a clause is reported; it adds
-    ``citation_status`` and ``corpus_coverage`` so the very different cases can be
-    told apart:
+    have cited. It changes nothing about *whether* a clause is reported; it adds
+    two fields that say exactly what was measured:
 
-    * ``"insufficient_citation"`` — every unattested word also occurs somewhere in
-      the record. The statement may well be correct; the *citation* is what is
-      incomplete. Deleting a correct statement over this would be wrong.
-    * ``"unsupported"`` — no unattested word occurs anywhere in the record. This is
-      the fabrication question.
-    * ``"partially_attested"`` — some unattested words occur in the record and
-      some do not. Deliberately its own value rather than being folded into either
-      neighbour: measuring run 10 showed this is the COMMON case (3 of 5 findings),
-      and a binary would have classified a real fabrication as a mere citation
-      defect because one incidental word ("system" for "enhancing system
-      reliability") happened to appear in the sources.
+    ``missing_stems_found_elsewhere``
+        How many of the clause's unattested content stems also occur somewhere in
+        ``available_evidence``: ``"none"``, ``"some"`` or ``"all"``. That is the
+        *entire* meaning of the field. It is a set-intersection result on stem
+        lists and nothing more.
 
-    **None of these three values is a verdict.** ``insufficient_citation`` in
-    particular is the case where a deterministic layer must not behave as though it
-    has detected a fabrication. All of them are reported for Tier B; only
-    ``unsupported`` is even about truth.
+    ``semantic_status``
+        Always ``"not_assessed"``. Present so a consumer cannot mistake this
+        record for a judgement.
+
+    **No category here is a truth label.** An earlier draft of this module named
+    these values ``unsupported`` / ``partially_attested`` /
+    ``insufficient_citation``, which read as verdicts on the claim. They were not:
+    the same set-intersection that produced them cannot tell a fabrication from a
+    faithful restatement in different words, and calling anything "unsupported" on
+    that basis asserted more than was measured. The names now state the
+    measurement, and ``semantic_status`` states that no semantic judgement has
+    been made.
     """
     evidence_stems = _content_stems(" ".join(cited_evidence))
     available_stems = (_content_stems(" ".join(available_evidence))
@@ -157,37 +163,23 @@ def unattested_clauses(line: str, cited_evidence: Iterable[str],
             "start": start,
             "end": end,
             "clause": text,
-            # Recorded so a Tier-B reader can see what the clause contributes;
-            # it is not itself a reason to reject.
-            "unattested": sorted(missing),
+            "missing_stems": sorted(missing),
+            # Stated on every finding, not only when a corpus is supplied, so the
+            # record is never readable as a semantic verdict.
+            "semantic_status": "not_assessed",
         }
         if available_stems is not None:
-            # Distinguishing "the reviewer cited too little" from "the record never
-            # says this" is the point of passing the corpus in separately. It is
-            # reported as a TRICHOTOMY rather than a binary because a binary lies:
-            #
-            #   * all  — every unattested stem occurs somewhere in the record, so
-            #            the statement may well be correct and only the citation is
-            #            incomplete. Never act on this as a fabrication.
-            #   * none — no unattested stem occurs anywhere in the record. This is
-            #            the fabrication question.
-            #   * some — a partial match. Measured on run 10 this is the common
-            #            case, and it is NOT resolvable lexically: one incidental
-            #            shared stem ("system" for "enhancing system reliability")
-            #            would otherwise downgrade a real fabrication to a mere
-            #            citation defect. Reporting "some" keeps that visible
-            #            instead of hiding it behind a binary that happens to be
-            #            wrong.
-            #
-            # All three values describe the EVIDENCE, never the claim's truth.
-            attested = missing & available_stems
-            if not attested:
-                finding["citation_status"] = "unsupported"
-            elif attested == missing:
-                finding["citation_status"] = "insufficient_citation"
+            found_elsewhere = missing & available_stems
+            if not found_elsewhere:
+                coverage = "none"
+            elif found_elsewhere == missing:
+                coverage = "all"
             else:
-                finding["citation_status"] = "partially_attested"
-            finding["corpus_coverage"] = f"{len(attested)} of {len(missing)} unattested words also appear in the record"
+                coverage = "some"
+            finding["missing_stems_found_elsewhere"] = coverage
+            finding["missing_stems_found_elsewhere_detail"] = (
+                f"{len(found_elsewhere)} of {len(missing)} unattested stems also "
+                f"occur somewhere in the record")
         findings.append(finding)
     return findings
 
@@ -201,9 +193,9 @@ def worklist(lines: Iterable[dict[str, Any]],
     line that names no evidence, so there is nothing here to add.
 
     ``available_evidence`` is passed through to :func:`unattested_clauses` so each
-    finding carries its ``citation_status`` (``unsupported``,
-    ``partially_attested`` or ``insufficient_citation``). The label describes the
-    evidence, never the claim's truth.
+    finding carries ``missing_stems_found_elsewhere`` (``none`` / ``some`` /
+    ``all``) and ``semantic_status: "not_assessed"``. The first is a measured
+    set-intersection; the second states that no truth judgement was made.
     """
     corpus = list(available_evidence) if available_evidence is not None else None
     items: list[dict[str, Any]] = []

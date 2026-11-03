@@ -258,6 +258,7 @@ def test_headings_are_inserted_in_the_required_order():
     assert names == order, f"headings out of order: {names}"
 
 
+@requires_capture
 def test_skill_heading_alias_is_renamed_not_duplicated():
     """The source's ``## Skills`` becomes ``## Technical Skills``, once."""
     out, _ = sp.preserve_source_facts(_draft(), SOURCE)
@@ -480,6 +481,7 @@ def test_ambiguous_match_is_left_unchanged():
     assert "Delivered 12 projects under supervision in 2019." in repaired
 
 
+@requires_capture
 def test_preservation_applied_twice_makes_no_further_changes():
     """Idempotence, on a document where every rule actually fires.
 

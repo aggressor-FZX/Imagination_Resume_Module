@@ -1,0 +1,73 @@
+{
+ "fixture_version": 1,
+ "provenance": {
+  "kind": "extracted_excerpt",
+  "source_capture": "850ee3ea-ca2e-4210-92b4-0e57ed5149eb.json",
+  "source_capture_sha256": "c141846a0d6ef29242e4cf24095978c52c1a88ae671bc84d639de8db4a98713f",
+  "note": "Verbatim excerpt. The full capture is immutable evidence and is NOT committed; this file contains only the strings the required regressions assert on."
+ },
+ "sources": {
+  "document-0": "## Professional Summary\nSYNTHETIC-ONLY Journeyman electrician with 8+ years of commercial and industrial electrical\nexperience across construction, facilities maintenance, and power distribution.\n## Professional Experience\n**SYNTHETIC-ONLY Cascade Power Solutions, LLC** -- Example City, WA\n*Journeyman Electrician | 03/2020 - Present*\n- Installed and maintained commercial electrical systems across 40+ job sites.\n- Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices.\n- Cut rework by 18% by standardizing panel labeling and inspection checklists.\n**SYNTHETIC-ONLY Harborline Mechanical Contractors** -- Sampletown, OR\n*Electrical Apprentice | 06/2016 - 02/2020*\n- Assisted with conduit bending, wire pulling, and panel terminations on 25 projects.\n- Completed 8,000 hours of supervised field work toward licensure.\n## Education\n**SYNTHETIC-ONLY Example Technical College** -- Example City, WA\n*Associate of Applied Science, Electrical Systems Technology | 2016*\n## Certifications\n- SYNTHETIC-ONLY Washington Journey Level Electrician License\n- SYNTHETIC-ONLY NFPA 70E Arc Flash Safety\n## Skills\n- Commercial electrical systems, conduit bending, panel labeling\n- NFPA 70E, lockout/tagout, inspection checklists",
+  "document-1": "## Professional Summary\nSYNTHETIC-ONLY Facilities maintenance technician focused on preventive maintenance of\nelectrical and mechanical building systems.\n## Professional Experience\n**SYNTHETIC-ONLY Bluegate Property Services** -- Sampletown, OR\n*Facilities Maintenance Technician | 01/2014 - 05/2016*\n- Maintained electrical distribution and HVAC controls for 12 commercial buildings.\n- Reduced unplanned downtime by 22% through a preventive maintenance schedule.\n## Education\n**SYNTHETIC-ONLY Example Community College** -- Sampletown, OR\n*Certificate, Building Systems Maintenance | 2013*\n## Skills\n- Preventive maintenance scheduling, HVAC controls, electrical distribution"
+ },
+ "draft_lines": [
+  {
+   "text": "Installed and maintained commercial electrical systems across 40+ job sites, ensuring compliance with NFPA 70E standards.",
+   "sha256": "6ff31560d4206adff7b6d9bca6dc39f4f8b753c447294679b7d07ed95383c52b"
+  },
+  {
+   "text": "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices, improving workforce safety and code adherence.",
+   "sha256": "51b1811f3ae0bab10a1104558fa61387c4a0b6bbccf989897a139e15709b81b4"
+  },
+  {
+   "text": "Cut rework by 18% by standardizing panel labeling and inspection checklists, increasing installation efficiency and quality control.",
+   "sha256": "dadb3780181b56b056dd2a6df525958eed975357d46f7a9c9f4f9182c2255977"
+  },
+  {
+   "text": "Completed 8,000 hours of supervised field work toward journeyman licensure, gaining hands‑on electrical construction experience.",
+   "sha256": "5e7372959f520a0e603fb6658a24461da98d72f68bb141eeb3e9dd3d5ddb4d13"
+  },
+  {
+   "text": "Maintained electrical distribution systems and HVAC controls for 12 commercial buildings, ensuring continuous operations.",
+   "sha256": "c72ef63b7661772dbae956873d51dcd124fc994cfa096568a55affe8ed629065"
+  },
+  {
+   "text": "Reduced unplanned downtime by 22% through implementation of preventive maintenance schedules, enhancing system reliability.",
+   "sha256": "b92d185a29991b4e233290a79056641141a45f47a9ae75487fc29de1275d8d53"
+  }
+ ],
+ "source_lines": [
+  {
+   "text": "Installed and maintained commercial electrical systems across 40+ job sites.",
+   "sha256": "136425ed0e649b90ed1f7991d3a7ec277357b0c6564e3b3a0508c57cf4560bea"
+  },
+  {
+   "text": "Trained 6 apprentices on lockout/tagout and NFPA 70E safe work practices.",
+   "sha256": "819bc00582f62992e3e7328a04ff418a01923f7b331db0b882e7ca696b30ed12"
+  },
+  {
+   "text": "Cut rework by 18% by standardizing panel labeling and inspection checklists.",
+   "sha256": "32db09653f7a9088e8237c15eb724817b776088a7fac8358d634986beaf7b10e"
+  },
+  {
+   "text": "Completed 8,000 hours of supervised field work toward licensure.",
+   "sha256": "a6fabfb85cd4a984d4a17bee708b33654c6fbace7292ee2e1c5791db0fc181bb"
+  },
+  {
+   "text": "Maintained electrical distribution and HVAC controls for 12 commercial buildings.",
+   "sha256": "c6c4d4e01726aec5f95d366b1133e62b9c9eaeb6c5fbdd79831909f2c99d41be"
+  },
+  {
+   "text": "Reduced unplanned downtime by 22% through a preventive maintenance schedule.",
+   "sha256": "2e1dba9e6c2b1fc332ff5944f5bd118b604c76c8273b8ec8037c8efc1b01602a"
+  },
+  {
+   "text": "SYNTHETIC-ONLY Facilities maintenance technician focused on preventive maintenance of",
+   "sha256": "55952ed2fdf59ff6100dd4dd3cdfc4c30cbea4651d585fba3852367fb907f110"
+  },
+  {
+   "text": "SYNTHETIC-ONLY Journeyman electrician with 8+ years of commercial and industrial electrical",
+   "sha256": "4cae46c808c8f2edf3e04f1691065f2bd497aa80e0178aefc63be7b240f4619a"
+  }
+ ]
+}
