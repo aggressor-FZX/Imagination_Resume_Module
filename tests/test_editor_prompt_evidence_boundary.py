@@ -282,3 +282,151 @@ def test_no_summary_is_invented_when_the_source_has_none(text):
     made as a claim, which is the same fabrication by another route.
     """
     assert StarEditor(llm_client=None)._extract_source_summary(text) == ""
+
+
+# ---------------------------------------------------------------------------
+# 5. The five-section contradiction, resolved and pinned
+# ---------------------------------------------------------------------------
+
+def test_prompt_requires_every_heading_even_when_empty():
+    """Every promised heading is mandatory; empty is a valid answer.
+
+    The contradiction this resolves, stated precisely because three places disagreed:
+
+    * the answer key's comment promised five headings, while its own tuple listed four
+      and omitted Projects;
+    * the prompt said "emit a section only when the input gives you content", which
+      forbids an empty Projects;
+    * `_ensure_all_sections` actively DELETED an empty header.
+
+    A test written from the comment and a test written from the tuple therefore
+    disagreed about whether a resume was complete. The product's promise is all
+    headings present with empty ones allowed, so the prompt now requires them and names
+    empty as correct.
+    """
+    prompt = _flat(STAR_EDITOR_SYSTEM_PROMPT)
+    format_block = prompt.split("section format")[1].split("rules:")[0]
+
+    for heading in ("professional summary", "professional experience", "projects",
+                    "education", "certifications", "technical skills"):
+        assert f"## {heading}" in format_block, (
+            f"the format block does not require a {heading!r} heading")
+
+    # And empty must be named as acceptable, or "require a heading" turns into
+    # "invent content to fill it".
+    assert "empty is a valid" in prompt or "empty section is required" in prompt
+    assert "no filler" in prompt
+
+
+def test_prompt_forbids_filling_an_empty_section():
+    """Requiring a heading must not become permission to fabricate for it."""
+    prompt = _flat(STAR_EDITOR_SYSTEM_PROMPT)
+
+    assert "do not invent an entry" in prompt
+    for forbidden in ("no placeholder bullet", "no \"none listed\"", "no \"n/a\""):
+        assert forbidden in prompt, forbidden
+
+
+def test_editor_keeps_an_empty_section_header_instead_of_deleting_it():
+    """`_ensure_all_sections` must preserve an empty heading.
+
+    This is the mechanical half of the contradiction, and it is tested through the case
+    that actually reaches the write-back. The function only assigns back to
+    ``result["final_markdown"]`` when it appended something, so a test whose document
+    needs no appended section passes whether the header was kept or deleted — it observes
+    the ORIGINAL markdown, not the processed one. Mutation-checking exposed exactly that:
+    restoring the deletion left the first version of this test green.
+
+    The document here therefore has an empty Projects heading AND an Education section
+    the editor must repopulate, which forces the write-back and makes the Projects result
+    observable.
+    """
+    editor = StarEditor(llm_client=None)
+    markdown = (
+        "## Professional Summary\nJourneyman electrician with 8+ years.\n\n"
+        "## Professional Experience\n**Cascade** -- WA\n"
+        "*Journeyman Electrician | 03/2020 - Present*\n- Installed systems.\n\n"
+        "## Projects\n\n"
+        # Empty Education forces the append path, hence the write-back.
+        "## Education\n\n"
+        "## Certifications\n- NFPA 70E Arc Flash Safety\n\n"
+        "## Technical Skills\n**Safety:** NFPA 70E\n"
+    )
+    result = editor._ensure_all_sections(
+        {"final_markdown": markdown},
+        education=[{"degree": "Associate of Applied Science",
+                    "institution": "Example Technical College", "dates": "2016"}])
+    kept = result["final_markdown"]
+
+    assert kept != markdown, (
+        "the fixture must trigger the write-back or the assertion below is vacuous")
+
+    assert re.search(r"^##\s+Projects\s*$", kept, re.MULTILINE), (
+        "the empty Projects heading was deleted")
+    body = re.search(r"^##\s+Projects\s*\n(.*?)(?=^##\s|\Z)", kept,
+                     re.MULTILINE | re.DOTALL)
+    assert (body.group(1).strip() if body else "") == "", (
+        "nothing may be invented to fill an empty section")
+
+
+def test_empty_header_removal_would_be_observable_in_this_fixture():
+    """Guard against the test above silently becoming vacuous again.
+
+    Asserts the fixture's precondition directly: the Education section really is empty,
+    so the editor really does append, so the write-back really happens. Without this, a
+    later change to the append rule could make the heading assertion unobservable while
+    the test stayed green.
+    """
+    markdown = (
+        "## Projects\n\n"
+        "## Education\n\n"
+        "## Certifications\n- NFPA 70E Arc Flash Safety\n"
+    )
+    editor = StarEditor(llm_client=None)
+    result = editor._ensure_all_sections(
+        {"final_markdown": markdown},
+        education=[{"degree": "AAS", "institution": "Example Technical College",
+                    "dates": "2016"}])
+    assert result["final_markdown"] != markdown
+    assert "Example Technical College" in result["final_markdown"]
+
+
+def test_empty_projects_survives_the_real_export_converter():
+    """[renderer] An empty Projects heading parses to [] rather than failing.
+
+    Verified rather than assumed: if the converter or renderer choked on an empty
+    section, requiring the heading would be unsafe and the contradiction would have to
+    be resolved the other way.
+    """
+    from approved_resume import export_payload
+
+    markdown = (
+        "## Professional Summary\nJourneyman electrician with 8+ years.\n\n"
+        "## Professional Experience\n**Cascade Power Solutions, LLC** -- Example City, WA\n"
+        "*Journeyman Electrician | 03/2020 - Present*\n"
+        "- Installed and maintained commercial electrical systems across 40+ job sites.\n\n"
+        "## Projects\n\n"
+        "## Education\n**Example Technical College** -- 2016\n\n"
+        "## Certifications\n- Washington Journey Level Electrician License\n\n"
+        "## Technical Skills\n**Safety:** NFPA 70E\n"
+    )
+    payload = export_payload(markdown)
+
+    assert payload.get("projects") == []
+    assert len(payload.get("experience") or []) == 1
+    assert payload.get("education")
+
+
+def test_answer_key_requires_five_headings_and_permits_empty_projects():
+    """The answer key's comment and its tuple must agree.
+
+    Written as a test against the key itself, because the original defect was that they
+    did not: the comment said five, the tuple had four, and the missing one was exactly
+    the section that may be empty.
+    """
+    from tests.fixtures.fidelity import expected_facts as facts
+
+    required = set(facts.REQUIRED_SECTION_HEADINGS)
+    assert "projects" in required, "Projects must be a required heading"
+    assert len(required) >= 5
+    assert "projects" in facts.SECTIONS_ALLOWED_TO_BE_EMPTY

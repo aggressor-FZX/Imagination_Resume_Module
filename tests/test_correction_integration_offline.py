@@ -326,10 +326,20 @@ def test_mocked_missing_source_representation_withholds_after_repair(synthetic_d
     assert (result.status, result.reason, result.markdown) == ("withheld", "source_facts_missing", None)
     # Repair attempted, then the repaired draft re-reviewed, and the omission still wins.
     assert (result.review_calls, result.repair_calls) == (2, 1)
-    # The exact HTTP call count is not a behaviour: this scripted session answers every
-    # phase, so the second repair pass and its retries make it stable only by accident.
-    # What matters is that every call was recorded and accounted for.
-    assert provider.calls == len(session.requests) > 0
+    # Phase ORDER and the hard upper bound are both asserted, because they are the
+    # behaviour. Only the exact historical total was dropped: it shifts whenever the
+    # number of repair passes changes, and pinning it would encode the old ordering into
+    # the test. The order cannot shift silently, and the bound cannot silently grow.
+    phases = [call["phase"] for call in provider.usage["calls"]]
+    assert phases[0] == "source_inventory"
+    assert phases[1] == "initial_review"
+    assert "repair" in phases, "the repair path must be reached"
+    assert phases.index("repair") > phases.index("initial_review"), (
+        "repair must follow the review that flagged the line, not precede it")
+    assert phases[-1] in {"post_patch_review", "post_restore_review", "initial_review"}
+    assert provider.calls == len(session.requests)
+    assert provider.calls <= 7, (
+        f"provider calls exceeded MAX_CALLS: {provider.calls}")
     assert provider.usage["total_tokens"] > 0
 
 

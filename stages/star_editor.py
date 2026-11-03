@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 
 STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. You reformat and tighten the material you are given. You do not add to it.
 
-SECTION FORMAT (emit a section only when the input gives you content for it):
+SECTION FORMAT — emit ALL SIX headings below, in this order, every time:
 
 ## Professional Summary
 A short paragraph drawn from the summary the input supplies, restated in third
-person. Omit this section entirely when the input supplies no summary text.
+person. If the input supplies no summary, emit the heading and nothing under it.
 
 ## Professional Experience
 **Company Name** -- Location
@@ -58,11 +58,16 @@ person. Omit this section entirely when the input supplies no summary text.
 **Category:** skill1, skill2, skill3
 
 RULES:
+- Every heading above MUST appear in the output, in that order, even when you have no
+  content for it. An empty section is required; empty is a valid, correct answer.
+- An empty heading means "this section exists and the candidate has nothing for it". Do
+  NOT delete it, do NOT merge it into a neighbour, and above all do NOT invent an entry
+  to fill it. No filler, no placeholder bullet, no "None listed", no "N/A".
+- A section that the input does supply content for must be filled from that input, not
+  padded beyond it.
 - Company names go on bold lines, NOT merged with job titles.
 - One bullet per input bullet. Do NOT lengthen the list. If the input gives three
   bullets for a role, emit three. A role with two bullets is correct and complete.
-- Emit a section ONLY when the input supplies content for it. A heading with no
-  supported content is omitted, not filled.
 - Every technology, tool and activity named in the input must survive somewhere in
   the output. Tightening prose is allowed; dropping the employer, the role, the
   dates or a stated technology is not.
@@ -92,9 +97,9 @@ RULES:
 
 OUTPUT JSON:
 {
-  "final_markdown": "## Professional Summary\nParagraph restating the supplied summary.\n\n## Professional Experience\n**Company** -- City, ST\n*Title | 2019 -- 2023*\n- bullet\n\n## Education\n**BS, Institution** -- 2026\n\n## Technical Skills\n**Languages:** Python, SQL",
+  "final_markdown": "## Professional Summary\nParagraph restating the supplied summary.\n\n## Professional Experience\n**Company** -- City, ST\n*Title | 2019 -- 2023*\n- bullet\n\n## Projects\n\n## Education\n**BS, Institution** -- 2026\n\n## Certifications\n\n## Technical Skills\n**Languages:** Python, SQL",
   "final_plain_text": "plain text summary",
-  "editorial_notes": "sections emitted only where the input supplies content"
+  "editorial_notes": "all six headings emitted; sections without source content left empty"
 }
 """
 
@@ -853,16 +858,30 @@ class StarEditor:
 
         # Check which sections exist AND have actual content (not just empty headers)
         sections_with_content = set()
-        for section_name in ["Professional Experience", "Experience", "Projects", 
-                            "Education", "Certifications", "Technical Skills", "Skills"]:
+        for section_name in ["Professional Summary", "Professional Experience",
+                            "Experience", "Projects", "Education", "Certifications",
+                            "Technical Skills", "Skills"]:
             match = re.search(rf'##\s*{re.escape(section_name)}\s*\n(.*?)(?=##\s|\Z)', md, re.IGNORECASE | re.DOTALL)
             if match:
                 body = match.group(1).strip()
                 if body:
                     sections_with_content.add(section_name.lower())
+                # An empty header is now KEPT rather than deleted.
+                #
+                # The product promises five headings, and "Projects" may legitimately
+                # have no entries. Deleting the empty header made a complete resume
+                # look like one missing a promised section, and it contradicted the
+                # answer key, which permits an empty Projects. A heading asserts no
+                # candidate fact, so an empty one is the correct representation of
+                # "this section exists and the candidate has nothing to put in it".
+                #
+                # This does NOT relax the no-invention rule: nothing is appended to
+                # fill an empty section. `added` below still only fires for sections
+                # with real input data.
                 elif match:
-                    # Header exists but empty — remove the empty header
-                    md = md[:match.start()] + md[match.end():]
+                    logger.info(
+                        "[STAR_EDITOR] Keeping empty section header %r (no filler added)",
+                        section_name)
 
         added = []
 

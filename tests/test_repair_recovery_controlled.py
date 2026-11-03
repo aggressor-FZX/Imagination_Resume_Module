@@ -56,10 +56,16 @@ class Scenario:
     to what is actually sent rather than to an assumption about it.
     """
 
-    def __init__(self, review, *, repair=None, review_after=None):
+    def __init__(self, review, *, repair=None, review_after=None,
+                 review_first_from: str | None = None):
         self._review = review
         self._repair = repair
         self._review_after = review_after
+        # Set only when the draft under test differs structurally from the recorded
+        # one. The recorded initial review answers *that exact draft*, so it cannot
+        # judge an inserted heading and returns an answer the adapter rejects. When a
+        # test substitutes a draft, it must also answer the first review.
+        self._review_first_from = review_first_from
         self.served: list[str] = []
 
     def answer(self, phase: str, wire: dict):
@@ -67,7 +73,7 @@ class Scenario:
         # byte-shaped like any other review, so the detector reports "review" for
         # every one of them. Once the recording is exhausted, any review-shaped
         # request is therefore a re-review — the initial review is always served by
-        # the recording itself.
+        # the recording itself unless a substituted draft forced it to be replaced.
         if phase in {"initial_review", "post_patch_review", "post_restore_review",
                      "review"}:
             builder = (self._review_after if self._review_after is not None
@@ -78,9 +84,45 @@ class Scenario:
         raise AssertionError(f"unexpected controlled phase {phase!r}")
 
 
-def drive(scenario: Scenario, *, timeout: float = 60.0):
-    """Run the real correction over run-7, answering later phases from the scenario."""
+def _served(body: str):
+    """An aiohttp-shaped 200 carrying ``body``, for a controlled answer."""
+    encoded = body.encode("utf-8")
+
+    class Served:
+        status = 200
+
+        def __init__(self):
+            self.content = self
+
+        async def iter_chunked(self, size):
+            for index in range(0, len(encoded), size):
+                yield encoded[index:index + size]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    return Served()
+
+
+
+def drive(scenario: Scenario, *, timeout: float = 60.0, draft: str | None = None):
+    """Run the real correction over run-7, answering later phases from the scenario.
+
+    ``draft`` overrides the captured draft. The default is the recorded run-7 writer
+    output, which is the evidence. One scenario passes a variant that carries all six
+    headings, because the recorded draft is missing a Projects heading — that is a
+    *writer* defect at revision b855087, not something the correction engine can fix
+    (repair may only replace a flagged span and cannot insert a newline). Testing the
+    all-headings invariant against the recorded draft would therefore be testing the
+    wrong layer and would fail for a reason that has nothing to do with repair.
+    """
     data = live_capture.load(RUN7)
+    substituted = draft is not None
+    if draft is None:
+        draft = data["draft"]
     extension = live_capture.ControlledExtension({})
     extension.prepare(data)
 
@@ -88,6 +130,22 @@ def drive(scenario: Scenario, *, timeout: float = 60.0):
         def post(self, url, **kwargs):
             exchanges = self.recorded.get("exchanges") or []
             if self.position < len(exchanges):
+                # A substituted draft is not the draft the recording reviewed, so its
+                # recorded first review does not apply and the adapter would reject it.
+                # Answer that phase from the scenario instead, and consume the recorded
+                # exchange so ordering stays intact.
+                phase_now = self._phase(kwargs)
+                if substituted and phase_now == "review":
+                    wire = json.loads(kwargs["json"]["messages"][1]["content"])
+                    payload = scenario.answer("initial_review", wire)
+                    scenario.served.append("initial_review")
+                    self.position += 1
+                    self.calls += 1
+                    self.requests.append(kwargs)
+                    self.controlled_requests.append(
+                        {"phase": "initial_review",
+                         "origin": extension.CONTROLLED})
+                    return _served(ca.success(payload))
                 return super().post(url, **kwargs)
             phase = self._phase(kwargs)
             wire = json.loads(kwargs["json"]["messages"][1]["content"])
@@ -125,7 +183,7 @@ def drive(scenario: Scenario, *, timeout: float = 60.0):
         provider = correction_provider.CorrectionProvider("no-network", session)
         sources = tuple(SourceDocument(i["source_id"], i["text"])
                         for i in data["sources"])
-        result = asyncio.run(correct(data["draft"], sources, provider,
+        result = asyncio.run(correct(draft, sources, provider,
                                      timeout_seconds=timeout))
     finally:
         if previous is None:
@@ -313,6 +371,26 @@ REPAIRED_SUPPORTED = {
         "NFPA 70E, lockout/tagout, inspection checklists",
     ),
 }
+
+
+
+def _draft_with_all_headings() -> str:
+    """The recorded run-7 draft with an empty Projects heading inserted.
+
+    The insertion is the ONLY difference. It exists so a test about structural
+    completeness can be about structure: the recorded draft omits the heading entirely,
+    which repair cannot fix, and conflating the two would make a repair test fail for a
+    writer reason.
+    """
+    from source_correction import _lines
+    draft = live_capture.load(RUN7)["draft"]
+    lines = draft.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip().startswith("## Education"):
+            lines.insert(index, "")
+            lines.insert(index + 1, "## Projects")
+            return "\n".join(lines)
+    raise AssertionError("the recorded draft has no Education heading to anchor on")
 
 
 def _repaired_review():
@@ -575,23 +653,39 @@ def test_repair_is_bounded_to_two_passes_and_the_call_budget():
 # ---------------------------------------------------------------------------
 
 @requires_run7
-def test_all_five_headings_survive_a_repair_without_filler():
-    """[controlled] Every promised section is present, and none is padded.
+def test_all_six_headings_survive_a_repair_without_filler():
+    """[controlled] Every promised heading is present, and none is padded.
 
-    "Keep five headings" and "invent nothing to fill them" pull against each other, so
+    "Keep the headings" and "invent nothing to fill them" pull against each other, so
     both halves are asserted: the headings exist, and the sections whose source content
     is thin do not acquire entries the source never had.
+
+    The draft used here carries all six headings and is otherwise identical to the
+    recorded one. That is a deliberate, stated substitution: the recorded run-7 draft
+    has no Projects heading at all, which is a *writer* defect (`b855087`) and not
+    something the correction engine can resolve — repair replaces a flagged span and
+    cannot insert a newline. Asserting the all-headings invariant against the recorded
+    draft would test the writer's defect while claiming to test repair, so the heading is
+    supplied here and the writer's own omission is recorded as a known defect in
+    docs/live-runs/REMAINING_DEFECTS.md.
     """
+    defect_free_layout = _draft_with_all_headings()
     scenario = Scenario(_defective_review(), repair=repair(REPAIRED_LINES),
                         review_after=_repaired_review())
 
-    result, _session, _data = drive(scenario)
+    result, _session, _data = drive(scenario, draft=defect_free_layout)
     assert result.status == "approved", (result.reason, result.commentary)
     md = result.markdown
 
     present = ca.sections_present(md)
     for heading, found in present.items():
         assert found, f"promised section missing: {heading}"
+
+    # Empty where the candidate has nothing, not filled with invention.
+    projects_body = ca.section_body(md, "Projects")
+    assert projects_body == "", (
+        f"Projects must be empty for this candidate, got: {projects_body!r}")
+    assert "Smart Electrical Inspection" not in md
 
     # No invented entries in the sections the source barely populates.
     certifications = ca.section_body(md, "Certifications")
@@ -603,6 +697,9 @@ def test_all_five_headings_survive_a_repair_without_filler():
     for invented in ("GPA", "Relevant Courses", "Honors"):
         assert invented not in education
 
-    # And no project the candidate never had.
-    assert "## Projects" not in md
+    # Projects is a required heading AND must be empty: the candidate has none, so an
+    # absent heading fails the product's promise while a filled one invents a project.
+    projects_body = ca.section_body(md, "Projects")
+    assert projects_body == "", (
+        f"Projects must be empty for this candidate, got: {projects_body!r}")
     assert "Smart Electrical Inspection" not in md

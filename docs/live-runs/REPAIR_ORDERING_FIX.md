@@ -75,15 +75,30 @@ Suite: **902 passed, 3 skipped**.
 
 See `REMAINING_DEFECTS.md` for the full table. Summary:
 
-| objection | class | fixable by code? |
-|---|---|---|
-| `8,000 hours of supervised` → `hands-on … mastering core` | **lost_qualifier** | yes — qualifier must travel with the number |
-| skills block invents a category, admits `installation`/`maintenance` | **fabrication** | yes |
-| summary appends a proficiency list past the source summary's end | **fabrication** | yes |
-| education line's bold name concatenates degree + institution | **fabrication** | yes — caught by `unsupported_entities`, not by the reviewer |
-| degree field "Electrical Systems Technology" dropped | **fabrication** | yes |
-| summary's first clause restates the source | **paraphrase** | **no** — reviewer was wrong |
-| heading segments reported missing | **formatting** | **no** — headings assert nothing |
+A checker rejection is not itself proof of fabrication. Where the reviewer or a
+deterministic check rejects a line, the class records *what kind* of failure it is —
+which decides whether the remedy is removal, restoration or coverage.
+
+| objection | primary class | secondary | remedy |
+|---|---|---|---|
+| `8,000 hours of supervised` → `hands-on … mastering core` | **lost_qualifier** | unsupported_addition (the trailing clause) | restore the qualifier AND remove the clause |
+| skills block invents a category, admits `installation`/`maintenance` | **unsupported_addition** | — | remove |
+| summary appends a proficiency list past the source summary's end | **unsupported_addition** | reviewer_error (the first clause was objected to wrongly) | remove the appended list |
+| bold name concatenates degree + institution | **formatting** | — | emit degree and institution separately (caught by `unsupported_entities`) |
+| degree field "Electrical Systems Technology" dropped | **omission** | — | carry the field |
+| summary's first clause restates the source | **reviewer_error** | — | none |
+| heading segments reported missing | **formatting** | — | emit the heading (empty is correct) |
+
+Two corrections to the earlier key, both made because the earlier version called things
+fabrication that asserted nothing false:
+
+* **"Electrical Systems Technology dropped" is an omission, not a fabrication.** The
+  draft drops a fact; it states nothing untrue. Calling it fabrication overstates the
+  defect and invites a "stop asserting this" fix for a line whose real fault is missing
+  coverage.
+* **The education line's concatenated bold name is formatting, not fabrication.** Every
+  word is sourced; only their combination into a bold *name* is wrong, and the
+  consequence is that `unsupported_entities` cannot match it. The fix is layout.
 
 The classification is required to disagree with the reviewer somewhere
 (`test_the_classification_does_not_assume_the_reviewer_is_always_right`), because a

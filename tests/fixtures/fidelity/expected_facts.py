@@ -226,14 +226,34 @@ ABSENT_FROM_SOURCE = {
 #
 # The product promises five headings. Keeping them is not permission to fabricate
 # content to fill one: "Projects" may appear with no invented entries.
+#
+# This was internally inconsistent and is corrected here. The comment promised five
+# headings, the tuple below listed four, and there was no Projects entry — so a test
+# written from the comment and a test written from the tuple disagreed about whether a
+# resume was complete. The product's promise is five headings with empty ones allowed,
+# which is what both the prompt and the renderer now do:
+#
+#   * the prompt requires all five headings and permits an empty one;
+#   * `_ensure_all_sections` keeps an empty heading instead of deleting it;
+#   * `approved_resume.export_payload` parses an empty `## Projects` to `[]` and the
+#     LaTeX/DOCX renderers emit nothing for it (verified, not assumed).
+#
+# A heading is a structural claim, not a factual one, so "present but empty" is the
+# correct state for a section the candidate has no content for.
 # ---------------------------------------------------------------------------
 
 REQUIRED_SECTION_HEADINGS = (
+    "professional summary",
     "professional experience",
+    "projects",
     "education",
     "certifications",
     "skills",
 )
+
+# Sections the product requires even when the candidate has nothing to put in them.
+# A heading with no content is permitted; content invented to fill it is not.
+SECTIONS_ALLOWED_TO_BE_EMPTY = ("projects",)
 
 # The summary is a paragraph, not necessarily a markdown heading, so it is checked
 # separately by content rather than by heading presence.

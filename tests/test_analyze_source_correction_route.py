@@ -233,11 +233,17 @@ def test_missing_source_representation_withholds_after_repair(offline, monkeypat
     result = post(client).json()
     assert result["correction_reason"] == "source_facts_missing"
     assert result["final_written_section"] is None
-    # The route now reaches the repair path at least once, which it never used to. The
-    # exact count is not asserted: a second repair pass and in-call retries make it
-    # stable only by accident, and pinning it would fix the ordering defect into the
-    # test rather than the behaviour the test exists to protect.
-    assert len(session.requests) > 2
+
+    # Phase ORDER and the hard upper bound are asserted; only the exact historical total
+    # is not. The total shifts when the number of repair passes changes, and pinning it
+    # would encode the old ordering. The order and the bound are the behaviour.
+    phases = [call["phase"] for call in result["run_metrics"]["calls"]
+              if call["stage"] == "source_correction"]
+    assert phases[:2] == ["source_inventory", "initial_review"], phases
+    assert "repair" in phases, f"the repair path must be reached: {phases}"
+    assert phases[-1] == "post_patch_review", (
+        f"the run must end on the re-review of the repaired draft: {phases}")
+    assert len(phases) <= 7, f"provider calls exceeded MAX_CALLS: {phases}"
     assert "PRIVATE_" not in json.dumps(result)
 
 
