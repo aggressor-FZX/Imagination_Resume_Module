@@ -1,19 +1,30 @@
-"""Measure what the multi-file route actually produces, with scripted models.
+"""The Imaginator's OWN multipart handler, measured with scripted models.
 
-Not acceptance, and not a redesign: this establishes which of the four requested
-multi-file requirements the current route can meet, so the next change is aimed at
-evidence rather than at a guess.
+**This is NOT the website's multi-file path.** Read `docs/ROUTE_MAP.md` before relying
+on anything here.
 
-The multi-file route is a DIFFERENT pipeline from the single-file one:
+The website's two-file traffic goes frontend -> orchestrator
+``POST /api/analysis/multi-file`` -> Imaginator ``POST /analyze`` (see
+``backend/tests/integration/multiFileRoute.test.js``, which follows the request). The
+handler exercised by this file is ``app.py``'s own
+``POST /api/analysis/multi-file``: an Imaginator-local multipart endpoint that no
+orchestrator route targets. Earlier versions of this file called its assertions
+"multi-file acceptance", which was wrong — naming the endpoint after the traffic that
+does *not* reach it is exactly the confusion the route map exists to prevent.
 
-    POST /api/analysis/multi-file
+What this handler is worth testing for: it shares the publication gate, it is covered by
+``tests/test_composite_publication.py``, and it is a plausible future entry point. So it
+is measured honestly, and labelled as the local handler it is.
+
+The handler is a DIFFERENT pipeline from ``/analyze``:
+
+    POST /api/analysis/multi-file          (Imaginator-local, multipart)
       -> run_analysis_async -> run_generation_async -> run_criticism_async
       -> run_synthesis_async -> publication gate -> receipt
     POST /resume/export
 
 It runs **no source correction and no preservation**, and it has **no live-capture
-wiring** (``live_capture.start`` appears once in ``app.py``, in the single-file path).
-Both facts matter for the requested target and are asserted here rather than assumed.
+wiring**. On the website's route both do run, because that route ends at ``/analyze``.
 
 Every model call is scripted. ``CorrectionResult`` does not exist on this path, and no
 bytes are mocked.
@@ -128,8 +139,12 @@ def _synthesis_markdown() -> str:
 
 
 @pytest.fixture
-def multifile(monkeypatch):
-    """Drive POST /api/analysis/multi-file with two files and scripted stages."""
+def local_multipart(monkeypatch):
+    """Drive the Imaginator's own ``POST /api/analysis/multi-file`` with two files.
+
+    The orchestrator never calls this endpoint; the website's route is ``/analyze``. See
+    the module docstring and `docs/ROUTE_MAP.md`.
+    """
     _distinct_fixtures_really_are_distinct()
 
     def forbidden(*args, **kwargs):
@@ -138,10 +153,10 @@ def multifile(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", forbidden)
     monkeypatch.setattr(socket.socket, "connect_ex", forbidden)
     monkeypatch.setattr(socket, "getaddrinfo", forbidden)
-    monkeypatch.setattr(app.settings, "IMAGINATOR_AUTH_TOKEN", "multifile-test-key")
-    monkeypatch.setenv("IMAGINATOR_AUTH_TOKEN", "multifile-test-key")
+    monkeypatch.setattr(app.settings, "IMAGINATOR_AUTH_TOKEN", "local-multipart-test-key")
+    monkeypatch.setenv("IMAGINATOR_AUTH_TOKEN", "local-multipart-test-key")
     monkeypatch.setenv("PUBLICATION_RECEIPT_SECRET",
-                       "multifile-signing-key-0123456789")
+                       "local-multipart-signing-key-0123456789")
 
     captured = {}
     markdown = _synthesis_markdown()
@@ -180,19 +195,19 @@ def multifile(monkeypatch):
         response = client.post(
             "/api/analysis/multi-file", files=files,
             data={"job_ad": "Senior Electrician"},
-            headers={"X-API-Key": "multifile-test-key",
-                     "X-Cogito-Owner-Id": "multifile-owner"})
+            headers={"X-API-Key": "local-multipart-test-key",
+                     "X-Cogito-Owner-Id": "local-multipart-owner"})
         yield client, response, captured, markdown
     app.app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------
-# What the route does today
+# What THIS handler does today
 # ---------------------------------------------------------------------------
 
-def test_both_documents_reach_the_pipeline(multifile):
+def test_both_documents_reach_the_pipeline(local_multipart):
     """Both uploads are concatenated and submitted, so neither is silently dropped."""
-    _client, _response, captured, _md = multifile
+    _client, _response, captured, _md = local_multipart
     submitted = captured["submitted_text"]
 
     for value in ("Cascade Power Solutions", "Bluegate Property Services",
@@ -200,14 +215,16 @@ def test_both_documents_reach_the_pipeline(multifile):
         assert value in submitted, f"document content dropped before analysis: {value}"
 
 
-def test_multifile_route_has_no_correction_or_preservation_or_capture():
-    """The two properties that block the requested target are structural, not transient.
+def test_local_multipart_handler_has_no_correction_or_preservation_or_capture():
+    """This handler has no correction, preservation or capture. Structural, not transient.
 
     Asserted from the source so this cannot be mistaken for a flaky observation: the
-    single-file path calls ``live_capture.start`` and runs ``_run_source_correction``;
-    the multi-file path does neither. A "captured multi-file run" therefore cannot be
-    produced today, and the four multi-file requirements cannot be enforced by
-    preservation, because preservation never runs on this path.
+    ``/analyze`` path calls ``live_capture.start`` and runs ``_run_source_correction``;
+    this multipart handler does neither. That asymmetry is a property of THIS endpoint.
+
+    It is **not** evidence about the website's two-file traffic, which reaches
+    ``/analyze`` (see ``docs/ROUTE_MAP.md`` and
+    ``Login_Landing_page/backend/tests/integration/multiFileRoute.test.js``).
     """
     source = Path(app.__file__).read_text()
 
@@ -216,39 +233,39 @@ def test_multifile_route_has_no_correction_or_preservation_or_capture():
     handler = source[handler_start:handler_end]
 
     assert "_run_source_correction" not in handler, (
-        "the multi-file route now runs source correction; update this analysis")
+        "this handler now runs source correction; update this analysis")
     assert "live_capture.start" not in handler, (
-        "the multi-file route now records a live capture; the target is reachable")
+        "this handler now records a live capture; update this analysis")
     assert "preserve_source_facts" not in handler, (
-        "the multi-file route now runs preservation; update this analysis")
+        "this handler now runs preservation; update this analysis")
 
-    # And the single-file path does all three, so the asymmetry is real.
+    # And the /analyze path does all three, so the asymmetry is real.
     single = source[source.index("async def _analyze_resume_impl("):]
     assert "_run_source_correction" in single
     assert "live_capture.start" in single
 
 
-def test_the_multi_file_final_document_is_the_synthesis_output_verbatim(multifile):
+def test_the_final_document_is_the_synthesis_output_verbatim(local_multipart):
     """No preservation stage means whatever synthesis returns is what gets judged.
 
-    This is why preservation-based guarantees cannot be claimed for multi-file: the gate
-    and the receipt bind the synthesis text as-is.
+    This is why preservation-based guarantees cannot be claimed for this endpoint: the
+    gate and the receipt bind the synthesis text as-is.
     """
-    _client, response, _captured, markdown = multifile
+    _client, response, _captured, markdown = local_multipart
     assert response.status_code == 200, response.text
     body = response.json()
 
     assert body["final_written_section_markdown"] == markdown
 
 
-def test_gate_and_receipt_do_run_on_this_route(multifile):
+def test_gate_and_receipt_do_run_on_this_route(local_multipart):
     """The parts that DO exist: Tier-A verification against the combined uploads,
     the publication gate, and a signed receipt.
 
     Stated because it bounds the work: the missing pieces are capture and
     preservation, not verification or signing.
     """
-    _client, response, _captured, _md = multifile
+    _client, response, _captured, _md = local_multipart
     body = response.json()
 
     assert body["metrics_support"]["verdict"] == "PASS (tier A only)"
@@ -258,11 +275,15 @@ def test_gate_and_receipt_do_run_on_this_route(multifile):
 
 
 # ---------------------------------------------------------------------------
-# The four requirements, measured against the route as it stands
+# The four requirements, measured against this handler as it stands
+#
+# These compare the scripted synthesis output with the two uploads. They measure THIS
+# handler's gate and receipt, and the scripted content, not a model's quality and not
+# the website's route.
 # ---------------------------------------------------------------------------
 
-def test_both_documents_supported_facts_are_retained(multifile):
-    _client, response, _captured, _md = multifile
+def test_both_documents_supported_facts_are_retained(local_multipart):
+    _client, response, _captured, _md = local_multipart
     md = response.json()["final_written_section_markdown"]
 
     for value in ("40+ job sites", "6 apprentices", "12 commercial buildings", "22%",
@@ -270,13 +291,13 @@ def test_both_documents_supported_facts_are_retained(multifile):
         assert value in md, f"supported fact from one of the two documents lost: {value}"
 
 
-def test_no_employer_role_or_date_mixing(multifile):
+def test_no_employer_role_or_date_mixing(local_multipart):
     """Each employer keeps its own role AND its own dates.
 
     Positional, not "the strings all appear somewhere": mixing is precisely the case
     where every string is present but attached to the wrong record.
     """
-    _client, response, _captured, _md = multifile
+    _client, response, _captured, _md = local_multipart
     md = response.json()["final_written_section_markdown"]
 
     cascade = md.index("**Cascade Power Solutions, LLC**")
@@ -298,9 +319,9 @@ def test_no_employer_role_or_date_mixing(multifile):
     assert "03/2020" not in bluegate_block
 
 
-def test_no_degree_or_institution_mixing(multifile):
+def test_no_degree_or_institution_mixing(local_multipart):
     """Each institution keeps its own degree and year."""
-    _client, response, _captured, _md = multifile
+    _client, response, _captured, _md = local_multipart
     md = response.json()["final_written_section_markdown"]
 
     technical = md.index("**Example Technical College**")
@@ -321,9 +342,9 @@ def test_no_degree_or_institution_mixing(multifile):
     assert "Associate of Applied Science" not in community_block
 
 
-def test_no_duplicate_or_invented_qualifications(multifile):
+def test_no_duplicate_or_invented_qualifications(local_multipart):
     """Each qualification appears once, and nothing appears that the sources lack."""
-    _client, response, _captured, _md = multifile
+    _client, response, _captured, _md = local_multipart
     md = response.json()["final_written_section_markdown"]
 
     for once_only in ("Associate of Applied Science", "Certificate,",
@@ -344,9 +365,12 @@ pdflatex = pytest.mark.skipif(shutil.which("pdflatex") is None,
 
 
 @pdflatex
-def test_receipt_accepted_by_export_and_files_checked_against_both_documents(multifile):
-    """The receipt travels, export accepts it, and both records reach the page."""
-    client, response, _captured, _md = multifile
+def test_receipt_accepted_by_export_and_files_checked_against_both_documents(local_multipart):
+    """The receipt travels, export accepts it, and both records reach the page.
+
+    Real LaTeX and real python-docx, read back from the produced files.
+    """
+    client, response, _captured, _md = local_multipart
     body = response.json()
 
     payload = dict(body.get("approved_export_payload") or {})
@@ -355,8 +379,8 @@ def test_receipt_accepted_by_export_and_files_checked_against_both_documents(mul
     payload["final_written_section_markdown"] = body["final_written_section_markdown"]
 
     export = client.post("/resume/export",
-                         headers={"X-Cogito-Owner-Id": "multifile-owner",
-                                  "X-API-Key": "multifile-test-key"},
+                         headers={"X-Cogito-Owner-Id": "local-multipart-owner",
+                                  "X-API-Key": "local-multipart-test-key"},
                          json=payload)
     assert export.status_code == 200, export.text[:400]
     data = export.json()
@@ -401,13 +425,16 @@ def test_receipt_accepted_by_export_and_files_checked_against_both_documents(mul
 # Evidence that this measurement used the frozen revision
 # ---------------------------------------------------------------------------
 
-def test_no_preservation_runs_so_the_frozen_revision_cannot_help_this_route():
+def test_no_preservation_runs_so_the_frozen_revision_cannot_help_this_handler():
     """Records the architectural gap in one assertion.
 
-    ``preserve_source_facts`` is called from ``StarEditor.polish``. The multi-file route
-    never constructs a ``StarEditor``: it goes analysis -> generation -> criticism ->
-    synthesis. So adding the skills/qualifier/education rules to the frozen revision
-    improved the single-file path only.
+    ``preserve_source_facts`` is called from ``StarEditor.polish``. This handler never
+    constructs a ``StarEditor``: it goes analysis -> generation -> criticism -> synthesis.
+    So the skills/qualifier/education rules in the frozen revision do not apply here.
+
+    They DO apply to the website's two-file route, which ends at ``/analyze`` and
+    therefore runs ``StarEditor.polish`` — which is why the multi-document preservation
+    fix matters for that route and not this one.
     """
     source = Path(app.__file__).read_text()
     handler = source[source.index("async def analyze_multi_file("):

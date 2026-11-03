@@ -625,3 +625,198 @@ def test_a_fully_sourced_skills_block_is_left_alone():
     out, changes = sp.preserve_source_facts(markdown, source)
     assert not any("skills" in c for c in changes), changes
     assert "Commercial electrical systems, conduit bending, panel labeling" in out
+
+
+# ---------------------------------------------------------------------------
+# 6. Multiple source documents
+#
+# The website's two-file route sends several documents as ONE combined source: the
+# orchestrator joins them with "\n\n---\n\n" and only ``/analyze`` is reached
+# (``docs/ROUTE_MAP.md``). Preservation therefore has to read a source that repeats
+# every heading once per document.
+#
+# Every per-document reader used to take the FIRST matching section only. Measured
+# before the fix, on the fixtures below:
+#
+#   * ``source_education_records`` returned one record, so rebuilding the Education
+#     section deleted the other document's degree;
+#   * ``source_summary`` returned the first document's paragraph, so the second
+#     document's sentence counted as an unsourced ADDITION and was truncated away by
+#     "trim the appended proficiency list".
+#
+# Both were replacements, so neither raised — the result looked like a normal change.
+# ---------------------------------------------------------------------------
+
+DOC_ELECTRICIAN = """## Professional Summary
+Journeyman electrician with 8+ years of commercial electrical experience.
+
+## Professional Experience
+**Cascade Power Solutions, LLC** -- Example City, WA
+*Journeyman Electrician | 03/2020 - Present*
+- Installed commercial electrical systems across 40+ job sites.
+
+## Education
+**Example Technical College** -- Example City, WA
+*Associate of Applied Science, Electrical Systems Technology | 2016*
+
+## Skills
+- Commercial electrical systems, panel labeling
+"""
+
+DOC_FACILITIES = """## Professional Summary
+Facilities maintenance technician focused on preventive maintenance.
+
+## Professional Experience
+**Bluegate Property Services** -- Sampletown, OR
+*Facilities Maintenance Technician | 01/2014 - 05/2016*
+- Maintained electrical distribution and HVAC controls for 12 commercial buildings.
+
+## Education
+**Example Community College** -- Sampletown, OR
+*Certificate, Building Systems Maintenance | 2013*
+
+## Skills
+- Preventive maintenance scheduling, HVAC controls
+"""
+
+COMBINED = DOC_ELECTRICIAN + "\n\n---\n\n" + DOC_FACILITIES
+
+DRAFT_BOTH_RECORDS = """## Professional Summary
+Journeyman electrician with 8+ years of commercial electrical experience. Facilities maintenance technician focused on preventive maintenance.
+
+## Professional Experience
+**Cascade Power Solutions, LLC** -- Example City, WA
+*Journeyman Electrician | 03/2020 - Present*
+- Installed commercial electrical systems across 40+ job sites.
+
+**Bluegate Property Services** -- Sampletown, OR
+*Facilities Maintenance Technician | 01/2014 - 05/2016*
+- Maintained electrical distribution and HVAC controls for 12 commercial buildings.
+
+## Education
+**Example Technical College** -- Example City, WA
+*Associate of Applied Science, Electrical Systems Technology | 2016*
+
+**Example Community College** -- Sampletown, OR
+*Certificate, Building Systems Maintenance | 2013*
+
+## Technical Skills
+- Commercial electrical systems, panel labeling
+- Preventive maintenance scheduling, HVAC controls
+"""
+
+
+def test_every_document_summary_is_read():
+    """Both summaries are source text, so neither may be truncated as an addition."""
+    summary = sp.source_summary(COMBINED)
+    assert "Journeyman electrician with 8+ years" in summary
+    assert "Facilities maintenance technician focused on preventive maintenance" in summary
+
+
+def test_both_documents_summaries_survive_preservation():
+    """A merged summary naming both candidates is NOT an appended proficiency list."""
+    out, changes = sp.preserve_source_facts(DRAFT_BOTH_RECORDS, COMBINED)
+    assert not any("summary" in change for change in changes), changes
+
+    section = sp._find_section(sp._split_sections(out), "professional summary")
+    text = " ".join(section["lines"])
+    assert "Journeyman electrician with 8+ years" in text
+    assert "Facilities maintenance technician focused on preventive maintenance" in text
+
+
+def test_every_document_education_record_is_read():
+    """Records from both documents, in document order, each complete."""
+    records = sp.source_education_records(COMBINED)
+    assert [record["institution"] for record in records] == [
+        "Example Technical College", "Example Community College"]
+    assert [record["dates"] for record in records] == ["2016", "2013"]
+    # Each record keeps its own degree, field and location.
+    assert records[0]["degree"] == "Associate of Applied Science"
+    assert records[0]["field"] == "Electrical Systems Technology"
+    assert records[0]["location"] == "Example City, WA"
+    assert records[1]["degree"] == "Certificate"
+    assert records[1]["field"] == "Building Systems Maintenance"
+    assert records[1]["location"] == "Sampletown, OR"
+
+
+def test_a_draft_that_drops_the_second_degree_gets_it_back():
+    """The multi-document failure the fix exists for.
+
+    Before: a draft with only the first document's education produced a rebuilt
+            Education section from that one record, deleting the second degree — the
+            "collapse education records" risk, observed rather than hypothesised.
+    After:  both source records are written back, each with its own institution.
+    """
+    draft = DRAFT_BOTH_RECORDS.replace(
+        "\n**Example Community College** -- Sampletown, OR\n"
+        "*Certificate, Building Systems Maintenance | 2013*\n", "")
+
+    out, changes = sp.preserve_source_facts(draft, COMBINED)
+    assert "restored the source's education record" in " ".join(changes)
+    assert "**Example Community College** -- Sampletown, OR" in out
+    assert "*Certificate, Building Systems Maintenance | 2013*" in out
+    # And the record that was already right is still right.
+    assert "**Example Technical College** -- Example City, WA" in out
+    assert "*Associate of Applied Science, Electrical Systems Technology | 2016*" in out
+
+
+def test_two_correct_documents_produce_no_education_change():
+    """A draft already holding both records is left alone.
+
+    This is the control for the test above: restoration must be triggered by the gap,
+    not by the mere presence of two source records.
+    """
+    out, changes = sp.preserve_source_facts(DRAFT_BOTH_RECORDS, COMBINED)
+    assert not any("education" in change for change in changes), changes
+    assert out.count("**Example Technical College**") == 1
+    assert out.count("**Example Community College**") == 1
+    assert out.count("Associate of Applied Science") == 1
+    assert out.count("Certificate, Building Systems Maintenance") == 1
+
+
+def test_every_document_skills_block_is_read_without_the_document_separator():
+    """Both skill lists are read, and the ``---`` join marker is not a skill."""
+    lines = sp.source_skills_lines(COMBINED)
+    assert lines == [
+        "- Commercial electrical systems, panel labeling",
+        "- Preventive maintenance scheduling, HVAC controls",
+    ]
+    assert "---" not in lines
+
+
+def test_an_unsupported_skills_block_is_replaced_with_BOTH_documents_skills():
+    """Replacement draws on every document, not just the first."""
+    draft = ("## Technical Skills\n"
+             "- Crew: apprentice crew, licensed journeyman electrician\n")
+    out, changes = sp.preserve_source_facts(draft, COMBINED)
+    assert "replaced an unsupported skills block" in " ".join(changes)
+
+    section = sp._find_section(sp._split_sections(out), "technical skills")
+    body = "\n".join(section["lines"])
+    assert "Commercial electrical systems, panel labeling" in body
+    assert "Preventive maintenance scheduling, HVAC controls" in body
+    assert "apprentice crew" not in body
+
+
+def test_a_single_document_source_is_unaffected():
+    """The multi-document change must not alter single-document behaviour.
+
+    With one document there is one matching section, so every reader behaves exactly as
+    before. Asserted because the fix touched four functions on the live route.
+    """
+    assert sp.source_summary(DOC_ELECTRICIAN) == (
+        "Journeyman electrician with 8+ years of commercial electrical experience.")
+    assert [record["institution"] for record in
+            sp.source_education_records(DOC_ELECTRICIAN)] == ["Example Technical College"]
+    assert sp.source_skills_lines(DOC_ELECTRICIAN) == [
+        "- Commercial electrical systems, panel labeling"]
+
+
+def test_a_source_with_repeated_headings_but_no_second_document_still_parses():
+    """Two Education headings with one record each are both read."""
+    source = ("## Education\n**Alpha College** -- City, ST\n"
+              "*Associate of Arts, History | 2012*\n"
+              "## Education\n**Beta College** -- Town, OR\n"
+              "*Bachelor of Arts, English | 2015*\n")
+    records = sp.source_education_records(source)
+    assert [record["institution"] for record in records] == ["Alpha College", "Beta College"]

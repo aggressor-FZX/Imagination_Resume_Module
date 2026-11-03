@@ -97,12 +97,37 @@ def _find_section(sections: list[dict], *names: str) -> dict | None:
     return None
 
 
+def _find_sections(sections: list[dict], *names: str) -> list[dict]:
+    """EVERY section matching ``names``, in document order.
+
+    ``_find_section`` is right for a DRAFT, which has one section per heading. It is
+    wrong for a SOURCE that is several documents concatenated, which is exactly what the
+    website's multi-file route sends: the documents are joined with
+    ``\\n\\n---\\n\\n``, so each one repeats the same headings.
+
+    Reading only the first match made every per-document rule see one document. Measured
+    on two synthetic resumes, that produced two silent data losses:
+
+    * the summary rule compared a merged summary against the FIRST document's summary,
+      called the second document's sentence an "appended proficiency list", and truncated
+      it away;
+    * the education rule rebuilt the Education section from the first document's records
+      alone, deleting the second document's degree.
+
+    Neither raised: both are replacements, so the result looked like a normal
+    preservation change.
+    """
+    lowered = {n.lower() for n in names}
+    return [section for section in sections
+            if section["heading"] and section["heading"].strip().lower() in lowered]
+
+
 # ---------------------------------------------------------------------------
 # 1. Source records
 # ---------------------------------------------------------------------------
 
 def source_education_records(source_text: str) -> list[dict]:
-    """Extract education records from a source document's Education section.
+    """Extract education records from a source document's Education section(s).
 
     The source shape this recognises is the one the fixture (and ordinary resumes) use:
 
@@ -113,12 +138,21 @@ def source_education_records(source_text: str) -> list[dict]:
     present, because a partial record cannot be restored faithfully. Returning nothing is
     the correct answer when the source does not state the record in this form; the caller
     then leaves the draft alone rather than inventing a shape.
-    """
-    record_section = _find_section(_split_sections(source_text), "education",
-                                   "academic background")
-    if record_section is None:
-        return []
 
+    EVERY Education section is read, not just the first. A multi-file source is several
+    documents concatenated, so it repeats the heading once per document; reading only the
+    first silently dropped the other candidate's degree, because the education rule
+    rebuilds the section from whatever it parsed.
+    """
+    records: list[dict] = []
+    for record_section in _find_sections(_split_sections(source_text), "education",
+                                         "academic background"):
+        records.extend(_education_records_in(record_section))
+    return records
+
+
+def _education_records_in(record_section: dict) -> list[dict]:
+    """The education records in one Education section."""
     records: list[dict] = []
     lines = [line for line in record_section["lines"] if line.strip()]
     index = 0
@@ -152,11 +186,22 @@ def source_education_records(source_text: str) -> list[dict]:
 
 
 def source_summary(source_text: str) -> str:
-    """The candidate's own summary paragraph, or ``""`` when the source has none."""
-    record_section = _find_section(_split_sections(source_text), "professional summary",
-                                   "summary", "profile", "objective")
-    if record_section is None:
-        return ""
+    """The candidate's own summary paragraph, or ``""`` when the source has none.
+
+    With several documents the summaries are concatenated in document order rather than
+    only the first being returned. Returning the first alone made the summary rule treat
+    every later document's summary sentence as text the source does not support.
+    """
+    parts = [words for words in
+             (_summary_in(section) for section in
+              _find_sections(_split_sections(source_text), "professional summary",
+                             "summary", "profile", "objective"))
+             if words]
+    return " ".join(parts)
+
+
+def _summary_in(record_section: dict) -> str:
+    """One section's summary text, with provenance markers removed."""
     words = " ".join(line.strip() for line in record_section["lines"] if line.strip())
     return _strip_markers(words)
 
@@ -277,12 +322,18 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
 
     changes: list[str] = []
     body = section["lines"]
-    has_institution = any(
-        record["institution"].lower() in " ".join(body).lower() for record in records)
-    has_field = any(record["field"] and record["field"].lower() in " ".join(body).lower()
+    body_text = " ".join(body).lower()
+    has_institution = any(record["institution"].lower() in body_text for record in records)
+    has_field = any(record["field"] and record["field"].lower() in body_text
                     for record in records)
-    if has_institution and has_field and not any(
-            _bolds_a_concatenation(body, record) for record in records):
+    # A source record the draft never mentions is the multi-document failure mode: the
+    # writer keeps the first candidate's degree and drops the second. Checking only
+    # "is at least one institution present" cannot see that, because with two source
+    # records one present institution satisfies it.
+    missing_record = any(record["institution"].lower() not in body_text
+                         for record in records)
+    if (has_institution and has_field and not missing_record
+            and not any(_bolds_a_concatenation(body, record) for record in records)):
         return markdown, []
 
     rebuilt: list[str] = [""]
@@ -503,12 +554,32 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
 # ---------------------------------------------------------------------------
 
 def source_skills_lines(source_text: str) -> list[str]:
-    """The candidate's own skill bullets, verbatim, from the source's Skills section."""
-    section = _find_section(_split_sections(source_text), "skills", "technical skills")
-    if section is None:
-        return []
-    return [_strip_markers(line).strip()
-            for line in section["lines"] if _strip_markers(line).strip()]
+    """The candidate's own skill bullets, verbatim, from every Skills section.
+
+    Every section, not only the first: a multi-file source repeats the heading once per
+    document, and reading one of them replaced the skills block with a single document's
+    list while dropping the other's.
+
+    Document separators are dropped. The multi-file route joins the uploads with
+    ``\\n\\n---\\n\\n``, and that separator sits in the trailing lines of the preceding
+    section, so without this filter it was emitted as the literal skill ``---``.
+    """
+    lines: list[str] = []
+    for section in _find_sections(_split_sections(source_text), "skills", "technical skills"):
+        for raw in section["lines"]:
+            value = _strip_markers(raw).strip()
+            if not value or _is_document_separator(value):
+                continue
+            lines.append(value)
+    return lines
+
+
+_DOCUMENT_SEPARATOR = re.compile(r"^[-*_]{3,}$")
+
+
+def _is_document_separator(value: str) -> bool:
+    """True for a Markdown horizontal rule / multi-document join marker."""
+    return bool(_DOCUMENT_SEPARATOR.match(value.strip()))
 
 
 def _phrase_in_source(term: str, source_tokens: list[str]) -> bool:

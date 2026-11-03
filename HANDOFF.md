@@ -1,4 +1,68 @@
-# Handoff — repair path proven offline; live delivery still needs an allowance
+# Handoff — single-file frozen; the multi-file routing blocker was wrong and is withdrawn
+
+**2026-11-02, session 8** (supersedes the session-7 header below).
+
+- **Tests:** 981 passed, 3 skipped (`python -m pytest tests/ -q -o addopts="" -p no:cacheprovider`).
+- **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; unchanged).
+- **Branch:** `wip/correction-timeout-attribution`.
+- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`), disclosure on
+  (`CORRECTION_PROVIDER_DISCLOSURE=1`).
+- **Credits:** unchanged. **No paid submission this session** — provider cost `$0.00`,
+  every provider call in the tests is a local stub.
+
+## Done this session (8)
+
+- [x] **The "website cannot capture multi-file at all" blocker is withdrawn.** It came from
+      reading `app.py`'s `analyze_multi_file`, an Imaginator-local multipart endpoint that no
+      orchestrator route targets. The website's two-file traffic goes to `/analyze`.
+      `docs/ROUTE_MAP.md` already said so; it is now backed by execution, not line numbers.
+- [x] **The two-file chain is recorded end to end**, offline, with a recording transport:
+      frontend URL → orchestrator handler → downstream host/path → payload.
+      `Login_Landing_page/src/services/__tests__/multiFileRequest.test.ts` (3 tests) and
+      `Login_Landing_page/backend/tests/integration/multiFileRoute.test.js` (6 tests).
+- [x] **Routing has not changed.** `git show 56517b8:backend/server.cjs` already calls
+      `${imagBase}/analyze`; `git log -S` finds no retargeting commit.
+- [x] **A real two-document defect was found and fixed** — the consequence the routing
+      question exposed. Preservation was single-document-only: it deleted the second
+      document's degree, truncated the second summary, and emitted `---` as a skill. Fixed in
+      `source_preservation.py`; 10 unit tests + 7 route tests; mutation-checked.
+- [x] **Ten tests relabelled.** `tests/test_multifile_measurement.py` →
+      `tests/test_local_multipart_handler.py`. They exercise the local multipart handler and no
+      longer claim to be multi-file acceptance.
+- [x] Freeze tag and manifest kept. `docs/live-runs/FREEZE_2026-11-02.md` carries a dated
+      correction; item 4 struck through rather than deleted.
+
+## Still open (two documents)
+
+1. A writer that merges both summaries into ONE line is withheld
+   (`source_completeness_uncertain`), not truncated. Safe, but still a rejection. Pinned by
+   `test_a_merged_two_document_summary_is_withheld_not_silently_truncated`.
+2. Cross-document transplant of a quantified bullet between two DIFFERENT employers sharing
+   a figure and qualifier: `_employer_of` scoping covers only within one employer's record.
+3. No captured two-file run with a real model. The acceptance target is reachable but un-met.
+
+## Verification commands (this session)
+
+```
+source .venv/bin/activate && cd Imagination_Resume_Module
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider           # 981 passed, 3 skipped
+python -m pytest tests/test_source_preservation.py -q -o addopts=""    # incl. multi-document §6
+python -m pytest tests/test_route_two_documents.py -q -o addopts=""    # real /analyze, 2 docs
+
+cd ../Login_Landing_page
+node node_modules/jest/bin/jest.js -c jest.integration.config.js \
+  backend/tests/integration/multiFileRoute.test.js                     # 6 passed
+node node_modules/jest/bin/jest.js -c jest.unit.config.cjs \
+  src/services/__tests__/multiFileRequest.test.ts                      # 3 passed
+```
+
+Note: `jest.integration.config.js` also collects `.worktrees/**`, where several DB-backed
+suites fail for pre-existing environment reasons. Those failures reproduce with this
+session's files removed.
+
+---
+
+# Prior handoff (session 7) — kept for history
 
 **2026-11-02, session 7.**
 
