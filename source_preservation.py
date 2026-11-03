@@ -47,8 +47,73 @@ import re
 _PROVENANCE_MARKERS = ("SYNTHETIC-ONLY",)
 
 _SECTION_HEADING = re.compile(r"^#{1,6}\s*(?P<name>.+?)\s*$")
+
+# Bare section headings, as real DOCX extraction produces them.
+#
+# A `.docx` stores a section title as a STYLED PARAGRAPH, not as a "#" prefix, so the
+# text extracted from one contains no Markdown heading markers at all. Measured on the
+# preserved run-12 capture, whose source begins:
+#
+#     Professional Summary
+#     SYNTHETIC-ONLY Journeyman electrician with 12 years of electrical experience spanning
+#
+# Parsed with ``_SECTION_HEADING`` alone that document is ONE section with
+# ``heading=None``, so every per-section rule (summary, education, skills) matched nothing
+# and ``preserve_source_facts`` returned the draft unchanged. The engine then withheld on
+# ``source_facts_missing`` for facts the source plainly stated.
+#
+# The allowlist is deliberately a CLOSED set of known resume section names, matched against
+# the WHOLE stripped line (with an optional trailing colon, as in "Skills:"). It is not a
+# heuristic for "short title-case line": a rule like that would turn an employer name, a
+# role, or a one-line achievement into a heading and split sections in the wrong place.
+# Extending it means naming a new resume section here, which is a reviewable act.
+_BARE_SECTION_NAMES = (
+    "professional summary", "summary", "profile", "objective",
+    "professional experience", "experience", "work experience",
+    "employment history", "employment",
+    "projects", "education", "academic background",
+    "certifications", "certificates", "licenses", "certifications and licenses",
+    "technical skills", "skills", "core competencies", "awards", "publications",
+)
+_BARE_SECTION = re.compile(
+    r"^(?P<name>" + "|".join(re.escape(name) for name in
+                              sorted(_BARE_SECTION_NAMES, key=len, reverse=True))
+    + r")\s*:?$",
+    re.IGNORECASE,
+)
+
 _BOLD_LINE = re.compile(r"^\*\*(?P<bold>.+?)\*\*\s*(?P<rest>.*)$")
 _ITALIC_LINE = re.compile(r"^\*(?P<body>[^*]+)\*\s*$")
+
+# Extracted text carries records without emphasis, e.g.
+#     SYNTHETIC-ONLY Northline Fabrication, Inc. -- Spokane, WA
+#     Welder / Maintenance Helper | 03/2012 - 09/2015
+# The institution/role line is recognisable by its trailing location, the detail line by
+# a trailing pipe-delimited date. Both are anchored whole-line so prose is never matched.
+_LOCATION_SUFFIX = re.compile(
+    r"^(?P<head>.+?)\s+[-\u2013\u2014]{1,2}\s+"
+    r"(?P<location>[A-Z][A-Za-z .'-]+,\s*(?:[A-Z]{2}|[A-Z][a-z]+))\s*$")
+_DETAIL_SUFFIX = re.compile(r"^(?P<body>.+?)\s*\|\s*(?P<dates>.+?)\s*$")
+
+
+def _bare_heading(raw: str) -> str | None:
+    """The canonical section name for a bare extracted heading line, else None."""
+    match = _BARE_SECTION.match((raw or "").strip())
+    return match.group("name") if match else None
+
+
+def _heading_of(raw: str) -> tuple[str, int] | None:
+    """Return ``(name, level)`` when ``raw`` is a heading, marked or bare."""
+    stripped = (raw or "").strip()
+    marked = _SECTION_HEADING.match(stripped)
+    if marked:
+        return marked.group("name"), len(raw) - len(raw.lstrip("#"))
+    bare = _bare_heading(stripped)
+    if bare:
+        # A bare heading has no marker depth; treat it as a top-level section so the
+        # renderer emits a stable "## " level for both input shapes.
+        return bare, 2
+    return None
 
 
 def _strip_markers(text: str) -> str:
@@ -59,20 +124,30 @@ def _strip_markers(text: str) -> str:
 
 
 def _split_sections(markdown: str) -> list[dict]:
-    """Split Markdown into ``[{'heading', 'level', 'lines'}]`` preserving order.
+    """Split Markdown OR extracted plain text into ordered sections.
 
     Text before the first heading is kept as a section with ``heading=None`` so nothing
     is silently dropped.
+
+    Both heading shapes are recognised because both reach this module: the website sends
+    a multi-file source whose README fixtures were hand-written with ``##``, while a real
+    upload is extracted from ``.docx`` and carries no markers at all. Supporting only the
+    marked shape made every downstream rule blind on real uploads (run 12).
+
+    Document boundaries are preserved: the multi-file route joins uploads with
+    ``\\n\\n---\\n\\n``, which is not a heading, so a repeated section heading inside the
+    second document starts a second section rather than merging into the first. Every
+    per-section rule already reads ALL matches via ``_find_sections``.
     """
     sections: list[dict] = []
     current = {"heading": None, "level": 0, "lines": []}
     for raw in (markdown or "").splitlines():
-        match = _SECTION_HEADING.match(raw.strip())
-        if match:
+        found = _heading_of(raw)
+        if found is not None:
             if current["heading"] is not None or current["lines"]:
                 sections.append(current)
-            level = len(raw) - len(raw.lstrip("#"))
-            current = {"heading": match.group("name"), "level": level, "lines": []}
+            name, level = found
+            current = {"heading": name, "level": level, "lines": []}
             continue
         current["lines"].append(raw)
     sections.append(current)
@@ -80,11 +155,22 @@ def _split_sections(markdown: str) -> list[dict]:
 
 
 def _render_sections(sections: list[dict]) -> str:
+    """Render sections, removing provenance markers from EVERY line.
+
+    The marker is fixture metadata, not a resume fact. Stripping it at the single render
+    point guarantees it cannot survive into any section — measured failure: run 12's
+    draft carried ``- SYNTHETIC-ONLY Washington 01 Journey Level Electrician License``
+    into Certifications, a section no earlier rule rewrites, so a per-rule strip left it
+    in place.
+
+    This is a no-op for a real candidate, whose text never contains the marker.
+    """
     out: list[str] = []
     for section in sections:
         if section["heading"] is not None:
             out.append("#" * max(section["level"], 1) + " " + section["heading"])
-        out.extend(section["lines"])
+        out.extend(_strip_markers(line) if line.strip() else line
+                   for line in section["lines"])
     text = "\n".join(out)
     return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
 
@@ -157,18 +243,14 @@ def _education_records_in(record_section: dict) -> list[dict]:
     lines = [line for line in record_section["lines"] if line.strip()]
     index = 0
     while index < len(lines):
-        bold = _BOLD_LINE.match(lines[index].strip())
-        if bold is None:
+        head, location = _record_head(lines[index])
+        if head is None:
             index += 1
             continue
-        institution = _strip_markers(bold.group("bold"))
-        rest = bold.group("rest").strip().lstrip("-").strip()
-        location = _strip_markers(rest) if rest else ""
+        institution = head
         detail = None
         if index + 1 < len(lines):
-            italic = _ITALIC_LINE.match(lines[index + 1].strip())
-            if italic is not None:
-                detail = _strip_markers(italic.group("body"))
+            detail = _record_detail(lines[index + 1])
         if detail is None:
             index += 1
             continue
@@ -362,10 +444,60 @@ def _bolds_a_concatenation(body: list[str], record: dict) -> bool:
         bold = _strip_markers(match.group("bold"))
         if record["institution"].lower() not in bold.lower():
             continue
-        excess = bold.lower().replace(record["institution"].lower(), "").strip(" ,-–")
+        excess = bold.lower().replace(record["institution"].lower(), "").strip(" ,-\u2013")
         if len(excess) > 3:
             return True
     return False
+
+
+def _record_head(raw: str) -> tuple[str | None, str]:
+    """An institution/employer line split into ``(head, location)``.
+
+    Two shapes reach this module and both must work:
+
+    * ``**Institution** -- Location``  (hand-written Markdown fixtures)
+    * ``Institution -- Location``      (text extracted from a real ``.docx``, which has
+      no emphasis markers at all)
+
+    The extracted shape is not hypothetical: run 12's source carried
+    ``SYNTHETIC-ONLY Spokane Falls Institute of Technology -- Spokane, WA``. Parsing only
+    the bold shape meant every education record silently disappeared from a real upload.
+
+    Returns ``(None, "")`` when the line is not a record head, so prose is never eaten.
+    """
+    stripped = raw.strip()
+    bold = _BOLD_LINE.match(stripped)
+    if bold is not None:
+        head = _strip_markers(bold.group("bold")).strip()
+        rest = bold.group("rest").strip().lstrip("-").strip()
+        return head, _strip_markers(rest)
+    located = _LOCATION_SUFFIX.match(_strip_markers(stripped))
+    if located is None:
+        return None, ""
+    head = located.group("head").strip().rstrip(":")
+    # A bullet or a sentence is not a record head, even when it ends in a location.
+    if not head or head.startswith("-") or head.endswith("."):
+        return None, ""
+    return head, located.group("location").strip()
+
+
+def _record_detail(raw: str) -> str | None:
+    """The detail line's text (degree/role, field, dates), or None.
+
+    Accepts both ``*Detail | Dates*`` and the unemphasised extracted ``Detail | Dates``.
+    A detail line must carry a pipe-delimited date part; that anchor is what keeps a
+    plain prose sentence from being read as a record.
+    """
+    stripped = _strip_markers(raw.strip())
+    italic = _ITALIC_LINE.match(raw.strip())
+    if italic is not None:
+        return _strip_markers(italic.group("body")).strip()
+    detail = _DETAIL_SUFFIX.match(stripped)
+    if detail is None:
+        return None
+    if stripped.startswith("-") or stripped.endswith("."):
+        return None
+    return stripped.strip()
 
 
 # ---------------------------------------------------------------------------
@@ -373,21 +505,41 @@ def _bolds_a_concatenation(body: list[str], record: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 def _employer_of(text: str, up_to: int) -> str:
-    """The most recent bold employer line above ``up_to``, normalised.
+    """The most recent employer line above ``up_to``, normalised.
 
     Used to keep a restoration inside the record it belongs to. A source bullet states an
     accomplishment *for a particular employer*, and substituting it under a different
     employer's heading moves a fact between records — the misattribution class the answer
     key forbids, and something a figure-plus-unit match cannot see on its own.
 
+    Both record shapes are recognised, for the reason given on ``_record_head``: a source
+    extracted from a real ``.docx`` has no bold markers, so reading only bold lines
+    returned ``""`` for every line of such a source. An empty employer DISABLES the scoping
+    check in the caller, so attribution protection would have switched itself off silently
+    on exactly the input shape that reaches production, while continuing to work on the
+    hand-written fixtures.
+
     Returns ``""`` when no employer line is found, which disables the scoping rather than
-    guessing at a boundary.
+    guessing at a boundary. At the top of a record that is the correct answer: a section
+    heading, not an employer, precedes the first role.
     """
     prefix = text[:up_to]
     for raw in reversed(prefix.splitlines()):
-        match = _BOLD_LINE.match(raw.strip())
-        if match:
-            return _strip_markers(match.group("bold")).strip().casefold()
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        bold = _BOLD_LINE.match(stripped)
+        if bold is not None:
+            return _strip_markers(bold.group("bold")).strip().casefold()
+        # A section heading ends the search: walking past it would return the PREVIOUS
+        # record's employer and scope a restoration to the wrong person's job.
+        if _bare_heading(stripped):
+            return ""
+        located = _LOCATION_SUFFIX.match(_strip_markers(stripped))
+        if located is not None:
+            head = located.group("head").strip()
+            if head and not head.startswith("-") and not head.endswith("."):
+                return head.casefold()
     return ""
 
 
@@ -520,10 +672,18 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
         return _render_sections(sections), ["removed an unsourced professional summary"]
 
     if section is None:
-        # No summary in the draft but the source has one: the editor prompt is supposed
-        # to emit it. Inserting it here would be composing a section from outside the
-        # draft, so it is reported instead of written.
-        return markdown, []
+        # No summary section in the draft but the source has one. Inserting one here is
+        # NOT composing prose: every word comes from the candidate's own summary, and it
+        # is the exact fact set the reviewer otherwise reports as `source_facts_missing`
+        # — which withholds the whole resume instead of delivering it.
+        #
+        # Measured: run 12 withheld because both documents' summaries were absent from a
+        # draft whose source stated them. Declining here produced the withholding, not
+        # safety.
+        heading = "Professional Summary"
+        sections.insert(0, {"heading": heading, "level": 2,
+                            "lines": ["", summary, ""]})
+        return _render_sections(sections), ["restored the source summary"]
 
     current = " ".join(line.strip() for line in section["lines"] if line.strip())
     normalized = _strip_markers(current)
@@ -763,6 +923,18 @@ def preserve_source_facts(markdown: str, source_text: str) -> tuple[str, list[st
     quantified-qualifier pass runs on prose, which the education/summary passes may have
     rewritten, so it runs last.
 
+    I reordered this pipeline during the run-12 fix and then measured that the reorder was
+    UNNECESSARY: the actual defect was that ``preserve_source_summary`` declined to create
+    a missing summary section, and once that branch inserts the section itself the original
+    order produces identical output on the captured evidence. Confirmed by reverting the
+    order and re-running the full preservation suites (97 passed). The reorder was dropped
+    rather than kept as unearned risk.
+
+    The final marker sweep is not part of the ordered rules because it is an invariant, not
+    a repair: a rule that copies a source line verbatim can reintroduce a provenance
+    marker, so the guarantee is enforced once at the render point regardless of which rule
+    last touched the text.
+
     Returns ``(markdown, changes)``. ``changes`` is a list of short, content-free
     descriptions fit for a log line; it never contains resume text.
     """
@@ -779,4 +951,9 @@ def preserve_source_facts(markdown: str, source_text: str) -> tuple[str, list[st
                  ensure_required_headings):
         markdown, step_changes = step(markdown, source_text)
         changes.extend(step_changes)
+    # A marker can be reintroduced by a rule that copies a source line verbatim, so the
+    # final pass guarantees the invariant rather than trusting each rule to uphold it.
+    if any(marker in markdown for marker in _PROVENANCE_MARKERS):
+        markdown = _render_sections(_split_sections(markdown))
+        changes.append("removed synthetic provenance markers")
     return markdown, changes
