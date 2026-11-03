@@ -1,5 +1,12 @@
 # Run 11 — realistic fixture on the unchanged live build
 
+> **SUPERSEDED — see `RUN_11_CORRECTED.md`.** Three claims in this document are
+> **withdrawn or corrected**: (1) the run-10 download explanation, (2) "`repairs: 1` is the
+> first time the repair path has ever executed" — **false, `analysis_jobs id=30` recorded
+> `repairs: 2`**, and (3) the provider cost, which is the correction stage only
+> ($0.005219), not the run's cost ($0.0124597 whole pipeline). This file is retained for
+> the record; do not cite it without those corrections.
+
 **Correlation ID:** `4c332713-0d6a-4b41-87fb-53a146e806fe`
 **Date:** 2026-11-03, analysis completed 10:26:08 local
 **Outcome:** **withheld** — `unresolved_claims`
