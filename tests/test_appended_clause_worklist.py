@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -438,7 +439,6 @@ def test_the_coverage_field_reports_only_what_was_counted():
         assert found[0]["clause"]
 
 
-# ---------------------------------------------------------------------------
 # CONTROL 1 — a correct clause flagged because its words are elsewhere
 # ---------------------------------------------------------------------------
 
@@ -465,72 +465,167 @@ def test_control_a_valid_paraphrase_with_little_vocabulary_overlap():
 
 
 # ---------------------------------------------------------------------------
-# CONTROL 2 — a false clause missed because its words are the source's
+# CONTROL 2 — natural sentences: one supported, one falsified by recombination
 # ---------------------------------------------------------------------------
 
-def test_control_a_false_claim_made_entirely_from_source_vocabulary():
-    """[tier-b-worklist] CONTROL 2 (false negative) — the documented blind spot.
+# Three real source facts, used unchanged by both cases below.
+# Two real source facts, used unchanged by both cases below.
+SRC_SPEED = "Cut average fault-response time from 4.5 hours to 2.75 hours."
+SRC_DOWNTIME_22 = ("Reduced unplanned downtime by 22% through a preventive "
+                   "maintenance schedule.")
+FACT_POOL = [SRC_SPEED, SRC_DOWNTIME_22]
 
-    Every content stem here is already in the source: "safe", "work" and
-    "practices" come from the record's own phrase. The work list is EMPTY, and the
-    claim (that the apprentices were trained on "safe work practices" plural) is
-    not what the source says.
+# SUPPORTED: two sourced facts stated in COORDINATION. "and reduced" joins them as
+# separate accomplishments, which is what the record says — one bullet reports a
+# fault-response time, the other reports a downtime reduction, and neither is
+# claimed to follow from the other.
+SUPPORTED_RECOMBINATION = (
+    "Cut average fault-response time from 4.5 hours to 2.75 hours, and reduced "
+    "unplanned downtime by 22% through a preventive maintenance schedule.")
 
-    This test asserts the miss deliberately. If this module were ever used as an
-    approval gate, this sentence would ship.
+# FALSE BY RECOMBINATION: the SAME words, the SAME two figures, no added vocabulary
+# — only the join changes. The comma plus "reducing" turns the second fact into a
+# participial clause modifying the first, so the sentence now says that cutting the
+# response time *brought about* the 22% downtime reduction. The record never links
+# them: they are two separate bullets, and the downtime reduction is attributed to
+# a preventive maintenance schedule, not to faster fault response.
+FALSE_RECOMBINATION = (
+    "Cut average fault-response time from 4.5 hours to 2.75 hours, reducing "
+    "unplanned downtime by 22% through a preventive maintenance schedule.")
+
+
+def test_control_the_recombination_pair_differs_only_in_the_asserted_relation():
+    """[tier-b-worklist] CONTROL 2a — the pair is a controlled comparison.
+
+    Vocabulary, figures and entities are identical in both sentences; only the
+    grammatical relation differs. This is asserted first, because without it the
+    two cases below could be explained by wording rather than by the module's
+    limits.
     """
-    cited = ["Trained 4 apprentices on lockout/tagout procedures."]
-    falsely_lexical = ("Trained 4 apprentices on lockout/tagout procedures, "
-                       "safe work practices trained.")
-    assert appended_clauses.unattested_clauses(
-        falsely_lexical, cited, cited) == [], (
-        "a false claim built only from source words passes the lexical test — "
-        "this is the documented blind spot, not a bug")
+    supported = appended_clauses._content_stems(SUPPORTED_RECOMBINATION)
+    false_claim = appended_clauses._content_stems(FALSE_RECOMBINATION)
+    assert supported == false_claim, (
+        "the two sentences must share every content stem; the difference is the "
+        "relation, not the words")
+    # Both figures survive in both versions. The stemmer keeps the percent sign,
+    # so compare the numeric cores rather than the raw tokens.
+    cores = {re.sub(r"[^0-9.]", "", stem) for stem in supported}
+    for figure in ("4.5", "2.75", "22"):
+        assert figure in cores, (figure, sorted(cores))
 
-    # The version that adds a word is at least visible, and still not judged.
-    smuggled = ("Trained 4 apprentices on lockout/tagout procedures, "
-                "certifying them in NFPA 70E.")
+
+def test_control_a_supported_recombination_is_not_reported():
+    """[tier-b-worklist] CONTROL 2b — SUPPORTED: coordination asserts no cause.
+
+    Two independently sourced facts joined by "and" state what the record states.
+    The work list is empty and — note — the detector finds no appended clause to
+    examine, because coordination is not a trailing participial phrase.
+    """
+    assert appended_clauses.appended_clauses(SUPPORTED_RECOMBINATION) == []
     found = appended_clauses.unattested_clauses(
-        smuggled, cited, cited + ["NFPA 70E Arc Flash Safety certificate."])
-    assert found, "the added credential must at least be visible"
-    assert found[0]["semantic_status"] == "not_assessed"
-    assert found[0]["missing_stems_found_elsewhere"] != "none", (
-        "the word exists elsewhere in the record, so the coverage field must say "
-        "so rather than implying absence")
+        SUPPORTED_RECOMBINATION, FACT_POOL, FACT_POOL)
+    assert found == []
 
 
-# ---------------------------------------------------------------------------
-# CONTROL 3 — a supported qualitative restatement
-# ---------------------------------------------------------------------------
+def test_control_a_false_recombination_is_examined_and_still_not_detected():
+    """[tier-b-worklist] CONTROL 2c — FALSE: same words, invented causal link.
 
-def test_control_a_supported_outcome_restated_qualitatively():
-    """[tier-b-worklist] CONTROL 3 (false positive) — generalisation is not invention.
+    The detector DOES examine this sentence (the participial clause is located),
+    and the finding list is still EMPTY, because every content stem comes from the
+    cited facts. The sentence is false — it claims a causal relationship the record
+    never draws — and no lexical test can see that.
 
-    "Cut average fault-response time from 4.5 hours to 2.75 hours" restated as
-    "reducing repeat visits" is a qualitative generalisation of a measured result.
-    It may be fair or not — that is a Tier-B judgement this module refuses to make.
-    It reports the clause; it does not call it wrong.
+    This is the honest demonstration of the module's limit. It replaces an earlier
+    version of this control whose "false" sentence was malformed rather than
+    natural, and which therefore tested nothing.
     """
-    cited = ["Cut average fault-response time from 4.5 hours to 2.75 hours."]
+    located = appended_clauses.appended_clauses(FALSE_RECOMBINATION)
+    assert [text for _a, _b, text in located] == [
+        "reducing unplanned downtime by 22% through a preventive maintenance "
+        "schedule"], (
+        "precondition: the detector examines this clause, so the empty result "
+        "below is a true miss, not an unexamined sentence")
+
+    found = appended_clauses.unattested_clauses(
+        FALSE_RECOMBINATION, FACT_POOL, FACT_POOL)
+    assert found == [], (
+        "a false causal recombination built entirely from source words passes the "
+        "lexical check — the documented blind spot, not a bug")
+
+    # The same sentence with a REAL causal link would be fine; the defect is that
+    # this link is not in the record. The module cannot tell the difference, which
+    # is why it reports coverage and never a verdict.
+    assert "preventive maintenance schedule" in SRC_DOWNTIME_22
+    assert "4.5 hours" in SRC_SPEED
+
+
+# ---------------------------------------------------------------------------
+# CONTROL 3 — supported and unsupported qualitative restatements, kept apart
+# ---------------------------------------------------------------------------
+
+def test_control_responding_more_quickly_is_supported_by_a_faster_response_time():
+    """[tier-b-worklist] CONTROL 3a — a supported qualitative restatement.
+
+    A fault-response time falling from 4.5 hours to 2.75 hours directly supports
+    "responding to faults more quickly". The generalisation names the direction of
+    the measured change and adds no new quantity, entity, or causal link.
+    """
+    line = ("Cut average fault-response time from 4.5 hours to 2.75 hours, "
+            "responding to faults more quickly.")
+    cited = [SRC_SPEED]
+    found = appended_clauses.unattested_clauses(line, cited, cited)
+    assert [f["clause"] for f in found] == ["responding to faults more quickly"]
+    # The words "fault" and "respond" are not in the source sentence, so the
+    # coverage field says "none". That is a fact about the EVIDENCE, and it is
+    # precisely NOT a statement that the restatement is unsupported — the
+    # restatement is entailed.
+    assert found[0]["missing_stems_found_elsewhere"] == "none"
+    assert found[0]["semantic_status"] == "not_assessed"
+    # The module reports it and judges nothing. A gate built on this field would
+    # reject a correct sentence, which is why it is not a gate.
+
+
+def test_control_reduced_repeat_visits_is_NOT_supported_by_a_faster_response_time():
+    """[tier-b-worklist] CONTROL 3b — the unsupported neighbour, kept separate.
+
+    Fewer repeat visits is a different operational claim. A faster response time
+    does not entail it: a site can respond quickly and still be visited just as
+    often. The work list looks *identical* to the supported case above (same
+    coverage value, same empty verdict field), so the pair shows exactly where a
+    semantic reviewer is required and the lexical layer stops.
+    """
     line = ("Cut average fault-response time from 4.5 hours to 2.75 hours, "
             "reducing repeat visits.")
+    cited = [SRC_SPEED]
     found = appended_clauses.unattested_clauses(line, cited, cited)
     assert [f["clause"] for f in found] == ["reducing repeat visits"]
-    assert found[0]["semantic_status"] == "not_assessed"
-    # The coverage field describes the evidence, and here it says the record does
-    # not mention repeat visits at all — which is exactly NOT the same as saying
-    # the generalisation is false.
     assert found[0]["missing_stems_found_elsewhere"] == "none"
+    assert found[0]["semantic_status"] == "not_assessed"
 
-    # With the restatement present in the record, the coverage field changes. The
-    # module's assessment does not, because it never made one.
+    # The supported and unsupported cases are INDISTINGUISHABLE to this module.
+    supported = appended_clauses.unattested_clauses(
+        "Cut average fault-response time from 4.5 hours to 2.75 hours, "
+        "responding to faults more quickly.", cited, cited)
+    assert supported[0]["missing_stems_found_elsewhere"] == \
+        found[0]["missing_stems_found_elsewhere"], (
+        "the module cannot separate an entailed restatement from an unentailed "
+        "one — that is a Tier-B judgement, not a lexical one")
+
+    # Recorded, and correct: if the record DID mention repeat visits, the coverage
+    # field would change. It says nothing about entailment either way.
     softened = appended_clauses.unattested_clauses(
-        line, cited, cited + ["Repeat visits reduced; average turnaround now 2.75 hours."])
+        line, cited, cited + ["Repeat visits reduced; turnaround now 2.75 hours."])
     assert softened[0]["missing_stems_found_elsewhere"] != "none"
-    assert softened[0]["semantic_status"] == "not_assessed"
 
-    # DOCUMENTED RECALL BOUNDARY: a qualifier not beginning with a lowercase -ing
-    # word is not located as an appended clause at all.
+
+def test_control_the_detector_does_not_locate_every_kind_of_qualifier():
+    """[tier-b-worklist] CONTROL 3c — the documented recall boundary.
+
+    A qualifier that does not begin with a lowercase ``-ing`` word is not located
+    as an appended clause at all. Asserted rather than left to be discovered,
+    because it bounds what the work list can claim to cover.
+    """
+    cited = [SRC_SPEED]
     adverb_first = ("Cut average fault-response time from 4.5 hours to 2.75 hours, "
                     "materially lowering turnaround.")
     assert appended_clauses.unattested_clauses(adverb_first, cited) == [], (
