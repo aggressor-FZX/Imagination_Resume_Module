@@ -1,13 +1,77 @@
-# Handoff — two-document path verified offline; one captured run awaits an allowance
+# Handoff — two-file website run executed and approved; one defect class remains
 
-**2026-11-03, session 9** (supersedes the session-8 header below).
+**2026-11-03, session 10** (supersedes the session-9 header below).
 
 - **Tests:** 996 passed, 3 skipped (`python -m pytest tests/ -q -o addopts="" -p no:cacheprovider`).
 - **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; unchanged, not moved).
-- **Latest commit:** `04c5fe1`, pushed to `master`.
-- **Branch:** `wip/correction-timeout-attribution`.
-- **Credits:** unchanged. **No paid submission this session** — provider cost `$0.00`,
-  every provider call in the tests is a local stub.
+- **Deployed:** `47c4254` on `master` (verified by deploy SHA and by reading the fix back
+  out of the deployed revision).
+- **Capture:** **OFF** (`CORRECTION_LIVE_CAPTURE=0`, redeployed, confirmed `capture=0`);
+  remote capture directory **empty**.
+- **Credits:** 968 → **935** (33, one analysis). Provider dollar cost for run 10 is
+  **unmeasured**, not zero — see below.
+
+## The authorised two-file run was executed: run 10
+
+| | |
+|---|---|
+| Correlation ID | `850ee3ea-ca2e-4210-92b4-0e57ed5149eb` |
+| Route | website → orchestrator `/api/analysis/multi-file?stream=1` → Imaginator `/analyze` |
+| Input | `synthetic-single.docx` + `synthetic-second.docx`, 370-char job ad |
+| Result | **approved**, initial review, `repair_calls = 0` |
+| Detail | `docs/live-runs/RUN_10_TWO_FILE.md` |
+
+**What it settles.** Two `source_documents` arrived under distinct ids. Both documents'
+employment and education records survived, correctly attributed, with no employer, role,
+date, degree or metric mixing, no duplicate records, and no invented figures or names. The
+multi-document preservation fix is confirmed on the live route.
+
+**What it does not settle — this is not a clean delivery.** Six bullets carry an appended
+outcome clause neither source states (`ensuring compliance with NFPA 70E standards`,
+`enhancing system reliability`, `gaining hands-on electrical construction experience`, …).
+The reviewer marked all 28 lines `supported`, so the engine's only defence for that shape —
+flag then repair — was never engaged; and `_introduces_beyond` flags capitalised names and
+unbacked figures, not lowercase outcome words. Verified directly against the real bullet:
+it returns `[]`.
+
+**Also not verified.** The PDF and DOCX were **not** downloaded: no `/resume/export`
+request left the browser on any of three attempts (patched `fetch`, coordinate click,
+forced click). The content verified above is the approved markdown **as rendered by the
+site**, not bytes read back from a compiled file. The offline suite proves the exporters
+render this payload, but that is not this run. Browser download behaviour remains a
+separate follow-up criterion.
+
+## Next work, in priority order
+
+1. **Appended outcome clauses in experience bullets** — the open fabrication risk. This is
+   a reviewer-quality problem: a live reviewer that approves every line gives the repair
+   path nothing to do. Two candidate directions, both offline-verifiable before any spend:
+   extend the addition check to lowercase outcome verbs and their objects, or require the
+   reviewer to cite an exact source span per bullet rather than a set of segment indices.
+   Neither is implemented. **Do not spend to test.**
+2. **Reconcile run 10's provider cost** from the OpenRouter activity export for 2026-11-03.
+   The ledger records it as unknown by design, not as zero.
+3. Real-model repair recovery is still unexercised (`repair_calls = 0` in every run).
+
+**No second submission without a new allowance.** The 1-analysis allowance is exhausted.
+
+## Verification commands (this session, unchanged from 9)
+
+```
+source .venv/bin/activate && cd Imagination_Resume_Module
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider            # 996 passed, 3 skipped
+python -m pytest tests/test_route_two_documents.py -q -o addopts=""     # 22 tests, real /analyze
+cd ../Login_Landing_page
+node node_modules/jest/bin/jest.js -c jest.integration.config.js \
+  backend/tests/integration/multiFileRoute.test.js                      # 6 passed
+```
+
+---
+
+# Prior handoff (session 9) — kept for history
+
+**2026-11-03, session 9.** Two-document path verified offline; no credits spent that
+session.
 
 ## Done this session (9)
 
