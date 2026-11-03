@@ -1,14 +1,109 @@
-# Handoff — single-file frozen; the multi-file routing blocker was wrong and is withdrawn
+# Handoff — two-document path verified offline; one captured run awaits an allowance
 
-**2026-11-02, session 8** (supersedes the session-7 header below).
+**2026-11-03, session 9** (supersedes the session-8 header below).
 
-- **Tests:** 981 passed, 3 skipped (`python -m pytest tests/ -q -o addopts="" -p no:cacheprovider`).
-- **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; unchanged).
+- **Tests:** 996 passed, 3 skipped (`python -m pytest tests/ -q -o addopts="" -p no:cacheprovider`).
+- **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; unchanged, not moved).
+- **Latest commit:** `04c5fe1`, pushed to `master`.
 - **Branch:** `wip/correction-timeout-attribution`.
-- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`), disclosure on
-  (`CORRECTION_PROVIDER_DISCLOSURE=1`).
 - **Credits:** unchanged. **No paid submission this session** — provider cost `$0.00`,
   every provider call in the tests is a local stub.
+
+## Done this session (9)
+
+- [x] **A cross-document claim is no longer treated as fabrication.** `_validate_review`
+      passed ONE document to `_introduces_beyond` while the claim could cite several, so
+      merging two faithful summaries reported document-1's own word "Facilities" as
+      *introduced* and withheld a fully source-backed resume. The span is now judged against
+      every document the claim cites. `tests/test_route_two_documents.py` (22 tests).
+- [x] **Paired approval test.** The same supported summary approves as two lines AND as one
+      line — asserting only one of the pair would prove either "the check got looser" or
+      "nothing changed".
+- [x] **Claim-level attribution still enforced**, by 7 controls each one line from an
+      approving draft: appended unbacked tools, and transplanted employer / role / dates /
+      achievement / qualification / figure. A multiset guard proves each really is a
+      single-line edit (a set difference reported zero for the duplicate-line transplant).
+- [x] **Paired explanation for a summary append.** `preserve_source_summary` repairs it
+      before the gate, so that run publishes and the appended claim is absent from the
+      published document. The bullet append — where no repair exists — is withheld by the
+      gate. Asserting the first without the second would look like a miss.
+- [x] **Export round trip both ways.** Approved payload → real `/resume/export` → real LaTeX
+      + python-docx → both records read back from the produced files. Four alterations
+      (appended claim, changed employer, moved date, dropped record) refused 409 under the
+      existing receipt contract, plus the same content under another owner.
+- [x] **Mutation-checked three ways.** Removing the addition check fails three controls;
+      reverting the provenance fix fails the paired approval; disabling `verify_receipt`
+      fails all five export tests.
+- [x] No pipeline added. Publication gate unchanged. Single-file freeze untouched.
+
+## Waiting on: one bounded captured run (needs an allowance)
+
+**Approval was requested and is pending.** The session owner was unavailable, and silence
+is not an allowance, so **no credits were spent**. This is the only remaining item.
+
+| | |
+|---|---|
+| Input | `synthetic-single.docx` + `synthetic-second.docx` |
+| Route | website → orchestrator `/api/analysis/multi-file` → Imaginator `/analyze` |
+| Capture | `CORRECTION_LIVE_CAPTURE=1` for the run, then `=0`; purge container captures |
+| Cost | **33 credits** (one analysis) |
+
+### Procedure when the allowance exists
+
+1. `CORRECTION_LIVE_CAPTURE=1` via `mcp_render-mcp-se_update_environment_variables`
+   (merge; leave `CORRECTION_LIVE_CAPTURE_DIR` and `CORRECTION_PROVIDER_DISCLOSURE`).
+2. Poll SSH until `capture=1`. A health 200 is **not** proof the deploy landed, and an
+   env-var change needs a real deploy, not a restart.
+3. `cd /app && PYTHONPATH=. python tools/live_capture_preflight.py` — expect exit 0.
+4. Submit the two documents at `https://cogitometric.ai/app/resume-builder`.
+5. Record `x-correlation-id`. The capture must show **two** `source_documents`.
+6. Check the delivered PDF **and** DOCX: both employers, both institutions, both degrees
+   with their own dates; no mixing, no duplicate, no invented qualification.
+7. Export must accept the receipt. `CORRECTION_LIVE_CAPTURE=0`; purge container captures;
+   keep the artifact locally.
+
+### Pass/fail
+
+**Passes** when every check in step 6 holds and the receipt is accepted by export.
+**If withheld**, `scp` the capture and classify the objection against the source *before*
+changing code — a checker rejection is not proof of fabrication.
+
+## Verification commands (this session)
+
+```
+source .venv/bin/activate && cd Imagination_Resume_Module
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider            # 996 passed, 3 skipped
+python -m pytest tests/test_route_two_documents.py -q -o addopts=""     # 22 tests, real /analyze
+python -m pytest tests/test_route_two_documents.py -q -o addopts="" -k export
+```
+
+## Verification commands (session 8, still valid)
+
+```
+python -m pytest tests/test_source_preservation.py -q -o addopts=""     # incl. multi-document §6
+cd ../Login_Landing_page
+node node_modules/jest/bin/jest.js -c jest.integration.config.js \
+  backend/tests/integration/multiFileRoute.test.js                      # 6 passed
+node node_modules/jest/bin/jest.js -c jest.unit.config.cjs \
+  src/services/__tests__/multiFileRequest.test.ts                       # 3 passed
+```
+
+Note: `jest.integration.config.js` also collects `.worktrees/**`, where several DB-backed
+suites fail for pre-existing environment reasons. Those failures reproduce with this
+session's files removed.
+
+---
+
+# Prior handoff (session 8) — kept for history
+
+**2026-11-02, session 8.**
+
+- **Tests:** 981 passed, 3 skipped.
+- **Tag:** `known-working-single-file-2026-11-02` → `73cf570` (kept; unchanged).
+- **Branch:** `wip/correction-timeout-attribution`.
+- **Capture was OFF** (`CORRECTION_LIVE_CAPTURE=0`), disclosure on
+  (`CORRECTION_PROVIDER_DISCLOSURE=1`).
+- **Credits:** unchanged. No paid submission that session.
 
 ## Done this session (8)
 
