@@ -251,65 +251,111 @@ Both documents' summaries are recovered, and the false-positive controls hold:
 | `Concrete Work` | False |
 | prose sentence containing "education" | False |
 
-## 4.6 The fix is necessary but NOT sufficient — a second defect
+## 4.6 The second defect — isolated: it is rule ORDER, not a coding error
 
-With the splitter patched, `preserve_source_facts` produced:
+I earlier recorded this as "un-isolated". It is now isolated by stepping the rules one at a
+time on the captured input:
 
 ```
-notes: ["replaced an unsupported skills block with the source's own skills",
-        "added an empty Professional Summary heading"]
-has 12 years: False
+after preserve_education_record        has_heading=False  has_12years=False  changes=[]
+after preserve_source_summary          has_heading=False  has_12years=False  changes=[]
+after preserve_quantified_qualifiers   has_heading=False  has_12years=False  changes=[]
+after preserve_skills_block            has_heading=False  has_12years=False  changes=["replaced an unsupported skills block..."]
+after ensure_required_headings         has_heading=True   has_12years=False  changes=["added an empty Professional Summary heading"]
 ```
 
-**The heading is inserted; the summary text is not.** `preserve_required_headings`
-inserts `{"heading": name, "level": 2, "lines": [""]}` and its own docstring explains why —
-"an empty summary heading claims a summary the candidate never wrote."
-
-Then `preserve_source_summary` runs, finds a summary section, and reaches this branch:
+`preserve_source_facts` runs:
 
 ```python
-if section is None:
-    # No summary in the draft but the source has one: the editor prompt is supposed
-    # to emit it. Inserting it here would be composing a section from outside the
-    # draft, so it is reported instead of written.
-    return markdown, []
+for step in (preserve_education_record,
+             preserve_source_summary,
+             preserve_quantified_qualifiers,
+             preserve_skills_block,
+             ensure_required_headings):
 ```
 
-Because the *heading* now exists but is empty, `section` is **not** None, so the code falls
-through to the comparison, computes `normalized == ''`, and then:
+`preserve_source_summary` runs **before** `ensure_required_headings`. With no summary
+section yet in the draft it takes its `if section is None: return markdown, []` branch — the
+branch whose comment says insertion "would be composing a section from outside the draft".
+`ensure_required_headings` then adds `## Professional Summary` with `lines: [""]`, and
+**nothing revisits it**. So the heading exists and the body is permanently empty.
 
-```python
-source_words = {...}      # non-empty
-draft_words  = set()      # empty
-lost = source_words       # everything
-if not added and not lost: return   # lost is non-empty -> does not return
-section["lines"] = ["", summary, ""]   # <-- SHOULD insert
+Both behaviours are individually defensible. Their order is not: the engine adds the section
+*after* the rule that fills it has already declined.
+
+### Reordering, measured
+
+```
+after ensure_required_headings    has12years=False  changes=['added an empty Professional Summary heading']
+after preserve_education_record   has12years=False  changes=[]
+after preserve_source_summary     has12years=True   changes=['restored the source summary wording']
+after preserve_quantified_qualifiers has12years=True changes=[]
+after preserve_skills_block       has12years=True   changes=["replaced an unsupported skills block..."]
 ```
 
-Reading the code, the text **should** be inserted at this point. It is not, so there is a
-second fault between that assignment and the rendered output — most plausibly that
-`preserve_source_summary` and `preserve_required_headings` run in an order where the
-heading-insertion step drops the body, or `_render_sections` drops a section whose
-`level` differs from the inserted one.
+Output:
 
-**I have not isolated it**, and I am not going to claim a fix for a step I have not
-traced. Recorded as an open, second defect in the same rule chain.
+```markdown
+## Professional Summary
 
-## 4.7 What this means for the fix
+Journeyman electrician with 12 years of electrical experience spanning commercial
+construction, industrial maintenance, and facility operations. Maintenance electrician
+focused on electrical distribution and building automation systems in occupied commercial
+properties.
+```
 
-The smallest *justified* change is now two steps, not one:
+## 4.6b Coverage of the two changes, measured against the 9 missing segments
 
-1. **`_split_sections` recognises bare styled headings** — prototyped and measured above.
-   This unblocks every downstream rule and is independently correct: real DOCX extraction
-   never emits `#`.
-2. **Trace and fix why an existing-but-empty summary section does not receive
-   `source_summary`.** One defect, undefined location, found only because step 1 was
-   applied and re-measured.
+| seg | content | now present |
+|---|---|---|
+| 0 | `Professional Summary` | **True** |
+| 1 | `12 years of electrical experience` | **True** |
+| 2 | `commercial construction` | **True** |
+| 19 | `Electrical Systems Technology` | False |
+| 21 | `Conduit bending` | **True** |
+| 22 | `Lockout/tagout` | **True** |
+| 23 | `Professional Summary` (doc-1 heading) | False |
+| 24 | `Maintenance electrician focused` | **True** |
+| 25 | `building automation` | **True** |
 
-Both are deterministic-layer changes. Neither touches the reviewer, the gate, or the writer.
-Neither can loosen publication: both add source facts the engine can enforce.
+**7 of 9.** The two remaining are not detection failures:
 
-No code has been changed. The prototype lives only in this analysis.
+* **seg 19** — the draft says `Associate of Applied Science, Spokane Falls Institute of
+  Technology` and the source says `Associate of Applied Science, Electrical Systems
+  Technology \| 2015`. The writer **dropped the field of study** and merged the institution
+  into the award line. `preserve_education_record` does mention both institution and field,
+  so this is a rule-coverage gap, not a parsing gap — a third, separate defect.
+* **seg 23** — doc-1's `Professional Summary` heading does not survive because the two
+  summaries are merged under one heading, which is the intended multi-document behaviour.
+
+## 4.7 The fix, final
+
+Two deterministic-layer changes, both measured:
+
+1. **`_split_sections` recognises bare styled headings** — real DOCX extraction never emits
+   `#`, so today every uploaded document is one unheaded section.
+2. **`ensure_required_headings` runs before `preserve_source_summary`** — so the section the
+   summary rule fills exists before it is asked to fill it.
+
+Neither touches the reviewer, the gate, or the writer. Neither can loosen publication:
+both only make the engine **see more source** it can enforce. A draft that omits the summary
+is still withheld.
+
+**Third defect, found and NOT fixed:** the education rule does not restore a dropped
+**field of study** (seg 19). Separate rule-coverage gap. Recorded, not addressed here.
+
+No code has been changed. Every prototype above ran from this analysis against the preserved
+capture, outside the repository.
+
+### Verification plan when the code is changed (offline, no spend)
+
+1. `source_summary(<captured run-12 combined>)` returns both summaries.
+2. `preserve_source_facts(<captured run-12 draft>, combined)` produces the summary text and
+   `12 years`.
+3. Full suite still passes, especially `test_source_preservation.py` §6 (multi-document
+   summaries) and `test_route_two_documents.py` (a correct draft still approves).
+4. New paired test: a bare-heading source must yield the same preservation result as the same
+   source with `##` added — that is the invariant the bug violated.
 
 # 5. What this establishes about the open questions
 
