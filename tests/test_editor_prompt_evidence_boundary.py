@@ -222,3 +222,63 @@ def test_recorded_draft_fabrications_have_no_lexical_anchor_in_the_source():
     for invented in ("diagnostic software", "layout planning", "bim software",
                      "autocad"):
         assert invented not in source
+
+
+# ---------------------------------------------------------------------------
+# 4. The source's own summary must reach the editor
+# ---------------------------------------------------------------------------
+
+RUN_5_SOURCE = """## Professional Summary
+SYNTHETIC-ONLY Journeyman electrician with 8+ years of commercial and industrial electrical
+experience across construction, facilities maintenance, and power distribution.
+
+## Professional Experience
+**SYNTHETIC-ONLY Cascade Power Solutions, LLC** -- Example City, WA
+*Journeyman Electrician | 03/2020 - Present*
+- Installed and maintained commercial electrical systems across 40+ job sites."""
+
+
+def test_source_summary_is_extracted_and_offered_to_the_editor():
+    """Delivery run 6 was withheld because the draft had no summary at all.
+
+    Source segments 0-2 (``## Professional Summary`` and its paragraph) were
+    reported missing. The editor prompt had no summary slot, so no draft could ever
+    carry one. The candidate wrote a summary; the rewrite must restate it.
+    """
+    editor = StarEditor(llm_client=None)
+    summary = editor._extract_source_summary(RUN_5_SOURCE)
+
+    assert "journeyman electrician" in summary.lower()
+    assert "8+ years" in summary
+    assert "##" not in summary
+
+    prompt = editor._create_user_prompt(
+        RUN_5_EXPERIENCES, "senior", [], "", original_resume_text=RUN_5_SOURCE)
+    assert "SOURCE SUMMARY" in prompt
+    assert "journeyman electrician" in prompt.lower()
+
+
+def test_editor_prompt_has_a_summary_section_slot():
+    """If the template has no summary section, the summary can never be emitted.
+
+    Asserted against the SECTION FORMAT block specifically, not the whole prompt:
+    the JSON example also contains the heading, so a whole-prompt substring check
+    still passes after the format slot is deleted (mutation-verified).
+    """
+    prompt = _flat(STAR_EDITOR_SYSTEM_PROMPT)
+    format_block = prompt.split("section format")[1].split("rules:")[0]
+    assert "## professional summary" in format_block
+
+
+@pytest.mark.parametrize("text", [
+    "",
+    "## Experience\n- did work\n",
+    "I am an electrician with 8 years of experience.\n## Experience\n- did work\n",
+])
+def test_no_summary_is_invented_when_the_source_has_none(text):
+    """An unlabelled opening paragraph is not promoted into a summary.
+
+    Doing so would turn arbitrary leading text into a claim the candidate never
+    made as a claim, which is the same fabrication by another route.
+    """
+    assert StarEditor(llm_client=None)._extract_source_summary(text) == ""

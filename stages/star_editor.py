@@ -35,6 +35,10 @@ STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. You reforma
 
 SECTION FORMAT (emit a section only when the input gives you content for it):
 
+## Professional Summary
+A short paragraph drawn from the summary the input supplies, restated in third
+person. Omit this section entirely when the input supplies no summary text.
+
 ## Professional Experience
 **Company Name** -- Location
 *Job Title | dates*
@@ -59,12 +63,22 @@ RULES:
   bullets for a role, emit three. A role with two bullets is correct and complete.
 - Emit a section ONLY when the input supplies content for it. A heading with no
   supported content is omitted, not filled.
+- Every technology, tool and activity named in the input must survive somewhere in
+  the output. Tightening prose is allowed; dropping the employer, the role, the
+  dates or a stated technology is not.
+- **Professional Summary:** restate the summary the input provides. Keep its facts —
+  the years of experience, the trade, the settings. Do not introduce a specialism,
+  a credential or a metric the summary does not state.
 - Education carries the degree, the institution and the date. The input does not
   state a GPA, coursework, honours or a graduation distinction unless it appears
   above — never add those fields.
 - Certifications carry the certification name as written. Add an issuer or an issue
   year ONLY when the input states it. Never supply an issuer or a date from your own
   knowledge of who typically issues that credential.
+- **Technical Skills:** list skills using the SAME WORDS the input uses. Do not
+  upgrade a noun into a rank, a role or a qualification. "training" is not
+  "crew leadership"; an apprenticeship is not "journey-level certification". A
+  category heading ("Safety:", "Leadership:") is formatting, not a claim.
 - Skills are grouped by category, and every skill listed must already appear in the
   input. Do not add a tool, platform, language or methodology because it is common
   in the field.
@@ -78,7 +92,7 @@ RULES:
 
 OUTPUT JSON:
 {
-  "final_markdown": "## Professional Experience\n**Company** -- City, ST\n*Title | 2019 -- 2023*\n- bullet\n\n## Education\n**BS, Institution** -- 2026\n\n## Technical Skills\n**Languages:** Python, SQL",
+  "final_markdown": "## Professional Summary\nParagraph restating the supplied summary.\n\n## Professional Experience\n**Company** -- City, ST\n*Title | 2019 -- 2023*\n- bullet\n\n## Education\n**BS, Institution** -- 2026\n\n## Technical Skills\n**Languages:** Python, SQL",
   "final_plain_text": "plain text summary",
   "editorial_notes": "sections emitted only where the input supplies content"
 }
@@ -161,7 +175,8 @@ class StarEditor:
             user_prompt = self._create_user_prompt(
                 experiences, seniority, domain_vocab, target_company,
                 education=education, projects=projects, certifications=certifications,
-                skills=skills, location=location, job_ad=job_ad
+                skills=skills, location=location, job_ad=job_ad,
+                original_resume_text=original_resume_text
             )
 
             # Call LLM with strict JSON schema
@@ -229,11 +244,49 @@ class StarEditor:
             # Return safe fallback
             return self._create_fallback_output(experiences, seniority)
     
+    def _extract_source_summary(self, text: str) -> str:
+        """Return the candidate's own summary paragraph, or "" when there is none.
+
+        The editor prompt has no summary slot, so a source that opens with
+        ``## Professional Summary`` reached the reviewer with nothing representing
+        it. In delivery run 6 those three source segments were reported missing and
+        the draft was withheld — correctly, because the candidate did write a
+        summary and the rewrite dropped it.
+
+        Only an explicitly labelled summary is returned. An unlabelled opening
+        paragraph is not assumed to be a summary: promoting arbitrary leading text
+        into one would create a claim the source never made as a claim.
+        """
+        if not text:
+            return ""
+        labels = ("professional summary", "summary", "profile", "objective",
+                  "professional profile", "career summary", "about")
+        lines = text.splitlines()
+        collected: list[str] = []
+        inside = False
+        for raw in lines:
+            stripped = raw.strip()
+            heading = re.sub(r"^#+\s*", "", stripped).strip().rstrip(":").strip().lower()
+            if not inside:
+                if heading in labels:
+                    inside = True
+                continue
+            # A new heading ends the summary.
+            if re.match(r"^#{1,6}\s", stripped) or stripped.lower().rstrip(":").strip() in {
+                    "professional experience", "experience", "work experience",
+                    "employment history", "education", "certifications",
+                    "skills", "technical skills", "projects"}:
+                break
+            if stripped:
+                collected.append(stripped)
+        return " ".join(collected).strip()
+
     def _create_user_prompt(self, experiences: List[Dict], seniority: str, 
                            domain_vocab: List[str], target_company: str = "",
                            education: List[Dict] = None, projects: List[Dict] = None,
                            certifications: List[Dict] = None, skills: List[str] = None,
-                           location: str = "", job_ad: str = "") -> str:
+                           location: str = "", job_ad: str = "",
+                           original_resume_text: str = "") -> str:
         """
         Create user prompt for the editor with ALL resume sections.
         
@@ -247,6 +300,7 @@ class StarEditor:
             certifications: Certification entries
             skills: Skill names for Skills section
             location: Job location
+            original_resume_text: The candidate's source text, used for the summary
             
         Returns:
             Formatted user prompt
@@ -255,6 +309,17 @@ class StarEditor:
         
         # Add seniority context
         prompt_parts.append(f"SENIORITY LEVEL: {seniority.upper()}")
+        
+        # The candidate's own summary paragraph. This must be supplied, not inferred:
+        # the editor has no other way to know the source contains one, and delivery
+        # run 6 was withheld because segments 0-2 (the source's Professional Summary
+        # heading and paragraph) had no counterpart anywhere in the draft. The
+        # publication gate reads an absent summary as an omitted source fact, and it
+        # is right to — the candidate wrote one.
+        summary_text = self._extract_source_summary(original_resume_text)
+        if summary_text:
+            prompt_parts.append("\nSOURCE SUMMARY (restate this in the Professional Summary section):")
+            prompt_parts.append(f"  {summary_text}")
         
         # Add domain vocabulary guidance
         if domain_vocab:
