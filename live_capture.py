@@ -449,15 +449,136 @@ def replay(path, *, timeout_seconds: float = 120.0):
     disclosure setting is forced on for the duration because that is the configuration
     the live run used. Returns ``(result, provider, session)``.
     """
+    result, provider, session = replay_with_extensions(path, timeout_seconds=timeout_seconds)
+    return result, provider, session
+
+
+class ControlledExtension:
+    """A separately labelled answer for a phase the recording never performed.
+
+    A capture records what the provider was asked and what it answered. It cannot
+    contain a phase the live run never reached — and delivery runs 4 through 7 all
+    stopped at the same point, so none of them contains a repair, a re-review or a
+    restore. Replaying new code against them therefore *ends* at the new behaviour
+    rather than exercising it.
+
+    This class supplies the missing answers, and is deliberately noisy about what it
+    is: every exchange it provides is labelled ``controlled``, it can never overwrite
+    a recorded exchange, and it refuses to answer a phase that the recording already
+    covers. Anything proved with it is proved about the code, never about the live
+    run — a distinction that matters because a controlled answer is written by the
+    same person reading the same answer key, and so cannot independently corroborate
+    the answer key.
+
+    Ordering rule, and the reason this is not a plain queue: an extension answer is
+    released for a phase only after every recorded exchange has been consumed. That
+    keeps the recording authoritative for everything it actually contains, so the
+    original rejection is reproduced by the original bytes before the extension is
+    ever consulted.
+    """
+
+    CONTROLLED = "controlled"
+
+    def __init__(self, answers: dict[str, str]):
+        for phase, body in answers.items():
+            if not isinstance(phase, str) or not isinstance(body, str) or not body:
+                raise LiveCaptureRefused("extension answers must be non-empty strings")
+        self.answers = dict(answers)
+        self.served: list[str] = []
+
+    @property
+    def phases(self) -> tuple[str, ...]:
+        return tuple(self.answers)
+
+    def prepare(self, recorded: dict) -> None:
+        """Refuse an answer for a phase the recording already covers."""
+        covered = {item.get("phase") for item in recorded.get("exchanges") or []}
+        clash = sorted(covered.intersection(self.answers))
+        if clash:
+            raise LiveCaptureRefused(
+                f"extension would overwrite recorded phase(s): {', '.join(clash)}")
+        self.served.clear()
+
+
+class ExtendedReplaySession(ReplaySession):
+    """ReplaySession that serves labelled controlled answers once the recording ends.
+
+    The parent's ``ReplayExhausted`` remains the behaviour when no controlled answer
+    exists for the phase being asked, so an unplanned phase is still an error rather
+    than an empty success.
+    """
+
+    def __init__(self, recorded: dict, extension: ControlledExtension):
+        super().__init__(recorded)
+        self.extension = extension
+        self.controlled_requests: list[dict] = []
+        # Phases the engine asked for that neither the recording nor the extension
+        # could answer. Recorded explicitly because raising consumes nothing: without
+        # this, "ran past the recording" and "never reached the end" look identical on
+        # the session, and a test asserting the former would be asserting nothing.
+        self.unanswered: list[str] = []
+
+    # ``_phase`` lives on CapturingSession, the class that names a request for the
+    # recorder. A replay must name phases exactly as the recorder did, so it borrows
+    # that detector rather than keeping a second copy that could drift from it.
+    _phase = staticmethod(CapturingSession._phase)
+
+    def post(self, url, **kwargs):
+        exchanges = self.recorded.get("exchanges") or []
+        if self.position < len(exchanges):
+            return super().post(url, **kwargs)
+        phase = self._phase(kwargs)
+        body = self.extension.answers.get(phase)
+        if body is None:
+            self.unanswered.append(phase)
+            raise ReplayExhausted(
+                f"replay exhausted after {self.position} of {len(exchanges)} exchanges"
+                f" and no controlled answer for phase {phase!r}")
+        self.calls += 1
+        self.position += 1
+        self.requests.append(kwargs)
+        self.controlled_requests.append({"phase": phase, "origin": self.extension.CONTROLLED})
+        self.extension.served.append(phase)
+        encoded = body.encode("utf-8")
+        status = 200
+
+        class Controlled:
+            def __init__(self):
+                self.status = status
+                self.content = self
+
+            async def iter_chunked(self, size):
+                for index in range(0, len(encoded), size):
+                    yield encoded[index:index + size]
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+        return Controlled()
+
+
+def replay_with_extensions(path, *, answers: dict[str, str] | None = None,
+                          timeout_seconds: float = 120.0):
+    """Replay a capture, optionally answering phases it never performed.
+
+    Returns ``(result, provider, session)``. Without ``answers`` this is exactly
+    ``replay``: the recording decides every phase and running past its end raises
+    ``ReplayExhausted``.
+    """
     import correction_provider
     from correction_provider import CorrectionProvider
     from source_correction import SourceDocument, correct
 
     data = load(path)
+    extension = ControlledExtension(answers or {})
+    extension.prepare(data)
     previous = os.environ.get(correction_provider.DISCLOSURE_SETTING)
     os.environ[correction_provider.DISCLOSURE_SETTING] = "1"
     try:
-        session = ReplaySession(data)
+        session = ExtendedReplaySession(data, extension)
         provider = CorrectionProvider("replay-no-network", session)
         sources = tuple(SourceDocument(item["source_id"], item["text"])
                         for item in data["sources"])
@@ -469,3 +590,30 @@ def replay(path, *, timeout_seconds: float = 120.0):
             os.environ.pop(correction_provider.DISCLOSURE_SETTING, None)
         else:
             os.environ[correction_provider.DISCLOSURE_SETTING] = previous
+
+
+def recorded_stopping_point(path) -> dict[str, Any]:
+    """The diagnosis the *original* code reached on a capture's own exchanges.
+
+    Recomputing this with current code is wrong: the current code deliberately
+    goes further (it repairs before judging missing facts), so it no longer stops
+    where the live run stopped. The original rejection is evidence about a revision,
+    so it is read from the capture's own ``timing.reason`` and exchange list rather
+    than re-derived.
+    """
+    data = load(path)
+    exchanges = data.get("exchanges") or []
+    timing = data.get("timing") or {}
+    review = data.get("review") or {}
+    return {
+        "phases": [item.get("phase") for item in exchanges],
+        "phase_count": len(exchanges),
+        "status": review.get("status"),
+        "reason": review.get("reason") or timing.get("reason"),
+        "review_calls": review.get("review_calls"),
+        "repair_calls": review.get("repair_calls"),
+        "restore_calls": review.get("restore_calls"),
+        "correlation_id": data.get("correlation_id"),
+        "revision": timing.get("revision") or (data.get("synthetic") and None),
+    }
+

@@ -219,14 +219,25 @@ def test_explicit_source_document_is_used_for_inventory(offline, monkeypatch, sy
     assert "".join(segment["text"] for segment in inventory["segments"]) == SOURCE
 
 
-def test_missing_source_representation_withholds_without_repair(offline, monkeypatch, synthetic_disclosure_bypass):
+def test_missing_source_representation_withholds_after_repair(offline, monkeypatch, synthetic_disclosure_bypass):
+    """An omitted fact withholds through the route, after the repair is attempted.
+
+    The withheld reason is unchanged. The call count is not: the repair path now runs
+    before the coverage verdict, so there is one more provider call than before. Pinning
+    the old count would pin the ordering defect rather than the behaviour it protected.
+    """
     client, _ = offline
     session = FakeSession(missing_representation=True)
     app.app.state.http_session = session
     pipeline(monkeypatch)
     result = post(client).json()
     assert result["correction_reason"] == "source_facts_missing"
-    assert result["final_written_section"] is None and len(session.requests) == 2
+    assert result["final_written_section"] is None
+    # The route now reaches the repair path at least once, which it never used to. The
+    # exact count is not asserted: a second repair pass and in-call retries make it
+    # stable only by accident, and pinning it would fix the ordering defect into the
+    # test rather than the behaviour the test exists to protect.
+    assert len(session.requests) > 2
     assert "PRIVATE_" not in json.dumps(result)
 
 

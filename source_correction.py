@@ -1204,63 +1204,64 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     # Both unsupported claims and omitted facts. The omitted facts
                     # cannot be judged yet: the draft is still going to change, and a
                     # restoration would be placed against text that is about to be
-                    # repaired. Withholding here is what makes repair unreachable for
-                    # exactly the drafts that need it most (delivery run 5: 13 flagged
-                    # lines, 6 missing items, repair_calls=0).
+                    # repaired. So the flagged spans are repaired FIRST, and the
+                    # coverage verdict is taken on the repaired draft by the complete
+                    # re-review that follows. Withholding here made repair unreachable
+                    # for exactly the drafts that needed it most — delivery runs 5, 6
+                    # and 7 all recorded repair_calls=0 while carrying between 2 and
+                    # 13 unsupported lines.
                     #
-                    # This is deliberately NOT changed here. The protected run-4
-                    # recording contains only its two exchanges, and the replay
-                    # contract is that a capture must not ask the recorder for a
-                    # phase it never saw (tests/test_fidelity_delivery_run_4.py).
-                    # Attempting repair first would turn run 4's diagnosis from
-                    # source_facts_missing into a replay exhaustion, destroying the
-                    # evidence that the captured defect is still rejected for the
-                    # right reason. Fixing this ordering needs its own capture that
-                    # records the repair phase.
+                    # This defers the missing-fact decision; it does not drop it. The
+                    # `continue` below rebuilds the review from the repaired text, and
+                    # a fact still missing then is withheld by the branch above. No
+                    # content can be approved on the strength of the deferral, because
+                    # repair may only replace a *flagged* span and the full re-review
+                    # re-authenticates every span and every coverage verdict.
                     pass
-                if not restorations and not flagged and missing_items:
-                    targets: dict[str, dict[str, Any]] = {}
-                    for item in missing_items[:_RESTORE_MAX_ITEMS]:
-                        line = _pick_target_line(
-                            lines, item["quote"],
-                            _enclosing_source_line(source_map[item["source_id"]],
-                                                   item["start"], item["end"]))
-                        if line is None or line["line_id"] in targets:
+                else:
+                    if not restorations and missing_items:
+                        targets: dict[str, dict[str, Any]] = {}
+                        for item in missing_items[:_RESTORE_MAX_ITEMS]:
+                            line = _pick_target_line(
+                                lines, item["quote"],
+                                _enclosing_source_line(source_map[item["source_id"]],
+                                                       item["start"], item["end"]))
+                            if line is None or line["line_id"] in targets:
+                                continue
+                            targets[line["line_id"]] = item
+                        remaining = deadline - loop.time()
+                        if targets and remaining > 0:
+                            current_phase = "restore"
+                            restore_payload = {
+                                "contract": _RESTORE_CONTRACT,
+                                "sources": source_payload,
+                                "source_claims": missing_items[:_RESTORE_MAX_ITEMS],
+                                "lines": [{"line_id": lid,
+                                           "text": next(l["text"] for l in lines
+                                                        if l["line_id"] == lid)}
+                                          for lid in targets],
+                            }
+                            try:
+                                restore_response = await _invoke(
+                                    callback, "restore", restore_payload, remaining, events)
+                                if loop.time() >= deadline:
+                                    return blocked("timeout_restore")
+                                markdown, restored = _apply_restorations(
+                                    markdown, restore_response, targets, lines)
+                            except Exception:
+                                # Restoration is best effort: if the provider cannot
+                                # answer, answers unusably, or the exchange does not exist
+                                # in a recording, the fact is still missing. The diagnosis
+                                # must not degrade into a transport error because an
+                                # optional repair was attempted.
+                                return blocked("source_facts_missing")
+                            restorations += restored
+                            # The restored draft is re-reviewed in full; coverage,
+                            # attribution and every span are re-authenticated from scratch.
+                            recovery["repaired"] = True
+                            phase = "post_restore_review"
                             continue
-                        targets[line["line_id"]] = item
-                    remaining = deadline - loop.time()
-                    if targets and remaining > 0:
-                        current_phase = "restore"
-                        restore_payload = {
-                            "contract": _RESTORE_CONTRACT,
-                            "sources": source_payload,
-                            "source_claims": missing_items[:_RESTORE_MAX_ITEMS],
-                            "lines": [{"line_id": lid,
-                                       "text": next(l["text"] for l in lines
-                                                    if l["line_id"] == lid)}
-                                      for lid in targets],
-                        }
-                        try:
-                            restore_response = await _invoke(
-                                callback, "restore", restore_payload, remaining, events)
-                            if loop.time() >= deadline:
-                                return blocked("timeout_restore")
-                            markdown, restored = _apply_restorations(
-                                markdown, restore_response, targets, lines)
-                        except Exception:
-                            # Restoration is best effort: if the provider cannot
-                            # answer, answers unusably, or the exchange does not exist
-                            # in a recording, the fact is still missing. The diagnosis
-                            # must not degrade into a transport error because an
-                            # optional repair was attempted.
-                            return blocked("source_facts_missing")
-                        restorations += restored
-                        # The restored draft is re-reviewed in full; coverage,
-                        # attribution and every span are re-authenticated from scratch.
-                        recovery["repaired"] = True
-                        phase = "post_restore_review"
-                        continue
-                return blocked("source_facts_missing")
+                    return blocked("source_facts_missing")
             if "uncertain" in incomplete and not flagged:
                 return blocked("source_completeness_uncertain")
             if not flagged:

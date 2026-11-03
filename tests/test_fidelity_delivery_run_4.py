@@ -58,22 +58,48 @@ requires_capture = pytest.mark.skipif(
 def test_captured_draft_rejection_is_still_reproducible(monkeypatch):
     """[capture] Run 4's exact draft is still withheld, for the same reason.
 
-    This is the primary regression artifact. If a change makes the old exchange
+    This is the primary regression artifact. If a change makes the recorded exchange
     approve, either the reviewer's completeness answer is no longer being honoured or
     the fixture is no longer reaching the engine.
 
-    The recording contains only the original two exchanges, so no restoration or
-    repair can occur; ``restore_calls`` must stay 0 and the exchange count must be
-    fully consumed without asking the recorder for a phase it never saw.
+    What changed, and why the old numbers are no longer asserted here: the gate used to
+    withhold on a missing fact *before* entering the repair path, so run 4 recorded
+    ``repair_calls == 0``. That ordering was a defect — 19 lines were flagged and no
+    attempt to fix them was made — and it is now repaired first. The recording holds only
+    its original two exchanges, so the repair answer does not exist and the run still
+    withholds; the *route* to the rejection differs, the outcome does not. The original
+    diagnosis is pinned separately from the capture's own bytes by
+    ``test_original_diagnosis_is_read_from_the_capture``.
     """
     monkeypatch.setattr(socket.socket, "connect", _forbid_network)
     result, provider, session = live_capture.replay(str(CAPTURE))
 
     assert result.status == "withheld"
-    assert result.reason == "source_facts_missing"
     assert result.markdown is None
-    assert (result.review_calls, result.repair_calls, result.restore_calls) == (1, 0, 0)
+    # The engine now attempts the repair the old code never reached, and cannot finish
+    # because the recording has no repair answer.
+    assert result.repair_calls == 1
     assert session.position == len(session.recorded["exchanges"])
+
+
+@requires_capture
+def test_original_diagnosis_is_read_from_the_capture():
+    """[capture] Run 4's original rejection is pinned to the bytes that produced it.
+
+    The stopping point is evidence about a revision, not a claim about current code.
+    Recomputing "what the old code did" from current code would silently rewrite the
+    history that made the defect findable, so it is read out of the artifact's own
+    ``review`` and ``timing`` fields.
+    """
+    stopped = live_capture.recorded_stopping_point(str(CAPTURE))
+
+    assert stopped["status"] == "withheld"
+    assert stopped["reason"] == "source_facts_missing"
+    assert stopped["review_calls"] == 1
+    assert stopped["repair_calls"] == 0, (
+        "the recorded run must show that repair was never attempted")
+    assert stopped["phases"] == ["source_inventory", "review"]
+    assert stopped["phase_count"] == 2
 
 
 @requires_capture

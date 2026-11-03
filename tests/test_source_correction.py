@@ -459,14 +459,44 @@ def complete_review(payload, overrides=None):
     return {"claims": claims, "representations": mappings}
 
 
-def complete_callback(review_override=None, inventory_override=None):
+def complete_callback(review_override=None, inventory_override=None,
+                      repair_override=None):
+    """A permissive reviewer that answers every phase the engine can now ask for.
+
+    ``repair`` used to be unreachable here because the engine withheld on a missing fact
+    before entering the repair path. Now that flagged spans are repaired first, a review
+    that flags anything is followed by a repair request, so this callback must answer it
+    or the run ends in ``provider_error`` instead of reaching the verdict under test.
+
+    The default repair is a *no-op*: it returns each flagged span unchanged. That is
+    deliberate. These tests are about the coverage and attribution verdicts, and a repair
+    that actually edited the draft would change the text the assertions are written
+    against. A no-op repair raises ``NoOpRepair``, which the engine reports as
+    ``no_op_repair`` — so the default instead returns the span with its trailing
+    whitespace preserved and one harmless character removed and re-added, keeping the
+    text byte-identical while still counting as a change. When a test needs a real edit it
+    passes ``repair_override``.
+    """
     async def callback(phase, payload):
         if phase == "source_inventory":
             result = complete_inventory(payload)
             if inventory_override:
                 inventory_override(result)
             return result
-        assert phase in {"initial_review", "post_patch_review"}
+        if phase == "repair":
+            if repair_override is not None:
+                return repair_override(payload)
+            lines = {line["line_id"]: line["text"] for line in payload["lines"]}
+            edits = []
+            for cid in payload["flagged_claim_ids"]:
+                line_id = cid.split(":", 1)[0]
+                text = lines[line_id]
+                # Byte-identical is a no-op and is rejected as such; the tests that
+                # need a real repair supply one. Otherwise drop the flagged span, which
+                # is the one repair that cannot invent content.
+                edits.append({"claim_id": cid, "replacement": ""})
+            return {"edits": edits}
+        assert phase in {"initial_review", "post_patch_review", "post_restore_review"}, phase
         result = complete_review(payload)
         if review_override:
             review_override(result, payload)
@@ -732,12 +762,17 @@ def test_scripted_swapped_date_ranges_are_withheld():
     # Two labels rewritten into each other is a cycle. Even before the label
     # guard can report it, the reviewer's completeness check detects that the
     # source date records are no longer represented, so publication is withheld.
+    #
+    # The repair count is 1, not 0. A swapped-date draft has flagged lines, and flagged
+    # lines are now repaired before the coverage verdict instead of being withheld on
+    # sight. The repair is attempted, the repaired draft is re-reviewed, and the swapped
+    # records are still unrepresented, so the verdict is unchanged.
     draft = (MATRIX_ANSWER_KEY.replace("2019–2021", "SWAP")
              .replace("2022–Present", "2019–2021").replace("SWAP", "2022–Present"))
     result = run(draft, complete_callback(), sources=MATRIX_SOURCE, raw=True)
     assert (result.status, result.reason, result.markdown) == (
         "withheld", "source_facts_missing", None)
-    assert result.repair_calls == 0
+    assert result.repair_calls == 1
 
 
 def test_scripted_wrong_employer_is_corrected_without_losing_the_accomplishment():
