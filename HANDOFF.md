@@ -1,177 +1,108 @@
-# Handoff — delivery is the remaining milestone (2026-11-02, session 6)
+# Handoff — repair path proven offline; live delivery still needs an allowance
 
-- **Tests:** 767 passed, 3 skipped. Latest commit `5d7f686`, deployed and healthy.
-- **New docs:** `docs/ROUTE_MAP.md`, `docs/SPENDING_RECONCILIATION_2026-11-02.md`,
-  `docs/RETRY_RESILIENCE_2026-11-02.md`, `docs/LIVE_CAPTURE_RUNBOOK.md`.
-- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`); preflight verified READY when forced on.
+**2026-11-02, session 7.**
 
-## Done this session
-
-- [x] **Composed route test** replaces the detached verifier assertion. Drives the real
-      `/analyze` path: transient 503 -> retry -> unsupported claim -> withheld, no receipt,
-      nothing exportable, no streamed tokens on SSE. Asserts 4 attempts for 3 phases so the
-      retry demonstrably ran, and carries a positive control so "withhold everything after
-      a retry" cannot pass.
-- [x] **An explicit `Retry-After` is never shortened.** Uncapped; if it does not fit the
-      remaining budget the phase stops cleanly and records `retry_after_exceeded_budget`.
-      Our own backoff is still capped, because that is our choice, not an instruction.
-- [x] **Spending reconciled separately.** Website: 99 credits / 3 runs, none this session.
-      Provider: ~$0.0063 over 16 probe requests from recorded token counts; refused
-      requests charged at prompt cost, never $0.00; stated as a lower bound.
-- [x] **Route map verified, and an earlier claim withdrawn.** Both frontend paths reach the
-      same Imaginator handler (`/analyze`), which does run source correction. Multi-file is
-      **not** bypassed. The earlier claim came from confusing the orchestrator route
-      `/api/analysis/multi-file` with the Imaginator-local handler of the same name, which
-      no website traffic reaches. See `docs/ROUTE_MAP.md` for line-level evidence.
-
-## Remaining: one captured single-file website run (needs allowance)
-
-Everything is prepared; only the spending decision is outstanding.
-
-- Capture: `CORRECTION_LIVE_CAPTURE=1`, dir `/app/data/live-capture`. Enabling requires a
-  **deploy**, not a restart.
-- Preflight confirmed READY (`admitted_by: separate volume`, 1 GB free, writes 0600 in 0700).
-- Cost: **33 credits** for one single-file analysis. No provider probes will be made to
-  force an outage; that was explicitly excluded.
-- On success: inspect the résumé, the commentary, the receipt, and the actual PDF/DOCX.
-- On failure: replay that exact capture before touching code. A captured-request probe is
-  **not** a substitute for website acceptance.
-- Multi-file acceptance follows only after single-file delivery passes.
-
-## Verification
-
-```bash
-cd Imagination_Resume_Module
-../.venv/bin/python -m pytest -o addopts="" -q      # 767 passed, 3 skipped
-```
-
----
-
-# Handoff — transient-failure resilience (2026-11-02, session 5)
-
-- **Tests:** 757 passed, 3 skipped.
-- **New report:** `docs/RETRY_RESILIENCE_2026-11-02.md`.
-- **Live:** capture OFF (`CORRECTION_LIVE_CAPTURE=0`), disclosure ON, retry code deployed.
+- **Tests:** 913 passed, 3 skipped.
+- **Latest commit:** `a2f584f`, pushed to `master`, deployed, verified in-container.
+- **Branch:** `wip/correction-timeout-attribution` == `origin/master`.
+- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`), disclosure on
+  (`CORRECTION_PROVIDER_DISCLOSURE=1`), container capture dir empty.
+- **Credits:** 1034. No analysis was purchased this session.
 
 ## Done this session
 
-- [x] Retry classification: `429`/`502`/`503`/`504` retried; `400`/`401`/`403`/`404`/`422`
-      never retried; malformed and factual verdicts never retried.
-- [x] Retry lives in the adapter so **completed phases are never re-run** and the engine's
-      phase budget is untouched by transport retries.
-- [x] Bounded allowance: 3 attempts, `Retry-After` honoured and capped, backoff otherwise,
-      and no attempt started without 10 s of remaining budget.
-- [x] Per-attempt telemetry: `attempt`, `http_status`, `elapsed_ms`, serving `provider` —
-      no content. Failed attempts record `usage_unknown: true`.
-- [x] Read timeouts deliberately NOT retried (they consume the budget they would need).
-- [x] Publication checks unchanged: gate, verifier, disclosure and protocol are
-      byte-for-byte identical; a test proves a retried success still faces the verifier.
-- [x] 30 tests, mutation-checked (un-retrying 429, or retrying 401, both fail).
-- [x] Fixed two defects in earlier work: `provider_rate_limited` was dropped by the
-      sanitizer vocabulary; a served-but-unusable 200 was reported both as `ok` and as a
-      transport failure.
+- [x] **Repair ordering fixed.** `source_correction.py` withheld on a missing source fact
+      *before* entering the repair path, so a review reporting both unsupported lines and
+      omitted facts withheld immediately. That is why every live run recorded
+      `repair_calls == 0` (run 4: 19 flagged; run 5: 13; runs 6–7: 3). Flagged spans are
+      now repaired first and the coverage verdict is taken on the repaired draft.
+- [x] **Recovery proven offline**, not just reachability. A separately labelled layer
+      answers the phases the recordings never performed
+      (`live_capture.replay_with_extensions`, `tests/support/controlled_answers.py`);
+      `ControlledExtension` refuses to overwrite a recorded phase, so the artifact stays
+      authoritative for everything it contains. A repairable draft is repaired,
+      re-reviewed, validated, approved, and exported to real PDF and DOCX whose content
+      is read back.
+- [x] **Negative controls** on that path: repair cannot delete an accomplishment, invent a
+      qualification, loop, or exceed `MAX_CALLS`.
+- [x] **Five/six-section contradiction resolved.** The answer key's comment promised five
+      headings while its own tuple listed four without Projects; the prompt forbade an
+      empty section; `_ensure_all_sections` deleted an empty header. Now: all headings
+      required, empty is correct, filler forbidden. Verified end to end that an empty
+      `## Projects` parses to `[]` and renders nothing.
+- [x] **Objection classes corrected.** Formatting / omission / unsupported addition / lost
+      qualifier / reviewer error, each mapped to its remedy. "Electrical Systems
+      Technology dropped" was wrongly called fabrication and is now **omission** (the
+      draft drops a fact, it asserts nothing false). The concatenated bold education name
+      is **formatting**, not fabrication.
+- [x] **Phase order and upper bounds restored** where exact historical call counts had
+      been relaxed to `> 0`.
 
-## Live verification — and its limit
+## Known defects NOT fixed (writer layer)
 
-The exact captured run-3 review request, driven through the deployed adapter: 4
-invocations, all `200` on the **first** attempt (37.6 s, 60.9 s, 54.0 s, 47.4 s). No real
-504 occurred, so **the retry was not exercised live**. Invocation 2 at 60.9 s would have
-been killed by the old fixed 60 s ceiling, which is why that ceiling was replaced.
+These are demonstrated and classified; fixing them needs prompt changes, and each prompt
+change has so far cost a paid submission to validate.
 
-## Remaining — needs an allowance, not more code
+1. **`8,000 hours of supervised` → `hands-on … mastering core`** — lost qualifier plus an
+   invented trailing clause. Two defects, two repairs.
+2. **Skills block** invents a category structure and admits activity verbs
+   (`installation`, `maintenance`) plus the rank `apprentice supervision`.
+3. **Summary** appends a proficiency list past where the source summary ends.
+4. **Degree field dropped** ("Electrical Systems Technology") — omission.
+5. **Education bold name** concatenates degree + institution, so `unsupported_entities`
+   rejects it. Formatting.
+6. **Writer omits the Projects heading entirely.** Repair cannot fix this: it replaces a
+   flagged span and cannot insert a newline. The structural tests therefore run against a
+   draft with the heading inserted, and say so.
 
-1. **One single-file delivery on the live website is still unproven.** Three authorized
-   analyses were consumed before this work. Per the agreed order, single-file delivery
-   must pass before any multi-file acceptance run.
-2. Nothing about approved output is proven: no receipt, no displayed commentary, no
-   actual PDF/DOCX bytes.
-3. Multi-file does not run source correction, so retry resilience does not apply to it.
+Full table with reasons: `docs/live-runs/REMAINING_DEFECTS.md` and
+`docs/live-runs/REPAIR_ORDERING_FIX.md`.
 
-## Verification
+## Remaining: one captured website run (needs allowance)
 
-```bash
-cd Imagination_Resume_Module
-../.venv/bin/python -m pytest -o addopts="" -q      # 757 passed, 3 skipped
+Nothing else is outstanding. Authorization was requested; the session owner was
+unavailable, so **no submission was made**. Balance 1034 credits; 33 per analysis.
+
+### Procedure when an allowance exists
+
+1. `CORRECTION_LIVE_CAPTURE=1` via `mcp_render-mcp-se_update_environment_variables`
+   (merge, leave `CORRECTION_LIVE_CAPTURE_DIR` and `CORRECTION_PROVIDER_DISCLOSURE`).
+2. Poll SSH until `capture=1`; a health 200 is NOT proof a deploy landed.
+3. `cd /app && PYTHONPATH=. python tools/live_capture_preflight.py` — expect exit 0.
+4. Submit `synthetic-single.docx`, title "Senior Electrician", the 370-char job ad at
+   `https://cogitometric.ai/app/resume-builder`.
+5. Record `x-correlation-id`; expect `repair` and a re-review in the phase log, which no
+   live run has ever done.
+6. Inspect résumé, commentary, receipt, and the actual PDF/DOCX.
+7. `CORRECTION_LIVE_CAPTURE=0`; purge container captures; keep the artifact locally.
+
+### If it is withheld
+
+`scp` the capture, then
+`python -c "from live_capture import replay; print(replay('<f>')[0])"`.
+Classify the objection against the source **before** changing code — a checker rejection is
+not proof of fabrication. Then fix offline and retest with a remaining attempt.
+
+## Verification commands
+
+```
+source .venv/bin/activate && cd Imagination_Resume_Module
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider      # 913 passed, 3 skipped
+python -m pytest tests/test_repair_recovery_controlled.py -q -o addopts=""
+python -m pytest tests/test_run7_objection_classification.py -q -o addopts=""
 ```
 
----
+## Evidence and integrity
 
-# Previous session (4) — live delivery attempts, superseded
+Protected captures, all byte-identical to when they were recorded:
 
+| run | revision | sha256 (12) |
+|---|---|---|
+| 4 | `5f3c1f0` | `92e03d4bbfde` |
+| 5 | `9057d966` | `8972d3711c6b` |
+| 6 | `fb75917` | `269caf5e06b3` |
+| 7 | `b855087` | `bb9643ffbaea` |
 
-- **Live:** `master` tracks the deploy; see `git log -1`.
-- **Tests:** 727 passed, 3 skipped.
-- **Reports:** `docs/LIVE_DELIVERY_RUNS_2026-11-02.md` (the three runs, in detail),
-  `docs/CORRECTION_BOUNDARY_ACCEPTANCE_2026-11-02.md` (implementation acceptance),
-  `docs/LIVE_CAPTURE_RUNBOOK.md` (how to capture and replay).
-- **Capture is OFF** (`CORRECTION_LIVE_CAPTURE=0`) and the container disk was purged.
-
-## Outcome in one paragraph
-
-Implementation acceptance passes and grew substantially. Live delivery **did not** pass:
-three authorized website analyses all ended `withheld`, for three *different* reasons,
-and each was diagnosed from evidence rather than guessed at. The third run is the
-important one — it reached source correction for the first time, and its capture shows a
-valid 13.6 KB review request returning `200` in 26–38 s while the same request also
-returns `504` from the upstream endpoint in ~8.5 s on other attempts. The remaining
-blocker is upstream provider availability, not a defect this session could clear.
-
-## Completed this session
-
-- [x] Found and fixed the reason capture could never write: the deployed image mounts its
-      disk at `/app/data`, inside the repo root, and the container has no `.git` and no
-      `git` binary, so the git-ignore guard refused the authorized path. A separately
-      mounted volume is now accepted as the equivalent guarantee (`f2fb8d4`).
-- [x] **Run 1** captured live, then reproduced exactly: `429 engine_overloaded` from
-      DeepInfra while `allow_fallbacks: False` pinned the other endpoint out of reach.
-      Fixed by enabling fallbacks and reporting `provider_rate_limited` (`bb926b4`). Also
-      fixed the capture wrapper dropping non-200 bodies — the reason run 1 looked like
-      "no response at all".
-- [x] **Run 2** exposed an earlier defect: `response_format={"type":"json_object"}` was
-      accepted by the adapter and never put on the wire, so every strict-JSON stage ran
-      unstructured. Forwarded it, and added recovery for a truncated envelope whose
-      `final_markdown` closed cleanly — mid-sentence cuts are still rejected (`70b9824`).
-- [x] **Run 3** reached correction and its capture showed the adapter abandoning a valid
-      review at a fixed 60 s ceiling with its own granted budget unspent. Each call's
-      timeout is now sized from the remaining budget, floored at 60 s, capped at 120 s
-      (`6dd7b1d`).
-- [x] Both retained captures replay offline to their exact recorded verdicts.
-- [x] Capture disabled after verification; container captures deleted; two synthetic
-      files retained locally (`0600`, outside the repo) with checksums in the report.
-
-## Remaining — needs a decision, not more code
-
-1. **Upstream availability is the open blocker.** The correction model has two endpoints
-   and both intermittently return `504` (~8.5 s) for a request that otherwise answers
-   fully. Options, in preference order:
-   a. a second provider model for correction (routing, not only fallback), decided with
-      the disclosure policy in mind;
-   b. bounded retry of a `5xx` **within the already-granted budget** (not a new timeout
-      increase — that was measured and does not address a server-side 504);
-   c. accept withholding under provider saturation and surface it as retryable (partly
-      done already via `provider_rate_limited`).
-   Any option needs a live run to prove, and there is **no reserved run left**.
-2. **A fresh live-test allowance is required** for the 66-credit multi-file run that was
-   authorized but never reached (runs 1–3 all failed before multi-file delivery was in
-   scope), plus verification of whichever option above is chosen.
-3. **Never yet exercised on the live path:** an approved result, the receipt, the
-   displayed commentary, and the actual PDF/DOCX bytes. Nothing about those is proven.
-
-## Verification
-
-```bash
-cd Imagination_Resume_Module
-../.venv/bin/python -m pytest -o addopts="" -q          # 727 passed, 3 skipped
-PYTHONPATH=. python tools/live_capture_preflight.py    # 0 ready / 2 not ready / 3 disabled
-
-# Replay a retained capture with no network:
-CORRECTION_PROVIDER_DISCLOSURE=1 ../.venv/bin/python -c \
-  "import live_capture; r,p,s = live_capture.replay('<path>.json'); print(r.status, r.reason)"
-```
-
-## Guardrails held
-
-No force-push; fast-forward pushes only. `secure_storage.json.encrypted` untouched. No
-document, draft, prompt or model text in ordinary logs or in Git. The publication gate
-was never bypassed — every run withheld rather than deliver unverified content, and the
-PDF/DOCX controls stayed disabled on the withheld result, which is correct.
+A capture is evidence about a revision. Its original diagnosis is read from its own
+`review`/`timing` fields (`live_capture.recorded_stopping_point`), never recomputed from
+current code — recomputing would rewrite the history that made the defect findable.
