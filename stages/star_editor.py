@@ -13,6 +13,7 @@ import re
 import logging
 from typing import Dict, Any, List, Optional
 from pipeline_config import OR_SLUG_STAR_EDITOR, TEMPERATURES, TIMEOUTS, contains_hallucination
+import source_preservation
 
 # Metric surfaces checked for source support (R-3). Value in group 1, unit in
 # group 2 where a unit exists. Applied to the WHOLE document, not just bullet
@@ -232,6 +233,34 @@ class StarEditor:
                 skills=skills, projects=projects,
                 original_resume_text=original_resume_text
             )
+
+            # DETERMINISTIC SOURCE PRESERVATION.
+            #
+            # Everything that must hold on EVERY run belongs here rather than in a
+            # prompt: the writer is a model and will keep losing a qualifier, dropping a
+            # degree field or appending a proficiency list. Each of those burnishes the
+            # resume while quietly misrepresenting the candidate, and each has cost a
+            # paid submission to discover.
+            #
+            # This runs after section assembly (so it sees the final document) and before
+            # metrics validation (so the validator judges the text that will actually be
+            # published). It only ever substitutes source wording, never composes prose.
+            if original_resume_text:
+                try:
+                    preserved, preservation_changes = source_preservation.preserve_source_facts(
+                        result.get("final_markdown", ""), original_resume_text)
+                except Exception:
+                    # Preservation is a safety net, not a load-bearing stage: a failure
+                    # must not lose an otherwise usable draft. The gate still applies.
+                    logger.error("[STAR_EDITOR] Source preservation failed")
+                    preserved, preservation_changes = result.get("final_markdown", ""), []
+                if preservation_changes:
+                    logger.info("[STAR_EDITOR] Preserved source facts: %s",
+                                "; ".join(preservation_changes))
+                    result["final_markdown"] = preserved
+                    result["source_preservation"] = list(preservation_changes)
+                    result["final_plain_text"] = re.sub(
+                        r"\*\*|\*|##", "", preserved)
 
             # Verify the final document, including any appended sections.
             result = self._validate_metrics_against_input(result, original_resume_text=original_resume_text)
