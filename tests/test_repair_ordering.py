@@ -274,3 +274,59 @@ def test_repair_request_names_the_flagged_claims(name):
     carried = {cid.split(":", 1)[0] for cid in payload["flagged_claim_ids"]}
     assert carried == flagged_lines, (
         "the repair must target the flagged lines, not an arbitrary subset")
+
+
+def test_recovery_plus_one_repair_stops_without_colliding_with_the_budget():
+    """After a recovery re-review, a settled draft reports the real reason.
+
+    Measured on delivery run 8: the engine spent inventory, review, recovery review,
+    repair, re-review, repair = 6 provider calls, then asked for a seventh (the
+    re-review of the second repair). The adapter's ``REPAIR_PATH_CALLS`` guard refused
+    it, so ``correct()`` reported ``provider_error`` for a decision it had already
+    reached — all six calls had returned HTTP 200, and the withhold was ours.
+
+    A second repair pass costs two calls (repair plus the re-review that must follow it).
+    When the recovery re-review has already been spent, that pair cannot be funded, so the
+    engine stops and names ``unresolved_claims``.
+
+    Driven from the run-8 recording itself. That is the only honest way to assert this
+    sequence: an invented script kept reaching a different stop (missing facts, no-op
+    repair) and would have proved nothing about the real collision.
+    """
+    import asyncio
+
+    run8 = Path("/home/skystarved/Render_Dockers/.live-run-2026-11-02/captures/"
+                "run8/7f1cc601-990c-4fdb-a2aa-0665c8cb7a0f.json")
+    if not run8.exists():
+        pytest.skip("run-8 capture is not present")
+
+    import live_capture
+    from source_correction import SourceDocument, correct
+
+    data = live_capture.load(str(run8))
+    session = live_capture.ReplaySession(data)
+
+    import correction_provider
+    from correction_provider import CorrectionProvider
+
+    import os
+    previous = os.environ.get(correction_provider.DISCLOSURE_SETTING)
+    os.environ[correction_provider.DISCLOSURE_SETTING] = "1"
+    try:
+        provider = CorrectionProvider("no-network", session)
+        sources = tuple(SourceDocument(item["source_id"], item["text"])
+                        for item in data["sources"])
+        result = asyncio.run(correct(data["draft"], sources, provider,
+                                     timeout_seconds=120))
+    finally:
+        if previous is None:
+            os.environ.pop(correction_provider.DISCLOSURE_SETTING, None)
+        else:
+            os.environ[correction_provider.DISCLOSURE_SETTING] = previous
+
+    assert result.status == "withheld"
+    assert result.reason != "provider_error", (
+        "a budget collision must not be reported as a provider failure")
+    assert result.reason == "unresolved_claims", result.reason
+    # Six calls are permitted; the engine must not ask for a seventh.
+    assert session.position <= 6, session.position

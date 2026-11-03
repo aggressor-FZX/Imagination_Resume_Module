@@ -1289,6 +1289,23 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     restorations)
             if repairs == 2:
                 return blocked("unresolved_claims")
+            # A second repair pass costs TWO provider calls (repair + the complete
+            # re-review that must follow it). When the recovery re-review has already
+            # been spent, the remaining budget cannot fund that pair, and asking anyway
+            # turns a legitimate phase into ``provider_error``: the adapter's budget
+            # guard rejects the request before it reaches the wire, so the operator sees
+            # a transport-sounding failure for what is really a settled decision.
+            #
+            # Measured, not assumed. Delivery run 8 spent: inventory, review, recovery
+            # review, repair, re-review, repair = 6 calls, and the engine then asked for
+            # the seventh (a re-review) which the adapter's REPAIR_PATH_CALLS guard
+            # refused. All six provider calls returned 200; the withhold was ours.
+            #
+            # So when recovery has been used and only one repair pass has happened, the
+            # engine stops here and names the unresolved claims. That is the same verdict
+            # the budget would have produced, reported as the decision it is.
+            if recovery.get("recovered") and repairs >= 1:
+                return blocked("unresolved_claims")
             current_phase = "repair"
             remaining = deadline - loop.time()
             if remaining <= 0:

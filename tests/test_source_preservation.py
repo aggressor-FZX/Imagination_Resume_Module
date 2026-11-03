@@ -13,6 +13,7 @@ import pytest
 
 import live_capture
 import source_preservation as sp
+from source_preservation import _stem
 from tests.fixtures.fidelity import expected_facts as facts
 
 RUN7 = "/home/skystarved/Render_Dockers/.live-run-2026-11-02/captures/" \
@@ -22,6 +23,20 @@ requires_capture = pytest.mark.skipif(
     not __import__("pathlib").Path(RUN7).exists(), reason="run-7 capture absent")
 
 SOURCE = facts.SOURCE_TEXT
+
+
+
+RUN8 = ("/home/skystarved/Render_Dockers/.live-run-2026-11-02/captures/"
+        "run8/7f1cc601-990c-4fdb-a2aa-0665c8cb7a0f.json")
+
+
+def _run8_draft() -> str:
+    """The delivery run-8 writer output — the draft that invented the skills block."""
+    return live_capture.load(RUN8)["draft"]
+
+
+def _run8_source() -> str:
+    return live_capture.load(RUN8)["sources"][0]["text"]
 
 
 def _draft() -> str:
@@ -510,3 +525,103 @@ def test_preservation_leaves_a_correct_document_alone():
                "## Technical Skills\n")
     out, changes = sp.preserve_source_facts(already, SOURCE)
     assert out.strip() == already.strip(), changes
+
+
+# ---------------------------------------------------------------------------
+# 5. Skills block
+# ---------------------------------------------------------------------------
+
+# Phrases from the delivery run-8 draft that are NOT in the source, and the ordinary
+# English reason each fails. Recorded because the judgement is semantic, and writing it
+# down is what stops the rule from being a word-list.
+RUN8_UNSUPPORTED_SKILL_TERMS = {
+    "apprentice crew": (
+        "every word occurs in the source ('Trained 6 apprentices', a 'crew' is never "
+        "mentioned). Training apprentices does not imply supervising a crew."),
+    "licensed journeyman electrician": (
+        "'licence' and 'journeyman electrician' both appear, but not as a claimed rank."),
+    "inspection coordination": (
+        "'inspection' and 'coordination' appear separately; coordinating inspections is "
+        "an activity the source never states."),
+    "electrical systems installation": (
+        "'installation' appears as a verb form of 'Installed'; as a skill it is an "
+        "activity, not a listed skill."),
+    "commercial construction": (
+        "the phrase is in the job ad, not the candidate's record."),
+}
+
+
+@requires_capture
+def test_run8_invented_skills_are_removed_and_source_skills_kept():
+    """The skills block from delivery run 8 is replaced by the source's own list.
+
+    Before: a categorised block inventing ``Crew: apprentice crew, licensed journeyman
+    electrician`` and ``Inspection: inspection coordination``.
+    After:  the source's two skill bullets, verbatim.
+    """
+    out, changes = sp.preserve_source_facts(_run8_draft(), _run8_source())
+
+    assert "replaced an unsupported skills block" in " ".join(changes)
+
+    section = sp._find_section(sp._split_sections(out), "technical skills")
+    body = "\n".join(section["lines"])
+
+    for invented in RUN8_UNSUPPORTED_SKILL_TERMS:
+        assert invented not in body, f"invented skill survived: {invented}"
+    # Invented category headings are claims too.
+    for label in ("**Crew:**", "**Inspection:**"):
+        assert label not in body, label
+
+    for sourced in ("Commercial electrical systems, conduit bending, panel labeling",
+                    "NFPA 70E, lockout/tagout, inspection checklists"):
+        assert sourced in body, f"source skill lost: {sourced}"
+
+
+@requires_capture
+def test_supervision_is_not_inferred_from_training_apprentices():
+    """``supervision`` must not appear unless the source says it.
+
+    The brief's rule, stated as an assertion: training apprentices is not supervision.
+    The source has no "supervis*" token outside "supervised field work" (which qualifies
+    hours, not people), so no skills term may assert supervision of anyone.
+    """
+    source = _run8_source()
+    out, _ = sp.preserve_source_facts(_run8_draft(), source)
+
+    section = sp._find_section(sp._split_sections(out), "technical skills")
+    body = " ".join(section["lines"]).lower()
+    assert "supervision" not in body
+    assert "supervising" not in body
+    assert "apprentice crew" not in body
+
+
+@requires_capture
+def test_installation_and_maintenance_are_supported_by_the_source_verbs():
+    """``installation``/``maintenance`` are NOT inventions: the source says them.
+
+    The brief's other half. The source's first Cascade bullet is "Installed and
+    maintained commercial electrical systems", so a skills term built from those verbs is
+    supported and must survive. A rule that stripped them would be over-fitting to the
+    other invented terms on the same line.
+    """
+    source = _run8_source()
+    tokens = [_stem(w) for w in
+              __import__("re").findall(r"[a-z0-9][a-z0-9/\.\-]*", source.lower())]
+
+    assert sp._phrase_in_source("installation", tokens)
+    assert sp._phrase_in_source("maintenance", tokens)
+    # And the unsupported ranks on the same invented line are still rejected.
+    assert not sp._phrase_in_source("apprentice crew", tokens)
+    assert not sp._phrase_in_source("licensed journeyman electrician", tokens)
+
+
+@requires_capture
+def test_a_fully_sourced_skills_block_is_left_alone():
+    """No change when every term is in the source: the rule is not a rewrite."""
+    source = _run8_source()
+    markdown = ("## Technical Skills\n"
+                "- Commercial electrical systems, conduit bending, panel labeling\n"
+                "- NFPA 70E, lockout/tagout, inspection checklists\n")
+    out, changes = sp.preserve_source_facts(markdown, source)
+    assert not any("skills" in c for c in changes), changes
+    assert "Commercial electrical systems, conduit bending, panel labeling" in out

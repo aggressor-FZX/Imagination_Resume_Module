@@ -498,6 +498,104 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 5. Skills block
+# ---------------------------------------------------------------------------
+
+def source_skills_lines(source_text: str) -> list[str]:
+    """The candidate's own skill bullets, verbatim, from the source's Skills section."""
+    section = _find_section(_split_sections(source_text), "skills", "technical skills")
+    if section is None:
+        return []
+    return [_strip_markers(line).strip()
+            for line in section["lines"] if _strip_markers(line).strip()]
+
+
+def _phrase_in_source(term: str, source_tokens: list[str]) -> bool:
+    """True when ``term`` appears in the source as contiguous (stemmed) tokens.
+
+    Contiguity is the whole point, and word-level membership was measurably too weak:
+    every word of "apprentice crew" and "licensed journeyman electrician" is present
+    somewhere in this source, yet neither phrase is stated, and both are invented ranks.
+    Requiring the phrase to appear in order rejects them while keeping every genuinely
+    sourced term.
+    """
+    tokens = [_stem(w) for w in re.findall(r"[a-z0-9][a-z0-9/\.\-]*", term.lower())]
+    tokens = [t for t in tokens if len(t) > 1]
+    if not tokens:
+        return True
+    size = len(tokens)
+    for index in range(len(source_tokens) - size + 1):
+        if source_tokens[index:index + size] == tokens:
+            return True
+    return False
+
+
+def preserve_skills_block(markdown: str, source_text: str) -> tuple[str, list[str]]:
+    """Replace a skills block the source does not support with the source's own list.
+
+    Delivery run 8 produced a categorised skills block that invented ranks and
+    activities: ``Crew: apprentice crew, licensed journeyman electrician`` and
+    ``Inspection: inspection coordination``. The source lists six skills and no
+    categories. Note the ordinary English judgement the brief asks for and this rule
+    encodes structurally rather than semantically: every word of "apprentice crew" and
+    "licensed journeyman electrician" DOES occur in the source ("Trained 6 apprentices",
+    "journeyman electrician"), so a word-level check would keep them. What is missing is
+    the phrase. Supervision is likewise not inferable from training apprentices, so no
+    term may assert it.
+
+    The replacement is the source's own bullets, verbatim and ungrouped. Grouping is the
+    writer's stylistic choice; it is dropped here only because the invented group
+    HEADINGS ("Crew:", "Inspection:") are themselves claims about how the candidate
+    organises their skills.
+
+    Nothing happens when every term in the block is sourced, so a faithful skills section
+    is untouched.
+    """
+    source_lines = source_skills_lines(source_text)
+    if not source_lines:
+        return markdown, []
+
+    sections = _split_sections(markdown)
+    section = _find_section(sections, "technical skills", "skills")
+    if section is None:
+        return markdown, []
+
+    body = [line for line in section["lines"] if line.strip()]
+    if not body:
+        return markdown, []
+
+    source_tokens = [_stem(w) for w in
+                     re.findall(r"[a-z0-9][a-z0-9/\.\-]*", source_text.lower())]
+
+    def term_supported(raw: str) -> bool:
+        term = re.sub(r"^\s*[-*]\s*", "", raw.strip())
+        # A category heading ("**Crew:**") is itself a claim; only its label matters.
+        term = term.replace("**", "").rstrip(":").strip()
+        return _phrase_in_source(term, source_tokens)
+
+    unsupported = [line for line in body
+                   if not _terms_all_supported(line, source_tokens)]
+    if not unsupported:
+        return markdown, []
+
+    # The source lines already carry their list marker; adding another produced
+    # "- - Commercial electrical systems...".
+    section["lines"] = [""] + [
+        line if line.lstrip().startswith("-") else f"- {line}"
+        for line in source_lines] + [""]
+    return _render_sections(sections), ["replaced an unsupported skills block with the source's own skills"]
+
+
+def _terms_all_supported(line: str, source_tokens: list[str]) -> bool:
+    """True when EVERY comma-separated term in a skills line appears in the source."""
+    text = line.replace("**", "").strip()
+    if ":" in text:
+        text = text.split(":", 1)[1]
+    terms = [t.strip() for t in text.split(",") if t.strip()]
+    return bool(terms) and all(_phrase_in_source(term, source_tokens) for term in terms)
+
+
 # 5. Required headings
 # ---------------------------------------------------------------------------
 
@@ -606,6 +704,7 @@ def preserve_source_facts(markdown: str, source_text: str) -> tuple[str, list[st
     for step in (preserve_education_record,
                  preserve_source_summary,
                  preserve_quantified_qualifiers,
+                 preserve_skills_block,
                  ensure_required_headings):
         markdown, step_changes = step(markdown, source_text)
         changes.extend(step_changes)

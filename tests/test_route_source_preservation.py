@@ -104,11 +104,12 @@ LINE_DECISIONS: dict[str, tuple[int, ...]] = {
     "*Associate of Applied Science, Electrical Systems Technology | 2016*": (15,),
     "- Washington Journey Level Electrician License": (17,),
     "- NFPA 70E Arc Flash Safety": (18,),
-    # The combined skills line restates BOTH source skill bullets. This is the case that
-    # made a single-best-match reviewer wrong: it cited one and left the other uncited,
-    # the adapter then emitted `uncertain` for the uncited item, and three
-    # genuinely-represented items withheld the whole draft.
-    "**Electrical:**": (20, 21),
+    # The skills block. Preservation now replaces an unsupported skills block with the
+    # source's own two bullets, so each line rests on exactly one segment — and the
+    # invented categorised block from the writer (`**Electrical:** installation,
+    # maintenance, ..., apprentice supervision, ...`) is gone before the reviewer sees it.
+    "- Commercial electrical systems, conduit bending, panel labeling": (20,),
+    "- NFPA 70E, lockout/tagout, inspection checklists": (21,),
 }
 
 
@@ -774,7 +775,13 @@ def test_reviewer_used_the_authored_decisions_it_matched(preserved):
     assert "Journeyman electrician with 8+ years" in matched
     assert "Completed 8,000 hours of supervised field work" in matched
     assert "*Associate of Applied Science, Electrical Systems Technology | 2016*" in matched
-    assert "**Electrical:**" in matched
+    # The invented categorised skills block is replaced by preservation BEFORE the
+    # reviewer sees the draft, so the reviewer's table covers the source's own two skill
+    # lines. The old assertion looked for `**Electrical:**`, which no longer reaches it.
+    assert "- Commercial electrical systems, conduit bending, panel labeling" in matched
+    assert "- NFPA 70E, lockout/tagout, inspection checklists" in matched
+    assert "**Electrical:**" not in matched, (
+        "the invented skills block should have been removed before review")
 
 
 def test_engine_approved_the_preserved_draft(preserved):
