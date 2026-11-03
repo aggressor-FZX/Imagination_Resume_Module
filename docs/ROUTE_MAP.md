@@ -154,12 +154,61 @@ The fix (2026-11-02) reads EVERY matching section for the source readers, and ad
 "a source record the draft never mentions" to the education trigger. Tests:
 `tests/test_source_preservation.py` section 6.
 
-Still **genuinely open** for two documents, and not addressed by that fix:
+Still **genuinely open** for two documents after both fixes:
 
-- whether the writer's merged summary is acceptable prose (preservation now stops
-  deleting it; it does not improve it);
 - cross-document transplant of a quantified bullet between two DIFFERENT employers whose
   records share a figure and a qualifier (employer scoping covers the same-employer case
   only);
 - end-to-end behaviour with a real model on two documents. The multi-document tests are
   scripted; no paid two-file run has been captured.
+
+## Correction, 2026-11-03: supporting a cross-document claim is not invalid
+
+The merged-summary behaviour recorded above was a **bug**, and the framing was wrong:
+synthesising supported facts from several cited documents is legitimate output, not a
+defect to tolerate.
+
+What went wrong, measured. `_validate_review` checks a draft span for content the sources
+never state. Its own comment said a span "may legitimately restate several items at once",
+but the call passed **one** document — `[sources[item["source_id"]]]` — while the claim
+could cite several. Merging two faithful summaries therefore reported document-1's own word
+"Facilities" as *introduced*, downgraded the representation to `uncertain`, and withheld an
+entirely source-backed resume with `source_completeness_uncertain`. Two bullet points
+approved; the same sentence joined by a space did not.
+
+Fixed (2026-11-03) by judging a span against **every document the claim cites**:
+
+```python
+cited_documents = [sources[citation["source_id"]]
+                   for citation in claim["citations"]
+                   if citation["source_id"] in sources]
+introduced = _introduces_beyond(span, cited_documents or [sources[item["source_id"]]],
+                                item["quote"])
+```
+
+This is not a loosening of the gate:
+
+- a word in **neither** cited document is still introduced, which is what catches an
+  appended unsupported qualification;
+- a **figure** the cited documents do not contain is still introduced, which is what
+  catches a re-attributed number;
+- a representation must still be carried by a citation whose offsets **cover** the item,
+  so a fact cannot be claimed from a document that does not contain it;
+- `_correct_unique_attribution` still refuses a source record's label under another
+  record's name.
+
+Evidence — `tests/test_route_two_documents.py`:
+
+| Test | Pins |
+|---|---|
+| `test_supported_summary_approves_whether_the_clauses_are_split_by_a_newline_or_a_space` | PAIRED: the same supported summary approves as two lines AND as one |
+| `test_an_unsupported_addition_or_a_moved_fact_is_still_withheld` (7 cases) | appended unbacked tools, transplanted employer / role / dates / achievement / qualification / figure — all still withheld |
+| `test_preservation_repairs_a_summary_append_before_the_gate_sees_it` | the paired explanation for why a *summary* append publishes: preservation removes it, and the published document omits it |
+| `test_the_approved_two_document_payload_renders_both_records` | approved payload → real `/resume/export` → real LaTeX + python-docx → both records read back from the files |
+| `test_export_refuses_altered_content_under_the_existing_receipt_contract` (4 alterations) | the same receipt does NOT authorise appended claims, a changed employer, a moved date, or a dropped record |
+| `test_export_refuses_the_approved_content_presented_under_another_owner` | the receipt does not travel to another account |
+
+Mutation-checked in both directions: removing the addition check makes three controls
+fail; removing the provenance fix makes the paired approval fail; disabling
+`verify_receipt` makes all five export tests fail. No pipeline was added and the
+publication gate was not weakened.

@@ -689,9 +689,30 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 # and the repair path exists for exactly that. Marking the *claim*
                 # unsupported (below) routes it there; marking the representation
                 # uncertain here would skip repair and withhold immediately.
+                #
+                # The allowed vocabulary is every document THIS CLAIM CITES, not only
+                # the one the item came from. The comment above already said a span may
+                # restate several items at once, but the code passed a single document,
+                # so a supported cross-document synthesis was reported as introducing
+                # the other document's own wording: merging the two summaries produced
+                # "Facilities" (document-1's word) "introduced" into a claim that cited
+                # both documents, and the run was withheld. Synthesising supported facts
+                # from several cited documents is legitimate, so the evidence used to
+                # judge a span is the evidence the reviewer named for it.
+                #
+                # This is not a weakening. A word in NEITHER cited document is still
+                # introduced, which is what catches an appended unsupported
+                # qualification ("Agile, Scrum, Gantt"). Moving an employer or a date
+                # between records is still caught, by two checks that do not depend on
+                # this list: the representation must be carried by a citation whose
+                # offsets actually COVER the item, and `_correct_unique_attribution`
+                # refuses a label that a source record assigns to someone else.
+                cited_documents = [sources[citation["source_id"]]
+                                   for citation in claim["citations"]
+                                   if citation["source_id"] in sources]
                 introduced = _introduces_beyond(
                     by_line[line_id]["text"][start:end],
-                    [sources[item["source_id"]]],
+                    cited_documents or [sources[item["source_id"]]],
                     item["quote"])
                 if not introduced:
                     continue

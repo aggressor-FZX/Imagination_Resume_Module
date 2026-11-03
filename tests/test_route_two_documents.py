@@ -35,7 +35,13 @@ Labelled **[route-two-doc]**.
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import socket
+import subprocess
+import tempfile
+import zipfile
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -90,13 +96,11 @@ SOURCE_DOCUMENTS = [
 # Both records present and correctly separated: the draft a competent writer should
 # produce. Preservation must not damage it.
 #
-# The two summaries are on SEPARATE lines, one per source document, because the route's
-# provenance check (`source_correction._introduces_beyond`) compares a draft span against
-# the ONE source document each inventory item came from. A single summary line merging
-# both documents is therefore not substantiable from either document alone, and the route
-# withholds it with `source_completeness_uncertain`. That is the correct behaviour for a
-# line that mixes two records, and
-# `test_a_merged_two_document_summary_is_withheld_not_silently_truncated` asserts it.
+# The two summaries are on SEPARATE lines here, one per source document. That is a
+# convenience, not a requirement: synthesising supported facts from more than one cited
+# document is legitimate, and the same summary merged onto ONE line must approve too.
+# Both spellings are asserted in the paired tests below
+# (`test_supported_summary_approves_whether_the_clauses_are_split_by_a_newline_or_a_space`).
 DRAFT_BOTH_RECORDS = """## Professional Summary
 Journeyman electrician with 8+ years of commercial electrical experience.
 Facilities maintenance technician focused on preventive maintenance.
@@ -130,6 +134,23 @@ Facilities maintenance technician focused on preventive maintenance.
 def _fold(text: str) -> str:
     """Comparable form: no provenance marker, whitespace collapsed, casefolded."""
     return " ".join(text.replace(live_capture.SYNTHETIC_MARKER, "").split()).casefold()
+
+
+def _word_overlap(quote: str, line: str) -> float:
+    """Share of the segment's significant words that appear in the line.
+
+    Mirrors the retrieval heuristic the real adapter uses (``correction_protocol``), so
+    this reviewer accepts the same kind of paraphrase a real model would be shown. It is
+    deliberately generous: the point of the scripted reviewer is to be *lenient* about
+    support, so that the engine's own addition check is what has to catch an appended,
+    unbacked qualification. A pickier reviewer would hide that check behind a coverage
+    failure and the negative control would prove the wrong thing.
+    """
+    words = [word for word in _fold(quote).split() if len(word) > 2]
+    if not words:
+        return 0.0
+    present = set(_fold(line).split())
+    return sum(word in present for word in words) / len(words)
 
 
 class TwoDocumentReviewer:
@@ -203,7 +224,9 @@ class TwoDocumentReviewer:
                 quote = _fold(segment["text"].lstrip("- ").replace("**", ""))
                 if not quote or quote.startswith("#"):
                     continue
-                if quote in bare or bare in quote:
+                contiguously_present = quote in bare
+                mostly_present = _word_overlap(quote, bare) >= 0.6
+                if contiguously_present or mostly_present or bare in quote:
                     matched.append(segment["index"])
             if matched:
                 supported.append(line_id)
@@ -211,6 +234,14 @@ class TwoDocumentReviewer:
                 cited.update(matched)
             else:
                 unsupported.append(line_id)
+
+        missing = [segment["index"] for segment in wire["segments"]
+                   if segment["text"].strip()
+                   and not segment["text"].strip().startswith("#")
+                   and segment["index"] not in cited]
+        return {"supported": supported, "unsupported": unsupported, "uncertain": [],
+                "structural": structural, "evidence": evidence,
+                "represented": sorted(cited), "missing": missing}
 
         missing = [segment["index"] for segment in wire["segments"]
                    if segment["text"].strip()
@@ -484,9 +515,11 @@ def test_the_receipt_binds_the_two_document_markdown(two_document_run):
 
 
 # ---------------------------------------------------------------------------
-# The limitation this measurement found, stated rather than hidden
+# Cross-document synthesis: supported is supported, however it is laid out
 # ---------------------------------------------------------------------------
 
+# The same two source summaries, merged onto ONE line. Nothing is added and nothing moves
+# between records; this is a plausible writer output and must approve.
 MERGED_SUMMARY_DRAFT = DRAFT_BOTH_RECORDS.replace(
     "Journeyman electrician with 8+ years of commercial electrical experience.\n"
     "Facilities maintenance technician focused on preventive maintenance.",
@@ -494,29 +527,319 @@ MERGED_SUMMARY_DRAFT = DRAFT_BOTH_RECORDS.replace(
     "Facilities maintenance technician focused on preventive maintenance.")
 
 
-def test_a_merged_two_document_summary_is_withheld_not_silently_truncated(
+def test_supported_summary_approves_whether_the_clauses_are_split_by_a_newline_or_a_space(
         monkeypatch, tmp_path):
-    """[route-two-doc] One summary line mixing both documents is withheld, not cut.
+    """[route-two-doc] Paired: the SAME supported summary approves in both layouts.
 
-    The provenance check compares a draft span against the ONE source document each
-    inventory item came from. A line that merges document-0's summary with document-1's
-    is therefore not substantiable from either alone, and the route withholds with
-    ``source_completeness_uncertain``.
+    Merging two supported clauses onto one line is synthesis, not fabrication. The
+    provenance check must therefore judge the span against the documents the reviewer
+    CITED for it, not only the document the particular source item came from.
 
-    This is the correct outcome and the important one to pin: the alternative observed
-    before the preservation fix was that the summary rule called document-1's sentence an
-    "appended proficiency list" and TRUNCATED it — a silent deletion of a real source
-    fact. Withholding is visible; truncation is not.
+    Measured before the fix: with one document supplied to ``_introduces_beyond``,
+    document-1's own word "Facilities" was reported as *introduced* into a claim the
+    reviewer had cited both documents for, and the merged — entirely faithful — summary
+    was withheld with ``source_completeness_uncertain``. Two bullet points would have
+    approved and the identical sentence joined by a space would not, which is a property
+    of the layout rather than of the content.
 
-    Recorded as a limitation, not a passing feature: a writer that merges two summaries
-    into one line will have that draft withheld rather than approved. Fixing that needs a
-    line that cites two documents, which the current per-document provenance check cannot
-    express.
+    The pair is the point: asserting only the merged case would prove the check got
+    looser; asserting only the split case would prove nothing changed.
     """
-    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, MERGED_SUMMARY_DRAFT)
+    newline_run = _run_route(monkeypatch, tmp_path, DRAFT_BOTH_RECORDS)[0]
+    assert newline_run.get("correction_status") == "approved", (
+        "the newline layout must approve", newline_run.get("correction_reason"),
+        newline_run.get("review_reasons"))
 
-    assert body.get("correction_status") == "withheld"
-    assert "source_completeness_uncertain" in (body.get("review_reasons") or []), (
-        body.get("review_reasons"))
-    # And crucially: neither summary was deleted, because nothing was published at all.
+    merged_run = _run_route(monkeypatch, tmp_path, MERGED_SUMMARY_DRAFT)[0]
+    assert merged_run.get("correction_status") == "approved", (
+        "the space layout expresses the same supported facts and must also approve",
+        merged_run.get("correction_reason"), merged_run.get("review_reasons"))
+
+    # And the approved text carries both clauses.
+    for run in (newline_run, merged_run):
+        markdown = run["final_written_section_markdown"]
+        assert "Journeyman electrician with 8+ years" in markdown
+        assert "Facilities maintenance technician" in markdown
+
+
+# ---------------------------------------------------------------------------
+# Negative controls: attribution survives the synthesis allowance
+#
+# Loosening the evidence set from "one document" to "the documents the claim cites" is
+# only safe if an unsupported addition and a moved fact still fail. Each control below
+# differs from an APPROVING draft by exactly one line, so the defect is the only variable.
+#
+# Why the appended qualification is on an EXPERIENCE BULLET, not in the summary:
+# preservation legitimately REPAIRS a summary that appends an unbacked proficiency list
+# (`preserve_source_summary`), so a summary append is caught before review and the route
+# approves the corrected document — which is the correct outcome, not a miss. A bullet has
+# no such repair, so the gate itself has to notice, which is what this control is for.
+# `test_preservation_repairs_a_summary_append_before_the_gate_sees_it` records the other
+# half of that pair.
+# ---------------------------------------------------------------------------
+
+CASES_WITHHELD = {
+    # A supported sentence with an unsupported qualification appended. The scripted
+    # reviewer matches the line as a whole — most of the line IS the source bullet — so
+    # the engine, not the reviewer, has to notice that "AutoCAD" and "SCADA" appear in
+    # neither document.
+    "appended_unbacked_tools": DRAFT_BOTH_RECORDS.replace(
+        "- Installed commercial electrical systems across 40+ job sites.",
+        "- Installed commercial electrical systems across 40+ job sites using "
+        "AutoCAD and SCADA."),
+    # An employer's record under another employer's name.
+    "transplanted_employer_label": DRAFT_BOTH_RECORDS.replace(
+        "**Cascade Power Solutions, LLC** -- Example City, WA",
+        "**Bluegate Property Services** -- Example City, WA"),
+    # A role title moved to the other employer's record.
+    "transplanted_role_title": DRAFT_BOTH_RECORDS.replace(
+        "*Journeyman Electrician | 03/2020 - Present*",
+        "*Facilities Maintenance Technician | 03/2020 - Present*"),
+    # Dates moved from one employer to another.
+    "transplanted_dates": DRAFT_BOTH_RECORDS.replace(
+        "*Journeyman Electrician | 03/2020 - Present*",
+        "*Journeyman Electrician | 01/2014 - 05/2016*"),
+    # One employer's accomplishment under another employer's heading. This is a DUPLICATE
+    # line (both bullets become the same text), which is why the guard below counts lines
+    # rather than set membership.
+    "transplanted_achievement": DRAFT_BOTH_RECORDS.replace(
+        "- Installed commercial electrical systems across 40+ job sites.",
+        "- Maintained electrical distribution and HVAC controls for 12 commercial "
+        "buildings."),
+    # Another document's skill grafted onto this document's line.
+    "transplanted_qualification": DRAFT_BOTH_RECORDS.replace(
+        "- Commercial electrical systems, panel labeling",
+        "- Commercial electrical systems, panel labeling, HVAC controls"),
+    # A real figure re-attributed. Both numbers are in the sources, so only the record it
+    # is attached to is wrong.
+    "transplanted_figure": DRAFT_BOTH_RECORDS.replace(
+        "- Installed commercial electrical systems across 40+ job sites.",
+        "- Installed commercial electrical systems across 12 commercial buildings."),
+}
+
+
+def test_the_controls_really_are_single_edits_from_an_approving_draft():
+    """[route-two-doc] Guard: every control differs from the baseline on exactly one line.
+
+    Counted by multiset, not by set membership. The achievement-transplant control
+    replaces one bullet with text that already exists as another bullet, so a set
+    difference reports ZERO changed lines — and this guard would then pass while asserting
+    nothing. Counting occurrences catches the duplication.
+
+    Without a guard like this, a control could fail for an unrelated reason (a dropped
+    record, a typo) and silently prove nothing about attribution.
+    """
+    from collections import Counter
+
+    baseline = Counter(DRAFT_BOTH_RECORDS.splitlines())
+    for name, draft in CASES_WITHHELD.items():
+        difference = baseline - Counter(draft.splitlines())
+        added = Counter(draft.splitlines()) - baseline
+        assert sum(difference.values()) == 1 and sum(added.values()) == 1, (
+            f"{name} is not a single-line edit: removed {dict(difference)}, "
+            f"added {dict(added)}")
+
+
+@pytest.mark.parametrize("case", sorted(CASES_WITHHELD))
+def test_an_unsupported_addition_or_a_moved_fact_is_still_withheld(
+        monkeypatch, tmp_path, case):
+    """[route-two-doc] Claim-level attribution survives the synthesis allowance.
+
+    Every case here is one line away from a draft that APPROVES in the test above, so a
+    pass here means the defect itself is what was rejected.
+
+    Note what is NOT asserted: the specific reason code. A transplant can be caught by
+    the coverage check (`missing`), by the provenance check (downgraded to `uncertain`),
+    or by a repair that then fails re-review (`malformed_output`). Which mechanism fires
+    is an implementation detail; what matters is that the draft is **not approved** and
+    nothing is published.
+    """
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, CASES_WITHHELD[case])
+
+    assert body.get("correction_status") == "withheld", (
+        f"{case} was approved", body.get("correction_reason"))
+    assert body.get("requires_review") is True
+    # Nothing is published: no receipt, no export payload, no document.
     assert body.get("final_written_section_markdown") is None
+    assert body.get("publication_receipt") is None
+    assert body.get("approved_export_payload") is None
+
+
+def test_preservation_repairs_a_summary_append_before_the_gate_sees_it(
+        monkeypatch, tmp_path):
+    """[route-two-doc] Paired with the bullet control: a repaired defect may still publish.
+
+    Appending an unbacked qualification to the SUMMARY is repaired deterministically by
+    ``preserve_source_summary`` before the gate runs, so the route approves — the document
+    it publishes, though, does not contain the appended claim. That is a pass, and it must
+    not be confused with the gate failing to notice.
+
+    Asserted three ways so the distinction cannot be lost:
+
+    * the run is approved;
+    * the published document omits the appended qualification;
+    * the same append on a bullet — where no repair exists — IS withheld (the control
+      above). Together these pin that the difference is the repair, not the check.
+    """
+    draft = DRAFT_BOTH_RECORDS.replace(
+        "Journeyman electrician with 8+ years of commercial electrical experience.",
+        "Journeyman electrician with 8+ years of commercial electrical experience, "
+        "proficient in AutoCAD and SCADA.")
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, draft)
+
+    assert body.get("correction_status") == "approved", (
+        body.get("correction_reason"), body.get("review_reasons"))
+    markdown = body["final_written_section_markdown"]
+    assert "AutoCAD" not in markdown and "SCADA" not in markdown, (
+        "the appended qualification must not survive into the published document")
+    # The supported summary it was appended to is still there.
+    assert "Journeyman electrician with 8+ years" in markdown
+
+
+# ---------------------------------------------------------------------------
+# Export: the approved two-document payload really renders, and alteration is refused
+#
+# This closes the loop the acceptance target asks for: an approval is only worth anything
+# if the signed payload it produces survives the export endpoint unchanged, and if the
+# SAME endpoint refuses that payload once its content is altered.
+#
+# Both directions use the real `POST /resume/export`, the real receipt, and the real
+# LaTeX + python-docx renderers. Nothing here is mocked, and no PDF/DOCX bytes are
+# synthesised: the rendered text is read back from the produced files.
+# ---------------------------------------------------------------------------
+
+pdflatex = pytest.mark.skipif(shutil.which("pdflatex") is None,
+                              reason="no LaTeX toolchain on this machine")
+
+EXPORT_OWNER = "two-document-owner"
+
+
+def _export(client, body, *, markdown=None, receipt=None):
+    """POST the approved payload to the real export endpoint."""
+    payload = dict(body.get("approved_export_payload") or {})
+    payload["publication_receipt"] = receipt or body["publication_receipt"]
+    payload["final_written_section_markdown"] = (
+        body["final_written_section_markdown"] if markdown is None else markdown)
+    return client.post("/resume/export",
+                       headers={"X-Cogito-Owner-Id": EXPORT_OWNER,
+                                "X-API-Key": "offline"},
+                       json=payload)
+
+
+@pdflatex
+def test_the_approved_two_document_payload_renders_both_records(monkeypatch, tmp_path):
+    """[route-two-doc] Approved payload -> real export -> both documents' records on the page.
+
+    The PDF is read back with ``pdftotext`` and the DOCX through ``word/document.xml``,
+    so this asserts what a reader would see, not what the payload claims.
+    """
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, DRAFT_BOTH_RECORDS)
+    assert body.get("correction_status") == "approved"
+    assert body.get("approved_export_payload"), "an approval must carry an export payload"
+
+    with TestClient(app.app) as client:
+        response = _export(client, body)
+        assert response.status_code == 200, response.text[:400]
+        data = response.json()
+
+    assert data.get("pdf_base64") and data.get("docx_base64")
+
+    import base64
+    with tempfile.TemporaryDirectory() as directory:
+        pdf_file = Path(directory) / "out.pdf"
+        docx_file = Path(directory) / "out.docx"
+        pdf_file.write_bytes(base64.b64decode(data["pdf_base64"]))
+        docx_file.write_bytes(base64.b64decode(data["docx_base64"]))
+
+        pdf_text = subprocess.run(["pdftotext", "-layout", str(pdf_file), "-"],
+                                  capture_output=True, text=True).stdout
+        with zipfile.ZipFile(docx_file) as archive:
+            docx_text = re.sub(r"<[^>]+>", " ",
+                               archive.read("word/document.xml").decode())
+
+    for label, text in (("pdf", pdf_text), ("docx", docx_text)):
+        flat = " ".join(text.split())
+        # Both documents' employment and education records reached the page.
+        for value in ("Cascade Power Solutions", "Bluegate Property Services",
+                      "Example Technical College", "Example Community College",
+                      "Journeyman Electrician", "Facilities Maintenance Technician",
+                      "03/2020", "01/2014", "Electrical Systems Technology",
+                      "Building Systems Maintenance"):
+            assert value in flat, f"{label}: missing {value!r}"
+
+        # And no mixing survived the renderer.
+        cascade_at = flat.index("Cascade Power Solutions")
+        bluegate_at = flat.index("Bluegate Property Services")
+        assert cascade_at < bluegate_at
+        assert "Facilities Maintenance Technician" not in flat[cascade_at:bluegate_at]
+
+        assert "\u00e2\u0080" not in text, f"{label}: mojibake"
+
+
+@pdflatex
+@pytest.mark.parametrize("alteration", ["appended_claim", "changed_employer",
+                                       "moved_date", "dropped_record"])
+def test_export_refuses_altered_content_under_the_existing_receipt_contract(
+        monkeypatch, tmp_path, alteration):
+    """[route-two-doc] The same receipt does not authorise altered content.
+
+    One approved payload, four alterations, all of which change the document a reader
+    would see. The receipt binds the content fingerprint and the canonical render
+    structure, so each must be refused — and refused for a receipt reason, not by
+    crashing.
+
+    The approved export in the test above is the control: identical payload, identical
+    endpoint, identical receipt, unchanged content, 200.
+    """
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, DRAFT_BOTH_RECORDS)
+    assert body.get("correction_status") == "approved"
+    markdown = body["final_written_section_markdown"]
+
+    altered = {
+        # Content the sources never state.
+        "appended_claim": markdown + "\n- Certified in AutoCAD and SCADA.\n",
+        # A record under the wrong employer (two documents, one changed).
+        "changed_employer": markdown.replace("Bluegate Property Services",
+                                             "Cascade Power Solutions"),
+        # A date moved.
+        "moved_date": markdown.replace("01/2014", "03/2020"),
+        # A whole record deleted, so the document no longer covers both uploads.
+        "dropped_record": markdown.replace("Example Community College", ""),
+    }[alteration]
+    assert altered != markdown, f"{alteration} did not actually change the document"
+
+    with TestClient(app.app) as client:
+        response = _export(client, body, markdown=altered)
+
+    assert response.status_code == 409, (
+        f"{alteration} was exported; status {response.status_code}")
+    payload = response.json()
+    assert payload.get("error") == "publication_blocked"
+    assert payload.get("reasons"), "a refusal must name its reason"
+    # A refusal must not leak the document.
+    assert "pdf_base64" not in payload and "docx_base64" not in payload
+
+
+def test_export_refuses_the_approved_content_presented_under_another_owner(
+        monkeypatch, tmp_path):
+    """[route-two-doc] The receipt is bound to an owner, so it does not travel.
+
+    A second account cannot spend an approval minted for the first, even with the exact
+    approved bytes.
+    """
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, DRAFT_BOTH_RECORDS)
+    assert body.get("correction_status") == "approved"
+
+    payload = dict(body["approved_export_payload"])
+    payload["publication_receipt"] = body["publication_receipt"]
+    payload["final_written_section_markdown"] = body["final_written_section_markdown"]
+
+    with TestClient(app.app) as client:
+        response = client.post(
+            "/resume/export",
+            headers={"X-Cogito-Owner-Id": "someone-else", "X-API-Key": "offline"},
+            json=payload,
+        )
+
+    assert response.status_code == 409
+    assert response.json().get("error") == "publication_blocked"
