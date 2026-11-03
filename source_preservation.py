@@ -392,6 +392,14 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
     The repair restores the source's own two-line record. It never composes a new
     degree, field or date; every value comes from the parsed record. If the source does
     not state a record in a recognisable form, the draft is left untouched.
+
+    A MISSING section is restored, not skipped. Until this was fixed the rule returned
+    early when the draft had no Education heading at all, so
+    `ensure_required_headings` added an empty `## Education` afterwards and the
+    candidate's degrees were silently dropped. That is the exact asymmetry the summary
+    rule had: the section that is created first is filled, and the one that is created
+    last stays empty. Both branches now emit the same source-backed record through
+    ``_education_lines``.
     """
     records = source_education_records(source_text)
     if not records:
@@ -400,7 +408,23 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
     sections = _split_sections(markdown)
     section = _find_section(sections, "education", "academic background")
     if section is None:
-        return markdown, []
+        # Absent section. Every value inserted comes from the parsed source record, and
+        # the alternative is delivering a resume with no education at all while the
+        # reviewer correctly reports the degrees missing.
+        #
+        # Placement follows the promised section order so this rule does not fight
+        # ensure_required_headings: insert before the first section that must come
+        # after Education, else append.
+        position = len(sections)
+        for index, candidate in enumerate(sections):
+            canonical = (_HEADING_ALIASES.get(candidate["heading"].strip().lower())
+                         if candidate["heading"] else None)
+            if canonical in _SECTIONS_AFTER_EDUCATION:
+                position = index
+                break
+        sections.insert(position, {"heading": "Education", "level": 2,
+                                   "lines": _education_lines(records)})
+        return _render_sections(sections), ["restored the source's education record"]
 
     changes: list[str] = []
     body = section["lines"]
@@ -418,6 +442,17 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
             and not any(_bolds_a_concatenation(body, record) for record in records)):
         return markdown, []
 
+    section["lines"] = _education_lines(records)
+    changes.append("restored the source's education record (degree, field, institution, date)")
+    return _render_sections(sections), changes
+
+
+def _education_lines(records: list[dict]) -> list[str]:
+    """The source's education records rendered as section lines.
+
+    Shared by the replace branch and the insert branch so a restored section is
+    identical however it came to exist.
+    """
     rebuilt: list[str] = [""]
     for record in records:
         line = f"**{record['institution']}**"
@@ -426,9 +461,7 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
         rebuilt.append(line)
         rebuilt.append(f"*{record['detail_line']}*")
         rebuilt.append("")
-    section["lines"] = rebuilt
-    changes.append("restored the source's education record (degree, field, institution, date)")
-    return _render_sections(sections), changes
+    return rebuilt
 
 
 def _bolds_a_concatenation(body: list[str], record: dict) -> bool:
@@ -839,6 +872,11 @@ REQUIRED_HEADINGS = (
     "Certifications",
     "Technical Skills",
 )
+
+# Sections the product promises AFTER Education. Used to place a restored Education
+# section in the promised order rather than wherever the last rule happened to leave the
+# document.
+_SECTIONS_AFTER_EDUCATION = frozenset({"Certifications", "Technical Skills"})
 
 _HEADING_ALIASES = {
     "professional summary": "Professional Summary",

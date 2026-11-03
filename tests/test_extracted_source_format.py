@@ -252,14 +252,85 @@ def test_both_education_records_survive_without_any_emphasis_markers():
 def test_the_degree_field_is_restored_and_not_invented():
     """[extracted-format] The writer dropped "Electrical Systems Technology".
 
-    The rule must put the source's own field back rather than leaving a bare award.
+    The rule must put the source's own field back onto the SAME line as its award. An
+    earlier version of this test accepted the field appearing anywhere and the year
+    appearing anywhere, which would have passed if the field were attached to the wrong
+    degree. The pairwise assertion below is the one that actually holds the record
+    together.
     """
     out, _ = _preserved()
+    pairs = {
+        "Spokane Falls Institute of Technology":
+            ("Associate of Applied Science", "Electrical Systems Technology", "2015"),
+        "Inland Northwest Safety Academy":
+            ("Certificate", "NFPA 70E Arc Flash Standards", "2021"),
+    }
+    lines = out.splitlines()
+    for institution, expected in pairs.items():
+        head = next(i for i, l in enumerate(lines) if institution in l)
+        detail = lines[head + 1]
+        for value in expected:
+            assert value in detail, (
+                f"{institution}: {value!r} not on its detail line; got {detail!r}")
+        # And no value from the OTHER record leaked onto this one.
+        for other, other_expected in pairs.items():
+            if other == institution:
+                continue
+            for value in other_expected:
+                assert value not in detail, (
+                    f"{institution} detail line carries {other}'s {value!r}")
+
+
+def _without_education(markdown: str) -> str:
+    """The draft with its whole Education section removed."""
+    kept: list[str] = []
+    skip = False
+    for line in markdown.splitlines():
+        if line.startswith("## "):
+            skip = line.strip().lower().startswith("## education")
+        if not skip:
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def test_education_is_restored_when_the_section_is_absent():
+    """[extracted-format] The symmetric case of the summary bug.
+
+    ``preserve_education_record`` returned early when the draft had no Education heading,
+    so ``ensure_required_headings`` added an EMPTY ``## Education`` afterwards and both
+    degrees were silently dropped. Every value restored comes from the parsed source
+    record, so this is not composing prose.
+    """
+    variant = _without_education(_draft())
+    assert "## Education" not in variant, "precondition: section removed"
+    out, changes = sp.preserve_source_facts(variant, _combined())
+    assert "Spokane Falls Institute of Technology" in out
+    assert "Inland Northwest Safety Academy" in out
     assert "Electrical Systems Technology" in out
-    for line in out.splitlines():
-        if "Associate of Applied Science" in line:
-            # The award line must not also carry an invented field or a different year.
-            assert "2015" in line or "2015" in out.split(line)[-1][:200]
+    assert any("education" in c for c in changes)
+    # Placed in the promised order: Education before Certifications.
+    assert out.index("## Education") < out.index("## Certifications")
+
+
+def test_education_is_filled_when_the_section_exists_but_is_empty():
+    """[extracted-format] Heading present, no records under it."""
+    variant = "## Education\n\n" + _without_education(_draft())
+    out, _ = sp.preserve_source_facts(variant, _combined())
+    assert "Spokane Falls Institute of Technology" in out
+    assert "Inland Northwest Safety Academy" in out
+    assert out.count("## Education") == 1
+
+
+def test_a_correct_education_section_is_left_alone():
+    """[extracted-format] No churn when the draft already matches the source."""
+    correct = ("## Education\n\n"
+               "**Spokane Falls Institute of Technology** -- Spokane, WA\n"
+               "*Associate of Applied Science, Electrical Systems Technology | 2015*\n\n"
+               "**Inland Northwest Safety Academy** -- Coeur d'Alene, ID\n"
+               "*Certificate, NFPA 70E Arc Flash Standards | 2021*\n\n") + \
+              _without_education(_draft())
+    _out, changes = sp.preserve_source_facts(correct, _combined())
+    assert not any("education" in c for c in changes), changes
 
 
 def test_employer_ownership_is_resolved_on_the_extracted_format():
