@@ -31,48 +31,56 @@ logger = logging.getLogger(__name__)
 # PROMPT TEMPLATES
 # ============================================================================
 
-STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. You MUST output ALL 5 sections below. Do NOT skip any section.
+STAR_EDITOR_SYSTEM_PROMPT = """You are a professional resume editor. You reformat and tighten the material you are given. You do not add to it.
 
-OUTPUT ALL 5 SECTIONS IN THIS EXACT ORDER:
+SECTION FORMAT (emit a section only when the input gives you content for it):
 
 ## Professional Experience
-For each job:
 **Company Name** -- Location
 *Job Title | dates*
-- bullet point 1
-- bullet point 2
+- bullet point
 
-## Projects  
-For each project:
+## Projects
 **Project Name** -- Tech Stack (duration)
 - bullet point
 
 ## Education
 **Degree, Institution** -- Date
-- GPA: X.XX
-- Relevant Courses: ...
 
 ## Certifications
-- Certification Name -- Issuer (Year)
+- Certification Name
 
 ## Technical Skills
 **Category:** skill1, skill2, skill3
 
 RULES:
-- Every section above MUST appear in the output.
 - Company names go on bold lines, NOT merged with job titles.
-- Each job has its own sub-section with bullets (4-5 bullets per role).
-- Skills are grouped by category (2-4 categories).
-- Never invent companies, dates, or metrics not in the input.
-- Target total word count: 450-600 words. Do NOT truncate early.
-- Weave JD keywords naturally into bullet content.
+- One bullet per input bullet. Do NOT lengthen the list. If the input gives three
+  bullets for a role, emit three. A role with two bullets is correct and complete.
+- Emit a section ONLY when the input supplies content for it. A heading with no
+  supported content is omitted, not filled.
+- Education carries the degree, the institution and the date. The input does not
+  state a GPA, coursework, honours or a graduation distinction unless it appears
+  above — never add those fields.
+- Certifications carry the certification name as written. Add an issuer or an issue
+  year ONLY when the input states it. Never supply an issuer or a date from your own
+  knowledge of who typically issues that credential.
+- Skills are grouped by category, and every skill listed must already appear in the
+  input. Do not add a tool, platform, language or methodology because it is common
+  in the field.
+- Never invent companies, titles, dates, metrics, projects or credentials.
+- Length follows the input. Do NOT pad to a word count; a shorter resume that is
+  fully supported is correct.
+- Weave job-description vocabulary into existing bullets only where it relabels an
+  activity the input already describes. Never add a technology the input does not
+  contain.
 - Output ONLY resume content, no meta-commentary.
 
 OUTPUT JSON:
 {
-  "final_markdown": "## Professional Experience\n**NOAA** -- Seattle, WA\n*Operations Manager | 2019 -- 2023*\n- bullet\n\n## Projects\n**Name** -- Tech (duration)\n- bullet\n\n## Education\n**BS, WSU** -- 2026\n\n## Certifications\n- Cert -- Issuer (year)\n\n## Technical Skills\n**Languages:** Python, SQL",
+  "final_markdown": "## Professional Experience\n**Company** -- City, ST\n*Title | 2019 -- 2023*\n- bullet\n\n## Education\n**BS, Institution** -- 2026\n\n## Technical Skills\n**Languages:** Python, SQL",
   "final_plain_text": "plain text summary",
-  "editorial_notes": "all sections present"
+  "editorial_notes": "sections emitted only where the input supplies content"
 }
 """
 
@@ -252,16 +260,31 @@ class StarEditor:
         if domain_vocab:
             prompt_parts.append(f"DOMAIN VOCABULARY TO INCORPORATE: {', '.join(domain_vocab[:10])}")
         
-        # Add JD keyword targets for ATS optimization
+        # Add JD keyword targets for ATS optimization.
+        #
+        # The job ad may supply VOCABULARY for activities the candidate already
+        # describes. It may never supply a skill, tool or technology of its own: a
+        # requirement in the ad is not evidence of the candidate's history. This
+        # block therefore names no quota. An earlier version asked the editor to
+        # "ensure at least 6 of these keywords appear", which forced the model to
+        # manufacture matches; delivery run 5's draft answered it by reporting
+        # "AI-powered diagnostic software" and "AI-based layout planning tools"
+        # against a source that mentions no such thing.
+        #
+        # Matching is word-bounded on purpose. A substring test let "ai" match
+        # inside "arc flash training", so the run-5 ad was read as requesting AI
+        # tooling and the editor duly invented some.
         if job_ad:
             jd_lower = job_ad.lower()
             jd_keywords = ["data science", "analytics", "supply chain", "python", "sql", "tableau",
                          "power bi", "data visualization", "machine learning", "ai", "leadership",
                          "executive", "azure", "aws", "spark", "team lead", "management",
                          "stakeholder", "strategy", "process improvement"]
-            matched = [kw for kw in jd_keywords if kw in jd_lower]
-            prompt_parts.append(f"\nJD KEYWORD TARGETS (weave these naturally into bullets): {', '.join(matched)}")
-            prompt_parts.append("Ensure at least 6 of these keywords appear in the final resume. Weave them into bullet content — never just list them.")
+            matched = [kw for kw in jd_keywords
+                       if re.search(rf"(?<![a-z0-9]){re.escape(kw)}(?![a-z0-9])", jd_lower)]
+            if matched:
+                prompt_parts.append(f"\nJD VOCABULARY (relabel existing activities only, do not add skills): {', '.join(matched)}")
+                prompt_parts.append("Use these words only where an input bullet already describes that activity. Do NOT add a skill, tool or technology to satisfy this list. There is no target number of keywords.")
         
         # Add SPECIFIC negative constraint for target company
         if target_company:

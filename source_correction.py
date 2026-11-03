@@ -1200,6 +1200,24 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             # re-review that follows re-authenticates everything, so restoration can
             # never approve content on its own.
             if "missing" in incomplete:
+                if flagged:
+                    # Both unsupported claims and omitted facts. The omitted facts
+                    # cannot be judged yet: the draft is still going to change, and a
+                    # restoration would be placed against text that is about to be
+                    # repaired. Withholding here is what makes repair unreachable for
+                    # exactly the drafts that need it most (delivery run 5: 13 flagged
+                    # lines, 6 missing items, repair_calls=0).
+                    #
+                    # This is deliberately NOT changed here. The protected run-4
+                    # recording contains only its two exchanges, and the replay
+                    # contract is that a capture must not ask the recorder for a
+                    # phase it never saw (tests/test_fidelity_delivery_run_4.py).
+                    # Attempting repair first would turn run 4's diagnosis from
+                    # source_facts_missing into a replay exhaustion, destroying the
+                    # evidence that the captured defect is still rejected for the
+                    # right reason. Fixing this ordering needs its own capture that
+                    # records the repair phase.
+                    pass
                 if not restorations and not flagged and missing_items:
                     targets: dict[str, dict[str, Any]] = {}
                     for item in missing_items[:_RESTORE_MAX_ITEMS]:
