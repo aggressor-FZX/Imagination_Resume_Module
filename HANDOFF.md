@@ -11,23 +11,81 @@ of scope.
 
 ## Status
 
+- [x] **Baseline integration** — rebased onto published `origin/master`
+      (`2bcbb4e`). All correction/publication/receipt modules are now present.
+      `wip/correction-timeout-attribution` was **not** modified or reset; its
+      contents reached this branch via the published `origin/master` instead.
 - [x] Phase A — two-mode permission contract (`skill_inference.py`,
       `models.py`, `orchestrator.py`, pipeline entry, `/analyze`,
       32 offline tests in `tests/test_skill_inference_mode.py`)
+- [x] Phase C partial — **prompt-level enforcement** for both writers,
+      10 offline tests in `tests/test_skill_inference_prompts.py`
 - [ ] Phase B — typed bridge records + grounded Researcher
-- [ ] Phase C — writer/reviewer boundary
+- [ ] Phase C remainder — phrase-scoped review extension (C.6), preservation
+      interaction (C.5), narrowing/removal lifecycle (C.7), redaction handoff (C.8)
 - [ ] Phase D — skills, preview, export binding
 - [ ] Phase E — caches and isolation
 
-## Current phase-A behaviour
+## Current behaviour
 
 `skill_inference_mode` is `imaginative` (default) or `conservative`; unknown
 values fail validation. Conservative performs **zero** Researcher calls and
-carries no default qualifications. `creativity_mode` remains an independent
-prose-style dial — it is **not** the permission boundary; prompts must still
-forbid bridging and invented duties in Conservative (Phase C work).
+carries no default qualifications.
+
+**The permission boundary is enforced in the prompts, not the temperature.**
+`creativity_mode` remains an independent prose-style dial, and that separation is
+only safe because both writers now state the policy in their prompt text:
+
+| | Conservative | Imaginative |
+|---|---|---|
+| Drafter system prompt | `SKILL-INFERENCE POLICY: CONSERVATIVE` — no skill inference at all | `IMAGINATIVE (MANDATORY LIMITS)` — general transferable-skill label only, with explicit limits and a worked example |
+| Sparse-input note | source-bounded; a shorter bullet is correct | may add a general label; no tool/algorithm/product/metric/proficiency |
+| StarEditor | receives **no** `domain_vocab`; forbids inference and proficiency upgrades | receives vocabulary scoped to relabelling; forbids expert/advanced/proven/years/leadership on an inferred label |
+
+The retired instruction — "EXPAND them into full bullets by inferring standard
+industry tasks … focus on HOW the work was likely done" — is **gone**. It applied
+in both modes, so a mode-only test could pass while a run still fabricated
+duties.
+
+### Verification (this branch)
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1149 passed, 13 skipped, 3 failed
+
+python -m pytest tests/test_skill_inference_mode.py tests/test_skill_inference_prompts.py -q
+# 42 passed
+```
+
+The 3 failures are **pre-existing** and unrelated: `test_correction_route_budget`
+(2) and `test_live_capture_controls` (1) — verified by stashing this branch's
+changes and reproducing them on the clean rebased base. They concern a
+`.git`-ignore check for a capture directory inside a git *worktree*, not skill
+inference.
+
+Mutation-verified: reintroducing the retired sparse-input instruction fails
+`test_sparse_input_no_longer_authorizes_invention_in_either_mode`.
 
 No deployment, no paid run, and no production mutation was made.
+
+## Remaining risk in the current state
+
+Prompt text is necessary but not sufficient. A model can still ignore it, and
+nothing yet reviews an inferred label semantically:
+
+1. **No bridge records exist yet** (Phase B). The writers are told what they may
+do, but no typed, source-anchored proposal is supplied or validated, so
+   Imaginative has permission without evidence discipline.
+2. **The correction reviewer judges whole lines** and requires lexical overlap
+   with cited source segments. A legitimate zero-overlap label such as
+   "trend analysis" would therefore be reported unsupported and repaired or
+   withheld (spec C.6).
+3. **`source_preservation.preserve_skills_block()`** replaces a skills block it
+   cannot match to source phrases — it can delete an inferred label before review
+   sees it (spec C.5).
+
+So the prompt work closes the "temperature as policy" gap; it does not yet make
+an inferred skill survive to delivery. Phases B and C-remainder do that.
 
 ---
 
