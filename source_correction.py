@@ -308,6 +308,47 @@ def _stem(word: str) -> str:
     return word
 
 
+# Separators that `_content_words` does not split on but the entity scan keeps.
+# Hyphen and dot are already inside `_CONTENT_WORD`, so a hyphenated or dotted name
+# compares equal through the normal vocabulary path and needs nothing here.
+_COMPOUND_SEPARATORS = ("/", "#")
+
+
+def _compound_pattern(word: str) -> str:
+    """A regex for `word` that keeps its separators and tolerates spacing around them."""
+    pieces: list[str] = []
+    for segment in re.split(r"([/#])", word):
+        if segment in _COMPOUND_SEPARATORS:
+            pieces.append(r"\s*" + re.escape(segment) + r"\s*")
+        elif segment:
+            pieces.append(re.escape(segment))
+    return "".join(pieces)
+
+
+def _compound_in_evidence(word: str, evidence: str) -> bool:
+    """True when `word` occurs in the evidence as that complete compound.
+
+    `_content_words` has no `/` or `#` in its character class, so the source's
+    "Lockout/tagout" becomes the two words "lockout" and "tagout". The entity scan
+    keeps the separator, so it reads one token "Lockout/tagout" that can never be
+    found in that vocabulary — and the run-13 draft was downgraded for restating a
+    skill the source states verbatim.
+
+    This restores the true case without accepting a compound on weaker grounds: the
+    compound has to appear *as a compound*, delimiters included, with non-alphanumeric
+    boundaries on both sides. A source that lists "lockout" and "tagout" separately
+    does not contain "Lockout/tagout", so a draft that fuses them is still reported
+    as introduced. Comparison is case-normalized because a skill is not a name.
+    """
+    if not word or not any(separator in word for separator in _COMPOUND_SEPARATORS):
+        return False
+    normalized = " ".join((evidence or "").split()).casefold()
+    if not normalized:
+        return False
+    pattern = r"(?<![a-z0-9])" + _compound_pattern(word.casefold()) + r"(?![a-z0-9])"
+    return re.search(pattern, normalized) is not None
+
+
 def _introduces_beyond(span: str, quotes: list[str], item_quote: str) -> list[str]:
     """Named entities the span introduces that the source does not contain.
 
@@ -327,6 +368,7 @@ def _introduces_beyond(span: str, quotes: list[str], item_quote: str) -> list[st
     """
     known = _content_words(" ".join(quotes)) | _content_words(item_quote)
     known_stems = {_stem(word) for word in known}
+    evidence_text = " ".join(list(quotes) + [item_quote])
 
     # A figure the span states must also appear in the source. Re-attributing a real
     # number ("18%") to a different subject is as wrong as inventing one, and the
@@ -368,6 +410,10 @@ def _introduces_beyond(span: str, quotes: list[str], item_quote: str) -> list[st
         if lowered in _EVIDENCE_STOPWORDS:
             continue
         if _stem(lowered) in known_stems or lowered in known:
+            continue
+        # A slash- or hash-compound the source states verbatim is present evidence,
+        # even though the content-word vocabulary stores its parts separately.
+        if _compound_in_evidence(word, evidence_text):
             continue
         # The first word of a line is capitalized by grammar, not by being a name —
         # but only when it is not part of a comma-separated list of terms. "Agile,
