@@ -1,3 +1,36 @@
+# Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
+
+**Branch:** `resumeDraft_fix`, rebased onto `origin/master` (`2bcbb4e`) so the
+correction/publication/receipt system that Phases C and D extend is present.
+Previously this branch was cut from a stale local `master` (`b23bba4`) that
+predated that system by 103 commits; that was a baseline mistake, not a change
+of scope.
+
+**Policy:** `docs/Plans/CogitoMetric_Official_Skill_Bridging_Plan_v1.md` (v1.1)
+**Spec:** `docs/Plans/Two_Mode_Skill_Bridging_Implementation_Spec.md`
+
+## Status
+
+- [x] Phase A — two-mode permission contract (`skill_inference.py`,
+      `models.py`, `orchestrator.py`, pipeline entry, `/analyze`,
+      32 offline tests in `tests/test_skill_inference_mode.py`)
+- [ ] Phase B — typed bridge records + grounded Researcher
+- [ ] Phase C — writer/reviewer boundary
+- [ ] Phase D — skills, preview, export binding
+- [ ] Phase E — caches and isolation
+
+## Current phase-A behaviour
+
+`skill_inference_mode` is `imaginative` (default) or `conservative`; unknown
+values fail validation. Conservative performs **zero** Researcher calls and
+carries no default qualifications. `creativity_mode` remains an independent
+prose-style dial — it is **not** the permission boundary; prompts must still
+forbid bridging and invented duties in Conservative (Phase C work).
+
+No deployment, no paid run, and no production mutation was made.
+
+---
+
 # Handoff — run-10 evidence reconciled; semantic work list added; fixtures awaiting review
 
 **2026-11-03, session 11** (supersedes the session-10 header below).
