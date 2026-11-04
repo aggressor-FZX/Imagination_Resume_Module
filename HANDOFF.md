@@ -20,11 +20,71 @@ of scope.
       32 offline tests in `tests/test_skill_inference_mode.py`)
 - [x] Phase C partial — **prompt-level enforcement** for both writers,
       10 offline tests in `tests/test_skill_inference_prompts.py`
-- [ ] Phase B — typed bridge records + grounded Researcher
-- [ ] Phase C remainder — phrase-scoped review extension (C.6), preservation
-      interaction (C.5), narrowing/removal lifecycle (C.7), redaction handoff (C.8)
-- [ ] Phase D — skills, preview, export binding
+- [x] Phase B — **typed, source-anchored bridge records** (`skill_bridge.py`),
+      Researcher proposal schema, correction phrase exemption, both leak paths,
+      41 record tests + 10 paired end-to-end tests
+- [ ] Phase C remainder — review-protocol phrase spans for non-Skills lines,
+      narrowing/removal lifecycle (C.7), redaction handoff (C.8)
+- [ ] Phase D — policy binding in the receipt, preview/export parity
 - [ ] Phase E — caches and isolation
+
+## Spec-agent integration SHA (recorded per task item 5)
+
+`wip/correction-timeout-attribution` is **3 commits ahead** of
+`origin/master` (`2bcbb4e`) and those commits are **not** in this branch:
+
+| SHA | Subject | In this branch |
+|---|---|---|
+| `ae2ed7b` | fix(imaginator_flow): resolve undefined analysis_result in final editor | **absent** |
+| `483074d` | fix(multipart): refuse to publish when required generation fell back | **absent** |
+| `30d4086` | fix(multipart): request-local generation outcomes; require explicit success | **absent** |
+
+That branch is **not pushed to origin** and was **not modified** or reset by this
+work. Its newer fallback/request-state/cache fixes are therefore **not** part of
+the SHAs tested below. A future integration should merge those three commits and
+re-run this suite; the locally measured baseline is `origin/master` = `2bcbb4e`.
+
+## Phase B — what a bridge is, and what it is not
+
+A bridge is a **proposal with an anchor**, not a fact:
+
+* the server assigns the ID and the `origin` (`researcher_inference`) *after*
+  validation, so a client-supplied origin tag grants nothing;
+* `evidence_quote` must appear **verbatim** in one immutable candidate document
+  (the multi-file join marker may not be spanned);
+* Conservative produces **no records at all**, even from perfect proposals;
+* taxonomy refs are optional and may only name refs the caller supplied.
+
+The correction engine admits a permitted label with **zero lexical overlap**, but
+only for the label phrase, and only when the entire supported span is that label
+and its anchor matches a reviewed source segment (containment plus an exact-text
+check, so forged offsets confer nothing). A mixed line still fails:
+
+| Draft line | Outcome |
+|---|---|
+| `- trend analysis` (imaginative, anchored) | supported |
+| `- trend analysis` (conservative) | uncertain — no authorisation exists |
+| `- Used Python for trend analysis and increased revenue 20%` | not supported — the tool and outcome are unsupported |
+
+Verified before/after on identical input:
+
+```
+imaginative   bridges=1 verdict=supported
+conservative  bridges=0 verdict=uncertain
+```
+
+## Leak paths
+
+| Path | Status |
+|---|---|
+| `implied_skills`/`domain_vocab` merged into `aggregate_skills` | **closed** — advisory only; new `resolved_skills` is candidate skills + permitted bridges (imaginative) or candidate skills alone (conservative) |
+| `imaginator_flow.run_final_editor_async` raw research injection | **already closed** by the published evidence boundary; verified it never interpolates `research_data` |
+| `preserve_skills_block()` deleting an inferred label | **closed** — permitted labels are retained; keyword passed only when bridges exist |
+
+**Not yet done:** the receipt does **not** bind mode/policy/bridge IDs (Phase D),
+and `policy_record()` exists but is unused by the approval path. Until Phase D, a
+caller cannot forge a bridge into the document (correction re-verifies the
+anchor), but the *set* of surviving bridges is not cryptographically bound.
 
 ## Current behaviour
 
