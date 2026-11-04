@@ -258,6 +258,11 @@ class PipelineOrchestrator:
                     "summary": "Conservative mode: no bridge inference performed",
                     "model_calls": 0,
                 }
+                # A policy skip is intentional, NOT a degraded provider result.
+                # It must not set ``completed_with_fallback`` (that flag means a
+                # stage failed and produced substitute output). The empty bundle
+                # below is the correct Conservative answer.
+                research_fallback = False
             elif precomputed_research is not None and isinstance(precomputed_research, dict):
                 logger.info(
                     "[ORCHESTRATOR] Stage 1: using precomputed research_data (fork-join skip)"
@@ -375,6 +380,9 @@ class PipelineOrchestrator:
                     extracted_job_title=extracted_job_title,
                     resume_text=resume_text,
                     on_token=draft_cb,
+                    # Permission policy reaches the writer so the prompt itself
+                    # forbids bridging/invented duties in Conservative mode.
+                    skill_inference_mode=effective_mode.value,
                 )
                 attempt = 1
             except Exception:
@@ -433,6 +441,9 @@ class PipelineOrchestrator:
                     skills=skills_list,
                     location=location,
                     temperature_override=temperatures["star_editor"],
+                    # The final writer must enforce the same permission policy as
+                    # the Drafter; temperature is not the boundary.
+                    skill_inference_mode=effective_mode.value,
                 )
                 if editor_data.get("fallback") or editor_data.get("fallback_used"):
                     logger.warning("[ORCHESTRATOR] Stage 3 used fallback logic")
