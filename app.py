@@ -555,6 +555,13 @@ async def _analyze_resume_impl(
             domain_insights_json=insights_data,
             openrouter_api_keys=api_keys,
             creativity_mode=payload.creativity_mode,
+            # Permission policy, validated at the model boundary. Omitted =>
+            # imaginative; an unknown value already failed request validation.
+            skill_inference_mode=(
+                payload.skill_inference_mode.value
+                if payload.skill_inference_mode is not None
+                else None
+            ),
             location=payload.location,  # Pass location for market intel enrichment
             job_title=payload.job_title,  # Pass user-provided job title for O*NET
             projects=payload.projects,  # Pass projects for students/career changers

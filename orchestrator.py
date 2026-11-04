@@ -24,6 +24,11 @@ from pipeline_config import (
     get_temperatures,
     get_tone_instruction,
 )
+from skill_inference import (
+    SkillInferenceMode,
+    mode_contract,
+    normalize_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +105,7 @@ class PipelineOrchestrator:
         experiences: List[Dict],
         openrouter_api_keys: Optional[List[str]] = None,
         creativity_mode: Optional[str] = None,
+        skill_inference_mode: Optional[str] = None,
         extracted_job_title: Optional[str] = None,
         location: Optional[str] = None,
         golden_bullets: Optional[List[str]] = None,
@@ -118,7 +124,11 @@ class PipelineOrchestrator:
             job_ad: Job description text
             experiences: Parsed experiences from resume
             openrouter_api_keys: Optional API keys for LLM calls
-            creativity_mode: Creativity preset for generation
+            creativity_mode: Prose-style preset (temperature/tone). NOT a
+                permission policy; see ``skill_inference_mode``.
+            skill_inference_mode: Permission policy. ``imaginative`` (default)
+                permits candidate-anchored transferable-skill proposals;
+                ``conservative`` skips the bridging Researcher call entirely.
             extracted_job_title: Extracted or user-provided job title
             location: Job location for market intel
             golden_bullets: Style reference bullets from Pinecone
@@ -137,7 +147,21 @@ class PipelineOrchestrator:
         start_time = time.time()
         pipeline_start = datetime.utcnow().isoformat()
 
-        logger.info("[ORCHESTRATOR] Starting pipeline")
+        # Resolve the permission policy once, here. Stages and the result carry
+        # this server-normalised value; no downstream stage re-reads the client
+        # body or re-derives the mode.
+        effective_mode = normalize_mode(skill_inference_mode)
+        inference_contract = mode_contract(effective_mode)
+
+        logger.info(
+            f"[ORCHESTRATOR] Starting pipeline for resume ({len(resume_text)} chars), "
+            f"job ad ({len(job_ad)} chars), {len(experiences)} experiences"
+        )
+        logger.info(
+            "[ORCHESTRATOR] Skill inference mode: %s (policy %s)",
+            inference_contract["skill_inference_mode"],
+            inference_contract["skill_inference_policy_version"],
+        )
 
         result = {
             "pipeline_version": "3.0",
@@ -146,6 +170,7 @@ class PipelineOrchestrator:
             "metrics": {},
             "errors": [],
             "final_output": None,
+            **inference_contract,
         }
 
         try:
@@ -202,7 +227,38 @@ class PipelineOrchestrator:
             # When research_data is precomputed (orch job-ad fork), skip the LLM call.
             stage1_start = time.time()
             precomputed_research = kwargs.get("research_data")
-            if precomputed_research is not None and isinstance(precomputed_research, dict):
+            if effective_mode is SkillInferenceMode.CONSERVATIVE:
+                # Conservative mode: no bridging inference. The Researcher exists
+                # to produce implied skills / vocabulary for the writer; skipping
+                # it here is the actual cost saving the policy promises. We do not
+                # call the model and then discard its output, and we deliberately
+                # do NOT reuse a precomputed Imaginative bundle: cached bridges
+                # must never acquire permission from this request's mode.
+                logger.info(
+                    "[ORCHESTRATOR] Stage 1: skipped by policy "
+                    "(skill_inference_mode=conservative)"
+                )
+                research_data = {
+                    "implied_metrics": [],
+                    "domain_vocab": [],
+                    "implied_skills": [],
+                    "work_archetypes": [],
+                    "insider_tips": "",
+                    "research_status": "skipped_by_policy",
+                    "grounding": {"status": "not_requested"},
+                }
+                if precomputed_research is not None:
+                    result.setdefault("warnings", []).append(
+                        "precomputed_research_ignored_by_policy"
+                    )
+                stage1_duration = time.time() - stage1_start
+                result["stages"]["researcher"] = {
+                    "status": "skipped_by_policy",
+                    "duration_seconds": stage1_duration,
+                    "summary": "Conservative mode: no bridge inference performed",
+                    "model_calls": 0,
+                }
+            elif precomputed_research is not None and isinstance(precomputed_research, dict):
                 logger.info(
                     "[ORCHESTRATOR] Stage 1: using precomputed research_data (fork-join skip)"
                 )
@@ -471,6 +527,14 @@ class PipelineOrchestrator:
                     "processed_skills": processed_skills,
                     "seniority_analysis": seniority_result,
                     "final_output": {
+                        # The effective permission policy travels with the
+                        # document so the route can record it on the analysis
+                        # and bind it into the approval state. It is server-set
+                        # here, never read from client input.
+                        **inference_contract,
+                        "skill_inference_grounding": research_data.get(
+                            "grounding", {}
+                        ),
                         "final_written_section_markdown": editor_data.get(
                             "final_markdown", ""
                         ),

@@ -848,6 +848,7 @@ async def run_new_pipeline_async(
     domain_insights_json: Optional[Dict] = None,
     openrouter_api_keys: Optional[List[str]] = None,
     creativity_mode: Optional[str] = None,
+    skill_inference_mode: Optional[str] = None,
     location: Optional[str] = None,
     job_title: Optional[str] = None,
     golden_bullets: Optional[List[str]] = None,
@@ -1078,6 +1079,7 @@ async def run_new_pipeline_async(
             experiences=experiences,
             openrouter_api_keys=openrouter_api_keys,
             creativity_mode=creativity_mode,
+            skill_inference_mode=skill_inference_mode,
             extracted_job_title=extracted_job_title,
             projects=effective_projects,  # Pass projects for students/career changers
             education=effective_education,  # Pass education
