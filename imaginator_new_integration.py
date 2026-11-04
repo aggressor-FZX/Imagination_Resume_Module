@@ -841,6 +841,50 @@ def _compute_jd_skill_gaps(
     return critical_gaps, nice_gaps
 
 
+def _resolve_delivered_skills(
+    candidate_skills: Optional[List[str]],
+    *,
+    skill_bridges: Optional[List[Dict[str, Any]]] = None,
+    mode: Optional[str] = None,
+) -> List[str]:
+    """The authoritative skill collection delivered to preview and export.
+
+    ``candidate_skills`` must already be candidate-evidence only. Bridges are
+    added **only** in Imaginative mode, and only their neutral labels — never the
+    evidence quote or the rationale. Conservative therefore resolves to exactly
+    the candidate list, so an inferred label has no path into the document.
+
+    Deduplication is case-insensitive but preserves the first spelling seen, and
+    does not let a bridge label replace a candidate skill with the same name.
+    """
+    from skill_inference import SkillInferenceMode, normalize_mode
+
+    resolved: List[str] = []
+    seen: set[str] = set()
+
+    def _add(value: Any) -> None:
+        if not isinstance(value, str):
+            return
+        label = " ".join(value.split())
+        if not label:
+            return
+        key = label.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        resolved.append(label)
+
+    for skill in candidate_skills or []:
+        _add(skill)
+
+    if normalize_mode(mode) is SkillInferenceMode.IMAGINATIVE:
+        for bridge in skill_bridges or []:
+            if isinstance(bridge, dict):
+                _add(bridge.get("skill"))
+
+    return resolved
+
+
 async def run_new_pipeline_async(
     resume_text: str,
     job_ad: str,
@@ -1165,22 +1209,24 @@ async def run_new_pipeline_async(
                     if skill and isinstance(skill, str):
                         all_skills_set.add(skill.strip())
 
-        # 3. Skills from researcher's implied skills (add missing ones)
-        for skill in implied_skills:
-            if skill and isinstance(skill, str):
-                # Only add if not already present (avoid duplicates)
-                if skill.strip() not in all_skills_set:
-                    all_skills_set.add(skill.strip())
-
-        # 4. Skills from domain_vocab (add missing ones)
-        for skill in domain_vocab:
-            if skill and isinstance(skill, str):
-                if skill.strip() not in all_skills_set:
-                    all_skills_set.add(skill.strip())
+        # 3/4. REMOVED: implied_skills and domain_vocab are no longer merged into
+        # `aggregate_skills`.
+        #
+        # Both are derived from the JOB AD and the Researcher's model reasoning,
+        # not from the candidate's own record. Merging them here made a JD
+        # requirement indistinguishable from a candidate skill: the export path
+        # could then present "Kubernetes" as the candidate's own capability, and
+        # no downstream check could tell where it came from.
+        #
+        # They remain available as explicitly-labelled advisory context on
+        # `domain_insights` (and, for usable transferable labels, as typed
+        # `skill_bridges` with a verbatim candidate anchor). Delivered candidate
+        # skills come from candidate evidence only: upstream extraction and the
+        # structured experience records.
 
         # Convert to list with deterministic ordering (sorted alphabetically) and limit to reasonable size
         aggregate_skills = sorted(list(all_skills_set))[:30]
-        logger.info("[NEW_PIPELINE] Aggregated skills from all sources")
+        logger.info("[NEW_PIPELINE] Aggregated candidate skills (evidence only)")
 
         # Build domain_insights from upstream data, researcher data, or intelligent defaults
         domain_insights = {}
@@ -1859,6 +1905,25 @@ async def run_new_pipeline_async(
             "certifications": effective_certifications,
             "education": effective_education,
             "aggregate_skills": aggregate_skills,
+            # ── Explicit, mode-aware delivered skills ──────────────────────
+            # `aggregate_skills` above is candidate-evidence only now, but it is
+            # still a convenience list. This is the authoritative collection for
+            # delivery: candidate skills, plus — in Imaginative mode only — the
+            # validated bridges that survived correction. Conservative therefore
+            # resolves to candidate skills alone, and a raw aggregate alias can
+            # never silently authorise an inferred qualification.
+            "resolved_skills": _resolve_delivered_skills(
+                aggregate_skills,
+                skill_bridges=result.get("skill_bridges") or [],
+                mode=result.get("skill_inference_mode"),
+            ),
+            # Validated bridge records (origin=researcher_inference). Present but
+            # empty in Conservative mode; never confused with candidate evidence.
+            "skill_bridges": result.get("skill_bridges") or [],
+            "skill_inference_mode": result.get("skill_inference_mode"),
+            "skill_inference_policy_version": result.get(
+                "skill_inference_policy_version"
+            ),
             # Full domain_insights — previously only 3 fields were emitted which
             # caused Top Skills and Certifications to show as empty in the UI.
             "domain_insights": domain_insights,

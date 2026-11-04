@@ -795,7 +795,11 @@ def _phrase_in_source(term: str, source_tokens: list[str]) -> bool:
     return False
 
 
-def preserve_skills_block(markdown: str, source_text: str) -> tuple[str, list[str]]:
+def preserve_skills_block(
+    markdown: str,
+    source_text: str,
+    permitted_bridges: Optional[list[str]] = None,
+) -> tuple[str, list[str]]:
     """Replace a skills block the source does not support with the source's own list.
 
     Delivery run 8 produced a categorised skills block that invented ranks and
@@ -815,9 +819,26 @@ def preserve_skills_block(markdown: str, source_text: str) -> tuple[str, list[st
 
     Nothing happens when every term in the block is sourced, so a faithful skills section
     is untouched.
+
+    ``permitted_bridges`` carries the validated, mode-permitted inferred skill
+    labels (Phase B). In Imaginative mode an inferred label is not a defect: it is
+    authorised for semantic review. So a term that matches a permitted bridge is
+    treated like a sourced term here — it must survive to the reviewer instead of
+    being deleted by a lexical check that cannot see intent. The exception is
+    per-term and narrow: an unmatchable term still triggers the source-only
+    replacement, and Conservative passes no bridges, so its behaviour is
+    unchanged.
     """
+    permitted = {
+        (label or "").strip().casefold()
+        for label in (permitted_bridges or [])
+        if isinstance(label, str) and label.strip()
+    }
     source_lines = source_skills_lines(source_text)
     if not source_lines:
+        # No source Skills section to fall back to. Returning early here used to
+        # mean an inferred label was simply left in place, which is the correct
+        # outcome in Imaginative and irrelevant in Conservative (no bridges).
         return markdown, []
 
     sections = _split_sections(markdown)
@@ -836,10 +857,16 @@ def preserve_skills_block(markdown: str, source_text: str) -> tuple[str, list[st
         term = re.sub(r"^\s*[-*]\s*", "", raw.strip())
         # A category heading ("**Crew:**") is itself a claim; only its label matters.
         term = term.replace("**", "").rstrip(":").strip()
+        if term.casefold() in permitted:
+            # An authorised inferred label is not an invented rank: it was tied
+            # to a verbatim candidate quote by Phase B and will be judged by the
+            # existing semantic review, which this lexical pass cannot replace.
+            return True
         return _phrase_in_source(term, source_tokens)
 
     unsupported = [line for line in body
-                   if not _terms_all_supported(line, source_tokens)]
+                   if not _terms_all_supported(
+                       line, source_tokens, permitted)]
     if not unsupported:
         return markdown, []
 
@@ -851,13 +878,21 @@ def preserve_skills_block(markdown: str, source_text: str) -> tuple[str, list[st
     return _render_sections(sections), ["replaced an unsupported skills block with the source's own skills"]
 
 
-def _terms_all_supported(line: str, source_tokens: list[str]) -> bool:
-    """True when EVERY comma-separated term in a skills line appears in the source."""
+def _terms_all_supported(
+    line: str,
+    source_tokens: list[str],
+    permitted: Optional[set[str]] = None,
+) -> bool:
+    """True when EVERY comma-separated term is sourced or is a permitted bridge."""
+    allowed = permitted or set()
     text = line.replace("**", "").strip()
     if ":" in text:
         text = text.split(":", 1)[1]
     terms = [t.strip() for t in text.split(",") if t.strip()]
-    return bool(terms) and all(_phrase_in_source(term, source_tokens) for term in terms)
+    return bool(terms) and all(
+        term.casefold() in allowed or _phrase_in_source(term, source_tokens)
+        for term in terms
+    )
 
 
 # 5. Required headings
@@ -953,7 +988,11 @@ def ensure_required_headings(markdown: str, source_text: str) -> tuple[str, list
 # Entry point
 # ---------------------------------------------------------------------------
 
-def preserve_source_facts(markdown: str, source_text: str) -> tuple[str, list[str]]:
+def preserve_source_facts(
+    markdown: str,
+    source_text: str,
+    permitted_bridges: Optional[list[str]] = None,
+) -> tuple[str, list[str]]:
     """Apply every source-preservation rule, in dependency order.
 
     Education and summary are normalized before headings are ensured, so a heading is
@@ -987,7 +1026,14 @@ def preserve_source_facts(markdown: str, source_text: str) -> tuple[str, list[st
                  preserve_quantified_qualifiers,
                  preserve_skills_block,
                  ensure_required_headings):
-        markdown, step_changes = step(markdown, source_text)
+        if step is preserve_skills_block:
+            # Only the skills rule understands the bridge exception; every other
+            # rule keeps its original source-only contract.
+            markdown, step_changes = step(
+                markdown, source_text, permitted_bridges=permitted_bridges
+            )
+        else:
+            markdown, step_changes = step(markdown, source_text)
         changes.extend(step_changes)
     # A marker can be reintroduced by a rule that copies a source line verbatim, so the
     # final pass guarantees the invariant rather than trusting each rule to uphold it.

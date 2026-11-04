@@ -354,7 +354,8 @@ def _correction_observer(correlation_id):
 
 
 async def _run_source_correction(markdown, source_documents, api_key, request, *,
-                                 timeout_seconds=120.0, observer=None, capture=None):
+                                 timeout_seconds=120.0, observer=None, capture=None,
+                                 permitted_bridges=None):
     """Use the application session when available, otherwise close a local session."""
     from disclosure import redact_sources
 
@@ -380,7 +381,8 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
         wrapped = live_capture.CapturingSession(session, capture) if capture else session
         provider = CorrectionProvider(api_key, wrapped, observer=observer)
         result = await correct(markdown, sources, provider,
-                               timeout_seconds=timeout_seconds, observer=observer)
+                               timeout_seconds=timeout_seconds, observer=observer,
+                               permitted_bridges=permitted_bridges)
         # Allow a cancelled provider coroutine to record its usage state.
         await asyncio.sleep(0)
         return result, provider
@@ -701,12 +703,20 @@ async def _analyze_resume_impl(
                 return _withhold_correction(reason="pipeline_budget_exhausted",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
 
+            # Validated, mode-permitted bridges (Phase B), read from the pipeline
+            # result rather than from the request body: a client cannot nominate
+            # its own exception. In Conservative mode this list is empty.
+            _permitted_bridges = [
+                b for b in ((analysis_result or {}).get("skill_bridges") or [])
+                if isinstance(b, dict) and b.get("skill")
+            ]
             try:
                 correction, provider = await _run_source_correction(
                     draft, source_documents_snapshot, api_keys[0], request,
                     timeout_seconds=correction_budget,
                     observer=_correction_observer(correlation_id),
-                    capture=live_capture_record)
+                    capture=live_capture_record,
+                    permitted_bridges=_permitted_bridges)
             except Exception:
                 metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
                 finish_capture(reason="provider_error")

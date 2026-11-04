@@ -582,6 +582,23 @@ class Drafter:
         else:
             _metrics_block = "- (none found — leave bullets unquantified; never estimate)"
 
+        # Typed, validated bridges: general labels already tied to a verbatim
+        # candidate quote by the Researcher stage. They may be used to describe
+        # the activity they are anchored to — they do NOT add activities.
+        _bridges = []
+        if normalize_mode(skill_inference_mode) is not SkillInferenceMode.CONSERVATIVE:
+            _bridges = [
+                b for b in (research_data or {}).get("bridges") or []
+                if isinstance(b, dict) and b.get("skill")
+            ]
+        if _bridges:
+            _bridges_block = "\n".join(
+                f"- \"{b['skill']}\" — supported by: …{b.get('evidence_quote', '')}…"
+                for b in _bridges[:6]
+            )
+        else:
+            _bridges_block = "- (none)"
+
         user_prompt = f"""
 User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
 Each experience has a 'bullets' (or 'description') field containing the ORIGINAL bullet content.
@@ -613,6 +630,13 @@ METRIC RULE (evidence only):
 - If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
   infer, round, or extrapolate a number.
 - A bullet without a metric is completely acceptable and is NOT a failure.
+
+=== APPROVED TRANSFERABLE-SKILL LABELS (pending semantic review) ===
+{_bridges_block}
+Each label above was tied to the quoted candidate activity it is anchored to.
+You may use a label ONLY to describe that activity. A label never adds activity,
+and it never authorises a tool, metric, duty, credential or proficiency level.
+Using none of them is a correct outcome.
 """
         
         try:

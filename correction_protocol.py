@@ -21,6 +21,7 @@ validator and its coverage proof are unchanged. Nothing factual is relaxed:
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 INVENTORY_CONTRACT = (
@@ -236,6 +237,57 @@ def _overlap(quote: str, line: str) -> bool:
     return sum(word in folded for word in words) / len(words) >= 0.6
 
 
+def _bridge_for_line(line: dict[str, Any], bridges: Any) -> dict[str, Any]:
+    """The permitted-bridge record that authorises this line's label, if any.
+
+    ``bridges`` is supplied by the application from Phase B's validated records;
+    a client cannot invent one because the application owns the list. Matching is
+    word-bounded and case-folded so a label cannot be claimed by substring
+    accident ("R" inside "arc flash").
+    """
+    if type(bridges) is not list:
+        return {}
+    text = line.get("text") or ""
+    folded = " ".join(text.casefold().split())
+    for bridge in bridges:
+        if type(bridge) is not dict:
+            continue
+        skill = bridge.get("skill")
+        if type(skill) is not str or not skill.strip():
+            continue
+        label = " ".join(skill.casefold().split())
+        if not label:
+            continue
+        if re.search(r"(?<![a-z0-9])" + re.escape(label) + r"(?![a-z0-9])", folded):
+            return bridge
+    return {}
+
+
+def _line_is_only_the_bridge(text: str, bridge: dict[str, Any]) -> bool:
+    """True when the supported span carries the label and no other claim.
+
+    This is the guard that keeps the exemption phrase-scoped. A label appearing
+    inside an otherwise ordinary sentence is NOT automatically permitted: the
+    line keeps the reviewer's verdict, so unsupported tools or outcomes on that
+    same line still fail.
+
+    Markdown bullets/labels are stripped before comparison, so "- trend
+    analysis" and "**Trend Analysis**" qualify while "Used Python for trend
+    analysis and raised revenue 20%" does not.
+    """
+    skill = bridge.get("skill") if isinstance(bridge, dict) else None
+    if type(skill) is not str or not skill.strip():
+        return False
+    residue = re.sub(r"[*_`#]", " ", text or "")
+    residue = re.sub(r"^\s*[-\u2022*+]\s*", " ", residue)
+    label = " ".join(skill.casefold().split())
+    residue = " ".join(residue.casefold().split())
+    # Remove the label, then require that nothing substantive remains.
+    residue = re.sub(r"(?<![a-z0-9])" + re.escape(label) + r"(?![a-z0-9])", " ", residue)
+    residue = re.sub(r"[^a-z0-9]+", " ", residue).strip()
+    return not residue
+
+
 def indexed_review_request(payload: dict[str, Any]) -> dict[str, Any]:
     """Build an index-list review request.
 
@@ -291,7 +343,12 @@ def indexed_review_request(payload: dict[str, Any]) -> dict[str, Any]:
                 matched = [best[0]]
         lines.append({"line_id": line["line_id"], "text": line["text"],
                       "candidates": matched})
+    # Permitted bridges travel privately: they are server-owned records, not a
+    # question for the model. `indexed_review_request` strips underscore keys
+    # before serialisation, so these never leave the process.
+    _bridges = payload.get("permitted_bridges")
     return {"contract": REVIEW_CONTRACT,
+            **({"_bridges": _bridges} if type(_bridges) is list else {}),
             "segments": [{"index": index, "source_id": item["source_id"],
                           "start": item["start"], "end": item["end"],
                           "source_claim_id": item["id"], "text": quote}
@@ -375,6 +432,53 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
     quotes = request.get("_quotes")
     if type(quotes) is not list or len(quotes) != len(items):
         quotes = [items[index].get("quote", "") for index in range(len(items))]
+    # Application-supplied permitted bridges (Phase B). Resolve each one's source
+    # anchor to a segment index ONCE, here, from the request the adapter built —
+    # never from model output. A bridge whose anchor is not among the reviewed
+    # segments simply cannot be exempted.
+    bridges = request.get("_bridges")
+    if type(bridges) is list:
+        resolved: list[dict[str, Any]] = []
+        for bridge in bridges:
+            if type(bridge) is not dict:
+                continue
+            quote_text = bridge.get("evidence_quote")
+            if type(quote_text) is not str or not quote_text.strip():
+                continue
+            anchor = None
+            for index, item in enumerate(items):
+                if item.get("source_id") != bridge.get("source_id"):
+                    continue
+                b_start, b_end = bridge.get("quote_start"), bridge.get("quote_end")
+                if not isinstance(b_start, int) or not isinstance(b_end, int):
+                    continue
+                i_start, i_end = item.get("start"), item.get("end")
+                item_quote = item.get("quote")
+                if (not isinstance(i_start, int) or not isinstance(i_end, int)
+                        or type(item_quote) is not str):
+                    continue
+                # Containment, not equality: a bridge quotes a *phrase* from the
+                # source line, while an inventory segment covers the whole line.
+                # Requiring exact equality meant a legitimate anchor (55-103
+                # inside 55-124) never matched and the exemption silently never
+                # fired.
+                if not (i_start <= b_start and b_end <= i_end):
+                    continue
+                # …but containment alone would let a forged record claim any
+                # offsets inside a real segment. The quoted text must actually
+                # occur at those offsets, so a made-up anchor (or a made-up
+                # quote) confers nothing.
+                local = b_start - i_start
+                if item_quote[local:local + (b_end - b_start)] != quote_text:
+                    continue
+                anchor = index
+                break
+            if anchor is None:
+                continue
+            resolved.append({**bridge, "_citation_index": anchor})
+        bridges = resolved
+    else:
+        bridges = []
     claims = []
     for line in lines:
         text = line["text"]
@@ -399,6 +503,42 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
                 item = items[index]
                 citations.append({"source_id": item["source_id"], "start": item["start"],
                                   "end": item["end"], "quote": quotes[index]})
+        # ── Phrase-scoped bridge exemption ───────────────────────────────
+        # A permitted transferable-skill label legitimately has no lexical
+        # overlap with the activity it is anchored to: "trend analysis" shares
+        # no word with "Compared weekly sales figures". The overlap floor above
+        # exists to stop *unrelated* text being cited as evidence, so it must not
+        # reject an authorised label.
+        #
+        # The exemption is deliberately narrow:
+        #   * only the exact label phrase may be treated as bridged;
+        #   * it requires an application-supplied permitted-bridge record;
+        #   * the reviewer must still have named a segment;
+        #   * the WHOLE supported span must be the label, so a mixed line such as
+        #     "used Python for trend analysis and increased revenue 20%" still
+        #     fails on the tool and the outcome.
+        bridge_here = _bridge_for_line(line, bridges)
+        if (
+            bridge_here
+            and verdict == "uncertain"
+            and chosen
+            and _line_is_only_the_bridge(text, bridge_here)
+            and all(_overlap_ratio(quotes[index], text) == 0 for index in chosen)
+        ):
+            anchor = bridge_here.get("_citation_index")
+            if isinstance(anchor, int) and 0 <= anchor < len(items):
+                item = items[anchor]
+                claims.append({
+                    "id": f"{line['line_id']}:0:{len(text)}",
+                    "line_id": line["line_id"],
+                    "start": 0,
+                    "end": len(text),
+                    "verdict": "supported",
+                    "citations": [{"source_id": item["source_id"],
+                                   "start": item["start"], "end": item["end"],
+                                   "quote": quotes[anchor]}],
+                })
+                continue
         claims.append({"id": f"{line['line_id']}:0:{len(text)}", "line_id": line["line_id"],
                        "start": 0, "end": len(text), "verdict": verdict,
                        "citations": citations})

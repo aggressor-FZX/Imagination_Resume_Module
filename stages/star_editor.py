@@ -256,10 +256,41 @@ class StarEditor:
             # This runs after section assembly (so it sees the final document) and before
             # metrics validation (so the validator judges the text that will actually be
             # published). It only ever substitutes source wording, never composes prose.
+            #
+            # Validated, mode-permitted inferred labels (Phase B). Conservative
+            # passes none, so its behaviour is unchanged. Imaginative passes the
+            # authorised labels so a lexical source check does not delete them
+            # before the semantic reviewer can judge them.
+            _permitted_bridges = []
+            if not conservative:
+                for _bridge in (research_data or {}).get("bridges") or []:
+                    if isinstance(_bridge, dict):
+                        _label = _bridge.get("skill")
+                        if isinstance(_label, str) and _label.strip():
+                            _permitted_bridges.append(_label)
+
             if original_resume_text:
                 try:
-                    preserved, preservation_changes = source_preservation.preserve_source_facts(
-                        result.get("final_markdown", ""), original_resume_text)
+                    # Pass the bridge labels ONLY when there are any. A
+                    # source-only call keeps the exact two-argument shape it has
+                    # always had: an unconditional new keyword silently broke a
+                    # recording wrapper that documents the route's boundary
+                    # order, and made preservation fall through to its error
+                    # path (so the draft was withheld as a no-op repair).
+                    if _permitted_bridges:
+                        preserved, preservation_changes = (
+                            source_preservation.preserve_source_facts(
+                                result.get("final_markdown", ""),
+                                original_resume_text,
+                                permitted_bridges=_permitted_bridges,
+                            )
+                        )
+                    else:
+                        preserved, preservation_changes = (
+                            source_preservation.preserve_source_facts(
+                                result.get("final_markdown", ""), original_resume_text
+                            )
+                        )
                 except Exception:
                     # Preservation is a safety net, not a load-bearing stage: a failure
                     # must not lose an otherwise usable draft. The gate still applies.

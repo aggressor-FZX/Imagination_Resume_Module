@@ -1115,21 +1115,29 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
 
 async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
                   *, timeout_seconds: float = 120.0,
-                  observer: Callable[[dict[str, Any]], None] | None = None) -> CorrectionResult:
+                  observer: Callable[[dict[str, Any]], None] | None = None,
+                  permitted_bridges: list[dict[str, Any]] | None = None) -> CorrectionResult:
     """Run the correction and report sanitized phase events to ``observer``.
 
     ``observer`` receives dicts whose values are numbers or fixed identifiers only
     (no document, prompt, model or exception text). Observer failures are ignored.
+
+    ``permitted_bridges`` carries Phase B's validated, mode-permitted skill
+    records. They are server-owned: the reviewer does not get to invent them, and
+    a bridge that cannot be matched to a reviewed source segment is ignored. When
+    omitted, the engine behaves exactly as before (no exemption exists).
     """
     loop = asyncio.get_running_loop()
     events = _Events(observer, loop, timeout_seconds)
-    result = await _correct_body(markdown, sources, callback, timeout_seconds, events)
+    result = await _correct_body(markdown, sources, callback, timeout_seconds, events,
+                                 permitted_bridges=permitted_bridges)
     events.end(result)
     return result
 
 
 async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
-                        timeout_seconds: float, events: _Events) -> CorrectionResult:
+                        timeout_seconds: float, events: _Events,
+                        permitted_bridges: list[dict[str, Any]] | None = None) -> CorrectionResult:
     """Review, optionally patch, and re-review; failures never return the draft.
 
     Sources must be a nonempty tuple of uniquely identified candidate documents.
@@ -1235,6 +1243,10 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
         lines = _lines(markdown)
         payload = {"contract": _REVIEW_CONTRACT, "sources": source_payload, "source_claims": inventory,
                    "lines": [{"line_id": line["line_id"], "text": line["text"]} for line in lines]}
+        if permitted_bridges:
+            # Server-owned permitted labels. The adapter may allow a zero-overlap
+            # label phrase to stand, but only for a record supplied here.
+            payload["permitted_bridges"] = list(permitted_bridges)
         if must_judge is not None:
             payload["must_judge"] = list(must_judge)
             must_judge = None

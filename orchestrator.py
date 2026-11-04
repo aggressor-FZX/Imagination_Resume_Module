@@ -29,6 +29,11 @@ from skill_inference import (
     mode_contract,
     normalize_mode,
 )
+from skill_bridge import (
+    build_bridges,
+    bridges_for_writer,
+    source_map,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,24 +52,28 @@ def stage_cooldown_seconds() -> float:
 
 
 def research_used_fallback(research_data: Dict[str, Any]) -> bool:
-    """Classify explicit failure signals and the Researcher's unmarked empty defaults.
+    """Classify explicit failure signals from the Researcher bundle.
 
-    Empty responses currently return this distinctive default shape without a
-    fallback flag. Treat it as degraded until the Researcher can mark it itself.
+    The Researcher now marks its own degraded outcomes, so the previous
+    string-matching heuristic over hardcoded default values is gone. It used to
+    detect the *old* invented defaults ("Problem Solving", "Communication",
+    "Improve system performance") because the stage could not say "I failed".
+
+    That heuristic became actively wrong once those defaults were removed: an
+    empty bundle is now an honest "no findings", not a fallback, so matching it
+    as degraded would report a healthy run as ``completed_with_fallback``.
+
+    ``parse_error``/``error``/explicit fallback flags remain failure signals. A
+    deliberate policy skip is NOT a fallback (it is ``skipped_by_policy``), so it
+    is excluded here rather than being suppressed by callers.
     """
+    if research_data.get("research_status") == "skipped_by_policy":
+        return False
     return bool(
         "error" in research_data
+        or research_data.get("parse_error")
         or research_data.get("fallback")
         or research_data.get("fallback_used")
-        or (
-            research_data.get("implied_metrics") == [
-                "Improve system performance", "Scale to handle increased load"
-            ]
-            and research_data.get("domain_vocab") == ["Technical skills relevant to the role"]
-            and research_data.get("implied_skills") == ["Problem Solving", "Communication"]
-            and "has_projects_section" not in research_data
-            and "is_student_or_career_changer" not in research_data
-        )
     )
 
 # ============================================================================
@@ -299,6 +308,11 @@ class PipelineOrchestrator:
                         job_ad,
                         experiences,
                         temperature_override=temperatures["researcher"],
+                        # The immutable candidate documents are the ONLY quotable
+                        # evidence for a bridge. They are read from the request,
+                        # never assembled from model output.
+                        source_documents=kwargs.get("source_documents"),
+                        skill_inference_mode=effective_mode.value,
                     )
                     if "error" in research_data:
                         logger.error("[ORCHESTRATOR] Stage 1 returned an error")
@@ -330,6 +344,37 @@ class PipelineOrchestrator:
                 # Force GC, then pause to let the OS reclaim memory before Stage 2.
                 gc.collect()
                 await asyncio.sleep(stage_cooldown_seconds())
+
+            # ── Validate model proposals into server-owned bridge records ──────
+            # A proposal is only a bridge if its quoted evidence appears verbatim
+            # in the immutable candidate source. Conservative yields none by
+            # construction; a client-supplied origin tag never grants anything
+            # because the origin is assigned here, after validation.
+            _sources = source_map(kwargs.get("source_documents"))
+            skill_bridges, rejected_bridges = build_bridges(
+                research_data.get("skill_bridges") or [],
+                sources=_sources,
+                mode=effective_mode,
+                policy_version=inference_contract["skill_inference_policy_version"],
+                taxonomy=kwargs.get("taxonomy_context"),
+            )
+            # The writer gets a compact, mode-scoped view; offsets stay server-side.
+            # NOTE: build a NEW bundle rather than mutating `research_data`.
+            # `research_data` may be the caller's precomputed object, and mutating
+            # it in place changed an input the caller still owned (and which a
+            # regression test compares before/after).
+            research_data = {
+                **research_data,
+                "bridges": bridges_for_writer(skill_bridges),
+                "bridge_ids": [b.id for b in skill_bridges],
+                "rejected_bridge_reasons": rejected_bridges,
+            }
+            if rejected_bridges:
+                logger.info(
+                    "[ORCHESTRATOR] Rejected %d bridge proposal(s)",
+                    len(rejected_bridges),
+                )
+            result["skill_bridges"] = [b.to_dict() for b in skill_bridges]
 
             logger.info("[ORCHESTRATOR] Stage 1 completed")
             logger.info("[ORCHESTRATOR] Researcher extraction complete")
@@ -546,6 +591,10 @@ class PipelineOrchestrator:
                         "skill_inference_grounding": research_data.get(
                             "grounding", {}
                         ),
+                        # Only validated, mode-permitted bridges reach downstream
+                        # consumers. Raw proposals stay in the Researcher bundle.
+                        "skill_bridges": [b.to_dict() for b in skill_bridges],
+                        "rejected_bridge_reasons": rejected_bridges,
                         "final_written_section_markdown": editor_data.get(
                             "final_markdown", ""
                         ),

@@ -53,11 +53,33 @@ Identify the primary "Work Archetypes" required by this job. Choose 1-2:
 ["Migration", "Greenfield Build", "Scaling/Optimization", "Turnaround/Rescue", "Maintenance/Stability"].
 *Why? This tells the Drafter what tone to use.*
 
-### 2. THE "LATERAL BRIDGE" (Crucial)
-Identify skills the user *has* but didn't explicitly name using the target's vocabulary.
-*   *Logic:* If Job requires X, and User did Y, and Y is mathematically/logically similar to X, that is a Match.
-*   *Example:* User did "Sonar Analysis" (Physics). Job needs "Time-Series Anomaly Detection" (Data). 
-*   *Output:* "Time-Series Analysis (Implied by Sonar work - handling noisy, continuous signal data)."
+### 2. SKILL BRIDGES (the only inference you may propose)
+Identify general, transferable-skill labels that the candidate's own stated
+activity plausibly supports but did not name.
+
+HARD REQUIREMENTS for every bridge:
+1. `evidence_quote` MUST be copied VERBATIM from the candidate material supplied
+   in the user message. Do not paraphrase it, shorten it mid-word, add ellipses,
+   or invent a sentence. If you cannot quote it exactly, do not propose it.
+2. `skill` MUST be a short, general skill label (2-4 words). It must NOT contain a
+   specific implementation, algorithm, named software product, formal methodology
+   certification, metric, proficiency level, seniority or leadership claim.
+3. `rationale` MUST be one short sentence explaining what activity the quote
+   describes and why the general label follows from it.
+
+ALLOWED (general label from a real activity):
+* quoted: "Compared weekly sales figures to identify trends"
+  skill: "trend analysis"
+* quoted: "analyzed measurement series over time"
+  skill: "time-series analysis"
+
+NOT ESTABLISHED (do not propose these):
+* "ARIMA forecasting" from unspecified analysis  -> a specific algorithm
+* "Python" from a physics or analyst job title   -> names a tool, not an activity
+* "10+ years of SQL" from a job requirement      -> a requirement is not evidence
+* "expert in...", "led a team of..."             -> proficiency/seniority claim
+
+Return at most 6 bridges. Zero bridges is a correct and common answer.
 
 ### 3. PROJECTS SECTION HANDLING (Students/Career Changers)
 *   If the user is a student or career changer, identify any "Projects" section in their profile.
@@ -72,10 +94,15 @@ Identify skills the user *has* but didn't explicitly name using the target's voc
 ### OUTPUT JSON SCHEMA:
 {
   "work_archetypes": ["Optimization", "Migration"],
-  "implied_skills": [
-    "Skill Name (Bridge Explanation)", 
-    "Example: Predictive Modeling (Implied by User's Physics Simulation experience - Monte Carlo methods map directly to stochastic forecasting)"
+  "skill_bridges": [
+    {
+      "skill": "trend analysis",
+      "evidence_quote": "Compared weekly sales figures to identify trends",
+      "rationale": "The described activity identifies changes over time, which is trend analysis.",
+      "source_id": "document-0"
+    }
   ],
+  "implied_skills": [],
   "implied_metrics": [
     "Must be able to handle [Metric] (Context: [Job Requirement])"
   ],
@@ -87,7 +114,8 @@ Identify skills the user *has* but didn't explicitly name using the target's voc
 
 CRITICAL RULES:
 1. Do NOT browse the live web. Use the provided text only.
-2. Be aggressive in finding connections. If a physicist applies for a Data job, find the math connection.
+2. "implied_skills" is DEPRECATED: always return an empty array. All inference
+   must go into "skill_bridges" with a verbatim quote.
 3. Return VALID JSON only.
 """
 
@@ -115,25 +143,69 @@ class Researcher:
         job_ad: str,
         experiences: Optional[List[Dict]] = None,
         temperature_override: Optional[float] = None,
+        source_documents: Optional[List[Dict[str, Any]]] = None,
+        skill_inference_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Analyze job ad and user profile to extract metrics, vocabulary, and implied skills.
+        Analyze job ad and user profile, proposing candidate-anchored skill bridges.
         
         Args:
             job_ad: Job description text
             experiences: Optional list of user experiences
+            source_documents: Immutable candidate documents ``[{source_id, text}]``.
+                These are the ONLY quotable evidence for a bridge. When omitted,
+                the serialized experiences are used instead and no bridge can be
+                validated against an unknown document.
+            skill_inference_mode: Permission policy; ``conservative`` returns no
+                proposals at all.
             
         Returns:
-            Dictionary with implied_metrics, domain_vocab, implied_skills, and insider_tips
+            Dictionary with skill_bridges proposals, implied_metrics, domain_vocab
+            and insider_tips
         """
+        from skill_inference import SkillInferenceMode, normalize_mode
+
         logger.info("[RESEARCHER] Analyzing job ad")
-        
-        user_prompt = f"Job Description:\n\n{job_ad[:1500]}"
-        
-        if experiences:
+
+        if normalize_mode(skill_inference_mode) is SkillInferenceMode.CONSERVATIVE:
+            # Defence in depth: the orchestrator does not call this stage in
+            # Conservative mode, and this guard keeps a direct caller from
+            # obtaining proposals the policy does not permit.
+            return {
+                "skill_bridges": [],
+                "implied_skills": [],
+                "implied_metrics": [],
+                "domain_vocab": [],
+                "work_archetypes": [],
+                "insider_tips": "",
+                "research_status": "skipped_by_policy",
+            }
+
+        user_prompt = f"Job Description (requirements only, NOT evidence):\n\n{job_ad[:1500]}"
+
+        # Quotable candidate evidence. Each document is labelled with the id a
+        # bridge must cite, and is bounded so one huge upload cannot crowd out
+        # the job description or exceed the provider budget.
+        quotable: List[Dict[str, str]] = []
+        for doc in source_documents or []:
+            if not isinstance(doc, dict):
+                continue
+            sid = doc.get("source_id")
+            text = doc.get("text")
+            if isinstance(sid, str) and sid.strip() and isinstance(text, str) and text.strip():
+                quotable.append({"source_id": sid, "text": text[:6000]})
+
+        if quotable:
+            user_prompt += (
+                "\n\nCANDIDATE EVIDENCE — the ONLY source you may quote.\n"
+                "Every evidence_quote must appear character-for-character in one of\n"
+                "these documents, and source_id must name that document.\n"
+            )
+            for doc in quotable:
+                user_prompt += f"\n--- source_id: {doc['source_id']} ---\n{doc['text']}\n"
+        elif experiences:
             exp_text = json.dumps(experiences, indent=2)
-            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:1000]}"
-            user_prompt += "\n\nBased on the user's profile and the job description, what IMPLIED skills do they likely possess?"
+            user_prompt += f"\n\nUser Profile/Experiences:\n{exp_text[:4000]}"
         
         try:
             # Call LLM with strict JSON schema and optimized parameters
@@ -154,23 +226,24 @@ class Researcher:
             result = self._parse_response(response)
             result["model_used"] = self.model # Track model in result
             logger.info("[RESEARCHER] Extraction complete")
-            
-            # Ensure we have at least some data
-            if not result.get("implied_metrics"):
-                result["implied_metrics"] = ["Demonstrate measurable impact", "Show technical proficiency"]
-            if not result.get("domain_vocab"):
-                result["domain_vocab"] = ["Relevant technical skills"]
-            
+
+            # NOTE: no default qualifications are injected on a thin response.
+            # The previous code filled `implied_metrics`/`domain_vocab` with
+            # generic strings, which then behaved like findings. An empty list is
+            # the honest answer; Phase B tests assert the old defaults are gone.
             return result
             
         except Exception:
             logger.error("[RESEARCHER] Failed to analyze job ad")
-            # Return safe defaults
+            # A failure returns NO proposals or invented qualifications.
             return {
-                "implied_metrics": ["Improve system performance", "Scale to handle increased load"],
-                "domain_vocab": ["Technical skills relevant to the role"],
-                "insider_tips": "Focus on quantifiable achievements and relevant technologies.",
-                "error": "research_failed"
+                "skill_bridges": [],
+                "implied_skills": [],
+                "implied_metrics": [],
+                "domain_vocab": [],
+                "work_archetypes": [],
+                "insider_tips": "",
+                "error": "research_failed",
             }
     
     def _parse_response(self, response: str) -> Dict[str, Any]:
@@ -188,12 +261,18 @@ class Researcher:
             response = _unwrap_markdown_json_fence(response)
             if not response or not response.strip() or response.strip() == "{}":
                 logger.warning("[RESEARCHER] Empty response from LLM, using defaults")
+                # Explicit marker: the stage now reports its own empty outcome.
+                # Previously this returned a distinctive default-shape bundle and
+                # the orchestrator had to guess by matching those strings, which
+                # stopped working once the invented defaults were removed.
                 return {
-                    "implied_metrics": ["Improve system performance", "Scale to handle increased load"],
-                    "domain_vocab": ["Technical skills relevant to the role"],
-                    "implied_skills": ["Problem Solving", "Communication"],
+                    "skill_bridges": [],
+                    "implied_metrics": [],
+                    "domain_vocab": [],
+                    "implied_skills": [],
                     "work_archetypes": [],
-                    "insider_tips": "Focus on quantifiable achievements and relevant technologies."
+                    "insider_tips": "",
+                    "parse_error": "empty_response",
                 }
 
             data = json.loads(response)
@@ -202,36 +281,27 @@ class Researcher:
             if not isinstance(data, dict):
                 raise ValueError("Response is not a JSON object")
             
-            # Set defaults for missing fields
+            # Set defaults for missing fields. NOTE: no invented qualifications —
+            # an absent list stays absent rather than becoming a claimed finding.
             result = {
+                "skill_bridges": data.get("skill_bridges", []),
                 "implied_metrics": data.get("implied_metrics", []),
                 "domain_vocab": data.get("domain_vocab", []),
+                # Deprecated in the prompt; kept only so old callers do not break.
                 "implied_skills": data.get("implied_skills", []),
                 "work_archetypes": data.get("work_archetypes", []),
                 "has_projects_section": data.get("has_projects_section", False),
                 "is_student_or_career_changer": data.get("is_student_or_career_changer", False),
-                "insider_tips": data.get("insider_tips", "Focus on relevant achievements.")
+                "insider_tips": data.get("insider_tips", "")
             }
             
             # Validate types
-            if not isinstance(result["implied_metrics"], list):
-                result["implied_metrics"] = []
-            if not isinstance(result["domain_vocab"], list):
-                result["domain_vocab"] = []
-            if not isinstance(result["implied_skills"], list):
-                result["implied_skills"] = []
-            if not isinstance(result["work_archetypes"], list):
-                result["work_archetypes"] = []
+            for _list_key in ("skill_bridges", "implied_metrics", "domain_vocab",
+                              "implied_skills", "work_archetypes"):
+                if not isinstance(result[_list_key], list):
+                    result[_list_key] = []
             if not isinstance(result["insider_tips"], str):
-                result["insider_tips"] = "Focus on relevant achievements."
-            
-            # Ensure we have at least some data
-            if not result["implied_metrics"]:
-                result["implied_metrics"] = ["Demonstrate measurable impact", "Show technical proficiency"]
-            if not result["domain_vocab"]:
-                result["domain_vocab"] = ["Relevant technical skills"]
-            if not result["implied_skills"]:
-                result["implied_skills"] = ["Problem Solving", "Communication"]
+                result["insider_tips"] = ""
                 
             return result
             
@@ -244,14 +314,15 @@ class Researcher:
                 logger.info("[RESEARCHER] Successfully extracted JSON from text")
                 return self._parse_response(json_match)
             
-            # Return defaults with error flag
-            logger.warning("[RESEARCHER] Using fallback defaults due to JSON parse failure")
+            # Return NO proposals or invented qualifications, with an error flag.
+            logger.warning("[RESEARCHER] Using empty result due to JSON parse failure")
             return {
-                "implied_metrics": ["Improve system performance", "Scale to handle increased load"],
-                "domain_vocab": ["Technical skills relevant to the role"],
-                "implied_skills": ["Problem Solving", "Communication"],
+                "skill_bridges": [],
+                "implied_metrics": [],
+                "domain_vocab": [],
+                "implied_skills": [],
                 "work_archetypes": [],
-                "insider_tips": "Focus on quantifiable achievements and relevant technologies.",
+                "insider_tips": "",
                 "parse_error": "invalid_json",
                 "fallback_used": True
             }
