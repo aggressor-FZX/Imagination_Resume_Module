@@ -39,7 +39,9 @@ of scope.
 - [x] **Capture-guard false refusal fixed** — `git check-ignore` returns 1 for a
       non-existent path under a directory-only rule, so the guard refused the
       FIRST capture in a clean checkout
-- [ ] Phase C remainder — phrase-scoped spans for a label embedded in prose
+- [x] **Phrase-scoped spans for a label embedded in prose** (spec C.6 rule 3) —
+      14 tests in `tests/test_bridge_phrase_spans.py` plus two tightened
+      end-to-end tests; see "Phase C.6 rule 3" below
 - [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
 
 ## Live verification (2026-11-05)
@@ -70,13 +72,49 @@ live proof needs a fixture the model can complete.
 
 ```
 python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
-# 1302 passed, 13 skipped, 0 failed
+# 1316 passed, 13 skipped, 0 failed
 ```
 
 Two environment notes for reproducing that number outside the main checkout:
 the two `test_correction_route_budget` tests read `../Login_Landing_page`, so a
 sibling symlink is required; and the capture guard is now correct about
 non-existent directories, so `test_live_capture_controls` passes without one.
+
+## Phase C.6 rule 3 — a permitted label embedded in prose
+
+Phase B admitted a permitted label only when the **whole** supported span was that
+label (`- trend analysis`). A label used inside prose — `- Delivered trend analysis
+for stakeholders` — was still reported unsupported: one whole-line verdict cannot
+say "this phrase is permitted, judge the rest".
+
+The adapter now splits such a line into up to three gapless spans: the label
+(carrying its anchor's citation) and the text either side (kept at the reviewer's
+verdict). The strict validator already demands a non-overlapping partition, which
+this satisfies by construction.
+
+```
+- Delivered trend analysis for stakeholders
+  [(0,12,'uncertain'), (12,26,'supported'), (26,43,'uncertain')]
+```
+
+The exemption stays narrow, and each guard has a paired test:
+
+| Guard | Why |
+|---|---|
+| only the exact label phrase carries support | a label must not approve a sentence |
+| the reviewer must still name a segment | the exemption is a floor, never an approval |
+| the label must share **no** word with the anchor | otherwise a relied-upon overlap already explains it, and a split would invent support |
+| residual spans keep `uncertain` | an unsupported tool or outcome in the same sentence still fails |
+
+So `- Used Python for trend analysis and increased revenue 20%` now approves
+**only** `trend analysis`; `used Python` and `increased revenue 20%` remain
+`uncertain` and still block publication. Two older tests asserted the coarser
+line-scoped rule ("nothing on that line may be supported") and are tightened to
+assert the precise one.
+
+**Deliberate limit.** A line with *partial* lexical overlap is not split. The
+reviewer's verdict already applies there, and inventing a partition where an
+overlap explains the label would be the adapter granting support.
 
 
 ## Two disclosure defects found and fixed
