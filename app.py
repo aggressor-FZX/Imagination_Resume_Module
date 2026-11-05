@@ -773,6 +773,11 @@ async def _analyze_resume_impl(
 
             # Do not forward any pipeline draft aliases, notes, or provenance.
             # Receipt creation parses this exact markdown into the sole export object.
+            #
+            # Policy state is carried explicitly because the render object does not
+            # represent it: without these two fields the approval would say nothing
+            # about which inference mode produced the document or which bridges
+            # were permitted, and receipt v5 could not bind them.
             output = publication_gate.apply_to_payload({
                 "final_written_section_markdown": final_markdown,
                 "final_written_section": final_markdown,
@@ -783,6 +788,12 @@ async def _analyze_resume_impl(
                 "correction_commentary": correction.commentary,
                 "run_metrics": metrics,
                 "processing_time_seconds": time.time() - start_time,
+                "skill_inference_mode": (analysis_result or {}).get(
+                    "skill_inference_mode"),
+                "skill_inference_policy_version": (analysis_result or {}).get(
+                    "skill_inference_policy_version"),
+                "skill_bridges": _surviving_bridges(
+                    (analysis_result or {}).get("skill_bridges"), final_markdown),
             }, decision)
             owner = trusted_owner_identity(request)
             output = _issue_publication_receipt(output, owner=owner)
@@ -1097,6 +1108,81 @@ def _research_run_metrics(llm_client: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _surviving_bridges(bridges, final_markdown):
+    """Only the bridges whose label actually survived into the approved text.
+
+    A proposal that never reached the document — or was removed during
+    correction — must not appear in the signed policy state. Binding an unused
+    bridge would overstate what was authorised, and would make the state differ
+    between two documents that are in fact identical.
+    """
+    if not isinstance(bridges, list):
+        return []
+    text = (final_markdown or "").casefold()
+    import re as _re
+
+    surviving = []
+    for bridge in bridges:
+        if not isinstance(bridge, dict):
+            continue
+        skill = bridge.get("skill")
+        if not isinstance(skill, str) or not skill.strip():
+            continue
+        label = " ".join(skill.casefold().split())
+        if not label:
+            continue
+        # Word-bounded: a label must appear as itself, not inside another word.
+        if _re.search(r"(?<![a-z0-9])" + _re.escape(label) + r"(?![a-z0-9])", text):
+            surviving.append(bridge)
+    return surviving
+
+
+def _policy_state_from_output(output):
+    """Policy state to bind into the receipt, or None for a source-only result.
+
+    Reads ONLY server-resolved fields: the effective mode, the policy version,
+    and the validated bridge records. A client cannot contribute any of these,
+    and an empty bridge list on an imaginative result is still meaningful (it
+    records that no inference was used), so the mode alone is enough to bind.
+    """
+    if not isinstance(output, dict):
+        return None
+    from skill_inference import SkillInferenceMode, normalize_mode
+
+    mode_value = output.get("skill_inference_mode")
+    if not mode_value:
+        return None
+    try:
+        mode = normalize_mode(mode_value)
+    except Exception:  # noqa: BLE001 - never fail approval on a bad mode string
+        return None
+    bridges = output.get("skill_bridges") or []
+    surviving = []
+    for bridge in bridges:
+        if not isinstance(bridge, dict):
+            continue
+        if not bridge.get("id") or not bridge.get("skill"):
+            continue
+        surviving.append({
+            "id": bridge.get("id"),
+            "skill": bridge.get("skill"),
+            "origin": bridge.get("origin"),
+            "source_id": bridge.get("source_id"),
+            "policy_version": bridge.get("policy_version"),
+        })
+    if mode is SkillInferenceMode.CONSERVATIVE and surviving:
+        # Impossible by construction; refuse rather than sign an incoherent
+        # approval.
+        return None
+    return {
+        "skill_inference_mode": mode.value,
+        "skill_inference_policy_version": output.get(
+            "skill_inference_policy_version"
+        ),
+        "surviving_bridges": surviving,
+    }
+
+
 def _issue_publication_receipt(output, owner=None, identity=None):
     """Attach a signed approval receipt to a publishable result.
 
@@ -1142,9 +1228,17 @@ def _issue_publication_receipt(output, owner=None, identity=None):
                 value = identity.get(field)
                 if isinstance(value, str) and value.strip():
                     approved_payload[field] = value.strip()
+        # Skill-inference policy state (mode + surviving bridges). Passing it
+        # upgrades the receipt to v5, which binds a fingerprint of that state;
+        # a v4 receipt therefore cannot later authorise an inferred skill.
+        # Source-only approvals pass nothing and stay v4.
+        policy_state = _policy_state_from_output(output)
         receipt = publication_gate.issue_receipt(
             markdown=md, verdict=verdict, owner=owner,
-            approved_payload=approved_payload)
+            approved_payload=approved_payload,
+            policy_state=policy_state)
+        if policy_state:
+            output["skill_inference_policy_state"] = policy_state
         output["publication_receipt"] = receipt
         output["approved_export_payload"] = approved_payload if receipt else None
         if receipt is None:
@@ -2044,7 +2138,11 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
             )
         _receipt_ok, _receipt_reason = publication_gate.verify_receipt(
             _receipt, markdown=_export_markdown, owner=_owner,
-            render_payload=payload)
+            render_payload=payload,
+            # Declared policy state, if the caller sent one. This never GRANTS
+            # anything: it can only make verification stricter, because a v5
+            # receipt must match it and a v4 receipt carries no binding at all.
+            policy_state=payload.get("skill_inference_policy_state"))
 
         if not _receipt_ok:
             logger.warning(

@@ -500,6 +500,17 @@ class AnalysisResponse(BaseModel):
         None,
         description="Policy version the effective mode was evaluated under",
     )
+    # Surviving bridge records and the server-resolved policy state bound into
+    # the approval receipt (v5). Server-set only: the browser transports these
+    # back at export so verification can compare them, but cannot author them.
+    skill_bridges: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Validated bridge records that survived into the approved text",
+    )
+    skill_inference_policy_state: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Policy state bound into the signed approval receipt",
+    )
 
     @field_validator("final_written_section_provenance", mode="before")
     @classmethod

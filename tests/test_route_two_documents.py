@@ -720,6 +720,11 @@ def _export(client, body, *, markdown=None, receipt=None):
     payload["publication_receipt"] = receipt or body["publication_receipt"]
     payload["final_written_section_markdown"] = (
         body["final_written_section_markdown"] if markdown is None else markdown)
+    # The approval may be policy-bound (receipt v5). The browser transports this
+    # state verbatim; omitting it makes a v5 approval unverifiable, which is the
+    # correct fail-closed behaviour rather than a false success.
+    if body.get("skill_inference_policy_state"):
+        payload["skill_inference_policy_state"] = body["skill_inference_policy_state"]
     return client.post("/resume/export",
                        headers={"X-Cogito-Owner-Id": EXPORT_OWNER,
                                 "X-API-Key": "offline"},
