@@ -237,6 +237,41 @@ def _overlap(quote: str, line: str) -> bool:
     return sum(word in folded for word in words) / len(words) >= 0.6
 
 
+def _matches_redacted_quote(slice_here: str, quote_text: str) -> bool:
+    """True when a source slice is the redacted form of the recorded quote.
+
+    Correction receives **length-preservingly redacted** sources, while a bridge
+    record keeps the raw quote it was validated against. When PII sits inside the
+    quoted activity, the two differ character-for-character:
+
+        recorded: "Compared sales for jordan@example.com and identified trends"
+        slice:    "Compared sales for [email removed]███ and identified trends"
+
+    An exact-equality-only check therefore silently dropped a legitimate bridge —
+    it looked like "the anchor does not match", which is indistinguishable from
+    forgery. This compares the recorded quote's own redaction instead, at the same
+    width, so a genuine anchor survives and a fabricated one still fails (its
+    redaction will not match either).
+
+    The redactor is length-preserving by contract, so no offset adjustment is
+    needed here; that invariant is enforced by ``disclosure.redact_sources``.
+    """
+    if not quote_text or not slice_here or len(slice_here) != len(quote_text):
+        return False
+    try:
+        from disclosure import redact_text
+    except Exception:  # noqa: BLE001 - disclosure unavailable => strict equality only
+        return False
+    try:
+        expected, _count = redact_text(quote_text)
+    except Exception:  # noqa: BLE001
+        return False
+    if len(expected) != len(quote_text):
+        # Redaction was not length-preserving; correspondence cannot be shown.
+        return False
+    return slice_here == expected
+
+
 def _bridge_for_line(line: dict[str, Any], bridges: Any) -> dict[str, Any]:
     """The permitted-bridge record that authorises this line's label, if any.
 
@@ -469,7 +504,9 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
                 # occur at those offsets, so a made-up anchor (or a made-up
                 # quote) confers nothing.
                 local = b_start - i_start
-                if item_quote[local:local + (b_end - b_start)] != quote_text:
+                slice_here = item_quote[local:local + (b_end - b_start)]
+                if slice_here != quote_text and not _matches_redacted_quote(
+                        slice_here, quote_text):
                     continue
                 anchor = index
                 break

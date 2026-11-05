@@ -181,7 +181,10 @@ def _is_general_label(skill: str) -> bool:
     """
     if not skill or len(skill) > MAX_SKILL_CHARS:
         return False
-    if _SENTENCE_PUNCT.search(skill):
+    # Sentence punctuation anywhere — including a trailing period. The original
+    # pattern required punctuation FOLLOWED BY whitespace, so "a complete sentence
+    # about trends." passed and could be authorised as a "narrowed" label.
+    if re.search(r"[.;!?]", skill):
         return False
     if ":" in skill:
         return False
@@ -196,7 +199,9 @@ def _is_general_label(skill: str) -> bool:
     ):
         return False
     words = [w for w in re.split(r"[\s/]+", skill) if w]
-    if len(words) < 2:
+    # A general capability label is a short phrase. Below 2 it is a bare token
+    # (usually a product name); above 5 it is prose.
+    if len(words) < 2 or len(words) > 5:
         return False
     # An all-caps token of length >= 2 is an acronym: a named product,
     # algorithm or platform, not a general capability.
