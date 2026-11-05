@@ -25,10 +25,67 @@ of scope.
       41 record tests + 10 paired end-to-end tests
 - [x] Phase D.4 — **policy state bound into the approval receipt** (v5),
       `_surviving_bridges()` filter, frontend transport, 25 binding tests
-- [ ] Phase C remainder — review-protocol phrase spans for non-Skills lines,
-      narrowing/removal lifecycle (C.7), redaction handoff (C.8)
+- [x] Phase C.7 — **accept / narrow / remove lifecycle**
+      (`skill_bridge_decisions.py`), 31 tests
+- [x] Phase C.8 — **redaction-safe bridge anchors** (real defect fixed, see below)
+- [ ] Phase C remainder — phrase-scoped spans for non-Skills lines inside prose
 - [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
 - [ ] Phase E — caches and isolation
+
+## Phase C.8 — a real defect that was found and fixed
+
+Correction receives **length-preservingly redacted** sources; a bridge keeps the
+**raw** quote it was validated against. When PII sat inside the quoted activity
+the two differed character-for-character, and the exact-equality anchor check
+**silently dropped a legitimate bridge** — a failure indistinguishable from
+forgery:
+
+```
+recorded:  "Compared sales for jordan@example.com and identified trends"
+slice:     "Compared sales for [email removed]███ and identified trends"
+```
+
+`_matches_redacted_quote()` now compares the recorded quote's own redaction at the
+same width. A genuine anchor survives; a fabricated one still fails, because its
+redaction will not match either. The redactor is length-preserving by contract, so
+offsets need no adjustment — and if that contract ever breaks, the helper returns
+`False` rather than guessing.
+
+## Phase C.7 — decision lifecycle
+
+| Decision | Applied when | Refused when |
+|---|---|---|
+| **accept** | the label is a standalone item | the label only appears inside prose (`label_not_standalone`) |
+| **narrow** | standalone; replacement is a valid general label | replacement is ARIMA/Python/AWS/a metric/a proficiency, is identical, or is missing |
+| **remove** | every occurrence is standalone | any occurrence is embedded in a sentence (`embedded_label_requires_repair`) |
+
+Two guards are deliberate:
+
+1. **Narrowing cannot escalate** — the replacement goes through the *same*
+   validator as an original proposal. There is one definition of "general label".
+2. **Partial removal is refused** — deleting the standalone item while the label
+   survives in prose reports success without removing anything.
+
+A refused decision leaves the text byte-identical. Reason codes are a fixed set;
+caller free text is dropped rather than logged.
+
+Also tightened `_is_general_label()`: sentence punctuation anywhere (a trailing
+period slipped through the previous "punctuation + whitespace" pattern) and a
+2–5 word bound. Verified balanced — 10/10 legitimate labels accepted, 8/8
+prohibited shapes rejected.
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1256 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_decisions_and_redaction.py -q   # 31
+python -m pytest tests/test_skill_bridge_records.py \
+                 tests/test_skill_bridge_end_to_end.py \
+                 tests/test_bridge_decisions_and_redaction.py -q   # 82
+```
+
 
 ## Phase D.4 — what the receipt now binds
 
