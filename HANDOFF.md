@@ -62,16 +62,60 @@ Deployed `imaginator-resume-cowriter` to master and probed the running service.
 | export without receipt refused | **PASS** 409 |
 | mode visible in orchestrator logs | **PASS** `Skill inference mode: imaginative (policy imaginative-v1)` |
 
-**8/9 probes pass.** The ninth is *analysis completion*: the synthetic fixtures
-withheld — `below_min_words` on the short one, `incomplete_review` on the 1.4 KB
-one (a live model left lines unjudged, which the engine reports accurately). That
-is correct gating on a synthetic input, **not** a feature failure: the pipeline
-ran, the mode was honoured, and the withhold reason was specific.
+**12/12 probes pass** against `627ba6c` (final). The tenth probe — a receipted
+approval — reports SKIP; see "Live receipted approval — blocked, and why".
+
+### A live defect this probing found, and fixed
+
+The first full-fixture run returned a withheld result with
+`skill_inference_mode: None`. Tracing it: `_mode_from_payload` short-circuited on
+`None` instead of resolving it, but an **omitted** mode is not an unknown policy —
+`normalize_mode(None)` resolves to `imaginative` / `imaginative-v1` and the
+pipeline runs exactly that. So the difference reflected how the request was
+*spelled*, not what happened, and the loss fell on the common path: the website
+never sends the field, so **every website refusal carried no policy attribution**,
+while a caller who sent it explicitly was told. Fixed; verified live after
+redeploy — the same website-shaped request now reports
+`imaginative` / `imaginative-v1`. 14 tests in
+`tests/test_withheld_policy_attribution.py`, mutation-checked.
+
 
 Not yet observed live: a **receipted** approval (`publication_receipt` +
-`skill_inference_policy_state`), because that needs a draft the live reviewer
-fully supports. The offline suite proves receipt v5 issuance and tamper refusal;
-live proof needs a fixture the model can complete.
+`skill_inference_policy_state`). See "Live receipted approval — blocked, and
+why" below; the offline suite proves receipt v5 issuance and tamper refusal.
+
+### Live receipted approval — blocked, and why
+
+Attempted six fixture shapes against `627ba6c`. None produced a receipt. The
+blocker is not the bridging feature:
+
+| Fixture shape | Withhold reason | Words |
+|---|---|---|
+| small (60 words) | `below_min_words` | 0 |
+| 162-word, two employers | `source_facts_missing` | 0 |
+| verbatim source mirror | `source_facts_missing` | 0 |
+| structured line-per-fact | `below_min_words` | 0 |
+| matched job ad, 3+3 bullets | `below_min_words` / `source_facts_missing` / `provider_error` (retry) | 0 |
+
+`words: 0` on every withheld result is the withholding rule working: an
+unapproved draft is not returned. Two structural gates pull in opposite
+directions on a *synthetic* fixture:
+
+* the publication gate requires **80 words**, so a short fixture cannot approve;
+* the reviewer's source inventory requires every required source fact to be
+  **represented**, so a longer draft has more chances to omit one.
+
+A real candidate resume clears both because it is long *and* every fact in it is
+its own activity. Neither gate was loosened to make this probe go green —
+weakening a publication gate to obtain a passing acceptance test is exactly the
+trade the spec forbids. The receipt half of the probe therefore still reports
+SKIP, and the probe now checks **both** halves (approval exports real bytes;
+tamper/dropped-state/appended-content are refused) so it will exercise fully the
+first time a real approval is presented.
+
+**What remains unproven live:** that a v5 receipt is issued and accepted end to
+end on the deployed service. Offline, that path is covered by 25 receipt-binding
+tests and 9 real-render parity tests.
 
 ### Test totals
 
@@ -521,9 +565,55 @@ new tests.
 and would delete the one clause that is correct. The work list reports questions; Tier B
 answers them.
 
-## Next work, in priority order
+## Remaining work after this branch
 
-1. **Wire the work list into the review** (not done). Decide whether a non-empty work list
+Phases A–E and both remainders are complete. What is left cannot be closed by
+more offline work:
+
+1. **A live receipted approval** (blocked, see above). Needs a real candidate
+   document — long enough for the 80-word gate, with every required source fact
+   represented. Do **not** loosen a gate to obtain it. When it arrives, the probe
+   already exercises both halves and no code change is needed.
+2. **A real browser save.** Run 10 recorded three attempts with no `/resume/export`
+   request leaving the browser. HTTP 200 is proven; a saved file is not.
+3. **Semantic inference quality.** Every test here is a scripted reviewer. Whether
+   an inferred label is *apt* for a given candidate is a human judgement;
+   `tests/fixtures/realistic_candidate/` is the vehicle and needs review before it
+   is frozen and hashed.
+4. **The three spec-agent commits** (`ae2ed7b`, `483074d`, `30d4086` on
+   `wip/correction-timeout-attribution`) are still unmerged. The tested baseline is
+   `origin/master`; merging those commits requires re-running this suite.
+5. **`Login_Landing_page` is on branch `employment-type-search`, not `main`.** The
+   frontend tests are committed there and that branch is pushed. It is unrelated
+   work in the same checkout; merging it to `main` is a separate decision, so it
+   was left alone.
+6. **A pre-existing frontend failure** unrelated to this work:
+   `src/services/__tests__/resumeMarkdownParser.run3live.test.ts` reads
+   `/tmp/export_check/run3_markdown.txt`, a local scratch file that does not exist.
+   40 of 41 tests in the services folder pass; this one fails identically with this
+   branch's files removed.
+
+## Verification commands
+
+```
+cd Imagination_Resume_Module   # on resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -q \
+  -o addopts="" -p no:cacheprovider      # 1346 passed, 13 skipped
+
+cd ../Login_Landing_page
+NODE_OPTIONS=--max-old-space-size=1024 node node_modules/jest/bin/jest.js \
+  -c jest.unit.config.cjs src/services/__tests__/bridgeExportPayload.test.ts  # 13
+
+# Live acceptance (needs IMAGINATOR_AUTH_TOKEN from final_env_vars.json)
+python3 tools/live_bridge_probe.py       # 12/12, receipt half SKIP (see above)
+```
+
+---
+
+# Session log
+
+
    should withhold, trigger a targeted re-review, or only annotate. Any of these changes
    prompt or reviewer behaviour, which per SPEC.v2 requires **bounded real-model evidence
    after** the offline tests — **not** an unapproved production retry.
