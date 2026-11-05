@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Live acceptance probes for the two-mode skill bridging feature.
+
+Reads configuration from the environment — never hardcodes a key. Two modes are
+checked against the deployed service; the assertions are about *behaviour a
+customer would see*, not internal plumbing.
+
+Usage:
+    IMAGINATOR_URL=... IMAGINATOR_AUTH_TOKEN=... python3 live_bridge_probe.py
+
+Exit code 0 only when every probe passes. Each probe prints what it observed so a
+failure is diagnosable without re-running blindly.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+
+BASE = os.environ.get(
+    "IMAGINATOR_URL", "https://imaginator-resume-cowriter.onrender.com"
+).rstrip("/")
+TOKEN = os.environ.get("IMAGINATOR_AUTH_TOKEN", "")
+
+# Deliberately synthetic: fabricated person, fabricated employer, no real PII.
+SOURCE = (
+    "Jordan Example\n"
+    "Cascade Power Solutions\n"
+    "Compared weekly sales figures to identify trends across 12 branches.\n"
+    "Trained 6 apprentices on lockout/tagout and NFPA 70E.\n"
+)
+JOB_AD = (
+    "Senior Data Analyst. Requires SQL, Python, and trend analysis experience. "
+    "Must be able to build forecasting models."
+)
+
+DRAFT = (
+    "## Professional Summary\n"
+    "Analyst with measurement and reporting experience.\n\n"
+    "## Professional Experience\n"
+    "**Cascade Power Solutions** -- Example City, WA\n"
+    "*Data Analyst | 03/2020 -- Present*\n"
+    "- Compared weekly sales figures to identify trends across 12 branches.\n"
+    "- Trained 6 apprentices on lockout/tagout and NFPA 70E.\n\n"
+    "## Education\n"
+    "**Example Technical College** -- 2016\n\n"
+    "## Certifications\n\n"
+    "## Technical Skills\n"
+    "- trend analysis\n"
+)
+
+
+def _post(path, payload, *, accept="application/json", timeout=120):
+    url = f"{BASE}{path}"
+    body = json.dumps(payload).encode()
+    request = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": accept,
+            "X-API-Key": TOKEN,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", "replace")
+            return response.status, raw
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", "replace")
+    except Exception as exc:  # noqa: BLE001
+        return None, f"transport_error: {type(exc).__name__}"
+
+
+def _get(path, timeout=30):
+    request = urllib.request.Request(f"{BASE}{path}", method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read().decode("utf-8", "replace")
+    except Exception as exc:  # noqa: BLE001
+        return None, f"transport_error: {type(exc).__name__}"
+
+
+RESULTS = []
+
+
+def check(name, condition, detail=""):
+    RESULTS.append((name, bool(condition), detail))
+    mark = "PASS" if condition else "FAIL"
+    print(f"[{mark}] {name}" + (f" — {detail}" if detail and not condition else ""))
+    return bool(condition)
+
+
+def main():
+    print(f"target: {BASE}")
+    if not TOKEN:
+        print("IMAGINATOR_AUTH_TOKEN is not set; every authenticated probe will fail.")
+
+    status, body = _get("/health")
+    health = {}
+    try:
+        health = json.loads(body)
+    except Exception:  # noqa: BLE001
+        pass
+    check("health endpoint reachable", status == 200 and health.get("status") == "healthy",
+          f"status={status}")
+
+    # ── Conservative: the Researcher must be skipped by policy ────────────
+    status, raw = _post("/analyze", {
+        "resume_text": SOURCE,
+        "job_ad": JOB_AD,
+        "source_documents": [{"source_id": "document-0", "text": SOURCE,
+                              "kind": "candidate_document"}],
+        "skill_inference_mode": "conservative",
+    })
+    conservative = {}
+    try:
+        conservative = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        pass
+    check("conservative request accepted", status in (200, 409),
+          f"status={status} body={raw[:160]}")
+    check("conservative reports its mode",
+          conservative.get("skill_inference_mode") in (None, "conservative"),
+          f"mode={conservative.get('skill_inference_mode')}")
+    check("conservative carries no bridges",
+          not conservative.get("skill_bridges"),
+          f"bridges={conservative.get('skill_bridges')!r}")
+
+    # ── Invalid mode must be refused, never silently defaulted ────────────
+    status, raw = _post("/analyze", {
+        "resume_text": SOURCE,
+        "job_ad": JOB_AD,
+        "skill_inference_mode": "balanced",
+    })
+    check("invalid mode is rejected", status in (400, 422),
+          f"status={status} body={raw[:160]}")
+
+    # ── Omitted mode takes the documented default ─────────────────────────
+    status, raw = _post("/analyze", {
+        "resume_text": SOURCE,
+        "job_ad": JOB_AD,
+        "source_documents": [{"source_id": "document-0", "text": SOURCE,
+                              "kind": "candidate_document"}],
+    })
+    omitted = {}
+    try:
+        omitted = json.loads(raw)
+    except Exception:  # noqa: BLE001
+        pass
+    check("omitted mode is accepted", status in (200, 409),
+          f"status={status} body={raw[:160]}")
+    check("omitted mode resolves to imaginative",
+          omitted.get("skill_inference_mode") in (None, "imaginative"),
+          f"mode={omitted.get('skill_inference_mode')}")
+
+    # ── Export containment: no receipt => refusal ─────────────────────────
+    status, raw = _post("/resume/export", {"final_written_section_markdown": DRAFT})
+    check("export without a receipt is refused", status == 409,
+          f"status={status} body={raw[:160]}")
+
+    # ── Export containment: a policy-bound approval cannot be presented
+    #    with a different policy state ─────────────────────────────────────
+    receipt = (omitted.get("publication_receipt") or "")
+    if receipt:
+        approved = omitted.get("approved_export_payload") or {}
+        payload = dict(approved)
+        payload["publication_receipt"] = receipt
+        payload["final_written_section_markdown"] = omitted.get(
+            "final_written_section_markdown", "")
+        state = omitted.get("skill_inference_policy_state") or {
+            "skill_inference_mode": "imaginative",
+            "skill_inference_policy_version": "imaginative-v1",
+            "surviving_bridges": [],
+        }
+        tampered = json.loads(json.dumps(state))
+        tampered["skill_inference_mode"] = "conservative"
+        payload["skill_inference_policy_state"] = tampered
+
+        status, raw = _post("/resume/export", payload)
+        body_json = {}
+        try:
+            body_json = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            pass
+        reasons = body_json.get("reasons") or []
+        check("tampered policy state is refused",
+              status == 409 and any("policy" in str(r) for r in reasons),
+              f"status={status} reasons={reasons}")
+    else:
+        check("a receipt was issued for the default-mode analysis", False,
+              "no publication_receipt in the response (analysis may have withheld)")
+
+    passed = sum(1 for _, ok, _ in RESULTS if ok)
+    total = len(RESULTS)
+    print(f"\n{passed}/{total} probes passed")
+    return 0 if passed == total else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
