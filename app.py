@@ -252,9 +252,38 @@ def _correction_usage(pipeline_metrics, provider=None):
     return result
 
 
+def _mode_from_payload(payload):
+    """The effective inference mode stated by a request, for withheld results.
+
+    Falls back to ``None`` rather than guessing: a withhold path that cannot
+    determine the mode should say nothing rather than assert a policy that may
+    not have run.
+    """
+    try:
+        from skill_inference import SkillInferenceMode, mode_contract, normalize_mode
+
+        requested = getattr(payload, "skill_inference_mode", None)
+        if requested is None:
+            return None, None
+        contract = mode_contract(normalize_mode(requested))
+        return (
+            contract["skill_inference_mode"],
+            contract["skill_inference_policy_version"],
+        )
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
 def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decision=None,
-                         aggregate_skills=None):
-    """Only public, fixed metadata survives a withheld correction."""
+                         aggregate_skills=None, skill_inference_mode=None,
+                         skill_inference_policy_version=None):
+    """Only public, fixed metadata survives a withheld correction.
+
+    The effective inference mode is *public* metadata: the caller selected it and
+    is entitled to know which policy produced the refusal. It is a plain string
+    with no candidate content, so it does not weaken the withholding rule — and
+    omitting it left the client unable to explain the outcome it had asked for.
+    """
     reasons = decision.reason_codes if decision and decision.blocked() else [reason]
     return AnalysisResponse(
         processing_status="needs_review", requires_review=True,
@@ -273,6 +302,8 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "provider_rejected_request": "The correction service refused the request and retrying would repeat the refusal; this needs operator attention.",
         }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
+        skill_inference_mode=skill_inference_mode,
+        skill_inference_policy_version=skill_inference_policy_version,
         run_metrics=metrics, processing_time_seconds=time.time() - start_time,
     )
 
@@ -586,9 +617,12 @@ async def _analyze_resume_impl(
         # Only the normal completed pipeline may enter source-aware correction.
         # A malformed or failed pipeline must not trigger additional paid calls.
         if not isinstance(analysis_result, dict):
+            _w_mode, _w_policy = _mode_from_payload(payload)
             return _withhold_correction(
                 reason="pipeline_invalid", pipeline_status="failed",
-                metrics=_correction_usage(RUN_METRICS), start_time=start_time)
+                metrics=_correction_usage(RUN_METRICS), start_time=start_time,
+                skill_inference_mode=_w_mode,
+                skill_inference_policy_version=_w_policy)
         if isinstance(analysis_result, dict):
             logger.info(
                 "analyze.pipeline.fast_track",
@@ -632,9 +666,12 @@ async def _analyze_resume_impl(
                                 and len(skill) <= 200
                                 and skill.lower() in payload.resume_text.lower()]
                                if isinstance(skills, list) else None)
+                _w_mode, _w_policy = _mode_from_payload(payload)
                 return _withhold_correction(reason=preflight.reason_codes[0],
                     pipeline_status=status, metrics=metrics, start_time=start_time,
-                    decision=preflight, aggregate_skills=safe_skills)
+                    decision=preflight, aggregate_skills=safe_skills,
+                    skill_inference_mode=_w_mode,
+                    skill_inference_policy_version=_w_policy)
             try:
                 from approved_resume import export_payload
                 export_payload(draft)
@@ -753,8 +790,11 @@ async def _analyze_resume_impl(
                     "provider_call_timeout_post_patch_review"}
                 reason = correction.reason if correction.reason in allowed_reasons else "correction_failed"
                 finish_capture(correction_result=correction, reason=reason)
+                _w_mode, _w_policy = _mode_from_payload(payload)
                 return _withhold_correction(reason=reason, pipeline_status=status,
-                    metrics=metrics, start_time=start_time)
+                    metrics=metrics, start_time=start_time,
+                    skill_inference_mode=_w_mode,
+                    skill_inference_policy_version=_w_policy)
 
             final_markdown = correction.markdown
             support = tier_a_verifier.verify_metrics(final_markdown, payload.resume_text)
@@ -767,9 +807,12 @@ async def _analyze_resume_impl(
             if decision.blocked():
                 finish_capture(correction_result=correction, decision=decision,
                                reason=decision.reason_codes[0])
+                _w_mode, _w_policy = _mode_from_payload(payload)
                 return _withhold_correction(reason=decision.reason_codes[0],
                     pipeline_status=status, metrics=metrics, start_time=start_time,
-                    decision=decision)
+                    decision=decision,
+                    skill_inference_mode=_w_mode,
+                    skill_inference_policy_version=_w_policy)
 
             # Do not forward any pipeline draft aliases, notes, or provenance.
             # Receipt creation parses this exact markdown into the sole export object.
