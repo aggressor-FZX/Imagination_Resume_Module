@@ -255,16 +255,23 @@ def _correction_usage(pipeline_metrics, provider=None):
 def _mode_from_payload(payload):
     """The effective inference mode stated by a request, for withheld results.
 
-    Falls back to ``None`` rather than guessing: a withhold path that cannot
-    determine the mode should say nothing rather than assert a policy that may
-    not have run.
+    An ABSENT field is not an unknown policy. ``normalize_mode(None)`` resolves to
+    the documented default (imaginative / imaginative-v1), and the pipeline runs
+    that default — so a withheld result must report it. Returning None here meant
+    that every caller who relied on the documented default (including the
+    website, which does not send the field) was told nothing about which policy
+    produced their refusal, while a caller who sent the field explicitly was told.
+    That difference reflected how the request was spelled, not what happened.
+
+    A value that cannot be interpreted still falls back to None rather than
+    guessing: validation refuses unknown modes elsewhere, so reaching that branch
+    means something is wrong with this process, and asserting a policy that may
+    not have run would be worse than saying nothing.
     """
     try:
-        from skill_inference import SkillInferenceMode, mode_contract, normalize_mode
+        from skill_inference import mode_contract, normalize_mode
 
         requested = getattr(payload, "skill_inference_mode", None)
-        if requested is None:
-            return None, None
         contract = mode_contract(normalize_mode(requested))
         return (
             contract["skill_inference_mode"],
