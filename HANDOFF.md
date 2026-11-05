@@ -23,10 +23,50 @@ of scope.
 - [x] Phase B — **typed, source-anchored bridge records** (`skill_bridge.py`),
       Researcher proposal schema, correction phrase exemption, both leak paths,
       41 record tests + 10 paired end-to-end tests
+- [x] Phase D.4 — **policy state bound into the approval receipt** (v5),
+      `_surviving_bridges()` filter, frontend transport, 25 binding tests
 - [ ] Phase C remainder — review-protocol phrase spans for non-Skills lines,
       narrowing/removal lifecycle (C.7), redaction handoff (C.8)
-- [ ] Phase D — policy binding in the receipt, preview/export parity
+- [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
 - [ ] Phase E — caches and isolation
+
+## Phase D.4 — what the receipt now binds
+
+The gap closed: the receipt bound the *rendered document* but said nothing about
+the inference mode or the surviving bridges. Mode/bridges are not part of the
+rendered object, so a source-only approval could be presented as an approval of
+inferred skills.
+
+| Situation | Result |
+|---|---|
+| Source-only approval (no policy state) | **v4**, unchanged; existing receipts still verify |
+| Policy state supplied | **v5** + `pol_fp` fingerprint |
+| Export declares policy state, receipt is v4 | `receipt_policy_unbound` — a v4 token grants no bridge privilege, ever |
+| Receipt is v5, export omits the state | `receipt_policy_state_missing` |
+| Both present, any bound field altered | `receipt_policy_mismatch` |
+
+Bound fields: mode, policy version, and per surviving bridge the `id`, `skill`,
+`origin`, `source_id` and `policy_version`. Canonicalisation sorts by
+`(id, skill)`, so reordering is not a change; `rationale`/`evidence_quote` are
+**not** bound (they are not semantic identity and binding them would make two
+identical documents differ).
+
+`_surviving_bridges()` keeps only labels that actually reached the approved
+markdown, using word-bounded matching — an unused or removed proposal is never
+signed, and the filter also works in Conservative mode (where it yields nothing).
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1225 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_receipt_binding.py -q      # 25
+python -m pytest tests/test_skill_bridge_records.py \
+                 tests/test_skill_bridge_end_to_end.py -q     # 51
+cd ../Login_Landing_page && npx tsc --noEmit                  # clean
+```
+
 
 ## Spec-agent integration SHA (recorded per task item 5)
 
@@ -81,10 +121,8 @@ conservative  bridges=0 verdict=uncertain
 | `imaginator_flow.run_final_editor_async` raw research injection | **already closed** by the published evidence boundary; verified it never interpolates `research_data` |
 | `preserve_skills_block()` deleting an inferred label | **closed** — permitted labels are retained; keyword passed only when bridges exist |
 
-**Not yet done:** the receipt does **not** bind mode/policy/bridge IDs (Phase D),
-and `policy_record()` exists but is unused by the approval path. Until Phase D, a
-caller cannot forge a bridge into the document (correction re-verifies the
-anchor), but the *set* of surviving bridges is not cryptographically bound.
+**Resolved by Phase D.4:** mode, policy version and the surviving bridge set are
+now bound into a v5 receipt, and a v4 receipt cannot authorise an inferred skill.
 
 ## Current behaviour
 
