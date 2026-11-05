@@ -202,21 +202,48 @@ def test_conservative_rejects_every_proposal():
 @pytest.mark.parametrize(
     "skill",
     [
-        "ARIMA forecasting",         # specific algorithm
-        "Python",                    # named tool only
         "Used Python for trend analysis and increased revenue 20%",  # a claim
         "expert in trend analysis",  # proficiency
-        "led a team of 5 analysts",  # leadership + team size
-        "trend analysis: advanced",  # category/level
+        "proven track record",       # proficiency
+        "trend analysis: advanced",  # category/level markup
         "analyzed data. achieved 20% growth.",  # sentence
+        "grew revenue 20%",          # metric with a unit
+        "3 years of analysis",       # metric with a unit
     ],
 )
-def test_non_general_labels_are_rejected(skill):
+def test_claim_shaped_labels_are_rejected(skill):
+    """Structural refusals: these shapes are never a skill label.
+
+    Deliberately does NOT include single words, acronyms or long phrases. Those
+    were refused by an earlier word-count heuristic, which discarded legitimate
+    skills ("reporting", "SQL") on shape alone. Whether a tool name is a
+    justified inference is a semantic question that belongs to the reviewer.
+    """
     accepted, rejected = build_bridges(
         [_proposal(skill=skill)], sources=SOURCES, mode="imaginative"
     )
     assert accepted == []
     assert rejected[0]["reason"] == "not_a_general_skill_label"
+
+
+@pytest.mark.parametrize(
+    "skill",
+    [
+        "trend analysis",
+        "reporting",              # single word, genuinely a skill
+        "Python",                 # a tool the reviewer may judge justified
+        "SQL",                    # acronym
+        "S3",                     # acronym with a digit
+        "cross functional collaboration and stakeholder communication",  # long
+    ],
+)
+def test_shape_alone_does_not_reject_a_label(skill):
+    """The structural check must not be a semantic gate."""
+    accepted, rejected = build_bridges(
+        [_proposal(skill=skill)], sources=SOURCES, mode="imaginative"
+    )
+    assert rejected == [], f"{skill!r} was refused on shape alone: {rejected}"
+    assert accepted[0].skill == skill
 
 
 @pytest.mark.parametrize(

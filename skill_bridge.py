@@ -162,50 +162,54 @@ def _crosses_document_boundary(source_text: str, start: int, end: int) -> bool:
 
 
 def _is_general_label(skill: str) -> bool:
-    """Heuristic: is this a skill label rather than a smuggled claim?
+    """Structural check: is this shaped like a label rather than a claim?
 
-    This is not semantic verification — it cannot tell a good bridge from a bad
-    one. It rejects shapes that are *never* a general transferable-skill label:
+    This is **shape only**. It deliberately does not decide whether a label is
+    semantically justified — the reviewer does that, against the candidate quote.
 
-    * a full sentence, or a label with a category colon;
-    * anything containing a digit (a metric or a rank wearing a skill's name);
-    * a proficiency/rank word, which turns a label into a claim about level;
-    * a single word, because a transferable-skill bridge is a *phrase*
-      ("trend analysis"), while bare single words are almost always tool or
-      language names ("Python", "SQL", "Kubernetes");
-    * an ALL-CAPS token, which is how acronym-valued products and algorithms
-      appear ("ARIMA", "AWS", "SAP").
+    Rejected (a *shape* that is never a label):
 
-    Anything this misses is caught later by the reviewer, which is the only
-    component that can judge meaning.
+    * empty, or longer than ``MAX_SKILL_CHARS``;
+    * sentence punctuation or a category colon (it is prose/markup, not a label);
+    * a metric with a unit (``20%``, ``3 years``, ``$5k``) — a number plus unit is
+      a *claim about an outcome*, which no skill inference may introduce;
+    * a proficiency/rank word (``expert``, ``advanced``, ``proven``) — the policy
+      explicitly forbids proficiency claims.
+
+    Deliberately **allowed**, because banning them discarded legitimate skills:
+
+    * single words (``reporting``, ``Python``) — a one-word skill named in the
+      candidate's own text is a perfectly good bridge;
+    * acronyms (``SQL``, ``ARIMA``) — if the candidate's text states it, the
+      reviewer decides whether the inference is justified;
+    * longer phrases (up to the character bound).
+
+    The earlier version rejected any single word and any label over five words.
+    Both were arbitrary: they refused real skills on shape alone, and a word
+    count cannot distinguish a tool name from a specialism.
     """
     if not skill or len(skill) > MAX_SKILL_CHARS:
         return False
-    # Sentence punctuation anywhere — including a trailing period. The original
-    # pattern required punctuation FOLLOWED BY whitespace, so "a complete sentence
-    # about trends." passed and could be authorised as a "narrowed" label.
-    if re.search(r"[.;!?]", skill):
+    # Sentence punctuation or a category colon: prose or markup, not a label.
+    if re.search(r"[.;!?]", skill) or ":" in skill:
         return False
-    if ":" in skill:
+    # Metric with a unit. Deliberately narrower than "contains a digit": a digit
+    # alone can be part of a real tool name (S3, 802.11), while a digit with a
+    # unit is an outcome claim.
+    #
+    # `%` needs no unit boundary after it — "%" is itself the unit, so requiring
+    # \b there is what previously let "trend analysis 20%" through.
+    if re.search(r"\d+\s*%", skill):
         return False
-    # A digit anywhere is a metric, a version, a team size or a rank.
-    if any(ch.isdigit() for ch in skill):
+    if re.search(r"\d+\s*(\$|x\b|hours?|days?|weeks?|months?|years?|percent)",
+                 skill, re.IGNORECASE):
         return False
-    # Proficiency/rank words turn a label into an assertion about level.
+    # Proficiency / rank vocabulary asserts a level rather than naming a skill.
     if re.search(
-        r"\b(expert|advanced|proficient|proven|mastery|senior|lead|principal)\b",
+        r"\b(expert|advanced|proficient|proven|mastery|seasoned)\b",
         skill,
         re.IGNORECASE,
     ):
-        return False
-    words = [w for w in re.split(r"[\s/]+", skill) if w]
-    # A general capability label is a short phrase. Below 2 it is a bare token
-    # (usually a product name); above 5 it is prose.
-    if len(words) < 2 or len(words) > 5:
-        return False
-    # An all-caps token of length >= 2 is an acronym: a named product,
-    # algorithm or platform, not a general capability.
-    if any(len(w) >= 2 and w.isupper() for w in words):
         return False
     return True
 

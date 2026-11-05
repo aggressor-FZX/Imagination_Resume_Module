@@ -53,21 +53,39 @@ def test_accept_is_valid_without_a_replacement():
 @pytest.mark.parametrize(
     "replacement",
     [
-        "ARIMA forecasting",     # specific algorithm
-        "Python",                # single token / tool
-        "AWS",                   # acronym
-        "expert trend analysis", # proficiency
-        "trend analysis 20%",    # metric
-        "a complete sentence about trends.",  # sentence
+        "expert trend analysis",             # proficiency claim
+        "proven trend analysis",             # proficiency claim
+        "trend analysis 20%",                # metric with a unit
+        "3 years of trend analysis",         # metric with a unit
+        "a complete sentence about trends.",  # prose
+        "Analysis: trend analysis",          # category markup
     ],
 )
-def test_narrowing_cannot_escalate(replacement):
-    """The same validator that guards a proposal guards a narrowing."""
+def test_narrowing_cannot_escalate_structurally(replacement):
+    """A narrowing is a *shape*-checked label, same as a proposal.
+
+    Semantic escalation (an algorithm or tool the candidate never used) is caught
+    by the reviewer against the original evidence, not here — this check refuses
+    only shapes that are never a label.
+    """
     with pytest.raises(BridgeDecisionError):
         validate_decision(
             bridge_id="b1", decision=NARROW, skill="trend analysis",
             replacement=replacement,
         )
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    ["data analysis", "reporting", "Python", "SQL", "statistical analysis"],
+)
+def test_narrowing_accepts_well_shaped_labels(replacement):
+    """Structural acceptance only; the reviewer still judges the wording."""
+    decision = validate_decision(
+        bridge_id="b1", decision=NARROW, skill="trend analysis",
+        replacement=replacement,
+    )
+    assert decision.replacement == replacement
 
 
 def test_narrowing_to_an_identical_label_is_refused():

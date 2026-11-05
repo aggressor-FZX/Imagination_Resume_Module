@@ -611,7 +611,21 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
     names the inventory items the reviewer declared missing, so the caller can attempt
     a bounded restoration rather than withholding on the first omission.
     """
-    if (not _exact_dict(response, {"claims", "representations"})
+    # `bridge_decisions` is optional: present only when the request offered
+    # permitted bridge labels. It is carried through untouched here and consumed
+    # by the caller; an absent key keeps the original source-only contract.
+    #
+    # The dict check runs FIRST: a malformed answer (None, a list, a string) must
+    # be reported as `malformed_output`, not crash into a generic
+    # `provider_error` that misattributes our own validation to the transport.
+    if type(response) is not dict:
+        raise _Invalid
+    allowed_keys = {"claims", "representations"}
+    if "bridge_decisions" in response:
+        allowed_keys.add("bridge_decisions")
+        if type(response["bridge_decisions"]) is not dict:
+            raise _Invalid
+    if (not _exact_dict(response, allowed_keys)
         or type(response["claims"]) is not list
         or type(response["representations"]) is not list):
         raise _Invalid
@@ -788,6 +802,145 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
     if seen != set(items):
         raise _Invalid
     return response["claims"], incomplete, missing_items
+
+
+
+class _BridgeOutcome:
+    """What applying a set of reviewer bridge decisions did to the draft."""
+
+    __slots__ = ("applied", "rejected", "requires_review", "bridges")
+
+    def __init__(self) -> None:
+        self.applied: list[dict[str, str]] = []
+        self.rejected: list[dict[str, str]] = []
+        self.requires_review = False
+        # Bridge records as they should be offered on the NEXT review. A narrowed
+        # bridge keeps its id and anchor but carries the new wording, so the
+        # re-review can judge that wording against the SAME candidate evidence.
+        # Without this the original label would simply vanish from the draft and
+        # the replacement would be unauthorised.
+        self.bridges: list[dict[str, Any]] | None = None
+
+
+def _apply_bridge_decisions(
+    markdown: str,
+    decisions: dict[str, Any],
+    permitted_bridges: list[dict[str, Any]] | None,
+    history: dict[str, dict[str, str]],
+) -> tuple[str, _BridgeOutcome]:
+    """Apply the reviewer's accept/narrow/remove decisions to the draft.
+
+    Only a *narrowed* label changes the text. An accepted label already reads as
+    it was written, and a removed label is handled by flagging it for the existing
+    repair path — this function does not delete content on a reviewer's word.
+
+    ``history`` accumulates the decision per bridge id so a later review cannot
+    quietly revive a removed label and so the final result reports only what
+    survived.
+
+    Narrowing is **structural** here: the replacement has been shape-checked by
+    the adapter, but it has NOT been judged against the candidate evidence. The
+    caller re-reviews the edited draft, and that review is what authorises the
+    new wording. ``requires_review`` says exactly that.
+    """
+    from skill_bridge_decisions import (
+        BridgeDecisionError,
+        apply_decisions,
+        validate_decision,
+    )
+
+    outcome = _BridgeOutcome()
+    if not isinstance(decisions, dict) or not decisions:
+        return markdown, outcome
+
+    by_id = {
+        bridge.get("id"): bridge
+        for bridge in (permitted_bridges or [])
+        if isinstance(bridge, dict) and bridge.get("id")
+    }
+
+    payloads: list[dict[str, str]] = []
+    for bridge_id, answer in decisions.items():
+        if not isinstance(answer, dict):
+            outcome.rejected.append({"bridge_id": str(bridge_id),
+                                     "reason": "malformed_decision"})
+            continue
+        bridge = by_id.get(bridge_id)
+        if bridge is None:
+            # A bridge the request never offered cannot be decided.
+            outcome.rejected.append({"bridge_id": str(bridge_id),
+                                     "reason": "unknown_bridge"})
+            continue
+        raw = {
+            "bridge_id": bridge_id,
+            "decision": answer.get("decision"),
+            "skill": bridge.get("skill"),
+            "replacement": answer.get("replacement", ""),
+        }
+        try:
+            validate_decision(**raw)
+        except BridgeDecisionError:
+            outcome.rejected.append({"bridge_id": str(bridge_id),
+                                     "reason": "invalid_decision"})
+            continue
+        previous = history.get(bridge_id)
+        if previous and previous.get("decision") == "remove":
+            # A removed bridge stays removed: a later review must not revive it
+            # by deciding differently about text that no longer contains it.
+            outcome.rejected.append({"bridge_id": str(bridge_id),
+                                     "reason": "already_removed"})
+            continue
+        payloads.append(raw)
+
+    if not payloads:
+        return markdown, outcome
+
+    edited, applied, rejected = apply_decisions(markdown, payloads)
+    outcome.rejected.extend(rejected)
+    # Bridge records for the NEXT review. A narrowed bridge keeps its identity and
+    # anchor but carries the new wording; a removed one is dropped. This is what
+    # lets the re-review judge the replacement against the original evidence
+    # instead of treating it as an unauthorised label that appeared from nowhere.
+    next_bridges: list[dict[str, Any]] = []
+    narrowed = {
+        decision.bridge_id: decision.replacement
+        for decision in applied
+        if decision.decision == "narrow"
+    }
+    removed = {
+        decision.bridge_id for decision in applied if decision.decision == "remove"
+    }
+    for bridge in permitted_bridges or []:
+        if not isinstance(bridge, dict) or not bridge.get("id"):
+            continue
+        bridge_id = bridge["id"]
+        if bridge_id in removed:
+            continue
+        record = dict(bridge)
+        if bridge_id in narrowed:
+            replacement = narrowed[bridge_id]
+            # The anchor and evidence do not change — only the permitted wording.
+            record["skill"] = replacement
+            # The quote may no longer appear verbatim in the draft, so the
+            # reviewer is judging a *label* against *evidence*, exactly as it did
+            # for the original proposal.
+        next_bridges.append(record)
+    if applied:
+        outcome.bridges = next_bridges
+
+    for decision in applied:
+        record = {
+            "bridge_id": decision.bridge_id,
+            "decision": decision.decision,
+            "skill": decision.skill,
+            "replacement": decision.replacement,
+        }
+        history[decision.bridge_id] = record
+        outcome.applied.append(record)
+        if decision.decision == "narrow":
+            # New wording in the draft has not been reviewed yet.
+            outcome.requires_review = True
+    return edited, outcome
 
 
 def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
@@ -1160,6 +1313,9 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     # "at most once" and "never after a repair" rules cannot be bypassed.
     recovery: dict[str, Any] = {"recovered": False, "repaired": False,
                                 "last_unjudged": None}
+    # Per-bridge decision history: a removed bridge must not be revived by a
+    # later review, and the final result reports only what survived.
+    bridge_history: dict[str, dict[str, str]] = {}
 
     def blocked(reason: str) -> CorrectionResult:
         detail = {
@@ -1246,7 +1402,14 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
         if permitted_bridges:
             # Server-owned permitted labels. The adapter may allow a zero-overlap
             # label phrase to stand, but only for a record supplied here.
-            payload["permitted_bridges"] = list(permitted_bridges)
+            #
+            # The key is underscore-prefixed so the real provider's serialization
+            # filter (`not key.startswith("_")`) strips it. Without that, the raw
+            # record — including its model-authored `rationale`, which may contain
+            # private detail the redactor never saw — would travel to the provider
+            # as part of the request body. The adapter reads the private key and
+            # builds the visible `bridges` block itself from redacted text.
+            payload["_permitted_bridges"] = list(permitted_bridges)
         if must_judge is not None:
             payload["must_judge"] = list(must_judge)
             must_judge = None
@@ -1261,6 +1424,38 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 return blocked(f"timeout_{phase}")
             claims, incomplete, missing_items = _validate_review(
                 response, lines, source_map, inventory)
+            # Reviewer decisions about permitted bridge labels (Phase C.6/C.7).
+            # Absent unless the request offered bridges, so source-only callers
+            # see exactly the previous behaviour.
+            #
+            # Guarded on `isinstance(response, dict)`: a malformed answer (None,
+            # a list, a string) must reach `_validate_review`'s own rejection
+            # path and be reported as `malformed_output`. Touching it here first
+            # turned that into a generic `provider_error`, which misreports our
+            # own validation as a transport problem.
+            bridge_decisions = (
+                response.get("bridge_decisions")
+                if isinstance(response, dict) else None
+            ) or {}
+            if bridge_decisions:
+                markdown, bridge_outcome = _apply_bridge_decisions(
+                    markdown, bridge_decisions, permitted_bridges,
+                    bridge_history,
+                )
+                if bridge_outcome.bridges is not None:
+                    # Carry the updated records forward: a narrowed bridge keeps
+                    # its anchor and gains the new wording, and a removed bridge
+                    # is gone. The next review therefore judges the replacement
+                    # against the ORIGINAL evidence and cannot resurrect a
+                    # removal.
+                    permitted_bridges = bridge_outcome.bridges
+                if bridge_outcome.requires_review:
+                    # A narrowed label was applied but has not been re-reviewed
+                    # yet. The complete review below is what authorises it; until
+                    # then it is structural wording only.
+                    recovery["repaired"] = True
+                    phase = "post_patch_review"
+                    continue
             if all(claim["verdict"] == "structural" for claim in claims):
                 return blocked("no_supported_claims")
             flagged = [claim for claim in claims if claim["verdict"] in {"unsupported", "uncertain"}]
