@@ -361,6 +361,66 @@ def _redacted_quote_at(
     return None
 
 
+def _bridge_span_in_line(line: str, bridge: dict[str, Any]) -> Optional[tuple[int, int]]:
+    """Character range of the authorised label inside ``line``, if present.
+
+    Word-bounded and case-insensitive, with the offsets taken from the ORIGINAL
+    string so the result can be used to split the line. Markdown emphasis is left
+    in place: the span covers the visible label only, so surrounding markup stays
+    in a residual span at the reviewer's verdict.
+    """
+    skill = bridge.get("skill") if isinstance(bridge, dict) else None
+    if type(skill) is not str or not skill.strip():
+        return None
+    if not isinstance(line, str) or not line:
+        return None
+    label = " ".join(skill.casefold().split())
+    if not label:
+        return None
+    pattern = r"(?<![a-z0-9])" + re.escape(label) + r"(?![a-z0-9])"
+    match = re.search(pattern, line.casefold())
+    if not match:
+        return None
+    start, end = match.span()
+    # The case-folded view can differ in length from the original for some
+    # Unicode characters, which would make the offsets wrong. Refuse rather than
+    # emit a span that does not line up.
+    if line.casefold()[start:end] != label:
+        return None
+    return start, end
+
+
+def _split_line_around_bridge(
+    *,
+    line_id: str,
+    text: str,
+    span: tuple[int, int],
+    citation: dict[str, Any],
+    residual_verdict: str,
+) -> list[dict[str, Any]]:
+    """Partition a line into ``before | label | after`` claims.
+
+    The label span is ``supported`` (it carries the permitted phrase and its
+    anchor); the residual spans keep the reviewer's own verdict, so an
+    unsupported tool or outcome on the same line is still withheld. Empty
+    residual spans are omitted, and the partition stays gapless because the
+    spans are taken directly from consecutive character ranges.
+    """
+    start, end = span
+    pieces: list[tuple[int, int, str, list[dict[str, Any]]]] = []
+    if start > 0:
+        pieces.append((0, start, residual_verdict, []))
+    pieces.append((start, end, "supported", [citation]))
+    if end < len(text):
+        pieces.append((end, len(text), residual_verdict, []))
+    return [
+        {"id": f"{line_id}:{a}:{b}", "line_id": line_id, "start": a, "end": b,
+         "verdict": verdict, "citations": citations}
+        for a, b, verdict, citations in pieces
+        if b > a
+    ]
+
+
 def _bridge_for_line(line: dict[str, Any], bridges: Any) -> dict[str, Any]:
     """The permitted-bridge record that authorises this line's label, if any.
 
@@ -757,6 +817,43 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
                                    "start": item["start"], "end": item["end"],
                                    "quote": quotes[anchor]}],
                 })
+                continue
+
+        # ── Phrase-scoped exemption for a label EMBEDDED in a sentence ─────
+        # The block above covers a standalone skill item. The remaining case is a
+        # permitted label used inside prose: "- Delivered trend analysis for
+        # stakeholders". The label is authorised and the surrounding words may be
+        # perfectly faithful, yet one whole-line verdict cannot express
+        # "this phrase is permitted, judge the rest".
+        #
+        # So split the line into up to three spans: the label (supported by its
+        # anchor) and the text either side (kept at the reviewer's verdict). The
+        # strict validator requires a gapless, non-overlapping partition, which
+        # this satisfies by construction.
+        #
+        # This does NOT upgrade a mixed claim. The residual spans keep `uncertain`,
+        # so an unsupported tool or outcome in the same sentence still fails; only
+        # the exact authorised phrase carries the exemption.
+        if (
+            bridge_here
+            and verdict == "uncertain"
+            and chosen
+            and not _line_is_only_the_bridge(text, bridge_here)
+            and all(_overlap_ratio(quotes[index], text) == 0 for index in chosen)
+        ):
+            anchor = bridge_here.get("_citation_index")
+            span = _bridge_span_in_line(text, bridge_here)
+            if isinstance(anchor, int) and 0 <= anchor < len(items) and span:
+                item = items[anchor]
+                claims.extend(
+                    _split_line_around_bridge(
+                        line_id=line["line_id"], text=text, span=span,
+                        citation={"source_id": item["source_id"],
+                                  "start": item["start"], "end": item["end"],
+                                  "quote": quotes[anchor]},
+                        residual_verdict=verdict,
+                    )
+                )
                 continue
         claims.append({"id": f"{line['line_id']}:0:{len(text)}", "line_id": line["line_id"],
                        "start": 0, "end": len(text), "verdict": verdict,

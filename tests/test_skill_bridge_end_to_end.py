@@ -148,13 +148,29 @@ def test_conservative_produces_no_authorisation_at_all():
 
 
 def test_mixed_claim_is_not_rescued_by_the_bridge():
-    """A label does not authorise a tool or an outcome on the same line."""
+    """A label does not authorise a tool or an outcome on the same line.
+
+    The exemption attaches to the exact label phrase only. The tool ("Used
+    Python") and the fabricated outcome ("increased revenue 20%") sit outside
+    that phrase, so they keep the reviewer's verdict and still block publication.
+    """
     bridges = _bridges()
     claims, _ = _review(DRAFT_MIXED, bridges)
-    assert all(c["verdict"] != "supported" for c in claims), (
-        "an unsupported tool/outcome must not be approved because a label on the "
-        "same line is permitted"
-    )
+    body_text = DRAFT_MIXED.split("\n")[1]
+    supported = [body_text[c["start"]:c["end"]].strip().lower()
+                 for c in claims
+                 if c["line_id"] == "L000002" and c["verdict"] == "supported"]
+    # Only the label may be approved...
+    assert supported == ["trend analysis"]
+    # ...and nothing carries the tool or the metric.
+    for claim in claims:
+        if claim["verdict"] != "supported":
+            continue
+        span = body_text[claim["start"]:claim["end"]].lower()
+        assert "python" not in span, "a permitted label must not authorise a tool"
+        assert "revenue" not in span and "20%" not in span, (
+            "a permitted label must not authorise an outcome metric"
+        )
 
 
 def test_forged_bridge_id_confers_nothing():
@@ -183,14 +199,23 @@ def test_bridge_with_an_anchor_that_is_not_a_reviewed_segment_confers_nothing():
 
 
 def test_label_inside_a_normal_sentence_is_not_auto_permitted():
-    """The exemption is phrase-scoped, not line-scoped."""
+    """The exemption is phrase-scoped: only the label phrase is supported."""
     bridges = _bridges()
     sentence = (
         "## Professional Experience\n"
         "- Delivered trend analysis and enhanced system reliability"
     )
     claims, _ = _review(sentence, bridges)
-    assert all(c["verdict"] != "supported" for c in claims)
+    body = [c for c in claims if c["line_id"] == "L000002"]
+    supported = [sentence.split("\n")[1][c["start"]:c["end"]].lower()
+                 for c in body if c["verdict"] == "supported"]
+    # Exactly the bridged phrase survives; the surrounding claim does not.
+    assert supported == ["trend analysis"]
+    assert all(
+        c["verdict"] != "supported"
+        for c in body
+        if "trend analysis" not in sentence.split("\n")[1][c["start"]:c["end"]].lower()
+    )
 
 
 def test_substring_of_a_longer_word_does_not_match():
