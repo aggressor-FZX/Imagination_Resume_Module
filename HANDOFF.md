@@ -28,9 +28,60 @@ of scope.
 - [x] Phase C.7 — **accept / narrow / remove lifecycle**
       (`skill_bridge_decisions.py`), 31 tests
 - [x] Phase C.8 — **redaction-safe bridge anchors** (real defect fixed, see below)
-- [ ] Phase C remainder — phrase-scoped spans for non-Skills lines inside prose
+- [x] **Reviewer decisions wired into the real engine** — `bridge_decisions`
+      through the adapter, narrow re-reviewed, remove not revivable, 18
+      engine-level tests
+- [x] **Two disclosure leaks found and fixed** (see below)
+- [ ] Phase C remainder — phrase-scoped spans for a label embedded in prose
 - [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
 - [ ] Phase E — caches and isolation
+
+## Two disclosure defects found and fixed
+
+Both were in the *outgoing provider payload*, not the response.
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | `correction_protocol` echoed the bridge record's **raw** `evidence_quote` into the visible `bridges` block. With PII inside the quoted activity, the raw text went to the provider while the redacted source sat right beside it. | `_redacted_quote_at()` derives the offer from the **redacted** source at the recorded coordinates. A bridge whose coordinates cannot be honoured is **not offered** (fails closed rather than leaking or fabricating). |
+| 2 | `source_correction` passed `permitted_bridges` as a **visible** key, so the raw record — including its model-authored `rationale`, which the redactor never saw — travelled in the request body. | Moved to `_permitted_bridges`; the provider's existing `not key.startswith("_")` filter strips it. |
+
+Verified on the serialized wire payload (underscore keys excluded, exactly as the
+provider does), for PII **inside the quote**, **inside the rationale**, and
+**outside the quote**.
+
+A pre-existing test also caught a regression: `_validate_review` touched a
+malformed `response` before type-checking it, turning `malformed_output` into a
+generic `provider_error`. Fixed by checking `type(response) is not dict` first.
+
+## Decision lifecycle through the engine
+
+| Decision | Engine behaviour |
+|---|---|
+| **accept** | label stands; approval path unchanged |
+| **narrow** | label rewritten, then `requires_review` forces a **complete re-review**. The updated record (same id, same anchor, new wording) is offered to that review, so the replacement is judged against the **original** candidate evidence. Structural validation alone never authorises it. |
+| **remove** | label dropped from the offered set; per-bridge history prevents a later review from reviving it |
+| **omitted / unknown** | no decision = no change; an unknown decision word or unknown bridge id is **malformed**, not approval |
+
+## Structural bounds relaxed per review
+
+Single words (`reporting`), acronyms (`SQL`, `ARIMA`) and longer phrases are **no
+longer** refused on shape alone — that heuristic discarded legitimate skills. Only
+claim shapes are rejected: sentence punctuation, category colons, metric + unit,
+proficiency vocabulary. Whether a *specific* label is justified is the reviewer's
+judgement against the candidate evidence, not a regex.
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1285 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_engine_lifecycle.py -q      # 18
+python -m pytest tests/test_source_correction.py \
+                 tests/test_bridge_engine_lifecycle.py \
+                 tests/test_bridge_decisions_and_redaction.py -q   # 135
+```
+
 
 ## Phase C.8 — a real defect that was found and fixed
 
