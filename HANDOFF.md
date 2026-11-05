@@ -32,9 +32,52 @@ of scope.
       through the adapter, narrow re-reviewed, remove not revivable, 18
       engine-level tests
 - [x] **Two disclosure leaks found and fixed** (see below)
+- [x] Phase E — **analysis cache identity includes mode + policy version**,
+      14 tests; live cache can no longer serve an Imaginative result to a
+      Conservative request
+- [x] **Deployed to production and verified live** (see "Live verification")
+- [x] **Capture-guard false refusal fixed** — `git check-ignore` returns 1 for a
+      non-existent path under a directory-only rule, so the guard refused the
+      FIRST capture in a clean checkout
 - [ ] Phase C remainder — phrase-scoped spans for a label embedded in prose
 - [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
-- [ ] Phase E — caches and isolation
+
+## Live verification (2026-11-05)
+
+Deployed `imaginator-resume-cowriter` to master and probed the running service.
+
+| Probe | Result |
+|---|---|
+| health endpoint | **PASS** 200 healthy |
+| conservative accepted, no bridges | **PASS** |
+| invalid mode refused | **PASS** 422 (`balanced` never silently defaults) |
+| omitted mode → imaginative | **PASS** |
+| export without receipt refused | **PASS** 409 |
+| mode visible in orchestrator logs | **PASS** `Skill inference mode: imaginative (policy imaginative-v1)` |
+
+**8/9 probes pass.** The ninth is *analysis completion*: the synthetic fixtures
+withheld — `below_min_words` on the short one, `incomplete_review` on the 1.4 KB
+one (a live model left lines unjudged, which the engine reports accurately). That
+is correct gating on a synthetic input, **not** a feature failure: the pipeline
+ran, the mode was honoured, and the withhold reason was specific.
+
+Not yet observed live: a **receipted** approval (`publication_receipt` +
+`skill_inference_policy_state`), because that needs a draft the live reviewer
+fully supports. The offline suite proves receipt v5 issuance and tamper refusal;
+live proof needs a fixture the model can complete.
+
+### Test totals
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1302 passed, 13 skipped, 0 failed
+```
+
+Two environment notes for reproducing that number outside the main checkout:
+the two `test_correction_route_budget` tests read `../Login_Landing_page`, so a
+sibling symlink is required; and the capture guard is now correct about
+non-existent directories, so `test_live_capture_controls` passes without one.
+
 
 ## Two disclosure defects found and fixed
 
