@@ -256,13 +256,45 @@ def _make_analysis_cache_key(
     extracted_skills_json: Optional[Dict],
     domain_insights_json: Optional[Dict],
     confidence_threshold: float,
+    skill_inference_mode: Optional[str] = None,
+    skill_inference_policy_version: Optional[str] = None,
 ) -> str:
+    """Cache identity for one analysis.
+
+    The **effective skill-inference mode and policy version are part of the key**.
+    They were not: two requests with identical text but different modes hashed the
+    same, so a Conservative request could be served an Imaginative result whose
+    bridge labels the caller never asked for. That is a permission leak across
+    requests, not a cache miss.
+
+    The values are normalised through the same single entry point every other
+    boundary uses, so an unknown mode cannot silently hash as the default. A
+    normalisation failure falls back to a distinct "invalid" component rather than
+    to "imaginative": the key still separates the requests, and the pipeline will
+    reject the value anyway.
+    """
+    try:
+        from skill_inference import mode_contract, normalize_mode
+
+        contract = mode_contract(normalize_mode(skill_inference_mode))
+        mode_part = contract["skill_inference_mode"]
+        policy_part = (
+            skill_inference_policy_version
+            or contract["skill_inference_policy_version"]
+        )
+    except Exception:
+        mode_part = "invalid"
+        policy_part = skill_inference_policy_version or "invalid"
+
     parts = [
         resume_text or "",
         job_ad or "",
         json.dumps(extracted_skills_json or {}, sort_keys=True, ensure_ascii=False),
         json.dumps(domain_insights_json or {}, sort_keys=True, ensure_ascii=False),
         str(confidence_threshold),
+        # Permission policy: a different mode is a different result.
+        mode_part,
+        policy_part,
     ]
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return digest
@@ -3136,6 +3168,12 @@ async def run_analysis_async(
         extracted_skills_json,
         domain_insights_json,
         confidence_threshold,
+        # The effective permission policy is part of the identity: a cached
+        # result must never travel to a request running a different mode.
+        skill_inference_mode=kwargs.get("skill_inference_mode"),
+        skill_inference_policy_version=(
+            kwargs.get("skill_inference_policy_version")
+        ),
     )
     cached = _analysis_cache_get(cache_key)
     if cached is not None:

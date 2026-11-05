@@ -1774,6 +1774,12 @@ async def analyze_multi_file(
             confidence_threshold=settings.confidence_threshold,
             openrouter_api_keys=api_keys,
             location=None,  # No location provided in multi-file upload
+            # The legacy multipart route does not expose an inference-mode control,
+            # so it runs the documented default. Passing it explicitly keeps the
+            # cache identity honest: an omission here would hash as the default
+            # anyway, but a future caller adding the control must not be able to
+            # collide with an existing entry.
+            skill_inference_mode="imaginative",
         )
         analysis_duration_ms = int((time.time() - t0) * 1000)
         logger.info(
