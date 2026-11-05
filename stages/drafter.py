@@ -156,10 +156,44 @@ def create_drafter_prompt(experiences: List[Dict], job_ad: str, research_data: D
                          seniority_level: str, allowed_verbs: List[str],
                          golden_bullets: Optional[List[str]] = None,
                          tone_instruction: str = "Maintain a standard, professional corporate tone.",
-                         extracted_job_title: Optional[str] = None) -> str:
+                         extracted_job_title: Optional[str] = None,
+                         skill_inference_mode: Optional[str] = None) -> str:
     """
     Create the drafter prompt with strict anti-hallucination guardrails and aggressive Style Transfer.
+
+    ``skill_inference_mode`` is the permission boundary, and it is enforced by
+    this prompt text — not by the sampling temperature. Both modes forbid
+    inventing duties, tools, metrics and credentials; only the permission to
+    use a general transferable-skill *label* differs.
     """
+    from skill_inference import SkillInferenceMode, normalize_mode as _normalize_mode
+
+    _mode = _normalize_mode(skill_inference_mode)
+    if _mode is SkillInferenceMode.CONSERVATIVE:
+        skill_permission_block = """
+### SKILL-INFERENCE POLICY: CONSERVATIVE (MANDATORY)
+- Do NOT introduce any skill label the candidate's own material does not state.
+- Do NOT infer transferable skills, implied tools, typical duties or how the work
+  "was likely done".
+- Rewrite and normalize ONLY what the input states. A shorter, faithful bullet is
+  the correct output; an inferred one is a defect.
+"""
+    else:
+        skill_permission_block = """
+### SKILL-INFERENCE POLICY: IMAGINATIVE (MANDATORY LIMITS)
+- You MAY use a general, transferable-skill label (for example "trend analysis"
+  for comparing figures over time, or "time-series analysis" for analyzing
+  measurements over time) to describe an activity the input already states.
+- You may NOT introduce a specific implementation, algorithm, named software
+  product, formal methodology certification, or proficiency level. This is not
+  support for it: naming a technique in the policy text is not evidence the
+  candidate used it.
+- You may NOT invent duties, activities, outcomes, team sizes, employers, dates or
+  credentials. A skill label characterises existing work; it never adds work.
+- Example: "compared weekly sales figures" supports "trend analysis". It does NOT
+  support "ARIMA forecasting", "Python", or "increased revenue 20%".
+"""
+
     # 1. Extract TRUTH constraints from structured experience data.
     # The LLM Parser writes the job title into the 'title' key; we also check
     # 'role' for backward compat and 'title_line' as a last resort.
@@ -235,7 +269,7 @@ You are NOT allowed to invent new jobs or change the user's employment history.
 SENIORITY LEVEL: {seniority_level.upper()}
 STRICT ACTION VERBS: {', '.join(allowed_verbs)}
 TONE INSTRUCTION: {tone_instruction}{title_context}
-
+{skill_permission_block}
 {golden_section}
 
 ### STYLE TRANSFER RULES (MANDATORY):
@@ -346,6 +380,7 @@ def _build_drafter_prompts(
     golden_bullets: Optional[List[str]] = None,
     resume_text: str = "",
     extracted_job_title: Optional[str] = None,
+    skill_inference_mode: Optional[str] = None,
 ) -> tuple:
     """Build (system_prompt, user_prompt) without calling a model.
 
@@ -363,6 +398,7 @@ def _build_drafter_prompts(
         golden_bullets=golden_bullets,
         tone_instruction="Maintain a standard, professional corporate tone.",
         extracted_job_title=extracted_job_title,
+        skill_inference_mode=skill_inference_mode,
     )
 
     _search_text = (resume_text or "") + "\n" + json.dumps(experiences)
@@ -443,6 +479,7 @@ class Drafter:
         extracted_job_title: Optional[str] = None,
         resume_text: Optional[str] = None,
         on_token: Optional[Callable[[str], None]] = None,
+        skill_inference_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Draft STAR-formatted resume bullets.
@@ -452,6 +489,9 @@ class Drafter:
             job_ad: Job description text
             research_data: Output from Researcher stage
             golden_bullets: Optional list of high-quality example bullets
+            skill_inference_mode: Permission policy. ``conservative`` forbids
+                skill bridging and any inferred duties; ``imaginative`` (the
+                default) permits general transferable-skill labels only.
             
         Returns:
             Dictionary with rewritten experiences and metadata
@@ -461,15 +501,50 @@ class Drafter:
         # Determine seniority level and get configuration
         seniority_level, seniority_config = get_seniority_config(job_ad)
         allowed_verbs = seniority_config["verbs"]
-        
-        # Check for sparse input to encourage safe expansion
+
+        # The permission policy, not the temperature, is the boundary. This is
+        # resolved once and used to build one instruction that applies to EVERY
+        # input length. Sparse input previously received its own instruction
+        # telling the model to "EXPAND ... by inferring standard industry tasks"
+        # and to guess "HOW the work was likely done"; that licence to invent
+        # duties applied in both modes, so mode-based prompt tests could pass
+        # while the run still fabricated work history.
+        from skill_inference import SkillInferenceMode, normalize_mode
+
+        effective_mode = normalize_mode(skill_inference_mode)
+        conservative = effective_mode is SkillInferenceMode.CONSERVATIVE
+
+        # Check for sparse input. Sparse notes may be expanded in *length*, but
+        # never by inventing activities; the allowed expansion is general skill
+        # vocabulary in Imaginative mode and nothing at all in Conservative.
         total_input_words = sum(len(str(exp).split()) for exp in experiences)
         is_sparse_input = total_input_words < 50
-        
-        sparse_instruction = ""
+
+        # NOTE: these instructions state the rule positively and never repeat the
+        # retired "expand by inferring industry tasks / how the work was likely
+        # done" phrasing. Echoing a forbidden phrase inside a prompt leaves a
+        # model free to read it as the instruction, which is exactly how the old
+        # wording licensed fabrication.
+        if conservative:
+            sparse_instruction = (
+                "\nNOTE: The user's notes are brief. Keep every bullet limited to "
+                "what the notes state. Skill labels must be ones the notes "
+                "themselves name. A shorter bullet is the correct output."
+            )
+        else:
+            sparse_instruction = (
+                "\nNOTE: The user's notes are brief. Keep every bullet limited to "
+                "what the notes state. You may add a general transferable-skill "
+                "label for an activity the notes already describe, but no specific "
+                "tool, algorithm, software product, credential, metric or "
+                "proficiency level, and no activity the notes do not describe. A "
+                "shorter bullet is the correct output."
+            )
         if is_sparse_input:
-             logger.info("[DRAFTER] Sparse input detected, adding expansion instruction")
-             sparse_instruction = "\nNOTE: The user's notes are very brief. You must EXPAND them into full bullets by inferring standard industry tasks associated with these roles/skills. Focus on HOW the work was likely done, but DO NOT invent specific metrics or projects found in the Job Description."
+            logger.info(
+                "[DRAFTER] Sparse input detected (mode=%s); applying policy-bounded instruction",
+                effective_mode.value,
+            )
 
         # Create prompt
         system_prompt = create_drafter_prompt(
@@ -481,6 +556,7 @@ class Drafter:
             golden_bullets=golden_bullets,
             tone_instruction=tone_instruction or "Maintain a standard, professional corporate tone.",
             extracted_job_title=extracted_job_title,
+            skill_inference_mode=effective_mode.value,
         ) + sparse_instruction
         
         # Pre-extract metrics from BOTH the raw resume text and structured experiences.
@@ -505,6 +581,23 @@ class Drafter:
             )
         else:
             _metrics_block = "- (none found — leave bullets unquantified; never estimate)"
+
+        # Typed, validated bridges: general labels already tied to a verbatim
+        # candidate quote by the Researcher stage. They may be used to describe
+        # the activity they are anchored to — they do NOT add activities.
+        _bridges = []
+        if normalize_mode(skill_inference_mode) is not SkillInferenceMode.CONSERVATIVE:
+            _bridges = [
+                b for b in (research_data or {}).get("bridges") or []
+                if isinstance(b, dict) and b.get("skill")
+            ]
+        if _bridges:
+            _bridges_block = "\n".join(
+                f"- \"{b['skill']}\" — supported by: …{b.get('evidence_quote', '')}…"
+                for b in _bridges[:6]
+            )
+        else:
+            _bridges_block = "- (none)"
 
         user_prompt = f"""
 User Experiences (JSON) - THIS IS THE SOURCE OF TRUTH.
@@ -537,6 +630,13 @@ METRIC RULE (evidence only):
 - If a useful metric is missing, leave the bullet unquantified. NEVER estimate,
   infer, round, or extrapolate a number.
 - A bullet without a metric is completely acceptable and is NOT a failure.
+
+=== APPROVED TRANSFERABLE-SKILL LABELS (pending semantic review) ===
+{_bridges_block}
+Each label above was tied to the quoted candidate activity it is anchored to.
+You may use a label ONLY to describe that activity. A label never adds activity,
+and it never authorises a tool, metric, duty, credential or proficiency level.
+Using none of them is a correct outcome.
 """
         
         try:

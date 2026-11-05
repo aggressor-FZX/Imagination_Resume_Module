@@ -639,6 +639,11 @@ def test_exported_files_carry_the_preserved_record(preserved):
     assert payload, "no export payload"
     payload["publication_receipt"] = body["publication_receipt"]
     payload["final_written_section_markdown"] = body["final_written_section_markdown"]
+    # The approval may be policy-bound (receipt v5). The browser transports this
+    # state verbatim; omitting it makes a v5 approval unverifiable, which is the
+    # correct fail-closed behaviour rather than a false success.
+    if body.get("skill_inference_policy_state"):
+        payload["skill_inference_policy_state"] = body["skill_inference_policy_state"]
 
     response = client.post("/resume/export",
                            headers={"X-Cogito-Owner-Id": "offline-owner"},

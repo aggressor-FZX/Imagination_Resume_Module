@@ -147,7 +147,8 @@ class StarEditor:
                     certifications: List[Dict] = None,
                     skills: List[str] = None,
                     location: str = "",
-                    temperature_override: Optional[float] = None) -> Dict[str, Any]:
+                    temperature_override: Optional[float] = None,
+                    skill_inference_mode: Optional[str] = None) -> Dict[str, Any]:
         """
         Polishes STAR draft into final resume format with TARGET COMPANY GUARD.
         Now includes education, projects, certifications, and skills sections.
@@ -171,7 +172,16 @@ class StarEditor:
         # Prepare input data
         experiences = draft_data.get("rewritten_experiences", [])
         seniority = draft_data.get("seniority_applied", "mid")
-        domain_vocab = research_data.get("domain_vocab", [])
+
+        # The permission policy is the boundary here, not the temperature. In
+        # Conservative mode the editor receives no role vocabulary at all, so
+        # it has nothing to turn into a skill; in Imaginative mode the vocabulary
+        # is supplied but explicitly scoped to relabelling existing activities.
+        from skill_inference import SkillInferenceMode, normalize_mode
+
+        effective_mode = normalize_mode(skill_inference_mode)
+        conservative = effective_mode is SkillInferenceMode.CONSERVATIVE
+        domain_vocab = [] if conservative else research_data.get("domain_vocab", [])
 
         try:
             # EXTRACT TARGET COMPANY from Research Data (e.g., "Armada")
@@ -182,7 +192,8 @@ class StarEditor:
                 experiences, seniority, domain_vocab, target_company,
                 education=education, projects=projects, certifications=certifications,
                 skills=skills, location=location, job_ad=job_ad,
-                original_resume_text=original_resume_text
+                original_resume_text=original_resume_text,
+                skill_inference_mode=effective_mode.value,
             )
 
             # Call LLM with strict JSON schema
@@ -245,10 +256,41 @@ class StarEditor:
             # This runs after section assembly (so it sees the final document) and before
             # metrics validation (so the validator judges the text that will actually be
             # published). It only ever substitutes source wording, never composes prose.
+            #
+            # Validated, mode-permitted inferred labels (Phase B). Conservative
+            # passes none, so its behaviour is unchanged. Imaginative passes the
+            # authorised labels so a lexical source check does not delete them
+            # before the semantic reviewer can judge them.
+            _permitted_bridges = []
+            if not conservative:
+                for _bridge in (research_data or {}).get("bridges") or []:
+                    if isinstance(_bridge, dict):
+                        _label = _bridge.get("skill")
+                        if isinstance(_label, str) and _label.strip():
+                            _permitted_bridges.append(_label)
+
             if original_resume_text:
                 try:
-                    preserved, preservation_changes = source_preservation.preserve_source_facts(
-                        result.get("final_markdown", ""), original_resume_text)
+                    # Pass the bridge labels ONLY when there are any. A
+                    # source-only call keeps the exact two-argument shape it has
+                    # always had: an unconditional new keyword silently broke a
+                    # recording wrapper that documents the route's boundary
+                    # order, and made preservation fall through to its error
+                    # path (so the draft was withheld as a no-op repair).
+                    if _permitted_bridges:
+                        preserved, preservation_changes = (
+                            source_preservation.preserve_source_facts(
+                                result.get("final_markdown", ""),
+                                original_resume_text,
+                                permitted_bridges=_permitted_bridges,
+                            )
+                        )
+                    else:
+                        preserved, preservation_changes = (
+                            source_preservation.preserve_source_facts(
+                                result.get("final_markdown", ""), original_resume_text
+                            )
+                        )
                 except Exception:
                     # Preservation is a safety net, not a load-bearing stage: a failure
                     # must not lose an otherwise usable draft. The gate still applies.
@@ -320,7 +362,8 @@ class StarEditor:
                            education: List[Dict] = None, projects: List[Dict] = None,
                            certifications: List[Dict] = None, skills: List[str] = None,
                            location: str = "", job_ad: str = "",
-                           original_resume_text: str = "") -> str:
+                           original_resume_text: str = "",
+                           skill_inference_mode: Optional[str] = None) -> str:
         """
         Create user prompt for the editor with ALL resume sections.
         
@@ -340,6 +383,31 @@ class StarEditor:
             Formatted user prompt
         """
         prompt_parts = []
+
+        # Permission policy. This is stated in the prompt because the temperature
+        # is a style dial, not an authority: a bold-temperature run must still be
+        # unable to invent duties, tools, credentials or proficiency.
+        from skill_inference import SkillInferenceMode, normalize_mode
+
+        if normalize_mode(skill_inference_mode) is SkillInferenceMode.CONSERVATIVE:
+            prompt_parts.append(
+                "SKILL-INFERENCE POLICY: CONSERVATIVE. Use only skills, tools and "
+                "activities the input states. Do NOT infer transferable skills, "
+                "implied tools, typical duties or how the work was likely done. "
+                "Do NOT upgrade a skill into a proficiency level, seniority or "
+                "leadership claim. A shorter, faithful resume is correct."
+            )
+        else:
+            prompt_parts.append(
+                "SKILL-INFERENCE POLICY: IMAGINATIVE. You may use a general "
+                "transferable-skill label that the described activities already "
+                "imply (e.g. \"trend analysis\" for comparing figures over time). "
+                "You may NOT add a specific implementation, algorithm, named "
+                "software product, credential, proficiency level, metric, duty or "
+                "achievement. A skill label characterises existing work; it never "
+                "adds work. Do not attach \"expert\", \"advanced\", \"proven\", "
+                "years of experience or leadership to an inferred label."
+            )
         
         # Add seniority context
         prompt_parts.append(f"SENIORITY LEVEL: {seniority.upper()}")

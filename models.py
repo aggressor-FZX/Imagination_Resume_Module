@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field, field_validator, AliasChoices, ConfigDict
 import json
 
+from skill_inference import SkillInferenceMode
+
 
 class ProcessingStatus(str, Enum):
     """Status of processing operations"""
@@ -204,6 +206,20 @@ class AnalysisRequest(BaseModel):
         validation_alias=AliasChoices("creativity_mode", "creativityMode"),
         description="Creativity preset for generation",
     )
+    # Permission policy, not a style dial. Deliberately independent of
+    # `creativity_mode`: an unknown value is a validation error rather than a
+    # silent fallback, because picking a mode on the caller's behalf would make
+    # an inference permission accidental.
+    skill_inference_mode: Optional[SkillInferenceMode] = Field(
+        None,
+        validation_alias=AliasChoices(
+            "skill_inference_mode", "skillInferenceMode"
+        ),
+        description=(
+            "Skill-inference policy. Omitted = imaginative (default). "
+            "conservative disables all bridge inference and its model call."
+        ),
+    )
     location: Optional[str] = Field(
         None,
         validation_alias=AliasChoices(
@@ -306,6 +322,33 @@ class AnalysisRequest(BaseModel):
                 if not isinstance(item, str) or not item.strip():
                     raise ValueError("golden_bullets items must be non-empty strings")
         return v
+
+    @field_validator("skill_inference_mode", mode="before")
+    @classmethod
+    def normalize_skill_inference_mode(cls, v):
+        """Default to imaginative and reject unknown values explicitly.
+
+        An omitted field (None) takes the policy default. An empty string is
+        treated as omitted because both JSON and multipart transports send it
+        for an unset control. Every other value must be one of the two modes.
+        """
+        if v is None:
+            return None
+        if isinstance(v, SkillInferenceMode):
+            return v
+        if isinstance(v, str):
+            cleaned = v.strip().lower()
+            if not cleaned:
+                return None
+            try:
+                return SkillInferenceMode(cleaned)
+            except ValueError:
+                raise ValueError(
+                    "skill_inference_mode must be 'imaginative' or 'conservative'"
+                ) from None
+        raise ValueError(
+            "skill_inference_mode must be 'imaginative' or 'conservative'"
+        )
 
 
 class ProvenanceEntry(BaseModel):
@@ -445,6 +488,28 @@ class AnalysisResponse(BaseModel):
     career_alchemy: Optional[Dict[str, Any]] = Field(
         None,
         description="Career Alchemy profile (Spotify Wrapped style career identity)",
+    )
+    # Effective permission policy for this analysis. Server-set only; the client
+    # never nominates these values, and they are bound into the approval state
+    # so export cannot be told a different mode than the one that was reviewed.
+    skill_inference_mode: Optional[str] = Field(
+        None,
+        description="Effective skill-inference mode used for this analysis",
+    )
+    skill_inference_policy_version: Optional[str] = Field(
+        None,
+        description="Policy version the effective mode was evaluated under",
+    )
+    # Surviving bridge records and the server-resolved policy state bound into
+    # the approval receipt (v5). Server-set only: the browser transports these
+    # back at export so verification can compare them, but cannot author them.
+    skill_bridges: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Validated bridge records that survived into the approved text",
+    )
+    skill_inference_policy_state: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Policy state bound into the signed approval receipt",
     )
 
     @field_validator("final_written_section_provenance", mode="before")

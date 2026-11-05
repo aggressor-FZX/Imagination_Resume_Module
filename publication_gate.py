@@ -397,8 +397,18 @@ RECEIPT_TTL_SECONDS = 60 * 30
 #        contact fields; the Markdown fingerprint also collapses whitespace.
 #   v4 — exact UTF-8 Markdown and the complete renderer-parsed object, including
 #        identity/contact fields and the parsed strings' exact whitespace.
+#   v5 — v4 PLUS a `pol_fp` fingerprint over the skill-inference policy state
+#        (effective mode, policy version, analysis/candidate-input binding and
+#        the surviving bridge IDs with their permitted wording). Without it, an
+#        approval issued for a source-only document could be presented as an
+#        approval of inferred skills, because mode/bridges are not part of the
+#        rendered object and so were never signed.
 RECEIPT_VERSION = 4
-_SUPPORTED_RECEIPT_VERSIONS = frozenset({4})
+# v5 is used only when a caller supplies skill-inference policy state. A v4
+# token carries no policy binding, so it can never authorise an inferred skill:
+# verification requires v5 whenever the render payload declares one.
+POLICY_RECEIPT_VERSION = 5
+_SUPPORTED_RECEIPT_VERSIONS = frozenset({4, 5})
 
 
 def _receipt_secret() -> Optional[bytes]:
@@ -422,6 +432,52 @@ def content_fingerprint(markdown: str) -> str:
     if not isinstance(markdown, str):
         raise TypeError("Markdown must be a string")
     return hashlib.sha256(markdown.encode("utf-8")).hexdigest()
+
+
+def canonical_policy_state(policy: Any) -> Optional[str]:
+    """Serialize skill-inference policy state for signing (receipt v5).
+
+    The rendered object does not include mode or bridge identity, so approving a
+    document said nothing about *why* an inferred label was allowed. Without this
+    binding an approval minted for a source-only resume could be presented as an
+    approval of inferred skills.
+
+    Deterministic by construction: fixed keys, sorted bridge records, and only
+    values the server resolved. Returns ``None`` for an absent state, which keeps
+    source-only approvals on v4.
+    """
+    if not isinstance(policy, dict) or not policy:
+        return None
+    bridges = policy.get("surviving_bridges") or []
+    normalised: List[Dict[str, str]] = []
+    if isinstance(bridges, (list, tuple)):
+        for bridge in bridges:
+            if not isinstance(bridge, dict):
+                continue
+            record = {
+                "id": str(bridge.get("id") or ""),
+                "skill": str(bridge.get("skill") or ""),
+                "origin": str(bridge.get("origin") or ""),
+                "source_id": str(bridge.get("source_id") or ""),
+                "policy_version": str(bridge.get("policy_version") or ""),
+            }
+            if not record["id"] or not record["skill"]:
+                continue
+            normalised.append(record)
+    state = {
+        "mode": str(policy.get("skill_inference_mode") or ""),
+        "policy_version": str(policy.get("skill_inference_policy_version") or ""),
+        "bridges": sorted(normalised, key=lambda item: (item["id"], item["skill"])),
+    }
+    return json.dumps(state, sort_keys=True, separators=(",", ":"))
+
+
+def policy_fingerprint(policy: Any) -> Optional[str]:
+    """SHA-256 of the canonical policy state, or None when there is none."""
+    canonical = canonical_policy_state(policy)
+    if canonical is None:
+        return None
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def canonical_render_content(payload: Any) -> Optional[str]:
@@ -1104,10 +1160,15 @@ def issue_receipt(*, markdown: Optional[str], verdict: str,
                   ttl: int = RECEIPT_TTL_SECONDS,
                   approved_claims: Optional[Dict[str, List[str]]] = None,
                   approved_payload: Optional[Dict[str, Any]] = None,
+                  policy_state: Optional[Dict[str, Any]] = None,
                   ) -> Optional[str]:
     """Issue a signed approval receipt, or None when signing is unavailable.
 
     Version 4 binds the exact Markdown and the complete renderer-parsed object.
+    When ``policy_state`` is supplied (skill-inference mode and surviving bridge
+    records) the receipt is issued as **version 5**, which additionally binds a
+    fingerprint of that state. A v4 receipt therefore cannot authorise an
+    inferred skill, and a v5 receipt cannot be re-pointed at different bridges.
     ``approved_claims`` and ``sb`` remain in the signed envelope for existing
     callers, but are not alternatives to the render-object fingerprint.
     """
@@ -1118,14 +1179,19 @@ def issue_receipt(*, markdown: Optional[str], verdict: str,
         fingerprint = content_fingerprint(markdown)
     except (TypeError, UnicodeEncodeError):
         return None
+    # Only an actual policy state upgrades the wire version. A source-only
+    # approval keeps v4, so existing callers and stored receipts are unaffected.
+    policy_fp = policy_fingerprint(policy_state)
     payload = {
-        "v": RECEIPT_VERSION,
+        "v": POLICY_RECEIPT_VERSION if policy_fp else RECEIPT_VERSION,
         "fp": fingerprint,
         "verdict": verdict,
         "owner": _normalise_owner(owner),
         "iat": int(time.time()),
         "ttl": int(ttl),
     }
+    if policy_fp:
+        payload["pol_fp"] = policy_fp
     if approved_claims:
         payload["cl"] = {
             field: sorted(set(claims))
@@ -1150,7 +1216,8 @@ def issue_receipt(*, markdown: Optional[str], verdict: str,
 
 def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
                    owner: Optional[str] = None,
-                   render_payload: Any = None) -> tuple:
+                   render_payload: Any = None,
+                   policy_state: Optional[Dict[str, Any]] = None) -> tuple:
     """Verify a receipt against the content being exported.
 
     Returns (ok: bool, reason: str).
@@ -1160,7 +1227,14 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
 
     Version 4 requires the structured payload and compares the complete parsed
     object, not a claim set or an assertion about the generated PDF/DOCX bytes.
+
+    **Version 5 also binds skill-inference policy state.** The asymmetry is the
+    point: a v4 receipt carries no policy fingerprint, so it can never authorise
+    an inferred skill. If the export declares policy state, a v5 receipt with a
+    matching fingerprint is required; a v4 receipt is refused with
+    ``receipt_policy_unbound`` rather than silently treated as equivalent.
     """
+    declared_policy_fp = policy_fingerprint(policy_state)
     if not receipt or not isinstance(receipt, str) or "." not in receipt:
         return False, "receipt_missing"
     secret = _receipt_secret()
@@ -1242,5 +1316,21 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
     career = canonical_render_content(render_payload)
     if not career or payload["render_fp"] != hashlib.sha256(career.encode("utf-8")).hexdigest():
         return False, "receipt_render_content_mismatch"
+
+    # ── policy binding (v5) ─────────────────────────────────────────────
+    # Checked last so a tampered document is reported as a content problem, not
+    # a policy one. Either side of the comparison may be absent:
+    #   * export declares policy state, receipt has none -> v4 cannot authorize
+    #     an inferred skill.
+    #   * receipt binds policy state, export declares none -> the caller dropped
+    #     the mode/bridges the approval was minted for.
+    #   * both present -> fingerprints must match exactly.
+    bound_policy_fp = payload.get("pol_fp")
+    if bound_policy_fp and not declared_policy_fp:
+        return False, "receipt_policy_state_missing"
+    if declared_policy_fp and not bound_policy_fp:
+        return False, "receipt_policy_unbound"
+    if bound_policy_fp and declared_policy_fp != bound_policy_fp:
+        return False, "receipt_policy_mismatch"
 
     return True, "ok"

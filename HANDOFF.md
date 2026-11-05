@@ -1,3 +1,300 @@
+# Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
+
+**Branch:** `resumeDraft_fix`, rebased onto `origin/master` (`2bcbb4e`) so the
+correction/publication/receipt system that Phases C and D extend is present.
+Previously this branch was cut from a stale local `master` (`b23bba4`) that
+predated that system by 103 commits; that was a baseline mistake, not a change
+of scope.
+
+**Policy:** `docs/Plans/CogitoMetric_Official_Skill_Bridging_Plan_v1.md` (v1.1)
+**Spec:** `docs/Plans/Two_Mode_Skill_Bridging_Implementation_Spec.md`
+
+## Status
+
+- [x] **Baseline integration** — rebased onto published `origin/master`
+      (`2bcbb4e`). All correction/publication/receipt modules are now present.
+      `wip/correction-timeout-attribution` was **not** modified or reset; its
+      contents reached this branch via the published `origin/master` instead.
+- [x] Phase A — two-mode permission contract (`skill_inference.py`,
+      `models.py`, `orchestrator.py`, pipeline entry, `/analyze`,
+      32 offline tests in `tests/test_skill_inference_mode.py`)
+- [x] Phase C partial — **prompt-level enforcement** for both writers,
+      10 offline tests in `tests/test_skill_inference_prompts.py`
+- [x] Phase B — **typed, source-anchored bridge records** (`skill_bridge.py`),
+      Researcher proposal schema, correction phrase exemption, both leak paths,
+      41 record tests + 10 paired end-to-end tests
+- [x] Phase D.4 — **policy state bound into the approval receipt** (v5),
+      `_surviving_bridges()` filter, frontend transport, 25 binding tests
+- [x] Phase C.7 — **accept / narrow / remove lifecycle**
+      (`skill_bridge_decisions.py`), 31 tests
+- [x] Phase C.8 — **redaction-safe bridge anchors** (real defect fixed, see below)
+- [x] **Reviewer decisions wired into the real engine** — `bridge_decisions`
+      through the adapter, narrow re-reviewed, remove not revivable, 18
+      engine-level tests
+- [x] **Two disclosure leaks found and fixed** (see below)
+- [ ] Phase C remainder — phrase-scoped spans for a label embedded in prose
+- [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
+- [ ] Phase E — caches and isolation
+
+## Two disclosure defects found and fixed
+
+Both were in the *outgoing provider payload*, not the response.
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | `correction_protocol` echoed the bridge record's **raw** `evidence_quote` into the visible `bridges` block. With PII inside the quoted activity, the raw text went to the provider while the redacted source sat right beside it. | `_redacted_quote_at()` derives the offer from the **redacted** source at the recorded coordinates. A bridge whose coordinates cannot be honoured is **not offered** (fails closed rather than leaking or fabricating). |
+| 2 | `source_correction` passed `permitted_bridges` as a **visible** key, so the raw record — including its model-authored `rationale`, which the redactor never saw — travelled in the request body. | Moved to `_permitted_bridges`; the provider's existing `not key.startswith("_")` filter strips it. |
+
+Verified on the serialized wire payload (underscore keys excluded, exactly as the
+provider does), for PII **inside the quote**, **inside the rationale**, and
+**outside the quote**.
+
+A pre-existing test also caught a regression: `_validate_review` touched a
+malformed `response` before type-checking it, turning `malformed_output` into a
+generic `provider_error`. Fixed by checking `type(response) is not dict` first.
+
+## Decision lifecycle through the engine
+
+| Decision | Engine behaviour |
+|---|---|
+| **accept** | label stands; approval path unchanged |
+| **narrow** | label rewritten, then `requires_review` forces a **complete re-review**. The updated record (same id, same anchor, new wording) is offered to that review, so the replacement is judged against the **original** candidate evidence. Structural validation alone never authorises it. |
+| **remove** | label dropped from the offered set; per-bridge history prevents a later review from reviving it |
+| **omitted / unknown** | no decision = no change; an unknown decision word or unknown bridge id is **malformed**, not approval |
+
+## Structural bounds relaxed per review
+
+Single words (`reporting`), acronyms (`SQL`, `ARIMA`) and longer phrases are **no
+longer** refused on shape alone — that heuristic discarded legitimate skills. Only
+claim shapes are rejected: sentence punctuation, category colons, metric + unit,
+proficiency vocabulary. Whether a *specific* label is justified is the reviewer's
+judgement against the candidate evidence, not a regex.
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1285 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_engine_lifecycle.py -q      # 18
+python -m pytest tests/test_source_correction.py \
+                 tests/test_bridge_engine_lifecycle.py \
+                 tests/test_bridge_decisions_and_redaction.py -q   # 135
+```
+
+
+## Phase C.8 — a real defect that was found and fixed
+
+Correction receives **length-preservingly redacted** sources; a bridge keeps the
+**raw** quote it was validated against. When PII sat inside the quoted activity
+the two differed character-for-character, and the exact-equality anchor check
+**silently dropped a legitimate bridge** — a failure indistinguishable from
+forgery:
+
+```
+recorded:  "Compared sales for jordan@example.com and identified trends"
+slice:     "Compared sales for [email removed]███ and identified trends"
+```
+
+`_matches_redacted_quote()` now compares the recorded quote's own redaction at the
+same width. A genuine anchor survives; a fabricated one still fails, because its
+redaction will not match either. The redactor is length-preserving by contract, so
+offsets need no adjustment — and if that contract ever breaks, the helper returns
+`False` rather than guessing.
+
+## Phase C.7 — decision lifecycle
+
+| Decision | Applied when | Refused when |
+|---|---|---|
+| **accept** | the label is a standalone item | the label only appears inside prose (`label_not_standalone`) |
+| **narrow** | standalone; replacement is a valid general label | replacement is ARIMA/Python/AWS/a metric/a proficiency, is identical, or is missing |
+| **remove** | every occurrence is standalone | any occurrence is embedded in a sentence (`embedded_label_requires_repair`) |
+
+Two guards are deliberate:
+
+1. **Narrowing cannot escalate** — the replacement goes through the *same*
+   validator as an original proposal. There is one definition of "general label".
+2. **Partial removal is refused** — deleting the standalone item while the label
+   survives in prose reports success without removing anything.
+
+A refused decision leaves the text byte-identical. Reason codes are a fixed set;
+caller free text is dropped rather than logged.
+
+Also tightened `_is_general_label()`: sentence punctuation anywhere (a trailing
+period slipped through the previous "punctuation + whitespace" pattern) and a
+2–5 word bound. Verified balanced — 10/10 legitimate labels accepted, 8/8
+prohibited shapes rejected.
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1256 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_decisions_and_redaction.py -q   # 31
+python -m pytest tests/test_skill_bridge_records.py \
+                 tests/test_skill_bridge_end_to_end.py \
+                 tests/test_bridge_decisions_and_redaction.py -q   # 82
+```
+
+
+## Phase D.4 — what the receipt now binds
+
+The gap closed: the receipt bound the *rendered document* but said nothing about
+the inference mode or the surviving bridges. Mode/bridges are not part of the
+rendered object, so a source-only approval could be presented as an approval of
+inferred skills.
+
+| Situation | Result |
+|---|---|
+| Source-only approval (no policy state) | **v4**, unchanged; existing receipts still verify |
+| Policy state supplied | **v5** + `pol_fp` fingerprint |
+| Export declares policy state, receipt is v4 | `receipt_policy_unbound` — a v4 token grants no bridge privilege, ever |
+| Receipt is v5, export omits the state | `receipt_policy_state_missing` |
+| Both present, any bound field altered | `receipt_policy_mismatch` |
+
+Bound fields: mode, policy version, and per surviving bridge the `id`, `skill`,
+`origin`, `source_id` and `policy_version`. Canonicalisation sorts by
+`(id, skill)`, so reordering is not a change; `rationale`/`evidence_quote` are
+**not** bound (they are not semantic identity and binding them would make two
+identical documents differ).
+
+`_surviving_bridges()` keeps only labels that actually reached the approved
+markdown, using word-bounded matching — an unused or removed proposal is never
+signed, and the filter also works in Conservative mode (where it yields nothing).
+
+### Verification
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1225 passed, 13 skipped, 3 failed  (all 3 pre-existing worktree .git-ignore artifacts)
+
+python -m pytest tests/test_bridge_receipt_binding.py -q      # 25
+python -m pytest tests/test_skill_bridge_records.py \
+                 tests/test_skill_bridge_end_to_end.py -q     # 51
+cd ../Login_Landing_page && npx tsc --noEmit                  # clean
+```
+
+
+## Spec-agent integration SHA (recorded per task item 5)
+
+`wip/correction-timeout-attribution` is **3 commits ahead** of
+`origin/master` (`2bcbb4e`) and those commits are **not** in this branch:
+
+| SHA | Subject | In this branch |
+|---|---|---|
+| `ae2ed7b` | fix(imaginator_flow): resolve undefined analysis_result in final editor | **absent** |
+| `483074d` | fix(multipart): refuse to publish when required generation fell back | **absent** |
+| `30d4086` | fix(multipart): request-local generation outcomes; require explicit success | **absent** |
+
+That branch is **not pushed to origin** and was **not modified** or reset by this
+work. Its newer fallback/request-state/cache fixes are therefore **not** part of
+the SHAs tested below. A future integration should merge those three commits and
+re-run this suite; the locally measured baseline is `origin/master` = `2bcbb4e`.
+
+## Phase B — what a bridge is, and what it is not
+
+A bridge is a **proposal with an anchor**, not a fact:
+
+* the server assigns the ID and the `origin` (`researcher_inference`) *after*
+  validation, so a client-supplied origin tag grants nothing;
+* `evidence_quote` must appear **verbatim** in one immutable candidate document
+  (the multi-file join marker may not be spanned);
+* Conservative produces **no records at all**, even from perfect proposals;
+* taxonomy refs are optional and may only name refs the caller supplied.
+
+The correction engine admits a permitted label with **zero lexical overlap**, but
+only for the label phrase, and only when the entire supported span is that label
+and its anchor matches a reviewed source segment (containment plus an exact-text
+check, so forged offsets confer nothing). A mixed line still fails:
+
+| Draft line | Outcome |
+|---|---|
+| `- trend analysis` (imaginative, anchored) | supported |
+| `- trend analysis` (conservative) | uncertain — no authorisation exists |
+| `- Used Python for trend analysis and increased revenue 20%` | not supported — the tool and outcome are unsupported |
+
+Verified before/after on identical input:
+
+```
+imaginative   bridges=1 verdict=supported
+conservative  bridges=0 verdict=uncertain
+```
+
+## Leak paths
+
+| Path | Status |
+|---|---|
+| `implied_skills`/`domain_vocab` merged into `aggregate_skills` | **closed** — advisory only; new `resolved_skills` is candidate skills + permitted bridges (imaginative) or candidate skills alone (conservative) |
+| `imaginator_flow.run_final_editor_async` raw research injection | **already closed** by the published evidence boundary; verified it never interpolates `research_data` |
+| `preserve_skills_block()` deleting an inferred label | **closed** — permitted labels are retained; keyword passed only when bridges exist |
+
+**Resolved by Phase D.4:** mode, policy version and the surviving bridge set are
+now bound into a v5 receipt, and a v4 receipt cannot authorise an inferred skill.
+
+## Current behaviour
+
+`skill_inference_mode` is `imaginative` (default) or `conservative`; unknown
+values fail validation. Conservative performs **zero** Researcher calls and
+carries no default qualifications.
+
+**The permission boundary is enforced in the prompts, not the temperature.**
+`creativity_mode` remains an independent prose-style dial, and that separation is
+only safe because both writers now state the policy in their prompt text:
+
+| | Conservative | Imaginative |
+|---|---|---|
+| Drafter system prompt | `SKILL-INFERENCE POLICY: CONSERVATIVE` — no skill inference at all | `IMAGINATIVE (MANDATORY LIMITS)` — general transferable-skill label only, with explicit limits and a worked example |
+| Sparse-input note | source-bounded; a shorter bullet is correct | may add a general label; no tool/algorithm/product/metric/proficiency |
+| StarEditor | receives **no** `domain_vocab`; forbids inference and proficiency upgrades | receives vocabulary scoped to relabelling; forbids expert/advanced/proven/years/leadership on an inferred label |
+
+The retired instruction — "EXPAND them into full bullets by inferring standard
+industry tasks … focus on HOW the work was likely done" — is **gone**. It applied
+in both modes, so a mode-only test could pass while a run still fabricated
+duties.
+
+### Verification (this branch)
+
+```
+python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
+# 1149 passed, 13 skipped, 3 failed
+
+python -m pytest tests/test_skill_inference_mode.py tests/test_skill_inference_prompts.py -q
+# 42 passed
+```
+
+The 3 failures are **pre-existing** and unrelated: `test_correction_route_budget`
+(2) and `test_live_capture_controls` (1) — verified by stashing this branch's
+changes and reproducing them on the clean rebased base. They concern a
+`.git`-ignore check for a capture directory inside a git *worktree*, not skill
+inference.
+
+Mutation-verified: reintroducing the retired sparse-input instruction fails
+`test_sparse_input_no_longer_authorizes_invention_in_either_mode`.
+
+No deployment, no paid run, and no production mutation was made.
+
+## Remaining risk in the current state
+
+Prompt text is necessary but not sufficient. A model can still ignore it, and
+nothing yet reviews an inferred label semantically:
+
+1. **No bridge records exist yet** (Phase B). The writers are told what they may
+do, but no typed, source-anchored proposal is supplied or validated, so
+   Imaginative has permission without evidence discipline.
+2. **The correction reviewer judges whole lines** and requires lexical overlap
+   with cited source segments. A legitimate zero-overlap label such as
+   "trend analysis" would therefore be reported unsupported and repaired or
+   withheld (spec C.6).
+3. **`source_preservation.preserve_skills_block()`** replaces a skills block it
+   cannot match to source phrases — it can delete an inferred label before review
+   sees it (spec C.5).
+
+So the prompt work closes the "temperature as policy" gap; it does not yet make
+an inferred skill survive to delivery. Phases B and C-remainder do that.
+
+---
+
 # Handoff — run-10 evidence reconciled; semantic work list added; fixtures awaiting review
 
 **2026-11-03, session 11** (supersedes the session-10 header below).

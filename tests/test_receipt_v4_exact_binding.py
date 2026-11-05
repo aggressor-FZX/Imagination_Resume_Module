@@ -196,10 +196,26 @@ def test_v3_signed_receipt_requires_reanalysis(approved):
     assert verify(legacy[:-1] + ("0" if legacy[-1] != "0" else "1"), approved) == (False, "receipt_signature_invalid")
 
 
-@pytest.mark.parametrize("version", [True, "4", 4.1, 5, 2])
+@pytest.mark.parametrize("version", [True, "4", 4.1, 2])
 def test_unknown_or_non_integer_versions_are_rejected(approved, version):
     receipt = signed_envelope({"v": version})
     assert verify(receipt, approved) == (False, "receipt_version_unknown")
+
+
+def test_v5_is_recognised_as_a_version():
+    """v5 exists now, so it must not be rejected as an unknown version.
+
+    This assertion used to include ``5`` in the unknown-version list because v5
+    did not exist. The meaningful guarantee today is that a v5 envelope is
+    recognised and then fails on its own merits (here: no verdict), rather than
+    being reported as an unrecognised wire version.
+    """
+    receipt = signed_envelope({"v": 5})
+    # The version gate itself must pass; the envelope then fails on its own
+    # merits (no verdict, no policy fingerprint), not as an unknown version.
+    ok, reason = gate.verify_receipt(receipt, markdown=MD, owner=OWNER)
+    assert reason != "receipt_version_unknown"
+    assert ok is False
 
 
 def test_v4_does_not_allow_missing_renderer_or_invalid_markdown(approved):
