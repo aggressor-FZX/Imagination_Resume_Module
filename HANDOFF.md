@@ -42,7 +42,12 @@ of scope.
 - [x] **Phrase-scoped spans for a label embedded in prose** (spec C.6 rule 3) —
       14 tests in `tests/test_bridge_phrase_spans.py` plus two tightened
       end-to-end tests; see "Phase C.6 rule 3" below
-- [ ] Phase D remainder — preview/export parity harness, real-file skills assertions
+- [x] **Preview/export parity and real-file content assertions** (Phase D
+      remainder) — 9 real-render tests in `tests/test_bridge_render_parity.py`,
+      7 export-semantics tests in `tests/test_export_generation_semantics.py`,
+      13 frontend transport tests in
+      `Login_Landing_page/src/services/__tests__/bridgeExportPayload.test.ts`;
+      see "Phase D remainder" below
 
 ## Live verification (2026-11-05)
 
@@ -72,13 +77,61 @@ live proof needs a fixture the model can complete.
 
 ```
 python -m pytest tests/ -q -o addopts="" -p no:cacheprovider
-# 1316 passed, 13 skipped, 0 failed
+# 1332 passed, 13 skipped, 0 failed
 ```
 
 Two environment notes for reproducing that number outside the main checkout:
 the two `test_correction_route_budget` tests read `../Login_Landing_page`, so a
 sibling symlink is required; and the capture guard is now correct about
 non-existent directories, so `test_live_capture_controls` passes without one.
+
+The real-render suites (`test_bridge_render_parity`,
+`test_export_isolation_and_parity`, `test_renderer_no_defaults`) need
+`pdflatex` and `pdftotext`. They SKIP with a reason when the toolchain is
+missing rather than passing on mocked bytes.
+
+## Phase D remainder — parity, real files, export semantics
+
+The spec's exit criterion for D is that *"preview and files reflect the same
+reviewed content; only permitted skill labels are delivered"*. Three suites were
+extended rather than replaced, because each was already authoritative for one
+part of that claim and silent about another.
+
+| Suite | Proves | Previously silent about |
+|---|---|---|
+| `test_bridge_render_parity.py` (9) | a reviewed label reaches real PDF **and** DOCX bytes; conservative excludes it; a narrowed bridge renders its replacement | the existing export suite never mentioned inference at all |
+| `test_export_generation_semantics.py` (7) | export reaches no pipeline stage; builder failure raises instead of a success-shaped 200 | nothing pinned either |
+| `bridgeExportPayload.test.ts` (13) | the browser transports policy state verbatim and never authors it; post-analysis edits cannot rewrite an approval | no frontend coverage of the new fields |
+
+**Parity is asserted over the preview string, not the payload.** Every skill
+label in the approved markdown must appear in both files; neither file may carry
+a label the preview omitted; and the approved bullet must still render *under*
+the approved employer (string parity is not attribution parity).
+
+Per the spec, this is "preserved approved substantive content and ownership, not
+identical heading counts or pagination". No byte-identical-across-runs claim is
+made — layout engines and timestamps differ.
+
+### A vacuous assertion that was caught and fixed
+
+The no-generation tripwire initially patched only *module-level* functions. Stage
+entry points are **class methods** — `PipelineOrchestrator.run_pipeline`,
+`Researcher.analyze`, `Drafter.draft`, `StarEditor.polish` — so the test would
+have asserted that nothing was called among a set of things the pipeline never
+exposes that way. It now patches class methods too, records what it armed, and
+**fails if nothing was armed**, so a future refactor cannot quietly restore the
+vacuous version. 10 real entry points are armed today.
+
+### Not asserted, deliberately
+
+- **Any credit-debit property.** `export_resume` takes no credit dependency; the
+  signature is asserted to stay `(payload, request, api_key)` so an added
+  dependency requires a deliberate review, but claiming the debit path is
+  exercised would be a claim without evidence.
+- **Real-model parity.** Everything here is offline. A live run needs an
+  allowance and a fixture the reviewer fully supports.
+- **Browser save.** HTTP 200 is not a saved file; run 10 already showed the
+  download never fired on the site. That remains a separate criterion.
 
 ## Phase C.6 rule 3 — a permitted label embedded in prose
 
