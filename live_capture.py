@@ -78,12 +78,55 @@ def _is_inside_repo(path: Path) -> bool:
 
 
 def _ignored_by_git(path: Path) -> bool:
+    """True when git would ignore ``path``.
+
+    ``git check-ignore`` answers for a *concrete path*, and returns 1 for a path
+    that does not exist yet when the matching rule is directory-only: the pattern
+    ``captures/`` does not match the string ``captures`` unless the directory is
+    present. That made the guard refuse the **first** capture in a clean checkout
+    even though the location is correctly ignored — the worst possible time for a
+    false refusal.
+
+    Fix: when the path does not exist, test the nearest existing ancestor AND the
+    path's own name against the ignore rules directly. The authoritative question
+    is "would a file written here be ignored", which is answered by matching the
+    pattern, not by stat-ing a directory into existence.
+    """
+    probe = Path(path)
+    ancestors = []
+    for _ in range(64):
+        ancestors.append(probe)
+        if probe.exists():
+            break
+        parent = probe.parent
+        if parent == probe:
+            break
+        probe = parent
+
+    # 1. If the path (or an existing ancestor) is already ignored, done.
+    for candidate in ancestors:
+        try:
+            result = subprocess.run(
+                ["git", "check-ignore", "-q", str(candidate)],
+                cwd=str(_REPO_ROOT), timeout=5, capture_output=True,
+            )
+        except Exception:
+            return False
+        if result.returncode == 0:
+            return True
+
+    # 2. The path does not exist yet and no ancestor is ignored. Ask git directly
+    #    whether a file at this location would be ignored, using a dry-run add.
+    #    That is exactly the question the guard exists to answer, and it works
+    #    for directory-only patterns without creating anything.
     try:
-        result = subprocess.run(["git", "check-ignore", "-q", str(path)],
-                                cwd=str(_REPO_ROOT), timeout=5)
-        return result.returncode == 0
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "--no-index", str(Path(path) / "_probe")],
+            cwd=str(_REPO_ROOT), timeout=5, capture_output=True,
+        )
     except Exception:
         return False
+    return result.returncode == 0
 
 
 def _device_of(path: Path) -> int | None:
