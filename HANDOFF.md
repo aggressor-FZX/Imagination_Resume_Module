@@ -1039,3 +1039,75 @@ verifying `git show HEAD:backend/server.cjs | grep -c skill_inference_mode` = 5.
 Synthetic account with 3 resume-analysis credits. Three Imaginator runs
 (2 via orchestrator, 1 direct). Job-search enrichment debited 90 *job-search*
 credits (9 paid calls) — separate pool, not resume analysis.
+
+---
+
+# Two-mode feature — final live comparison (2026-11-05)
+
+**Live:** imaginator `897d01b`, orchestrator-backend + frontend `58a63d9` (+ `ff41695` UI).
+**Fixture:** `tests/fixtures/bridge_opportunity/` — activity stated, skill label absent.
+
+## Outcome
+
+| | Imaginative | Conservative |
+|---|---|---|
+| Mode / policy reported | `imaginative` / `imaginative-v1` | `conservative` / `conservative-v1` |
+| Bridging call | runs | **skipped by policy** (logged) |
+| Surviving bridges | **5** | **0** |
+| Delivered | approved, export 200 | approved, export 200 |
+| PDF / DOCX | 125,594 B / 37,765 B | 125,226 B / 37,724 B |
+| Source facts in **both files** | 10/10 | 10/10 |
+| Prohibited content | none | none |
+
+**Bridged labels, and whether they reached the bytes:**
+
+`trend analysis`, `scorecard development`, `invoice reconciliation`,
+`equipment failure analysis`, `stock level planning` — all five verified present
+in both the PDF and the DOCX of the Imaginative delivery.
+
+**The Conservative split is the proof the policy works.** Two of those five
+(`invoice reconciliation`, `stock level planning`) are *source-declared* skills,
+so they correctly appear in both modes. The genuinely inferred ones
+(`trend analysis`, `scorecard development`, `equipment failure analysis`) appear
+**only** in Imaginative. Conservative did not lose source facts to gain that
+strictness: 10/10 in both.
+
+## Three defects found by running it
+
+1. **No way to choose a mode in the website.** The only control was the
+   creativity preset, a prose-style dial; `skill_inference_mode` was never sent.
+   Added a separate Skill Inference selector and wired it through the request.
+2. **The job-ad fork pre-empted candidate-aware bridging.** The orchestrator's
+   `runJobAdResearcher` posts only `{job_ad}`, so it cannot produce a
+   candidate-anchored bridge — but forwarding its result made the Imaginator log
+   `Stage 1: using precomputed research_data (fork-join skip)` and skip the
+   Researcher that could. Every Imaginative run delivered zero bridges.
+3. **The candidate documents never reached Stage 1.** After fixing (2), the
+   Researcher still proposed nothing: `source_documents` was dropped at three
+   layers (`app.py` → `run_new_pipeline_async` → `run_pipeline` → `kwargs.get`),
+   so `quotable` was empty and the model correctly refused to quote anything.
+
+All three were invisible in the offline suite, which passed throughout.
+
+## Why the earlier "gate working" claim was wrong
+
+`source_completeness_uncertain` is emitted from two places — the source
+inventory and the post-review path. Instrumenting the wrong one produced no log
+line, and a bare `except: pass` hid a `NameError` that made the instrument
+unreachable. The evidence, once it fired, was `required_source_claims: 35,
+uncertain_source_claims: 4`. **Do not accept "the gate is working" without that
+number.**
+
+## Still not established
+
+- **Reviewer stability.** The live reviewer withheld this fixture on roughly
+  half of attempts (`source_completeness_uncertain`, `incomplete_review`,
+  `source_facts_missing`, `fallback_output`), against 1 attempt for
+  `realistic_candidate`. The successful runs are genuine, but delivery is not
+  reliable on this fixture and that variance is unexplained.
+- **Visual inspection was not performed** — the model has no vision here.
+  Layout was verified programmatically instead: both PDFs are 1-page US Letter,
+  produced by pdfTeX 1.40.26, with all sections present and no truncation.
+- A Conservative receipt rejects a genuine mode flip, a policy-version change and
+  an injected bridge — all `receipt_policy_mismatch`. An earlier "ACCEPTED" in
+  this session was a test bug (it flipped conservative→conservative).
