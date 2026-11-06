@@ -1,6 +1,49 @@
 # Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
 
-## Current checkpoint — 2026-11-06
+## Current checkpoint — 2026-11-06 (recovery-after-repair fix)
+
+- **Commit:** `450ff7d` on `resumeDraft_fix` and `master`; Imaginator deploy
+  `dep-dbn1461srm7s73c5o8pg` (autoDeploy on `master`).
+- **Root cause of the live withhold, established from a real capture, not from
+  reading code.** Run `diagcons-28fc7c2a88e3` (Conservative, direct `/analyze`,
+  frozen fixture) withheld as `incomplete_review`. The protected capture from
+  that run records `phases: [source_inventory, initial_review, repair,
+  post_patch_review]`, and the `post_patch_review` entry shows all **19** lines
+  were asked about with no `must_judge` hint, raising `UnjudgedReview`. So the
+  reviewer omitted exactly `L000008`–`L000013` (all six experience bullets) and
+  the recovery branch returned `incomplete_review` **before any completion call
+  was made**, solely because `state["repaired"]` was `True`.
+- **The fix** removes `repaired` as a disqualifier. It was a proxy for "the
+  draft may have changed", which is not the invariant: by the time a
+  `post_patch_review` omits lines, the repaired markdown *is* the current
+  document and the completion is rebuilt from it. The honest test is document
+  identity, so the guard now compares a sha256 digest of the markdown the
+  omission was recorded against (`_document_digest`) and refuses only when that
+  document actually changed. Recovery is **still** at most once, still refuses a
+  repeated identical omission, still honours the deadline, and still cannot
+  approve anything on its own — it only adds judgements, which the unchanged
+  completeness and attribution checks then decide.
+- **Verification:** `1388 passed, 13 skipped`. Three recovery tests were rewritten
+  or added and all are mutation-checked — restoring the old `repaired` guard
+  fails `test_recovery_is_allowed_after_a_repair_of_the_same_document` and
+  `test_a_post_repair_omission_is_completed_end_to_end`.
+- **Not yet done (next bounded step):** one authorized Conservative diagnostic
+  with capture still enabled, to observe whether a *second* `post_patch_review`
+  now carries `must_judge`. The harness exists:
+  `scripts/run_conservative_diagnostic.py` (one POST, no retry, records the
+  response verbatim, prints only structural facts). Delivery is **not** claimed
+  until that run is observed. Turn `CORRECTION_LIVE_CAPTURE` back off afterwards
+  (requires a deploy, not a restart).
+- **Content fidelity remains open and unchanged.** Imaginative `de375f60` added
+  "ensuring accurate fuel expense reporting" and "highlighting key cost
+  drivers" and dropped "against the prior four quarters"; `_introduces_beyond`
+  returns `[]` for these because it only detects capitalised names and figures.
+  Stage attribution is unknown (no drafter/editor snapshots). No per-request
+  enrichment bypass exists on the multi-file route, and
+  `JOB_DETAIL_ENRICHMENT_ENABLED` was **not** touched — that is a
+  billing/provider config change needing explicit approval.
+
+## Previous checkpoint — 2026-11-06
 
 - **Restoration mapping fix deployed:** `4865c3b` on Imaginator master, Render
    deploy `dep-dbmr68cs728c739h33g0`. The engine now carries each selected
