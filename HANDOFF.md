@@ -1,6 +1,83 @@
 # Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
 
-## Current checkpoint — 2026-11-06 (recovery-after-repair fix)
+## Current checkpoint — 2026-11-06 (combined repair, NOT yet deployed)
+
+**Status: prepared, awaiting one bounded live validation. No deploy was triggered
+for this checkpoint** (documentation-only pushes were explicitly stopped). The
+combined repair is committed locally on `resumeDraft_fix`; it is NOT on `master`
+and NOT live until the authorized validation is approved and a real deploy runs.
+
+### A. The two captured `uncertain` inventory spans, classified
+
+From protected capture `2dc8b2b7-d3c7-4b24-bf66-fff4018833e9` (35 claims:
+25 required, 8 non_resume, 2 uncertain). Both uncertain spans are in the
+supplement document:
+
+| Span | Verdict | Why |
+|---|---|---|
+| `## Professional Summary\n` | **Formatting, no candidate claim** | A bare Markdown section heading. The SAME heading in the main document was `non_resume` on this run, and all 8 other headings in both documents were `non_resume`. It names a section, not a fact. |
+| `SYNTHETIC-ONLY Operations analyst supporting stock planning and parts availability for a regional equipment service network.\n\n` | **Substantive candidate fact, genuinely ambiguous** | A role/summary statement about the candidate. Not formatting, not mixed. Its ownership/relevance was declined, so it must KEEP `uncertain` and still withhold. |
+
+Neither is "mixed formatting and content". The narrow fix: in
+`_validate_inventory`, when the model calls a BARE section heading `uncertain`,
+reclassify only that word to `non_resume`. Detection uses a CLOSED vocabulary of
+generic section-heading words (`_SECTION_HEADING_WORDS`); any candidate-specific
+word (name, number, metric, verb) leaves the span exactly as classified. The
+span is still partitioned and still required in `representations` — a review
+that drops it is `malformed_output`. Replaying the exact captured inventory
+changes exactly one item: `candidate-supplement.txt:0:24` uncertain→non_resume;
+the substantive sentence stays uncertain. **This does not waive the substantive
+span and does not turn all uncertain spans into structural content.**
+
+### B. Exported unsupported wording and omitted qualifier — analysis finished
+
+Imaginative run `de375f60` was APPROVED (`requires_review: false`, receipt
+issued, export 200). Exact source → output (frozen fixture, verbatim):
+
+| | Source | Approved output |
+|---|---|---|
+| Added outcome clause | `- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices against depot dispensing records each quarter.` | `- Reconciled 1,180 fuel invoices quarterly against depot records, ensuring accurate fuel expense reporting.` |
+| Added outcome clause | `- SYNTHETIC-ONLY Prepared the monthly cost summary reviewed by the regional manager.` | `- Prepared monthly cost summaries for regional management review, highlighting key cost drivers.` |
+| Dropped qualifier | `- SYNTHETIC-ONLY Compared quarterly parts usage against the prior four quarters to set reorder points.` | `- Analyzed quarterly parts usage with historical comparison to set data-driven reorder points.` |
+
+Both added clauses and the vague replacement reached the compiled PDF
+(verified by extracting the PDF text streams from the retained `export.raw`).
+**Why approval allowed them** (verified directly against the real bullets):
+`_introduces_beyond` returns `[]` for all three — it detects only capitalised
+proper nouns and unbacked figures, and these are lowercase outcome words with
+no new figure. `_quote_shares_content` returns `True` for each because the
+rewrite still shares content words with its source item; relatedness is not
+fidelity. The reviewer marked the lines `supported`, so flag-then-repair never
+engaged, and the completeness check asks whether each required item is
+*represented*, not whether extra outcome claims were introduced or a qualifier
+dropped. `tests/test_exported_outcome_wording_regression.py` pins this observed
+case (10 tests). **No factual check was weakened and no remediation was
+implemented** — extending the addition check to lowercase outcome clauses is a
+separate, authorized change.
+
+### C. Combined repair contents
+
+- `source_correction.py`: `_SECTION_HEADING_WORDS`, `_is_section_heading()`, and
+  the narrow reclassification in `_validate_inventory`.
+- `tests/test_inventory_heading_classification.py` (23 tests, mutation-checked:
+  disabling the correction fails 2).
+- `tests/test_exported_outcome_wording_regression.py` (10 tests).
+- Full suite: **1420 passed, 13 skipped** (1388 + 32 new).
+
+### D. Protected live capture — turn-off arrangement (NOT yet applied)
+
+`CORRECTION_LIVE_CAPTURE=1` and
+`CORRECTION_LIVE_CAPTURE_DIR=/app/data/live-capture` are still set on the
+imaginator (verified read-only from the running container's environ). Collection
+is complete: both captures are retained privately at 0600 under
+`~/.local/state/imaginator-capture/` and `captures/` (git-ignored). **After the
+one bounded validation, turn capture off through the authorized config-change
+process**: set `CORRECTION_LIVE_CAPTURE=0` via
+`update_environment_variables` (or the Render dashboard), then trigger a REAL
+deploy — a restart reuses the old container spec and will NOT apply the change.
+Do not deploy documentation-only updates. Keep all diagnostic evidence private.
+
+## Previous checkpoint — 2026-11-06 (recovery-after-repair fix)
 
 - **Commit:** `450ff7d` on `resumeDraft_fix` and `master`; Imaginator deploy
   `dep-dbn1461srm7s73c5o8pg` (autoDeploy on `master`).

@@ -573,6 +573,49 @@ def _attribution_ambiguity(markdown: str, sources: dict[str, str]) -> bool:
 
 
 
+# A CLOSED vocabulary of words that appear in generic resume section headings.
+# It is deliberately not "any heading": a heading is pure formatting only when
+# EVERY word in its label is one of these. Any candidate-specific word -- a name,
+# a number, a metric, a company, a verb -- is outside the set, so a heading that
+# carries content ("## Professional Summary for Jordan Example", "## Increased
+# revenue 30%") is NOT structural and keeps whatever classification the model
+# gave it. This is what keeps the correction narrow.
+_SECTION_HEADING_WORDS = frozenset(_SECTION_LABELS | {
+    "professional", "technical", "relevant", "core", "key", "additional",
+    "work", "employment", "career", "academic", "objective", "highlights",
+    "qualifications", "accomplishments", "achievements", "awards", "honors",
+    "publications", "references", "volunteer", "affiliations", "overview",
+    "background", "expertise", "competencies", "personal", "contact",
+    "activities", "memberships", "training", "certificates", "and", "of",
+})
+
+
+def _is_section_heading(quote: str) -> bool:
+    """True only for a bare Markdown section heading, with no candidate fact.
+
+    A heading such as ``## Professional Summary`` is formatting: it names a
+    section, not a claim about the candidate. The inventory model is told to
+    classify such text ``non_resume``, but on one captured run it returned
+    ``uncertain`` for the *same* heading it classified ``non_resume`` in the
+    other document. That single word withheld a faithful draft before any
+    review ran (``review_calls: 0``).
+
+    This is deliberately narrow. It matches ONLY a line that is a Markdown
+    heading whose label consists entirely of generic section-heading words
+    (the closed ``_SECTION_HEADING_WORDS`` set) plus whitespace/newlines. A
+    heading carrying any other content is NOT structural and is left exactly
+    as the model classified it, so genuinely ambiguous, mixed or substantive
+    spans still go to review.
+    """
+    stripped = (quote or "").strip()
+    if not stripped.startswith("#"):
+        return False
+    label = stripped.lstrip("#").strip()
+    words = re.findall(r"[A-Za-z]+", label)
+    return bool(words) and all(word.lower() in _SECTION_HEADING_WORDS
+                               for word in words)
+
+
 def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str, Any]]:
     if not _exact_dict(response, {"source_claims"}) or type(response["source_claims"]) is not list:
         raise _Invalid
@@ -591,6 +634,17 @@ def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str
                 or type(item["classification"]) is not str
                 or item["classification"] not in {"required", "non_resume", "uncertain"}):
             raise _Invalid
+        # A bare section heading is formatting, never a candidate fact. If the
+        # inventory model called it ``uncertain``, correct ONLY that word to
+        # ``non_resume`` -- the classification the same heading received in the
+        # other document on the same run. This does not waive the span: it is
+        # still partitioned, still accounted for in every review, and any
+        # substantive or genuinely ambiguous span keeps its ``uncertain``
+        # classification and still withholds. Measured on capture
+        # 2dc8b2b7-d3c7-4b24-bf66-fff4018833e9.
+        if (item["classification"] == "uncertain"
+                and _is_section_heading(item["quote"])):
+            item["classification"] = "non_resume"
         ids.add(item["id"])
         groups[sid].append(item)
     for sid, group in groups.items():
