@@ -11,8 +11,16 @@ What is recorded, in order:
 * the writer-generated draft that entered correction (the draft is *not* constructed);
 * every outgoing correction request, exactly as serialized;
 * every provider response body, verbatim;
+* every engine phase's own input and normalized output, including the
+  engine-selected restoration targets and their line association (`phases`);
 * the normalized review the engine derived, and its final gate decision;
 * per-phase timings and the correlation id that joins the two services' logs.
+
+The `phases` list exists because an HTTP exchange is not enough to explain a
+restoration: the wire form deliberately omits the internal source-claim identity,
+so the only record of *which* source fact was paired with *which* line is the
+engine's own payload. Without it a captured `source_facts_missing` cannot be
+diagnosed.
 
 Access control, all enforced in code rather than by convention:
 
@@ -214,6 +222,7 @@ class LiveCapture:
             "sources": [],
             "draft": None,
             "exchanges": [],
+            "phases": [],
             "review": None,
             "gate": None,
             "timing": {},
@@ -239,6 +248,24 @@ class LiveCapture:
             return
         self.data["exchanges"][index]["status"] = status if isinstance(status, (int, str)) else None
         self.data["exchanges"][index]["response_body"] = body
+
+    def record_phase(self, phase: str, payload: Any, *, result: Any = None,
+                     error: str | None = None) -> None:
+        """Record one engine phase's own input and normalized output.
+
+        Kept separate from ``exchanges``: one engine phase can produce several
+transport attempts (a retry repeats the wire request but not the phase), and the
+        engine payload carries the private line-to-source association that the
+        transmitted request intentionally drops. ``error`` is a bounded exception
+        type name only — never a message, which could contain document text.
+        """
+        try:
+            self.data["phases"].append({"phase": phase,
+                                        "payload": payload,
+                                        "result": result,
+                                        "error": error})
+        except Exception:
+            pass
 
     def record_review(self, review: Any) -> None:
         self.data["review"] = review

@@ -418,6 +418,8 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
     async def run(session):
         wrapped = live_capture.CapturingSession(session, capture) if capture else session
         provider = CorrectionProvider(api_key, wrapped, observer=observer)
+        if capture is not None:
+            provider = _PhaseRecordingProvider(provider, capture)
         result = await correct(markdown, sources, provider,
                                timeout_seconds=timeout_seconds, observer=observer,
                                permitted_bridges=permitted_bridges)
@@ -429,6 +431,66 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
         return await run(session)
     async with aiohttp.ClientSession() as session:
         return await run(session)
+
+
+class _PhaseRecordingProvider:
+    """Record each engine phase's own payload and normalized answer.
+
+    The wire exchange alone cannot explain a restoration refusal: the transmitted
+    request deliberately drops the internal ``source_claim_id`` and the engine's
+    line mapping, so "which fact was paired with which line" exists nowhere in the
+    captured HTTP body. This wrapper stores the engine's own phase input, the
+    adapter's normalized return value and a bounded failure label.
+
+    It is a transparent proxy: every attribute is delegated, ``set_budget`` is
+    forwarded because ``_invoke`` depends on it, and any recording error is
+    swallowed so diagnostics can never change the correction decision or the
+    response a user receives.
+    """
+
+    def __init__(self, inner, capture):
+        self._inner = inner
+        self._capture = capture
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def set_budget(self, remaining_seconds):
+        setter = getattr(self._inner, "set_budget", None)
+        if callable(setter):
+            return setter(remaining_seconds)
+        return None
+
+    async def __call__(self, phase, payload):
+        try:
+            normalized = await self._inner(phase, payload)
+        except BaseException as exc:  # noqa: BLE001 - record, then re-raise unchanged
+            try:
+                self._capture.record_phase(phase, _copy_phase_payload(payload),
+                                           error=type(exc).__name__)
+            except Exception:
+                pass
+            raise
+        try:
+            self._capture.record_phase(phase, _copy_phase_payload(payload),
+                                       result=_copy_phase_payload(normalized))
+        except Exception:
+            pass
+        return normalized
+
+
+def _copy_phase_payload(value):
+    """A JSON-safe deep copy, or a shape label when it cannot be represented.
+
+    The phase payloads are engine-owned plain structures, but a caller may attach
+    arbitrary objects to a direct-callback payload. Copying through JSON keeps the
+    record serialisable without leaking a live object into the capture file.
+    """
+    try:
+        return json.loads(json.dumps(value, default=str))
+    except Exception:
+        return {"<unserializable>": type(value).__name__}
+
 
 
 async def _analyze_resume_impl(
@@ -728,9 +790,22 @@ async def _analyze_resume_impl(
                             "reason": correction_result.reason,
                             "review_calls": correction_result.review_calls,
                             "repair_calls": correction_result.repair_calls,
+                            # Restoration is the phase this capture exists to
+                            # explain, so its count is recorded explicitly. It was
+                            # previously omitted, which made "restored nothing" and
+                            # "never asked to restore" indistinguishable.
+                            "restore_calls": getattr(correction_result, "restore_calls", None),
                             "commentary": correction_result.commentary,
+                            # Numeric coverage, not just its type: the earlier
+                            # `{TypeName: True}` form discarded every count needed to
+                            # tell a near-complete draft from an empty one.
                             "coverage": (None if correction_result.coverage is None else {
-                                type(correction_result.coverage).__name__: True}),
+                                "level": correction_result.coverage.level,
+                                "line_count": correction_result.coverage.line_count,
+                                "claim_count": correction_result.coverage.claim_count,
+                                "supported_count": correction_result.coverage.supported_count,
+                                "structural_count": correction_result.coverage.structural_count,
+                            }),
                         })
                     if decision is not None:
                         live_capture_record.record_gate(getattr(decision, "reason_codes", None))
