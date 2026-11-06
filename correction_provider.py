@@ -281,6 +281,10 @@ class CorrectionProvider:
             elif phase == "restore" and "source_claims" in original_payload:
                 translated = correction_protocol.indexed_restore_request(original_payload)
         except correction_protocol.MalformedIndexedResponse:
+            # Never send an ambiguous restore request without the indexed
+            # line-to-source mapping; the unindexed fallback cannot recover it.
+            if phase == "restore":
+                raise
             translated = None
         if translated is not None:
             payload = translated

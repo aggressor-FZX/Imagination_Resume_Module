@@ -1533,11 +1533,12 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                             restore_payload = {
                                 "contract": _RESTORE_CONTRACT,
                                 "sources": source_payload,
-                                "source_claims": missing_items[:_RESTORE_MAX_ITEMS],
+                                "source_claims": list(targets.values()),
                                 "lines": [{"line_id": lid,
                                            "text": next(l["text"] for l in lines
-                                                        if l["line_id"] == lid)}
-                                          for lid in targets],
+                                                        if l["line_id"] == lid),
+                                           "source_claim_id": item["id"]}
+                                          for lid, item in targets.items()],
                             }
                             try:
                                 restore_response = await _invoke(

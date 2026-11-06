@@ -106,7 +106,7 @@ _BRIDGE_DECISIONS = ("accept", "narrow", "remove")
 _EVIDENCE_KEY = "evidence"
 
 RESTORE_CONTRACT = (
-    "Rewrite the named draft lines so each states its source segment's fact, with the "
+    "Rewrite the named draft lines so each states the fact in its segment_index, with the "
     "real employer, role, dates and numbers taken from that segment. Respond with JSON "
     "of exactly this form: {\"restorations\":[{\"line_id\":\"L000002\","
     "\"replacement\":\"line text\"}]}. Answer every line_id you were given, exactly "
@@ -910,10 +910,11 @@ def indexed_restore_request(payload: dict[str, Any]) -> dict[str, Any]:
     cannot be trusted to echo a long line character for character, and it has no way
     to know the internal ``source_claim_id``. This adapter therefore:
 
-    * gives the model the line ids and their current text, and the segment text it may
-      quote;
+        * gives the model the line ids, their current text and the index of the
+            specific source segment selected by the correction engine;
     * asks only for ``{line_id, replacement}``;
-    * reconstructs ``source_claim_id`` and ``before`` from the request itself.
+        * reconstructs ``source_claim_id`` and ``before`` from the private,
+            engine-supplied line-to-item mapping, not from model output or list order.
 
     The engine's restoration validator then re-checks all of it — the returned
     ``source_claim_id`` must match the item the engine asked about, ``before`` must
@@ -925,19 +926,34 @@ def indexed_restore_request(payload: dict[str, Any]) -> dict[str, Any]:
     if type(items) is not list or not items or type(lines) is not list or not lines:
         raise MalformedIndexedResponse
     segments = []
+    item_indices = {}
     for index, item in enumerate(items):
         if (type(item) is not dict or type(item.get("id")) is not str
-                or type(item.get("quote")) is not str):
+                or not item["id"] or item["id"] in item_indices
+                or type(item.get("quote")) is not str or not item["quote"].strip()):
             raise MalformedIndexedResponse
+        item_indices[item["id"]] = index
         segments.append({"index": index, "text": item["quote"]})
     requested = []
+    target_by_line = {}
+    used_items = set()
     for line in lines:
         if (type(line) is not dict or type(line.get("line_id")) is not str
-                or type(line.get("text")) is not str):
+                or not line["line_id"] or line["line_id"] in target_by_line
+                or type(line.get("text")) is not str
+                or type(line.get("source_claim_id")) is not str
+                or line["source_claim_id"] not in item_indices
+                or line["source_claim_id"] in used_items):
             raise MalformedIndexedResponse
-        requested.append({"line_id": line["line_id"], "text": line["text"]})
+        item_id = line["source_claim_id"]
+        used_items.add(item_id)
+        target_by_line[line["line_id"]] = item_id
+        requested.append({"line_id": line["line_id"], "text": line["text"],
+                          "segment_index": item_indices[item_id]})
+    if used_items != set(item_indices):
+        raise MalformedIndexedResponse
     return {"contract": RESTORE_CONTRACT, "segments": segments, "lines": requested,
-            "_items": items, "_lines": requested}
+            "_lines": requested, "_targets": target_by_line}
 
 
 def strict_restore_from_indexed(response: Any, request: dict[str, Any]) -> dict[str, Any]:
@@ -947,8 +963,8 @@ def strict_restore_from_indexed(response: Any, request: dict[str, Any]) -> dict[
     answers a different set of lines, twice for the same line, or with a multi-line
     replacement is rejected as malformed rather than silently repaired.
     """
-    items, lines = request.get("_items"), request.get("_lines")
-    if type(items) is not list or type(lines) is not list:
+    lines, targets = request.get("_lines"), request.get("_targets")
+    if type(lines) is not list or type(targets) is not dict:
         raise MalformedIndexedResponse
     if type(response) is not dict or set(response) != {"restorations"}:
         raise MalformedIndexedResponse
@@ -970,7 +986,7 @@ def strict_restore_from_indexed(response: Any, request: dict[str, Any]) -> dict[
         # The engine expects the item id and the exact text being replaced. Both come
         # from the request, never from the model.
         restorations.append({"line_id": line_id,
-                             "source_claim_id": items[0]["id"],
+                             "source_claim_id": targets[line_id],
                              "before": by_id[line_id]["text"],
                              "replacement": replacement})
     if seen != set(by_id):

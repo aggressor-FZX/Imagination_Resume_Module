@@ -333,7 +333,8 @@ def test_disclosure_cannot_be_bypassed_for_the_restore_phase(monkeypatch):
                                "start": 29, "end": 51, "quote": TITLE,
                                "classification": "required"}],
             "lines": [{"line_id": "L000002",
-                       "text": "*Professional | 03/2020 - Present*"}],
+                       "text": "*Professional | 03/2020 - Present*",
+                       "source_claim_id": "candidate:29:51"}],
         }))
     assert session.requests == [], "nothing may be sent without an approved policy"
 
