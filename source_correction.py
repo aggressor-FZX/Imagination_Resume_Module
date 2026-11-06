@@ -1577,18 +1577,36 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 # correct withhold into `provider_error` would misreport the
                 # engine's own verdict as a transport problem.
                 try:
+                    # `inventory` is the list this function actually holds;
+                    # `_validate_review` builds its own lookup from it. Reading a
+                    # name that only exists inside that helper raised NameError,
+                    # which the guard below then swallowed — so the event silently
+                    # never fired and the reason stayed undiagnosable. Verify an
+                    # instrumented branch by observing the event, never by reading
+                    # the code.
+                    by_id = {item["id"]: item for item in inventory}
                     uncertain_required = sum(
                         1 for mapping in (response.get("representations") or [])
                         if isinstance(mapping, dict)
                         and mapping.get("status") == "uncertain"
-                        and items.get(mapping.get("source_claim_id"), {})
+                        and by_id.get(mapping.get("source_claim_id"), {})
                             .get("classification") == "required")
                     events.emit("correction.completeness",
                                 outcome="withheld",
                                 reason="source_completeness_uncertain",
-                                uncertain_required_claims=uncertain_required)
+                                uncertain_required_claims=uncertain_required,
+                                required_source_claims=sum(
+                                    1 for item in inventory
+                                    if item["classification"] == "required"))
                 except Exception:
-                    pass
+                    # Never let telemetry change the verdict — but never let it
+                    # fail silently either. A swallowed NameError above made a
+                    # correct withhold look undiagnosable, and the code read as
+                    # instrumented the whole time.
+                    events.emit("correction.phase_end",
+                                phase="post_restore_review"
+                                if restorations else "post_patch_review",
+                                outcome="callback_error")
                 return blocked("source_completeness_uncertain")
             if not flagged:
                 supported = sum(c["verdict"] == "supported" for c in claims)
