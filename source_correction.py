@@ -1537,6 +1537,35 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                             continue
                     return blocked("source_facts_missing")
             if "uncertain" in incomplete and not flagged:
+                # Diagnosability only: WHEN the reviewer declines to confirm a
+                # source claim but flags no line, the operator previously got a
+                # bare reason code with no way to tell whether the gate was right.
+                #
+                # The event carries COUNTS and the reviewer's own status word,
+                # never draft or source text. `correction_events.sanitize()` is an
+                # allow-list and drops unknown keys, so only bounded integers and
+                # fixed vocabulary can survive here by construction — which is the
+                # property that keeps private resume content out of logs. Those
+                # counts are what let an operator tell "the reviewer could not
+                # confirm one required fact" apart from "it confirmed almost
+                # nothing", which is a different diagnosis.
+                # Purely diagnostic. It must never change the decision, so any
+                # failure here is swallowed: a logging helper that can turn a
+                # correct withhold into `provider_error` would misreport the
+                # engine's own verdict as a transport problem.
+                try:
+                    uncertain_required = sum(
+                        1 for mapping in (response.get("representations") or [])
+                        if isinstance(mapping, dict)
+                        and mapping.get("status") == "uncertain"
+                        and items.get(mapping.get("source_claim_id"), {})
+                            .get("classification") == "required")
+                    events.emit("correction.completeness",
+                                outcome="withheld",
+                                reason="source_completeness_uncertain",
+                                uncertain_required_claims=uncertain_required)
+                except Exception:
+                    pass
                 return blocked("source_completeness_uncertain")
             if not flagged:
                 supported = sum(c["verdict"] == "supported" for c in claims)

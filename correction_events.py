@@ -15,6 +15,11 @@ _INTEGER_FIELDS = {
     "max_tokens", "pipeline_elapsed_ms", "prompt_tokens", "completion_tokens",
     "repairs", "request_index", "reserve_ms", "reviews", "total_tokens",
     "upstream_timeout_ms", "http_status",
+    # Counts how many REQUIRED source claims the reviewer declined to confirm.
+    # A count, never the claims: it separates "one fact could not be confirmed"
+    # from "almost nothing was confirmed", which are different diagnoses for the
+    # same reason code. Text is dropped by the allow-list below regardless.
+    "uncertain_required_claims",
 }
 _FLOAT_FIELDS = {"cost_usd"}
 _IDENTIFIER = re.compile(r"[a-z0-9_]{1,64}\Z")
@@ -23,7 +28,8 @@ _MODEL = re.compile(r"[a-z0-9_./-]{1,80}\Z")
 _PROVIDER = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}\Z")
 
 EVENTS = frozenset({"correction.budget", "correction.phase_start", "correction.phase_end",
-                    "correction.end", "provider.call"})
+                    "correction.end", "provider.call",
+                    "correction.completeness"})
 PHASES = frozenset({"source_inventory", "initial_review", "repair", "post_patch_review"})
 # Transport/callback outcomes only; validation results are reported as reasons.
 # ``provider_rate_limited`` and ``provider_unavailable`` were missing from this set

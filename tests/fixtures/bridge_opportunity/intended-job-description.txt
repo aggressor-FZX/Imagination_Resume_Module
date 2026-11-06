@@ -1,0 +1,22 @@
+Operations Analyst - Fleet and Depot Reporting
+
+A regional transit and equipment services group seeks an operations analyst to
+support fleet reporting, depot performance and parts planning across multiple
+sites.
+
+Responsibilities:
+- Produce recurring operational reporting across depots and service branches
+- Compare period-over-period performance and explain movement to operations managers
+- Maintain and improve depot performance scorecards
+- Reconcile high volumes of supplier and fuel invoices against internal records
+- Identify repeat equipment failures and slow-moving stock from historical records
+- Support quarterly stock level planning with usage history
+
+Requirements:
+- 5+ years in operations, fleet or inventory reporting
+- Strong spreadsheet modelling and SQL
+- Experience with invoice reconciliation at volume
+- Ability to present findings to operations managers
+- Associate degree or certificate in analytics, inventory control or a related field
+
+This posting is synthetic test material. The employer is fictional.
