@@ -27,6 +27,24 @@
   or added and all are mutation-checked — restoring the old `repaired` guard
   fails `test_recovery_is_allowed_after_a_repair_of_the_same_document` and
   `test_a_post_repair_omission_is_completed_end_to_end`.
+- **One authorized post-deploy diagnostic was run and did NOT exercise the fix.**
+  Run `2dc8b2b7-d3c7-4b24-bf66-fff4018833e9` (record:
+  `captures/recovery-validation/post-recovery-fix/`, capture copied in at 0600)
+  withheld as `source_completeness_uncertain` with `phases: [source_inventory]`,
+  `review_calls: 0`, `repair_calls: 0`. The inventory model classified 2 of 35
+  supplement claims `uncertain`, and the early block at `source_correction.py`
+  (the one that runs *before* the review loop) withheld immediately. Independent
+  confirmation from the service log for the same correlation id:
+  `required_source_claims: 25, source_claim_total: 35, reviews: 0, repairs: 0,
+  elapsed_ms: 1016`. **This attempt neither confirms nor refutes the recovery
+  fix** — the fixed code path was never reached.
+- **There are two independent, intermittent gates on this fixture, not one.**
+  (a) `source_inventory` returns an `uncertain` classification → withhold before
+  any review; (b) a `post_patch_review` omits lines → the recovery path. Run
+  `diagcons-28fc7c2a88e3` cleared (a) and hit (b); the post-deploy run hit (a) and
+  never reached (b). Both are model-output variance on the same frozen input,
+  which is also why the earlier checkpoint recorded delivery on "roughly half" of
+  attempts. Neither gate is a wiring defect.
 - **Not yet done (next bounded step):** one authorized Conservative diagnostic
   with capture still enabled, to observe whether a *second* `post_patch_review`
   now carries `must_judge`. The harness exists:
