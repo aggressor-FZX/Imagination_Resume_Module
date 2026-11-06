@@ -511,6 +511,12 @@ def test_preservation_leaves_a_correct_document_alone():
     """A document that already satisfies every rule is returned byte-identical."""
     # The summary must match the source's own paragraph, or the summary rule will
     # legitimately restore it — which is correct behaviour, not a failure of idempotence.
+    #
+    # Certifications and Technical Skills are filled from the source here: the
+    # source states both, and an empty section is NOT a faithful resume. The
+    # product's own SECTIONS_ALLOWED_TO_BE_EMPTY is ("projects",) only. Measured
+    # on the Conservative diagnostic 3abb7811, where the writer emptied both
+    # sections and the reviewer then reported those source facts missing.
     already = ("## Professional Summary\n\n"
                "Journeyman electrician with 8+ years of commercial and industrial "
                "electrical experience across construction, facilities maintenance, "
@@ -524,9 +530,46 @@ def test_preservation_leaves_a_correct_document_alone():
                "**Example Technical College** -- Example City, WA\n"
                "*Associate of Applied Science, Electrical Systems Technology | 2016*\n\n"
                "## Certifications\n\n"
-               "## Technical Skills\n")
+               "- Washington Journey Level Electrician License\n"
+               "- NFPA 70E Arc Flash Safety\n\n"
+               "## Technical Skills\n\n"
+               "- Commercial electrical systems, conduit bending, panel labeling\n"
+               "- NFPA 70E, lockout/tagout, inspection checklists\n")
     out, changes = sp.preserve_source_facts(already, SOURCE)
     assert out.strip() == already.strip(), changes
+
+
+def test_empty_source_sections_are_filled_from_the_source():
+    """The observed live failure: empty Skills/Certifications drop source facts."""
+    draft = ("## Professional Summary\n\n"
+             "Journeyman electrician with 8+ years of commercial and industrial "
+             "electrical experience across construction, facilities maintenance, "
+             "and power distribution.\n\n"
+             "## Professional Experience\n"
+             "**Example Technical College Holder** -- City, ST\n"
+             "*Journeyman Electrician | 03/2020 - Present*\n"
+             "- Completed 8,000 hours of supervised field work toward licensure.\n\n"
+             "## Projects\n\n"
+             "## Education\n"
+             "**Example Technical College** -- Example City, WA\n"
+             "*Associate of Applied Science, Electrical Systems Technology | 2016*\n\n"
+             "## Certifications\n\n"
+             "## Technical Skills\n")
+    out, changes = sp.preserve_source_facts(draft, SOURCE)
+    assert "Washington Journey Level Electrician License" in out
+    assert "NFPA 70E Arc Flash Safety" in out
+    assert "Commercial electrical systems, conduit bending, panel labeling" in out
+    assert "NFPA 70E, lockout/tagout, inspection checklists" in out
+    assert any("filled an empty" in c for c in changes)
+
+
+def test_a_source_with_no_skills_or_certifications_leaves_empty_sections_alone():
+    """Paired control: no source content means nothing to fill."""
+    source = "## Professional Experience\n**Alpha Corp** -- City, ST\n- Led 4 projects.\n"
+    draft = "## Certifications\n\n## Technical Skills\n"
+    out, changes = sp.preserve_source_facts(draft, source)
+    assert "filled an empty" not in " ".join(changes)
+    assert "## Certifications" in out and "## Technical Skills" in out
 
 
 # ---------------------------------------------------------------------------

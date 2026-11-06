@@ -775,6 +775,145 @@ def _is_document_separator(value: str) -> bool:
     return bool(_DOCUMENT_SEPARATOR.match(value.strip()))
 
 
+def source_certification_lines(source_text: str) -> list[str]:
+    """The candidate's own certification bullets, verbatim, from every section."""
+    lines: list[str] = []
+    for section in _find_sections(_split_sections(source_text), "certifications"):
+        for raw in section["lines"]:
+            value = _strip_markers(raw).strip()
+            if not value or _is_document_separator(value):
+                continue
+            lines.append(value)
+    return lines
+
+
+def _source_experience_records(source_text: str) -> list[dict]:
+    """Employer records from every Professional Experience section.
+
+    Each record is ``{"head", "location", "detail", "bullets"}``. Only records
+    with a recognisable employer head AND a role/detail line are returned, so a
+    partial record is never used to invent a shape.
+    """
+    records: list[dict] = []
+    for section in _find_sections(_split_sections(source_text),
+                                  "professional experience", "experience",
+                                  "work experience"):
+        current: dict | None = None
+        for raw in section["lines"]:
+            head, location = _record_head(raw)
+            if head is not None:
+                current = {"head": head, "location": location,
+                           "detail": "", "bullets": []}
+                records.append(current)
+                continue
+            if current is None:
+                continue
+            detail = _record_detail(raw)
+            if detail is not None:
+                current["detail"] = detail
+                continue
+            value = _strip_markers(raw).strip()
+            if value.startswith("-") and not _is_document_separator(value):
+                current["bullets"].append(value.lstrip("-").strip())
+    return [r for r in records if r["head"] and r["detail"]]
+
+
+def preserve_employer_records(markdown: str, source_text: str) -> tuple[str, list[str]]:
+    """Restore employer names and role lines the writer replaced with placeholders.
+
+    Measured on the Conservative diagnostic ``3abb7811``: the writer emitted
+    three identical ``**Current Employer** --`` heads and ``*Analyst |*`` role
+    lines, dropping all three real employer names, role titles and dates. The
+    reviewer then reported those source facts missing and the run withheld.
+
+    The rule is deliberately narrow and refuses to guess:
+
+    * it acts only when a draft record head is a generic placeholder (or the
+      role line has no dates), never on a real employer name;
+    * it matches draft records to source records IN ORDER, and only when the
+      counts agree -- an ambiguous mapping is left for the reviewer;
+    * it substitutes only the candidate's own source head and detail lines.
+      Bullets are left to the existing rules and the reviewer.
+    """
+    source_records = _source_experience_records(source_text)
+    if not source_records:
+        return markdown, []
+
+    sections = _split_sections(markdown)
+    draft_records: list[tuple[dict, int, int]] = []
+    for section in _find_sections(sections, "professional experience",
+                                  "experience", "work experience"):
+        for index, raw in enumerate(section["lines"]):
+            head, _ = _record_head(raw)
+            if head is not None:
+                draft_records.append((section, index))
+    if not draft_records or len(draft_records) != len(source_records):
+        return markdown, []
+
+    generic = re.compile(r"^(current|previous|present|recent)\s+"
+                         r"(employer|company|role|position)$", re.IGNORECASE)
+    needs_repair = False
+    for (section, index), _source in zip(draft_records, source_records):
+        head, _ = _record_head(section["lines"][index])
+        if head and generic.match(head.strip()):
+            needs_repair = True
+            break
+        # A role line with no dates is the same placeholder shape.
+        for look in range(index + 1, min(index + 3, len(section["lines"]))):
+            detail = _record_detail(section["lines"][look])
+            if detail is not None and "|" in detail and not re.search(r"\d", detail):
+                needs_repair = True
+                break
+        if needs_repair:
+            break
+    if not needs_repair:
+        return markdown, []
+
+    for (section, index), source in zip(draft_records, source_records):
+        head_line = f"**{source['head']}**"
+        if source["location"]:
+            head_line += f" -- {source['location']}"
+        section["lines"][index] = head_line
+        for look in range(index + 1, min(index + 3, len(section["lines"]))):
+            if _record_detail(section["lines"][look]) is not None:
+                section["lines"][look] = f"*{source['detail']}*"
+                break
+    return _render_sections(sections), ["restored the source's employer and role records"]
+
+
+def preserve_empty_source_sections(markdown: str, source_text: str) -> tuple[str, list[str]]:
+    """Fill a Skills or Certifications section the writer left empty.
+
+    Measured on the Conservative diagnostic ``3abb7811``: the writer emitted
+    ``## Technical Skills`` and ``## Certifications`` with no content at all,
+    while the source states four skill bullets and one certification. The
+    existing skills rule returns early on an empty body, so the candidate's own
+    facts were silently dropped and the reviewer then reported them missing.
+
+    Only an EMPTY section is filled, and only with the candidate's own source
+    lines. A section with content is left to the existing rules and the
+    reviewer; a source with no such section is left alone.
+    """
+    sections = _split_sections(markdown)
+    changes: list[str] = []
+    for names, source_lines, label in (
+        (("technical skills", "skills"), source_skills_lines(source_text), "skills"),
+        (("certifications",), source_certification_lines(source_text), "certifications"),
+    ):
+        if not source_lines:
+            continue
+        for section in _find_sections(sections, *names):
+            if any(line.strip() for line in section["lines"]):
+                continue
+            section["lines"] = [""] + [
+                line if line.lstrip().startswith("-") else f"- {line}"
+                for line in source_lines] + [""]
+            changes.append(f"filled an empty {label} section from the source")
+    if not changes:
+        return markdown, []
+    return _render_sections(sections), changes
+
+
 def _phrase_in_source(term: str, source_tokens: list[str]) -> bool:
     """True when ``term`` appears in the source as contiguous (stemmed) tokens.
 
@@ -1341,8 +1480,10 @@ def preserve_source_facts(
     for step in (preserve_education_record,
                  preserve_source_summary,
                  preserve_quantified_qualifiers,
+                 preserve_employer_records,
                  preserve_experience_bullets,
                  preserve_skills_block,
+                 preserve_empty_source_sections,
                  ensure_required_headings):
         if step in (preserve_skills_block, preserve_experience_bullets):
             # Both rules understand the bridge exception: an authorised inferred
