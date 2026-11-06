@@ -15,12 +15,17 @@ _INTEGER_FIELDS = {
     "max_tokens", "pipeline_elapsed_ms", "prompt_tokens", "completion_tokens",
     "repairs", "request_index", "reserve_ms", "reviews", "total_tokens",
     "upstream_timeout_ms", "http_status",
-    # Counts how many REQUIRED source claims were declined. A count, never the
-    # claims: it separates "one fact could not be confirmed" from "almost
-    # nothing was confirmed", which are different diagnoses for the same reason
-    # code. Text is dropped by the allow-list below regardless.
-    "uncertain_required_claims",
+    # Source-inventory counts at a completeness refusal. Counts, never the
+    # claims: they separate "one ambiguous span" from "almost nothing was
+    # usable", which are different diagnoses for the same reason code. Text is
+    # dropped by the allow-list below regardless.
+    #
+    # Names state exactly what is counted. An earlier `uncertain_required_claims`
+    # counted spans classified `uncertain`, NOT required spans that turned
+    # uncertain — a field that lied about its own meaning is worse than no field.
+    "uncertain_source_claims",
     "required_source_claims",
+    "source_claim_total",
 }
 _FLOAT_FIELDS = {"cost_usd"}
 _IDENTIFIER = re.compile(r"[a-z0-9_]{1,64}\Z")

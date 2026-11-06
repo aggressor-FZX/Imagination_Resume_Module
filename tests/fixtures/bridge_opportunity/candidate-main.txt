@@ -1,24 +1,24 @@
 ## Professional Summary
-SYNTHETIC-ONLY Operations analyst with 9 years of experience in fleet and depot reporting across public transit and freight operations.
+SYNTHETIC-ONLY Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations.
 
 ## Professional Experience
 
 **SYNTHETIC-ONLY Harborline Transit Authority** -- Tacoma, WA
-*Operations Analyst | 04/2019 - Present*
+*Fuel Reporting Analyst | 04/2019 - Present*
 - SYNTHETIC-ONLY Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.
 - SYNTHETIC-ONLY Built the depot scorecard that supervisors review in the Monday operations meeting.
 - SYNTHETIC-ONLY Reconciled 1,180 fuel invoices against depot dispensing records each quarter.
 
 **SYNTHETIC-ONLY Cascade Freight Partners** -- Kent, WA
-*Reporting Coordinator | 07/2015 - 03/2019*
-- SYNTHETIC-ONLY Reviewed 3 years of maintenance cost records to find which equipment failed repeatedly.
+*Cost Reporting Coordinator | 07/2015 - 03/2019*
+- SYNTHETIC-ONLY Audited 3 years of maintenance cost records to find which equipment failed repeatedly.
 - SYNTHETIC-ONLY Prepared the monthly cost summary reviewed by the regional manager.
-- SYNTHETIC-ONLY Maintained the shipment delay log used by the dispatch team.
+- SYNTHETIC-ONLY Rebuilt the shipment delay log that the dispatch team relies on.
 
 ## Education
 **SYNTHETIC-ONLY Puget Sound Technical College** -- Tacoma, WA
 *Associate of Applied Science, Business Analytics | 2015*
 
 ## Skills
-- SYNTHETIC-ONLY Spreadsheet modelling, SQL, fleet scheduling
-- SYNTHETIC-ONLY Invoice reconciliation, depot reporting
+- SYNTHETIC-ONLY Spreadsheet modelling, SQL
+- SYNTHETIC-ONLY Invoice reconciliation

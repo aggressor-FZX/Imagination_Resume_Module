@@ -28,7 +28,7 @@ import source_correction as sc
 def test_the_event_and_its_field_are_allow_listed():
     """A dropped event is a silent no-op, so the vocabulary must include it."""
     assert "correction.completeness" in ce.EVENTS
-    assert "uncertain_required_claims" in ce._INTEGER_FIELDS
+    assert "uncertain_source_claims" in ce._INTEGER_FIELDS
 
 
 def test_the_sanitizer_keeps_the_count():
@@ -36,13 +36,13 @@ def test_the_sanitizer_keeps_the_count():
         "event": "correction.completeness",
         "outcome": "withheld",
         "reason": "source_completeness_uncertain",
-        "uncertain_required_claims": 3,
+        "uncertain_source_claims": 3,
     })
     assert clean == {
         "event": "correction.completeness",
         "outcome": "withheld",
         "reason": "source_completeness_uncertain",
-        "uncertain_required_claims": 3,
+        "uncertain_source_claims": 3,
     }
 
 
@@ -50,26 +50,26 @@ def test_the_sanitizer_drops_text_smuggled_into_the_event():
     """The whole point of the allow-list: private content cannot ride along."""
     clean = ce.sanitize({
         "event": "correction.completeness",
-        "uncertain_required_claims": 2,
+        "uncertain_source_claims": 2,
         # Not allow-listed, so dropped rather than logged.
         "source_quote": "Jordan Example, jordan@example.test",
         "claim_text": "Compared monthly fuel consumption across 14 depots",
         "required_source_claim_count": 2,
     })
     assert clean == {"event": "correction.completeness",
-                     "uncertain_required_claims": 2}
+                     "uncertain_source_claims": 2}
 
 
 def test_a_non_integer_count_is_dropped():
     clean = ce.sanitize({"event": "correction.completeness",
-                         "uncertain_required_claims": "twelve"})
-    assert "uncertain_required_claims" not in clean
+                         "uncertain_source_claims": "twelve"})
+    assert "uncertain_source_claims" not in clean
 
 
 def test_the_unknown_event_name_is_still_refused():
     """Adding one event must not open the vocabulary to arbitrary names."""
     assert ce.sanitize({"event": "correction.arbitrary",
-                        "uncertain_required_claims": 1}) == {}
+                        "uncertain_source_claims": 1}) == {}
 
 
 # ── The decision is unchanged by the diagnostic ──────────────────────────
@@ -159,14 +159,14 @@ def test_the_inventory_branch_is_diagnosable():
     events = [e for e in seen if e.get("event") == "correction.completeness"]
     if seen:  # an observer was supported by this fixture's run()
         assert events, "the inventory refusal emitted no diagnostic event"
-        assert events[0]["uncertain_required_claims"] >= 1
+        assert events[0]["uncertain_source_claims"] >= 1
 
 
 def test_the_required_count_field_is_allow_listed():
     assert "required_source_claims" in ce._INTEGER_FIELDS
     clean = ce.sanitize({
         "event": "correction.completeness",
-        "uncertain_required_claims": 1,
+        "uncertain_source_claims": 1,
         "required_source_claims": 12,
     })
     assert clean["required_source_claims"] == 12

@@ -614,6 +614,17 @@ async def _analyze_resume_impl(
             classified_skills=payload.classified_skills,
             job_titles=payload.job_titles,
             research_data=payload.research_data,
+            # The immutable candidate documents. Stage 1 needs them to anchor a
+            # bridge to a real activity, and this call previously dropped them —
+            # so the Researcher received None, had nothing it was allowed to
+            # quote, and correctly proposed zero bridges. The mode looked
+            # implemented while its only source of evidence was missing.
+            #
+            # Taken from the request snapshot, never from pipeline output.
+            source_documents=[
+                {"source_id": sid, "text": text, "kind": "candidate_document"}
+                for sid, text in (source_documents_snapshot or ())
+            ] or None,
         )
         analysis_duration_ms = int((time.time() - t0) * 1000)
         logger.info(

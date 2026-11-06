@@ -1373,12 +1373,13 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     "correction.completeness",
                     outcome="withheld",
                     reason="source_completeness_uncertain",
-                    uncertain_required_claims=sum(
+                    uncertain_source_claims=sum(
                         1 for item in inventory
                         if item.get("classification") == "uncertain"),
                     required_source_claims=sum(
                         1 for item in inventory
                         if item.get("classification") == "required"),
+                    source_claim_total=len(inventory),
                 )
             except Exception:
                 pass
@@ -1585,6 +1586,8 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     # instrumented branch by observing the event, never by reading
                     # the code.
                     by_id = {item["id"]: item for item in inventory}
+                    # Here the claim WAS required and the reviewer would not
+                    # confirm it, so the count is exactly that.
                     uncertain_required = sum(
                         1 for mapping in (response.get("representations") or [])
                         if isinstance(mapping, dict)
@@ -1594,10 +1597,11 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     events.emit("correction.completeness",
                                 outcome="withheld",
                                 reason="source_completeness_uncertain",
-                                uncertain_required_claims=uncertain_required,
+                                uncertain_source_claims=uncertain_required,
                                 required_source_claims=sum(
                                     1 for item in inventory
-                                    if item["classification"] == "required"))
+                                    if item["classification"] == "required"),
+                                source_claim_total=len(inventory))
                 except Exception:
                     # Never let telemetry change the verdict — but never let it
                     # fail silently either. A swallowed NameError above made a

@@ -1135,6 +1135,16 @@ async def run_new_pipeline_async(
             classified_skills=classified_skills,
             job_titles=job_titles,
             research_data=kwargs.get("research_data"),
+            # The immutable candidate documents, so Stage 1 can propose a
+            # bridge anchored to a real activity. Omitting this made
+            # `kwargs.get("source_documents")` in the orchestrator resolve to
+            # None, so the Researcher had no evidence to quote and could not
+            # propose a bridge — the mode's defining benefit was unreachable on
+            # this path even after the job-ad fork stopped pre-empting it.
+            #
+            # Passed through verbatim: they are the request's own documents,
+            # never assembled from model output.
+            source_documents=kwargs.get("source_documents"),
         )
 
         # Extract final output

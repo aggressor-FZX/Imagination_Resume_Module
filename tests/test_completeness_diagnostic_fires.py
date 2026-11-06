@@ -51,7 +51,7 @@ def test_the_inventory_refusal_emits_an_observable_event():
     assert emitted, (
         "the inventory refusal emitted no diagnostic — either it is not "
         "instrumented or the instrumentation raised and was swallowed")
-    assert emitted[0]["uncertain_required_claims"] >= 1
+    assert emitted[0]["uncertain_source_claims"] >= 1
     assert emitted[0]["required_source_claims"] >= 1
     # Becomes a log line or it may as well not exist.
     assert ce.sanitize(emitted[0]), "the event does not survive sanitization"
