@@ -237,6 +237,71 @@ def test_a_docx_style_source_is_left_to_the_reviewer():
     assert changes == []
 
 
+# --- 4b. The three named safeguards ----------------------------------------
+
+def test_a_number_bearing_unsupported_outcome_is_not_exempt():
+    """'Trained 4 apprentices' must not justify 'increased productivity by 4%'.
+
+    The clause carries a number that also occurs in the source, but the 4%
+    outcome is not a restatement of four apprentices. A rule that exempted any
+    clause carrying a source figure would admit this invented claim.
+    """
+    source = "- SYNTHETIC-ONLY Trained 4 apprentices on lockout/tagout procedures.\n"
+    draft = ("- Trained 4 apprentices on lockout/tagout procedures, "
+             "increased productivity by 4%.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert "increased productivity by 4%" not in out
+    assert "removed an unsupported appended clause" in changes
+    # The candidate's real fact survives.
+    assert "Trained 4 apprentices" in out
+
+
+def test_a_permitted_skill_bridge_survives_experience_bullet_correction():
+    """An authorised inferred label must reach semantic review, not be erased.
+
+    Imaginative passes the validated bridge labels; Conservative passes none.
+    The same draft is therefore corrected in Conservative (the label is not
+    permitted) and left alone in Imaginative (it is).
+    """
+    source = "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n"
+    draft = ("- Compared weekly sales figures across 12 branches, "
+             "applying trend analysis.\n")
+    imaginative, ch_i = sp.preserve_experience_bullets(
+        draft, source, permitted_bridges=["trend analysis"])
+    assert "trend analysis" in imaginative
+    assert ch_i == []
+    conservative, ch_c = sp.preserve_experience_bullets(draft, source)
+    assert "removed an unsupported appended clause" in ch_c
+    assert "trend analysis" not in conservative
+
+
+def test_a_permitted_bridge_in_the_prefix_is_not_erased():
+    """A bridge used to characterise an anchored activity is not a defect."""
+    source = "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n"
+    draft = ("- Applied trend analysis to weekly sales figures across 12 "
+             "branches, ensuring accurate reporting.\n")
+    out, changes = sp.preserve_experience_bullets(
+        draft, source, permitted_bridges=["trend analysis"])
+    assert "trend analysis" in out
+    assert changes == []
+
+
+def test_employer_attribution_is_not_crossed_by_the_correction():
+    """A correction under one employer must not touch another employer's bullet."""
+    source = ("**SYNTHETIC-ONLY Alpha Corp**\n"
+              "- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices each quarter.\n"
+              "**SYNTHETIC-ONLY Beta Corp**\n"
+              "- SYNTHETIC-ONLY Prepared the monthly cost summary.\n")
+    draft = ("**Alpha Corp**\n"
+             "- Reconciled 1,180 fuel invoices each quarter, ensuring accurate reporting.\n"
+             "**Beta Corp**\n"
+             "- Prepared the monthly cost summary.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert "ensuring accurate reporting" not in out
+    assert "- Prepared the monthly cost summary." in out
+    assert changes == ["removed an unsupported appended clause"]
+
+
 # --- 5. The observed case is real (retained evidence) ----------------------
 
 @pytest.mark.skipif(not (BASE / "analysis.raw").exists(),

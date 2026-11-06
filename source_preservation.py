@@ -1079,6 +1079,23 @@ def _grounded_in_source(word: str, source_words: set[str],
     return False
 
 
+def _contains_permitted_bridge(text: str,
+                               permitted_bridges: Optional[list[str]]) -> bool:
+    """True when the text carries a validated, mode-permitted inferred label.
+
+    Whole-label, case-insensitive match with word boundaries: a bridge must not
+    be confused with a substring of an unrelated word. An empty or absent list
+    (Conservative, or a source-only caller) grants no exemption.
+    """
+    for label in permitted_bridges or []:
+        if not isinstance(label, str) or not label.strip():
+            continue
+        pattern = r"(?<![A-Za-z0-9])" + re.escape(label.strip()) + r"(?![A-Za-z0-9])"
+        if re.search(pattern, text or "", re.IGNORECASE):
+            return True
+    return False
+
+
 def _ungrounded_words(text: str, source_words: set[str],
                       source_stems: set[str]) -> list[str]:
     """Content words with no basis in the full source context.
@@ -1099,7 +1116,9 @@ def _ungrounded_words(text: str, source_words: set[str],
     return found
 
 
-def preserve_experience_bullets(markdown: str, source_text: str) -> tuple[str, list[str]]:
+def preserve_experience_bullets(markdown: str, source_text: str,
+                                permitted_bridges: Optional[list[str]] = None
+                                ) -> tuple[str, list[str]]:
     """Correct a bullet that adds an unsupported claim or drops a material qualifier.
 
     Measured on the approved Imaginative run ``de375f60``: the writer appended
@@ -1121,9 +1140,13 @@ def preserve_experience_bullets(markdown: str, source_text: str) -> tuple[str, l
       basis in the FULL source context is replaced by its source line verbatim.
       This is the observed false-approval shape: "Reconciled 1,180 fuel
       invoices quarterly against depot records" is faithful; ", ensuring
-      accurate fuel expense reporting" is not. A clause carrying a source
-      figure is left alone: "cutting rework by 18%" is a paraphrase, not an
-      addition, and must not be trimmed.
+      accurate fuel expense reporting" is not. A faithful paraphrase that
+      restates a source figure ("cutting rework by 18%") introduces no
+      ungrounded content word, so it is left alone by the same rule -- no
+      special figure exemption is needed. That matters: exempting any clause
+      carrying a source number would let "Trained 4 apprentices ... increased
+      productivity by 4%" through, because "4" occurs in the source even
+      though the 4% outcome does not.
     * A faithful paraphrase -- different verbs and inflections, no new content
       word, every figure kept -- is left untouched. Verbatim copying is not
       required.
@@ -1139,6 +1162,9 @@ def preserve_experience_bullets(markdown: str, source_text: str) -> tuple[str, l
       concern, not a deterministic preservation one, so it is left untouched.
     * Only a Markdown-bullet source line can be matched. A DOCX-style extraction
       has no bullet markers, so this rule leaves that format to the reviewer.
+    * A clause that is (or contains) a validated, mode-permitted skill bridge is
+      left for the semantic reviewer. A lexical check cannot see intent, and
+      erasing an authorised inferred label would delete legitimate content.
 
     A correction always substitutes the candidate's own source line. It never
     truncates or composes a new sentence, which would be prose generation and
@@ -1176,9 +1202,17 @@ def preserve_experience_bullets(markdown: str, source_text: str) -> tuple[str, l
         if comma > 0 and not transplanted:
             prefix = stripped[:comma]
             clause = stripped[comma + 1:]
+            # A permitted inferred label is authorised for semantic review; a
+            # lexical check must not delete it.
+            if _contains_permitted_bridge(clause, permitted_bridges):
+                out_lines.append(raw)
+                continue
+            # No figure exemption: a faithful paraphrase that restates a source
+            # number introduces no ungrounded content word, while an invented
+            # outcome does ("increased productivity by 4%"). Exempting any
+            # clause carrying a source number would admit the latter.
             if (not _ungrounded_words(prefix, source_words, source_stems)
-                    and _ungrounded_words(clause, source_words, source_stems)
-                    and not (_numeric_qualifiers(clause) & source_figures)):
+                    and _ungrounded_words(clause, source_words, source_stems)):
                 out_lines.append(f"{indent}- {bullet}{newline}")
                 changes.append("removed an unsupported appended clause")
                 continue
@@ -1229,9 +1263,10 @@ def preserve_source_facts(
                  preserve_experience_bullets,
                  preserve_skills_block,
                  ensure_required_headings):
-        if step is preserve_skills_block:
-            # Only the skills rule understands the bridge exception; every other
-            # rule keeps its original source-only contract.
+        if step in (preserve_skills_block, preserve_experience_bullets):
+            # Both rules understand the bridge exception: an authorised inferred
+            # label must survive to semantic review. Every other rule keeps its
+            # original source-only contract.
             markdown, step_changes = step(
                 markdown, source_text, permitted_bridges=permitted_bridges
             )
