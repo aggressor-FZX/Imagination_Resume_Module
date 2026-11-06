@@ -1,5 +1,42 @@
 # Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
 
+## Current checkpoint — 2026-11-06
+
+- **Active branch:** `resumeDraft_fix`; investigation started from commit
+   `119ab72`. The accompanying freeze/handoff commit is local only; do not push
+   it to a deploy-linked branch without authorization.
+- The user accepted the functional two-mode checkpoint but requires repeatable
+   delivery on the fixed input. No further fixture changes or blind live retries.
+- The exact five comparison inputs match `897d01b` and are frozen in
+   `tests/fixtures/bridge_opportunity/FROZEN.md`; verify them with
+   `python -m pytest tests/test_bridge_opportunity_frozen.py -q`.
+- The final paired PDFs, DOCX files and saved responses are preserved privately
+   under ignored `captures/two-mode-2026-11-06/`; its `INDEX.md` and historical
+   event inventory distinguish the matching pairs from stale and missing data.
+- **Corrections to earlier claims:** the 10-item check did not prove all facts
+   and qualifiers survived. The saved Imaginative file changes `1,180 fuel
+   invoices` to `1,180 fuel transactions` and `prior four quarters` to `trailing
+   four-quarter averages`, and adds an unsupported purpose clause. Also, the
+   `ed556783` completeness refusal followed initial review, not source inventory.
+- The retained failure `896e4cc4` reached restore and withheld as
+   `source_facts_missing`, but its target mapping and restore answer were not
+   retained. An independently reproduced adapter defect assigns the first source
+   item to every restore target; its role in that particular refusal is unknown.
+   Do not attribute the failure to that defect or weaken checks based on it.
+- No production fix or paid validation was performed in this investigation.
+   Further production changes and bounded paid validation require explicit
+   authorization. Earlier attempt outputs were overwritten; retain the gaps.
+- **Intentionally untracked/ignored:** `captures/two-mode-2026-11-06/` contains
+   the preserved responses and synthetic files, including signed receipts; it
+   must remain private and must not be committed. No source fixture changes were
+   made.
+- **Next steps:** (1) inspect preserved files and request any available earlier
+   captures; (2) obtain authorization before changing production or incurring
+   model costs; (3) if authorized, investigate the restoration mapping with
+   controlled source/target pairs and re-review, without claiming it caused
+   run `896e4cc4`; (4) run a bounded fixed-input comparison only with explicit
+   cost approval and persist every request outcome separately.
+
 **Branch:** `resumeDraft_fix`, rebased onto `origin/master` (`2bcbb4e`) so the
 correction/publication/receipt system that Phases C and D extend is present.
 Previously this branch was cut from a stale local `master` (`b23bba4`) that
