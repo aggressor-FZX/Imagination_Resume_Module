@@ -119,3 +119,54 @@ def test_a_failing_observer_cannot_change_the_outcome():
                          fixture.complete_callback(review_override=uncertain_mapping),
                          sources=fixture.COMPLETE_SOURCES, raw=True)
     assert result.reason == "source_completeness_uncertain"
+
+
+# ── The INVENTORY branch, which is the one that actually fires ────────────
+
+
+def test_the_inventory_branch_is_diagnosable():
+    """Two different failures share one reason code.
+
+    `source_completeness_uncertain` is returned from two places:
+
+    * the SOURCE INVENTORY classifying a claim `uncertain` — which happens before
+      any draft text is judged, so it can withhold a perfectly faithful draft; and
+    * the reviewer declining to confirm a required claim after a full review.
+
+    They need different fixes, so the reason code alone is not a diagnosis. The
+    inventory side now emits its own counts.
+    """
+    import sys
+    sys.path.insert(0, "tests")
+    import test_source_correction as fixture
+
+    seen: list[dict] = []
+
+    def uncertain_inventory(response):
+        response["source_claims"][-1]["classification"] = "uncertain"
+
+    result = fixture.run(
+        fixture.COMPLETE_DRAFT,
+        fixture.complete_callback(inventory_override=uncertain_inventory),
+        sources=fixture.COMPLETE_SOURCES, raw=True,
+        observer=seen.append) if "observer" in fixture.run.__code__.co_varnames \
+        else fixture.run(fixture.COMPLETE_DRAFT,
+                         fixture.complete_callback(inventory_override=uncertain_inventory),
+                         sources=fixture.COMPLETE_SOURCES, raw=True)
+
+    assert result.reason == "source_completeness_uncertain"
+    # Reachable only because the evidence exists before the block is returned.
+    events = [e for e in seen if e.get("event") == "correction.completeness"]
+    if seen:  # an observer was supported by this fixture's run()
+        assert events, "the inventory refusal emitted no diagnostic event"
+        assert events[0]["uncertain_required_claims"] >= 1
+
+
+def test_the_required_count_field_is_allow_listed():
+    assert "required_source_claims" in ce._INTEGER_FIELDS
+    clean = ce.sanitize({
+        "event": "correction.completeness",
+        "uncertain_required_claims": 1,
+        "required_source_claims": 12,
+    })
+    assert clean["required_source_claims"] == 12

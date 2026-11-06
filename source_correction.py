@@ -1359,6 +1359,29 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             return blocked("timeout_source_inventory")
         inventory = _validate_inventory(response, source_map)
         if any(item["classification"] == "uncertain" for item in inventory):
+            # The SOURCE INVENTORY itself declined to classify a claim. That is
+            # a different failure from the reviewer declining to confirm one
+            # later, and it happens before any drafting text is judged — so it
+            # can withhold a perfectly faithful draft for a reason the operator
+            # could not previously see at all (the identical reason code is also
+            # emitted much later, after a full review).
+            #
+            # Counts and classification words only: `correction_events.sanitize`
+            # is an allow-list, so no source text can ride along.
+            try:
+                events.emit(
+                    "correction.completeness",
+                    outcome="withheld",
+                    reason="source_completeness_uncertain",
+                    uncertain_required_claims=sum(
+                        1 for item in inventory
+                        if item.get("classification") == "uncertain"),
+                    required_source_claims=sum(
+                        1 for item in inventory
+                        if item.get("classification") == "required"),
+                )
+            except Exception:
+                pass
             return blocked("source_completeness_uncertain")
         if not any(item["classification"] == "required" for item in inventory):
             return blocked("no_required_source_claims")

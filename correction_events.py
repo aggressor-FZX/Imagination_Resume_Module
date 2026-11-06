@@ -15,11 +15,12 @@ _INTEGER_FIELDS = {
     "max_tokens", "pipeline_elapsed_ms", "prompt_tokens", "completion_tokens",
     "repairs", "request_index", "reserve_ms", "reviews", "total_tokens",
     "upstream_timeout_ms", "http_status",
-    # Counts how many REQUIRED source claims the reviewer declined to confirm.
-    # A count, never the claims: it separates "one fact could not be confirmed"
-    # from "almost nothing was confirmed", which are different diagnoses for the
-    # same reason code. Text is dropped by the allow-list below regardless.
+    # Counts how many REQUIRED source claims were declined. A count, never the
+    # claims: it separates "one fact could not be confirmed" from "almost
+    # nothing was confirmed", which are different diagnoses for the same reason
+    # code. Text is dropped by the allow-list below regardless.
     "uncertain_required_claims",
+    "required_source_claims",
 }
 _FLOAT_FIELDS = {"cost_usd"}
 _IDENTIFIER = re.compile(r"[a-z0-9_]{1,64}\Z")
