@@ -54,14 +54,18 @@ These tests assert the DESIRED behavior on the exact retained failing output:
 it must be corrected, not merely characterized as currently accepted. The
 frozen fixture is unchanged and no factual check is weakened.
 """
+import asyncio
 import json
 import re
 from pathlib import Path
 
 import pytest
 
+import correction_protocol as protocol
 import source_correction as sc
 import source_preservation as sp
+from skill_bridge import build_bridges
+from source_correction import SourceDocument, correct
 
 BASE = (Path(__file__).resolve().parent.parent / "captures"
         / "restoration-mapping-validation"
@@ -275,11 +279,33 @@ def test_a_permitted_skill_bridge_survives_experience_bullet_correction():
     assert "trend analysis" not in conservative
 
 
-def test_a_permitted_bridge_in_the_prefix_is_not_erased():
-    """A bridge used to characterise an anchored activity is not a defect."""
-    source = "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n"
-    draft = ("- Applied trend analysis to weekly sales figures across 12 "
-             "branches, ensuring accurate reporting.\n")
+def test_a_permitted_bridge_does_not_authorise_an_outcome_in_the_same_bullet():
+    """The bridge exemption is phrase-scoped, not clause-scoped.
+
+    A validated label may stand, but it must not shield an unsupported outcome
+    sitting beside it. The whole bullet is corrected from the candidate's own
+    source line, so neither the invented outcome nor the inferred label is
+    silently approved by a lexical rule.
+    """
+    source = ("**SYNTHETIC-ONLY Acme Corp**\n"
+              "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n")
+    draft = ("**Acme Corp**\n"
+             "- Compared weekly sales figures across 12 branches, applying trend "
+             "analysis and ensuring accurate reporting.\n")
+    out, changes = sp.preserve_experience_bullets(
+        draft, source, permitted_bridges=["trend analysis"])
+    assert "ensuring accurate reporting" not in out
+    assert "removed an unsupported appended clause" in changes
+    # The candidate's real activity survives, verbatim from the source.
+    assert "Compared weekly sales figures across 12 branches." in out
+
+
+def test_a_permitted_bridge_alone_is_not_erased():
+    """A bridge with no unsupported outcome beside it still reaches review."""
+    source = ("**SYNTHETIC-ONLY Acme Corp**\n"
+              "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n")
+    draft = ("**Acme Corp**\n"
+             "- Compared weekly sales figures across 12 branches, applying trend analysis.\n")
     out, changes = sp.preserve_experience_bullets(
         draft, source, permitted_bridges=["trend analysis"])
     assert "trend analysis" in out
@@ -300,6 +326,122 @@ def test_employer_attribution_is_not_crossed_by_the_correction():
     assert "ensuring accurate reporting" not in out
     assert "- Prepared the monthly cost summary." in out
     assert changes == ["removed an unsupported appended clause"]
+
+
+def test_a_source_line_from_another_employer_is_not_substituted():
+    """Automatic replacement must not cross employer ownership.
+
+    Beta's draft bullet carries Alpha's fact (a transplant) plus an unsupported
+    outcome. The only source bullet it lexically matches belongs to Alpha. The
+    deterministic layer must NOT substitute Alpha's line under Beta's heading;
+    it leaves the bullet for the reviewer instead.
+    """
+    source = ("**SYNTHETIC-ONLY Alpha Corp**\n"
+              "- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices each quarter.\n"
+              "**SYNTHETIC-ONLY Beta Corp**\n"
+              "- SYNTHETIC-ONLY Prepared the monthly cost summary reviewed by the "
+              "regional manager.\n")
+    draft = ("**Alpha Corp**\n"
+             "- Reconciled 1,180 fuel invoices each quarter.\n"
+             "**Beta Corp**\n"
+             "- Reconciled 1,180 fuel invoices each quarter, ensuring accurate "
+             "reporting.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert changes == [], "a cross-employer substitution was made"
+    assert "- Reconciled 1,180 fuel invoices each quarter, ensuring accurate reporting." in out
+
+
+def test_ambiguous_ownership_is_left_for_review():
+    """Two employers with identical source bullets: no automatic replacement."""
+    source = ("**SYNTHETIC-ONLY Alpha Corp**\n"
+              "- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices each quarter.\n"
+              "**SYNTHETIC-ONLY Beta Corp**\n"
+              "- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices each quarter.\n")
+    draft = ("**Alpha Corp**\n"
+             "- Reconciled 1,180 fuel invoices each quarter.\n"
+             "**Beta Corp**\n"
+             "- Reconciled 1,180 fuel invoices each quarter, ensuring accurate "
+             "reporting.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert changes == [], "an ambiguous match was resolved by guessing"
+    assert "ensuring accurate reporting" in out
+
+
+# --- 4c. Through the real correction path ----------------------------------
+
+def test_bridge_plus_outcome_through_the_correction_path_is_not_approved():
+    """A permitted bridge must not authorise an outcome in the same bullet.
+
+    Drives the exact shape through preservation AND the real correction engine
+    with a scripted reviewer that marks every line supported -- the observed
+    ``de375f60`` false-approval mode. The unsupported outcome must be gone from
+    the delivered text; a green approval carrying it would be the defect.
+    """
+    source = ("## Professional Experience\n"
+              "**SYNTHETIC-ONLY Acme Corp**\n"
+              "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n")
+    draft = ("## Professional Experience\n"
+             "**Acme Corp**\n"
+             "- Compared weekly sales figures across 12 branches, applying trend "
+             "analysis and ensuring accurate reporting.\n")
+
+    accepted, _ = build_bridges(
+        [{"skill": "trend analysis",
+          "evidence_quote": "Compared weekly sales figures across 12 branches",
+          "rationale": "The activity identifies changes over time.",
+          "source_id": "document-0"}],
+        sources={"document-0": source}, mode="imaginative")
+    bridges = [b.to_dict() for b in accepted]
+    assert bridges, "expected a validated bridge"
+
+    preserved, _ = sp.preserve_source_facts(
+        draft, source, permitted_bridges=["trend analysis"])
+    assert "ensuring accurate reporting" not in preserved, (
+        "preservation let the unsupported outcome through")
+
+    class ApprovingReviewer:
+        """Marks every line supported -- the observed false-approval mode."""
+
+        def __init__(self):
+            self.phases = []
+
+        async def __call__(self, phase, payload):
+            self.phases.append(phase)
+            if phase == "source_inventory":
+                request = protocol.indexed_inventory_request(payload)
+                return protocol.strict_inventory_from_indexed(
+                    {"required": [s["index"] for s in request["_segments"]],
+                     "non_resume": [], "uncertain": []}, request)
+            if phase in ("initial_review", "post_patch_review",
+                         "post_restore_review"):
+                request = protocol.indexed_review_request(payload)
+                lines = request["_lines"]
+                structural = [l["line_id"] for l in lines
+                              if l["text"].strip().startswith("#")]
+                supported = [l["line_id"] for l in lines
+                             if l["line_id"] not in structural]
+                answer = {
+                    "supported": supported, "structural": structural,
+                    "evidence": {lid: list(range(len(request["_items"])))
+                                 for lid in supported},
+                    "represented": list(range(len(request["_items"]))),
+                    "missing": [], "unsupported": [], "uncertain": [],
+                }
+                return protocol.strict_review_from_indexed(answer, request)
+            return {"edits": []}
+
+    reviewer = ApprovingReviewer()
+    result = asyncio.run(correct(
+        preserved, (SourceDocument("document-0", source),), reviewer,
+        timeout_seconds=60, permitted_bridges=bridges))
+
+    # Whatever the engine decides, the delivered text must not carry the
+    # unsupported outcome. A withheld result is also an acceptable outcome.
+    delivered = result.markdown or ""
+    assert "ensuring accurate reporting" not in delivered, (
+        "the unsupported outcome reached the delivered text")
+    assert "Compared weekly sales figures across 12 branches" in delivered or (
+        result.status == "withheld")
 
 
 # --- 5. The observed case is real (retained evidence) ----------------------

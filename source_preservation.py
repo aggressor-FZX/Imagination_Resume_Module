@@ -1051,8 +1051,35 @@ def _source_bullets(source_text: str) -> list[str]:
     return out
 
 
-def _best_source_bullet(line: str, bullets: list[str]) -> str | None:
-    """The unambiguous source line this draft bullet restates, or None."""
+def _source_bullets_with_employer(source_text: str) -> list[tuple[str, str]]:
+    """``(bullet, employer)`` for each Markdown source bullet.
+
+    The employer is the most recent record heading above the bullet. An empty
+    employer means ownership could not be established; a caller must not use
+    that bullet for an automatic substitution.
+    """
+    out: list[tuple[str, str]] = []
+    offset = 0
+    for raw in (source_text or "").splitlines(keepends=True):
+        stripped = raw.strip()
+        if stripped.startswith("-"):
+            text = _strip_markers(stripped).lstrip("-").strip()
+            if text:
+                out.append((text, _employer_of(source_text, offset)))
+        offset += len(raw)
+    return out
+
+
+def _best_source_bullet(line: str, bullets: list[str],
+                        employer: str = "") -> str | None:
+    """The unambiguous source line this draft bullet restates, or None.
+
+    ``employer`` scopes the match to the same record. A source bullet from a
+    DIFFERENT employer must never be substituted into this one's draft bullet:
+    that would move a fact between records. When ownership cannot be
+    established on either side, or the best match is tied, return None so the
+    reviewer decides instead of the deterministic layer guessing.
+    """
     words = _stemmed_words(line)
     best: str | None = None
     best_score = 0
@@ -1079,6 +1106,11 @@ def _grounded_in_source(word: str, source_words: set[str],
     return False
 
 
+def _bridge_pattern(label: str) -> str:
+    """Whole-label, word-bounded, case-insensitive pattern for one bridge."""
+    return r"(?<![A-Za-z0-9])" + re.escape(label.strip()) + r"(?![A-Za-z0-9])"
+
+
 def _contains_permitted_bridge(text: str,
                                permitted_bridges: Optional[list[str]]) -> bool:
     """True when the text carries a validated, mode-permitted inferred label.
@@ -1090,10 +1122,26 @@ def _contains_permitted_bridge(text: str,
     for label in permitted_bridges or []:
         if not isinstance(label, str) or not label.strip():
             continue
-        pattern = r"(?<![A-Za-z0-9])" + re.escape(label.strip()) + r"(?![A-Za-z0-9])"
-        if re.search(pattern, text or "", re.IGNORECASE):
+        if re.search(_bridge_pattern(label), text or "", re.IGNORECASE):
             return True
     return False
+
+
+def _without_permitted_bridges(text: str,
+                               permitted_bridges: Optional[list[str]]) -> str:
+    """The text with every validated bridge phrase removed.
+
+    Used to judge the REST of a clause: an authorised label may stand, but it
+    must not authorise an unsupported outcome sitting beside it. Removing only
+    the exact whole-label phrase keeps the exemption phrase-scoped.
+    """
+    residual = text or ""
+    for label in permitted_bridges or []:
+        if not isinstance(label, str) or not label.strip():
+            continue
+        residual = re.sub(_bridge_pattern(label), " ", residual,
+                          flags=re.IGNORECASE)
+    return residual
 
 
 def _ungrounded_words(text: str, source_words: set[str],
@@ -1174,18 +1222,49 @@ def preserve_experience_bullets(markdown: str, source_text: str,
                     re.findall(r"[A-Za-z][A-Za-z\-]+", source_text or "")
                     if len(w) > 3}
     source_stems = _stemmed_words(source_text or "")
-    bullets = _source_bullets(source_text)
+    scoped_bullets = _source_bullets_with_employer(source_text)
     source_figures = _numeric_qualifiers(source_text)
 
     out_lines: list[str] = []
     changes: list[str] = []
+    draft_offset = 0
     for raw in markdown.splitlines(keepends=True):
         stripped = raw.strip()
         if not stripped.startswith("-"):
+            draft_offset += len(raw)
             out_lines.append(raw)
             continue
-        bullet = _best_source_bullet(stripped, bullets)
+        # Ownership scoping. A source bullet from a DIFFERENT employer must
+        # never be substituted into this draft bullet -- that would move a fact
+        # between records. When the source has only one employer (or none is
+        # marked at all), ownership is unambiguous and the rule may act. When
+        # there are several employers and this draft bullet's owner cannot be
+        # established, leave it for the reviewer rather than guessing.
+        draft_employer = _employer_of(markdown, draft_offset)
+        draft_offset += len(raw)
+        source_employers = {employer for _, employer in scoped_bullets
+                            if employer}
+        if len(source_employers) > 1 and not draft_employer:
+            out_lines.append(raw)
+            continue
+        if draft_employer and source_employers:
+            candidates = [text for text, employer in scoped_bullets
+                          if employer == draft_employer]
+        else:
+            candidates = [text for text, _ in scoped_bullets]
+        if not candidates:
+            out_lines.append(raw)
+            continue
+        bullet = _best_source_bullet(stripped, candidates)
         if bullet is None:
+            out_lines.append(raw)
+            continue
+        # The same bullet text under two different employers is ambiguous
+        # ownership: we cannot tell which record this draft bullet belongs to,
+        # even after scoping. Leave it for the reviewer rather than guessing.
+        owners_of_bullet = {employer for text, employer in scoped_bullets
+                            if text == bullet and employer}
+        if len(owners_of_bullet) > 1:
             out_lines.append(raw)
             continue
         indent = raw[:len(raw) - len(raw.lstrip())]
@@ -1202,17 +1281,19 @@ def preserve_experience_bullets(markdown: str, source_text: str,
         if comma > 0 and not transplanted:
             prefix = stripped[:comma]
             clause = stripped[comma + 1:]
-            # A permitted inferred label is authorised for semantic review; a
-            # lexical check must not delete it.
-            if _contains_permitted_bridge(clause, permitted_bridges):
-                out_lines.append(raw)
-                continue
+            # A permitted inferred label is authorised for semantic review, but
+            # ONLY for its exact phrase. It must not shield an unsupported
+            # outcome sitting beside it in the same clause ("applying trend
+            # analysis and ensuring accurate reporting"). Remove the label from
+            # the clause before judging the rest; if the remainder still
+            # introduces ungrounded content, the whole bullet is corrected.
+            residual = _without_permitted_bridges(clause, permitted_bridges)
             # No figure exemption: a faithful paraphrase that restates a source
             # number introduces no ungrounded content word, while an invented
             # outcome does ("increased productivity by 4%"). Exempting any
             # clause carrying a source number would admit the latter.
             if (not _ungrounded_words(prefix, source_words, source_stems)
-                    and _ungrounded_words(clause, source_words, source_stems)):
+                    and _ungrounded_words(residual, source_words, source_stems)):
                 out_lines.append(f"{indent}- {bullet}{newline}")
                 changes.append("removed an unsupported appended clause")
                 continue
