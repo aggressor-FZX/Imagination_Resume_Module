@@ -2,6 +2,33 @@
 
 ## Current checkpoint — 2026-11-06
 
+- **Restoration mapping fix deployed:** `4865c3b` on Imaginator master, Render
+   deploy `dep-dbmr68cs728c739h33g0`. The engine now carries each selected
+   source claim alongside its target line; the provider uses the corresponding
+   indexed segment and fails closed on ambiguous mappings. Full post-restore
+   review and existing factual checks remain unchanged. The previous failure's
+   exact restore targets and answer remain unavailable, so its cause is unknown.
+- **Verification:** focused restoration suite 130 passed; full offline suite
+   1381 passed, 13 skipped. Command:
+   `OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -q -o addopts='' -p no:cacheprovider --tb=short`.
+- **Two authorized post-deploy attempts**, fixed fixture and no retry loop,
+   saved separately under ignored `captures/restoration-mapping-validation/`:
+   Imaginative `de375f60-a62c-48b7-abd0-be8701eb1fe8` exported after initial
+   review with no restoration; its files contain unsupported outcome wording and
+   omit a source qualifier, so export 200 is not factual acceptance. Conservative
+   `3e1cbdb1-eeac-4e13-a162-eb0e367c58a9` withheld `source_facts_missing` after
+   restore, with no receipt. Exact restore request/answer are not in the response;
+   no claim can be made that the mapping fix resolved this run. Repeatability and
+   fidelity remain open.
+- Reported Imaginator costs for these two attempts were $0.0175941 and
+   $0.01341595, respectively; these are not whole-pipeline costs. The
+   Imaginative response reported 2 paid enrichment calls and 20 enrichment credits;
+   Conservative reported zero. Account debit and total provider spend are unknown.
+- The prior successful pair remains unchanged in ignored
+   `captures/two-mode-2026-11-06/final_run/`; the frozen fixture hash tests still
+   pass. Additional testing must preserve each attempt and requires its own
+   bounded authorization.
+
 - **Active branch:** `resumeDraft_fix`; investigation started from commit
    `119ab72`. The accompanying freeze/handoff commit is local only; do not push
    it to a deploy-linked branch without authorization.
