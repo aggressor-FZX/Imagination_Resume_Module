@@ -208,22 +208,112 @@ def test_a_second_identical_omission_is_not_retried_again(bypass):
     assert result.reason == "incomplete_review"
 
 
-def test_recovery_is_unreachable_after_a_repair(bypass):
-    """Recovery would judge stale text once the draft has changed, so it is spent."""
+def test_recovery_is_allowed_after_a_repair_of_the_same_document(bypass):
+    """A repair is not a change of document, so it must not disqualify recovery.
+
+    Measured on a live run (``diagcons-28fc7c2a88e3``): the initial review judged
+    all 19 lines, the post-patch review then omitted the six experience bullets,
+    and the run withheld as ``incomplete_review`` solely because a repair had
+    already happened. The completion would have re-asked about the SAME repaired
+    markdown, so the flag was a proxy for staleness that did not hold.
+
+    The invariant that does hold is document identity, which the next test pins.
+    """
     from source_correction import _recover_unjudged, UnjudgedReview
 
-    state = {"recovered": False, "repaired": True, "last_unjudged": None}
+    markdown = "## Experience\n- one\n- two\n"
+    state = {"recovered": False, "repaired": True, "last_unjudged": None,
+             "unjudged_digest": None}
     outcome = asyncio.run(_recover_unjudged(
-        "initial_review", UnjudgedReview(["L000001"]),
-        deadline=10 ** 9, state=state))
+        "post_patch_review", UnjudgedReview(["L000001"]),
+        deadline=10 ** 9, state=state, markdown=markdown))
+    assert outcome == ["L000001"], "a same-document omission must be recoverable"
+    assert state["recovered"] is True
+
+
+def test_recovery_is_refused_when_the_document_changed(bypass):
+    """The real staleness guard: completion must judge the draft that was omitted."""
+    from source_correction import _recover_unjudged, UnjudgedReview
+
+    first = "## Experience\n- one\n- two\n"
+    changed = "## Experience\n- one\n- two revised\n"
+    state = {"recovered": False, "repaired": True, "last_unjudged": None,
+             "unjudged_digest": None}
+    asyncio.run(_recover_unjudged("initial_review", UnjudgedReview(["L000001"]),
+                                  deadline=10 ** 9, state=state, markdown=first))
+    state["recovered"] = False  # isolate the digest check from the once-only rule
+    outcome = asyncio.run(_recover_unjudged("initial_review", UnjudgedReview(["L000002"]),
+                                            deadline=10 ** 9, state=state,
+                                            markdown=changed))
     assert outcome == "incomplete_review"
-    assert state["recovered"] is False
+
+
+def test_a_post_repair_omission_is_completed_end_to_end(bypass):
+    """The live failure shape: repair, then a partial re-review, then approval.
+
+    ``PartialSession`` omits lines on its FIRST review, so this drives the order the
+    live run took by omitting on the SECOND instead. The first review must genuinely
+    flag a line or the engine approves without repairing, so the draft carries one
+    span that differs from the source; the repair restores it and the re-review then
+    omits trailing lines, which is exactly what ``diagcons-28fc7c2a88e3`` recorded.
+    """
+    drift = SOURCE.replace("Maintained the workshop", "Kept the workshop")
+
+    class OmitOnSecondReview(PartialSession):
+        def post(self, url, **kwargs):
+            self.requests.append(kwargs)
+            payload = json.loads(kwargs["json"]["messages"][1]["content"])
+            if "flagged_claim_ids" in payload:
+                # A real repair: put the drifted span back to its source wording so
+                # the edit is neither a no-op nor a new fact.
+                lines = {line["line_id"]: line["text"] for line in payload["lines"]}
+                edits = []
+                for cid in payload["flagged_claim_ids"]:
+                    line_id, start, end = cid.rsplit(":", 2)
+                    span = lines[line_id][int(start):int(end)]
+                    edits.append({"claim_id": cid,
+                                  "replacement": span.replace("Kept", "Maintained")})
+                body = {"edits": edits}
+            elif "segments" not in payload:
+                body = {"edits": []}
+            elif "lines" not in payload:
+                body = inventory_answer(payload)
+            else:
+                self.reviews += 1
+                body = full_review_answer(payload)
+                if self.reviews == 2:
+                    # The post-patch review omits, exactly as the live run did.
+                    omitted = {line["line_id"] for line in payload["lines"][-2:]}
+                    for key in ("supported", "unsupported", "uncertain", "structural"):
+                        body[key] = [v for v in body[key] if v not in omitted]
+                    body["evidence"] = {k: v for k, v in body["evidence"].items()
+                                        if k not in omitted}
+            self.answers.append(body)
+            return Response(json.dumps({
+                "model": OR_SLUG_DRAFTER,
+                "usage": {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14},
+                "choices": [{"finish_reason": "stop",
+                             "message": {"content": json.dumps(body)}}],
+            }).encode())
+
+    session = OmitOnSecondReview()
+    result, provider = run(drift, session)
+    phases = [call["phase"] for call in provider.usage["calls"]]
+    assert "repair" in phases, phases
+    # The completion happened AFTER the repair, and it carried the hint.
+    assert phases.count("post_patch_review") >= 2, phases
+    hinted = [json.loads(req["json"]["messages"][1]["content"])
+              for req in session.requests if "lines" in json.loads(
+                  req["json"]["messages"][1]["content"])]
+    assert any("must_judge" in payload for payload in hinted), "no completion was asked"
+    assert result.status == "approved", result.reason
 
 
 def test_recovery_is_refused_when_the_deadline_has_passed(bypass):
     from source_correction import _recover_unjudged, UnjudgedReview
 
-    state = {"recovered": False, "repaired": False, "last_unjudged": None}
+    state = {"recovered": False, "repaired": False, "last_unjudged": None,
+             "unjudged_digest": None}
     outcome = asyncio.run(_recover_unjudged(
         "initial_review", UnjudgedReview(["L000001"]),
         deadline=0.0, state=state))
@@ -235,7 +325,8 @@ def test_recovery_is_refused_with_no_line_identifiers(bypass):
     """Without a named gap there is nothing to complete, so this is not recovery."""
     from source_correction import _recover_unjudged, UnjudgedReview
 
-    state = {"recovered": False, "repaired": False, "last_unjudged": None}
+    state = {"recovered": False, "repaired": False, "last_unjudged": None,
+             "unjudged_digest": None}
     outcome = asyncio.run(_recover_unjudged(
         "initial_review", UnjudgedReview([]),
         deadline=10 ** 9, state=state))

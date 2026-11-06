@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import math
 import re
 from dataclasses import dataclass
@@ -1098,8 +1099,19 @@ def _apply_restorations(markdown: str, response: Any,
     return markdown, len(edits)
 
 
+def _document_digest(markdown: str) -> str:
+    """Identity of the document a review was asked about.
+
+    Recovery re-asks about the CURRENT draft, so the question that matters is
+    whether that draft is the same one that produced the omission. A digest is
+    sufficient and is not reversible into the document.
+    """
+    return hashlib.sha256((markdown or "").encode("utf-8")).hexdigest()
+
+
 async def _recover_unjudged(phase: str, exc: UnjudgedReview,
-                            deadline: float, state: dict[str, Any]
+                            deadline: float, state: dict[str, Any],
+                            markdown: str = ""
                             ) -> list[str] | str:
     """Decide whether a partially answered review can be completed, at most once.
 
@@ -1111,10 +1123,20 @@ async def _recover_unjudged(phase: str, exc: UnjudgedReview,
     Bounded by construction:
 
     * at most one recovery per correction (``state["recovered"]``);
-    * never once a repair has happened, so the reviewed draft is the same document;
+    * never across a changed document — the completion must judge the same draft
+      that produced the omission (``state["unjudged_digest"]``);
     * never if the deadline leaves no room for a meaningful call;
     * never a blind retry: the hint names the exact unanswered lines, and an
       identical omission the second time means the model cannot answer.
+
+    **A prior repair does not disqualify recovery.** That earlier rule used the
+    repair flag as a proxy for "the draft may have changed", which is not the
+    invariant: by the time a ``post_patch_review`` omits lines, the repaired draft
+    *is* the current document and the completion is rebuilt from that same
+    markdown. Measured on a live run: the initial review judged all 19 lines, the
+    post-patch review then omitted the six experience bullets, and withholding
+    cited only that a repair had happened. The repairs did not make the re-ask
+    stale, and the document digest is the honest test.
 
     Returns the line ids to require, or the reason string to withhold with. The
     caller rebuilds the request from the current draft and carries the ids as
@@ -1123,16 +1145,22 @@ async def _recover_unjudged(phase: str, exc: UnjudgedReview,
     recovery can only add judgements -- never approval.
     """
     line_ids = list(exc.line_ids)
-    if state.get("recovered") or state.get("repaired") or not line_ids:
+    if state.get("recovered") or not line_ids:
         return "incomplete_review"
     if state.get("last_unjudged") == line_ids:
         # Same unanswered lines again: the model cannot judge them, so re-asking is
         # a blind retry rather than recovery.
         return "incomplete_review"
+    if (state.get("unjudged_digest") is not None
+            and state["unjudged_digest"] != _document_digest(markdown)):
+        # The draft changed since the omission: completing the answer would judge a
+        # different document, so this is not a completion.
+        return "incomplete_review"
     if deadline - asyncio.get_running_loop().time() <= 0:
         return f"timeout_{phase}"
     state["recovered"] = True
     state["last_unjudged"] = line_ids
+    state["unjudged_digest"] = _document_digest(markdown)
     return line_ids
 
 
@@ -1312,7 +1340,7 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     # Bounded recovery state for an incomplete review. Shared with the helper so the
     # "at most once" and "never after a repair" rules cannot be bypassed.
     recovery: dict[str, Any] = {"recovered": False, "repaired": False,
-                                "last_unjudged": None}
+                                "last_unjudged": None, "unjudged_digest": None}
     # Per-bridge decision history: a removed bridge must not be revived by a
     # later review, and the final result reports only what survived.
     bridge_history: dict[str, dict[str, str]] = {}
@@ -1691,7 +1719,7 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             # parsed but skipped part of the draft, and no repair edit can address a
             # line that was never judged (repair may only replace a *flagged* span).
             # Attempt the single bounded completion before withholding.
-            outcome = await _recover_unjudged(phase, exc, deadline, recovery)
+            outcome = await _recover_unjudged(phase, exc, deadline, recovery, markdown)
             if isinstance(outcome, str):
                 return blocked(outcome)
             # Carry only the ids across the loop rebuild; the payload itself is
