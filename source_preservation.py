@@ -985,6 +985,208 @@ def ensure_required_headings(markdown: str, source_text: str) -> tuple[str, list
 
 
 # ---------------------------------------------------------------------------
+# 6. Experience bullets: unsupported additions and dropped qualifiers
+# ---------------------------------------------------------------------------
+
+# Spelled-out numbers are material qualifiers too. "the prior four quarters" is a
+# specific comparison period; a rewrite that says only "historical comparison" has
+# dropped it. This is a general number vocabulary, not a list of phrases from any
+# one run, and it lets "six apprentices" and "6 apprentices" compare equal.
+_NUMBER_WORDS = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+    "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14",
+    "fifteen": "15", "twenty": "20", "thirty": "30", "forty": "40",
+    "fifty": "50", "hundred": "100", "thousand": "1000",
+}
+
+_WORD_TOKEN = re.compile(r"[A-Za-z][A-Za-z'’+.-]*|\d[\d,./+%-]*")
+
+# Function words carry no substantiation. Without this filter a source-backed
+# clause ("and kept complete records for all routine equipment maintenance") was
+# reported as an addition purely because "and", "for" and "all" are not content
+# words in the source vocabulary. This is a stop list, not a phrase blacklist.
+_CLAUSE_STOPWORDS = frozenset({
+    "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "for", "with",
+    "by", "from", "as", "is", "are", "was", "were", "be", "been", "being",
+    "this", "that", "these", "those", "it", "its", "their", "we", "our", "each",
+    "every", "per", "across", "within", "into", "over", "more", "than", "all",
+    "any", "some", "such", "also", "while", "when", "where", "which", "who",
+    "not", "no", "under", "through", "during", "before", "after", "between",
+    "among", "via", "plus", "about", "both", "other", "including", "include",
+})
+
+
+def _numeric_qualifiers(text: str) -> set[str]:
+    """Numeric cores of the figures and number-words a text states."""
+    cores: set[str] = set()
+    for token in _WORD_TOKEN.findall(text or ""):
+        if any(ch.isdigit() for ch in token):
+            core = re.sub(r"[^0-9.]", "", token).rstrip(".")
+            if core:
+                cores.add(core)
+        elif token.lower() in _NUMBER_WORDS:
+            cores.add(_NUMBER_WORDS[token.lower()])
+    return cores
+
+
+def _source_bullets(source_text: str) -> list[str]:
+    """The candidate's own Markdown bullet lines, with markers removed.
+
+    Only lines that ARE Markdown bullets qualify. A DOCX-style extraction stores
+    its facts as plain styled paragraphs with no ``-`` prefix; treating every
+    line as a bullet made this rule fire on that format, where an existing test
+    pins that appended outcome clauses are a reviewer/writer concern, not a
+    deterministic preservation one. Requiring the bullet marker keeps the rule
+    scoped to the shape it was measured on.
+    """
+    out: list[str] = []
+    for raw in (source_text or "").splitlines():
+        stripped = raw.strip()
+        if not stripped.startswith("-"):
+            continue
+        text = _strip_markers(stripped).lstrip("-").strip()
+        if text:
+            out.append(text)
+    return out
+
+
+def _best_source_bullet(line: str, bullets: list[str]) -> str | None:
+    """The unambiguous source line this draft bullet restates, or None."""
+    words = _stemmed_words(line)
+    best: str | None = None
+    best_score = 0
+    tie = False
+    for bullet in bullets:
+        score = len(words & _stemmed_words(bullet))
+        if score > best_score:
+            best, best_score, tie = bullet, score, False
+        elif score == best_score and score > 0:
+            tie = True
+    if tie or best_score < 3:
+        return None
+    return best
+
+
+def _grounded_in_source(word: str, source_words: set[str],
+                        source_stems: set[str]) -> bool:
+    """True when the word is the source's own or an inflectional variant."""
+    if word in source_words or _stem(word) in source_stems:
+        return True
+    if len(word) >= 6:
+        head = word[:6]
+        return any(len(v) >= 6 and v.startswith(head) for v in source_words)
+    return False
+
+
+def _ungrounded_words(text: str, source_words: set[str],
+                      source_stems: set[str]) -> list[str]:
+    """Content words with no basis in the full source context.
+
+    Verb inflections (``-ing``/``-ed``), figures and number-words are left to the
+    qualifier check: a faithful paraphrase may change a verb, but it may not
+    introduce a new noun, adjective or outcome the record never states.
+    """
+    found: list[str] = []
+    for token in _WORD_TOKEN.findall(text or ""):
+        word = token.strip(".-'’").lower()
+        if (len(word) < 3 or word in _CLAUSE_STOPWORDS
+                or any(ch.isdigit() for ch in word)
+                or word in _NUMBER_WORDS or word.endswith(("ing", "ed"))):
+            continue
+        if not _grounded_in_source(word, source_words, source_stems):
+            found.append(word)
+    return found
+
+
+def preserve_experience_bullets(markdown: str, source_text: str) -> tuple[str, list[str]]:
+    """Correct a bullet that adds an unsupported claim or drops a material qualifier.
+
+    Measured on the approved Imaginative run ``de375f60``: the writer appended
+    "ensuring accurate fuel expense reporting" and "highlighting key cost drivers"
+    to two source bullets, and replaced "against the prior four quarters" with the
+    vaguer "with historical comparison". The reviewer marked every line supported,
+    so the engine's addition check (which sees only capitalised names and figures)
+    and its completeness check (which asks only whether the item is represented)
+    both let the inaccurate text through to export.
+
+    This rule is a CORRECTION, not a gate, and stays inside this module's stated
+    scope: it either removes a span the source does not support, or restores a
+    source value the draft dropped. It never composes prose.
+
+    * A bullet that dropped a numeric qualifier (a figure or a spelled-out number
+      such as "four quarters") is replaced by its source line verbatim.
+    * A bullet whose PREFIX is fully grounded in the source (a faithful
+      paraphrase) but whose trailing clause introduces content words with no
+      basis in the FULL source context is replaced by its source line verbatim.
+      This is the observed false-approval shape: "Reconciled 1,180 fuel
+      invoices quarterly against depot records" is faithful; ", ensuring
+      accurate fuel expense reporting" is not. A clause carrying a source
+      figure is left alone: "cutting rework by 18%" is a paraphrase, not an
+      addition, and must not be trimmed.
+    * A faithful paraphrase -- different verbs and inflections, no new content
+      word, every figure kept -- is left untouched. Verbatim copying is not
+      required.
+
+    Three refusals keep this from weakening the gate, each measured on an
+    existing control:
+
+    * A draft that carries a DIFFERENT source figure is a transplant, not a
+      dropped qualifier. Restoring it to the matched source line would erase the
+      very defect the reviewer must withhold, so the line is left untouched.
+    * A bullet whose PREFIX is itself ungrounded is the writer's own paraphrase
+      with an appended clause. Existing tests pin that class as a reviewer/writer
+      concern, not a deterministic preservation one, so it is left untouched.
+    * Only a Markdown-bullet source line can be matched. A DOCX-style extraction
+      has no bullet markers, so this rule leaves that format to the reviewer.
+
+    A correction always substitutes the candidate's own source line. It never
+    truncates or composes a new sentence, which would be prose generation and
+    would produce a line that exists in neither the draft nor the source.
+    """
+    source_words = {w.lower() for w in
+                    re.findall(r"[A-Za-z][A-Za-z\-]+", source_text or "")
+                    if len(w) > 3}
+    source_stems = _stemmed_words(source_text or "")
+    bullets = _source_bullets(source_text)
+    source_figures = _numeric_qualifiers(source_text)
+
+    out_lines: list[str] = []
+    changes: list[str] = []
+    for raw in markdown.splitlines(keepends=True):
+        stripped = raw.strip()
+        if not stripped.startswith("-"):
+            out_lines.append(raw)
+            continue
+        bullet = _best_source_bullet(stripped, bullets)
+        if bullet is None:
+            out_lines.append(raw)
+            continue
+        indent = raw[:len(raw) - len(raw.lstrip())]
+        newline = "\n" if raw.endswith("\n") else ""
+        draft_figures = _numeric_qualifiers(stripped)
+        bullet_figures = _numeric_qualifiers(bullet)
+        # A different source figure is a transplant. Leave it for the reviewer.
+        transplanted = bool(draft_figures - bullet_figures)
+        if not transplanted and bullet_figures - draft_figures:
+            out_lines.append(f"{indent}- {bullet}{newline}")
+            changes.append("restored a dropped material qualifier")
+            continue
+        comma = stripped.rfind(",")
+        if comma > 0 and not transplanted:
+            prefix = stripped[:comma]
+            clause = stripped[comma + 1:]
+            if (not _ungrounded_words(prefix, source_words, source_stems)
+                    and _ungrounded_words(clause, source_words, source_stems)
+                    and not (_numeric_qualifiers(clause) & source_figures)):
+                out_lines.append(f"{indent}- {bullet}{newline}")
+                changes.append("removed an unsupported appended clause")
+                continue
+        out_lines.append(raw)
+    return "".join(out_lines), changes
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -1024,6 +1226,7 @@ def preserve_source_facts(
     for step in (preserve_education_record,
                  preserve_source_summary,
                  preserve_quantified_qualifiers,
+                 preserve_experience_bullets,
                  preserve_skills_block,
                  ensure_required_headings):
         if step is preserve_skills_block:
