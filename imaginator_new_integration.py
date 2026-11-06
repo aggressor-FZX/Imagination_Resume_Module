@@ -641,6 +641,92 @@ def _get_domain_fallback_occupation(
     return fallback_by_domain["default"]
 
 
+def _markdown_employer_records(resume_text: str) -> List[Dict[str, Any]]:
+    """One experience record per Markdown employer record in the source text.
+
+    Recognises the shape the frozen fixture (and ordinary Markdown resumes) use::
+
+        **Employer Name** -- City, ST
+        *Role Title | MM/YYYY - Present*
+        - bullet
+        - bullet
+
+    Only the Professional Experience sections are read, so an Education
+    institution is never mistaken for an employer. Every value is copied from
+    the candidate's own text; nothing is generated. Returns ``[]`` when no
+    recognisable record exists, so the caller keeps its existing fallback.
+    """
+    if not resume_text:
+        return []
+    bold = re.compile(r"^\*\*(?P<name>.+?)\*\*\s*(?:--|-|—|–)?\s*(?P<loc>.*)$")
+    detail = re.compile(r"^\*(?P<detail>.+?)\*\s*$")
+    records: List[Dict[str, Any]] = []
+    in_experience = False
+    current: Dict[str, Any] | None = None
+    for raw in resume_text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            heading = line.lstrip("#").strip().lower()
+            in_experience = heading in ("professional experience", "experience",
+                                        "work experience")
+            if current and current.get("bullets"):
+                records.append(current)
+                current = None
+            continue
+        if not in_experience:
+            continue
+        match = bold.match(line)
+        if match:
+            if current and current.get("bullets"):
+                records.append(current)
+            name = re.sub(r"^SYNTHETIC-ONLY\s*", "", match.group("name").strip())
+            current = {
+                "title_line": f"{name} -- {match.group('loc').strip()}".rstrip(" -"),
+                "company": name,
+                "role": "",
+                "duration": "",
+                "location": match.group("loc").strip(),
+                "bullets": [],
+            }
+            continue
+        if current is None:
+            continue
+        dm = detail.match(line)
+        if dm and not current["role"]:
+            text = dm.group("detail").strip()
+            parts = [p.strip() for p in text.split("|")]
+            current["role"] = parts[0]
+            if len(parts) > 1:
+                current["duration"] = parts[1]
+            continue
+        if line.startswith("-") and not re.fullmatch(r"-{3,}", line):
+            current["bullets"].append(line.lstrip("-").strip())
+
+    if current and current.get("bullets"):
+        records.append(current)
+
+    result: List[Dict[str, Any]] = []
+    for record in records:
+        if not record["company"] or not record["bullets"]:
+            continue
+        body = "\n".join(f"- {b}" for b in record["bullets"])
+        result.append({
+            "title_line": record["title_line"],
+            "company": record["company"],
+            "role": record["role"],
+            "duration": record["duration"],
+            "location": record["location"],
+            "bullets": list(record["bullets"]),
+            "snippet": body,
+            "body": body,
+            "raw": body,
+            "skills": [],
+        })
+    return result
+
+
 def _extract_structured_sections_from_resume(
     resume_text: str,
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -986,17 +1072,40 @@ async def run_new_pipeline_async(
             usable_exps = [e for e in experiences if _exp_is_usable(e)]
             
             if not usable_exps:
-                logger.warning("[NEW_PIPELINE] No usable parsed experience; falling back to raw text")
-                experiences = [{
-                    "title_line": "Professional Experience",
-                    "company": "Current Employer",
-                    "role": "Professional",
-                    "snippet": resume_text[:3000],
-                    "body": resume_text[:3000],
-                    "duration": "",
-                    "raw": resume_text[:3000]
-                }]
-                logger.info("[NEW_PIPELINE] Created fallback experience from resume text")
+                # A Markdown resume stores each employer as a bold record head
+                # followed by an italic role/date line. ``parse_experiences``
+                # does not recognise that shape, so it returned zero records for
+                # the frozen two-document fixture and the old fallback collapsed
+                # ALL employers into one "Current Employer" placeholder. The
+                # writer then merged every bullet under that single record and
+                # the reviewer correctly reported the real employers missing
+                # (measured: Conservative diagnostics 3abb7811 and c84a6a8d).
+                #
+                # Build one record per real employer from the source text. This
+                # is a structural parse, not generation: every value is copied
+                # from the candidate's own document. If no record can be found,
+                # keep the previous raw-text fallback rather than inventing one.
+                records = _markdown_employer_records(resume_text)
+                if records:
+                    experiences = records
+                    logger.info(
+                        "[NEW_PIPELINE] Built %d employer records from Markdown "
+                        "source", len(records))
+                else:
+                    logger.warning(
+                        "[NEW_PIPELINE] No usable parsed experience; falling back "
+                        "to raw text")
+                    experiences = [{
+                        "title_line": "Professional Experience",
+                        "company": "Current Employer",
+                        "role": "Professional",
+                        "snippet": resume_text[:3000],
+                        "body": resume_text[:3000],
+                        "duration": "",
+                        "raw": resume_text[:3000]
+                    }]
+                    logger.info(
+                        "[NEW_PIPELINE] Created fallback experience from resume text")
             else:
                 if len(usable_exps) < len(experiences):
                     logger.info("[NEW_PIPELINE] Filtered unusable experiences")
