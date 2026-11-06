@@ -974,3 +974,68 @@ Protected captures, all byte-identical to when they were recorded:
 A capture is evidence about a revision. Its original diagnosis is read from its own
 `review`/`timing` fields (`live_capture.recorded_stopping_point`), never recomputed from
 current code — recomputing would rewrite the history that made the defect findable.
+
+---
+
+# Live acceptance — 2026-11-05 (authorised run)
+
+**Live revisions:** imaginator `1adfa5b`, orchestrator-backend + frontend `e21fda2`.
+**Input:** frozen `tests/fixtures/realistic_candidate/` (all 5 SHA-256 verified before the run).
+**Path:** real orchestrator `POST /api/analysis/multi-file` → Imaginator `/analyze` → `/api/ml/imagination/export`.
+
+## Result
+
+| Step | Outcome |
+|---|---|
+| Imaginative via orchestrator | **APPROVED**, 249-word markdown, v5 receipt |
+| PDF + DOCX download | **200**, real 127,809-byte PDF 1.7 and 37,758-byte DOCX |
+| Facts preserved in **both files** | **22/22** (F01–F22) |
+| Prohibited tools/achievements | **none** in either file |
+| Conservative | mode `conservative`, policy `conservative-v1`, **no bridges, no policy state** |
+| Conservative bridging call | **skipped** — no `[RESEARCHER] Analyzing job ad` in logs |
+| Tamper: appended achievement | **409** `receipt_content_mismatch` |
+| Tamper: altered employer | **409** `receipt_render_content_mismatch` |
+| Tamper: policy state mode | **409** `receipt_policy_mismatch` |
+| Tamper: dropped policy state | **409** `receipt_policy_state_missing` |
+| Tamper: forged signature | **409** `receipt_signature_invalid` |
+| Tamper: injected skill | **409** `receipt_render_content_mismatch` |
+| Untampered control | **200** |
+
+## Two defects found by running it (both fixed and deployed)
+
+**1. No mode could be selected through the website, and the policy state never
+returned.** `backend/server.cjs` had *zero* references to `skill_inference_mode`:
+the multi-file payload is an explicit object literal, and the browser sent only
+`creativity_mode`. Every website analysis silently took the default, so
+Conservative was unreachable. Separately, both publication-field allow-lists
+omitted `skill_inference_policy_state`, so a v5 receipt arrived at export
+unaccompanied and was refused with `receipt_policy_state_missing` — an approval
+that could be issued and never downloaded. Fixed in `e21fda2`; 6 regression
+tests, mutation-checked.
+
+**2. A commit that looked deployed but was not.** The first attempt at that fix
+was amended onto master while the working tree still held the mutated
+(mutation-tested) copy, so `344edee` shipped *without* the fix — and the
+Conservative run duly came back `imaginative`. Caught by asserting the *response*
+mode rather than trusting the deploy status. Re-committed as `e21fda2` after
+verifying `git show HEAD:backend/server.cjs | grep -c skill_inference_mode` = 5.
+
+## What this run does NOT establish
+
+- **No inferred skill survived, because none was proposed.** Every approved
+  skill in this candidate is a verbatim source skill, so there is no bridging
+  opportunity to exercise: the Researcher correctly proposed zero bridges and
+  `surviving_bridges` is `[]` in both modes. A bridging positive still needs a
+  fixture whose activity implies a skill the source does not already name. This
+  is a **fixture limitation, not a passing bridging test** — do not read it as one.
+- **Conservative withheld** (`source_completeness_uncertain` / `no_op_repair`) on
+  live model output. That is the correction gate working, not a mode defect: the
+  mode, policy version and empty bridge set were all correct.
+- **File name is `resume`** for this payload, because the approved headline is
+  empty. Cosmetic, but the filename does not derive from the job title here.
+
+## Cost
+
+Synthetic account with 3 resume-analysis credits. Three Imaginator runs
+(2 via orchestrator, 1 direct). Job-search enrichment debited 90 *job-search*
+credits (9 paid calls) — separate pool, not resume analysis.
