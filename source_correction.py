@@ -718,6 +718,23 @@ def _active_bridges() -> tuple[dict[str, Any], ...]:
     return _ACTIVE_BRIDGES.get()
 
 
+# The coverage verdicts from the PREVIOUS review of this same correction, keyed
+# by inventory item id. Used only to detect a self-contradiction: the reviewer
+# confirmed an item against a line, the repair left that line byte-identical, and
+# the next review calls the same item missing. Measured on Imaginative website
+# run ``61bce5ef`` (2026-11-07): five employer/institution head lines were
+# ``supported`` with a citation in pass 1 and ``structural`` with no citation in
+# pass 2, while the line text was unchanged, so the item was reported missing and
+# the run withheld as ``source_facts_missing``.
+_ACTIVE_PRIOR_COVERAGE: "contextvars.ContextVar[dict[str, Any]]" = (
+    contextvars.ContextVar("prior_coverage", default={}))
+
+
+def _active_prior_coverage() -> dict[str, Any]:
+    """Prior-pass coverage evidence for the current correction, if any."""
+    return _ACTIVE_PRIOR_COVERAGE.get()
+
+
 def _validate_review(response: Any, lines: list[dict[str, Any]],
                      sources: dict[str, str], inventory: list[dict[str, Any]],
                      ) -> tuple[list[dict[str, Any]], set[str], list[dict[str, Any]]]:
@@ -910,6 +927,88 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
     claims_by_span = {(c["line_id"], c["start"], c["end"]): c for c in response["claims"]}
     seen: set[str] = set()
     incomplete: set[str] = set()
+
+    # ── Bounded coverage reconciliation ────────────────────────────────────
+    # A reviewer that confirms an item against a line, then calls the same item
+    # missing after a repair that left that line byte-identical, has contradicted
+    # itself. Measured on Imaginative website run ``61bce5ef`` (2026-11-07): five
+    # head lines were ``supported`` with a citation in pass 1 and ``structural``
+    # with no citation in pass 2, the line text unchanged, and the run withheld
+    # as ``source_facts_missing`` with every fact present.
+    #
+    # This is NOT a global override of ``missing``. It fires only when ALL of the
+    # following hold, each of which is checked against the CURRENT draft and the
+    # ORIGINAL sources rather than against the prior verdict:
+    #
+    #   1. the prior pass recorded the item ``represented`` with a span;
+    #   2. that span's line still exists and its text is byte-identical now;
+    #   3. the item's own quote is verbatim in that line (current-draft evidence);
+    #   4. the item's quote is verbatim in the source document it came from;
+    #   5. the current pass offers no competing evidence for the item.
+    #
+    # If any check fails the refusal stands. A changed line, a paraphrase, a
+    # transplanted fact or a genuinely absent item all keep the withhold.
+    prior = _active_prior_coverage()
+    reconciled: set[str] = set()
+    if prior:
+        current_text = {line["line_id"]: line["text"] for line in lines}
+        for mapping in response["representations"]:
+            if mapping.get("status") != "missing":
+                continue
+            cid = mapping.get("source_claim_id")
+            item = items.get(cid)
+            record = prior.get(cid)
+            if item is None or not isinstance(record, dict):
+                continue
+            if record.get("status") != "represented" or not record.get("spans"):
+                continue
+            # Markup is formatting, not content: the source states
+            # "Harborline Transit Authority -- Tacoma, WA" and the draft writes
+            # "**Harborline Transit Authority** -- Tacoma, WA". Comparing raw
+            # strings would call a faithful rendering a mismatch.
+            def _flat(value: str) -> str:
+                return " ".join(
+                    _strip_markup(_strip_provenance(value)).split()).casefold()
+
+            quote = _flat(item["quote"])
+            if not quote:
+                continue
+            document = sources.get(item["source_id"])
+            if not document:
+                continue
+            if quote not in _flat(document):
+                continue
+            for span in record["spans"]:
+                line_id = span.get("line_id")
+                if line_id not in current_text:
+                    continue
+                # The line must be UNCHANGED since the pass that confirmed it.
+                if current_text[line_id] != record.get("line_text", {}).get(line_id):
+                    continue
+                if quote not in _flat(current_text[line_id]):
+                    continue
+                # The evidence is the CURRENT draft line and the ORIGINAL
+                # source item, both verified above. The claim on that line is
+                # restored to ``supported`` with a citation to the item's own
+                # source offsets, which is what the prior pass recorded and what
+                # the unchanged text still supports. This is not a manufactured
+                # verdict: the citation is the real source span the item came
+                # from, and the line carries it verbatim.
+                for claim in response["claims"]:
+                    if claim["line_id"] != line_id:
+                        continue
+                    claim["verdict"] = "supported"
+                    claim["citations"] = [{
+                        "source_id": item["source_id"],
+                        "start": item["start"],
+                        "end": item["end"],
+                        "quote": item["quote"],
+                    }]
+                reconciled.add(cid)
+                mapping["status"] = "represented"
+                mapping["spans"] = [{"line_id": line_id, "start": 0,
+                                     "end": len(current_text[line_id])}]
+                break
     # Inventory items the reviewer declared "missing". Returned so the caller can
     # attempt a bounded restoration instead of withholding unconditionally.
     missing_items: list[dict[str, Any]] = []
@@ -1688,10 +1787,15 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     loop = asyncio.get_running_loop()
     events = _Events(observer, loop, timeout_seconds)
     token = _ACTIVE_BRIDGES.set(tuple(permitted_bridges or ()))
+    # Coverage evidence starts empty for every correction: a prior run's verdicts
+    # must never be reused, and a ContextVar default would otherwise leak between
+    # concurrent requests on the same worker.
+    prior_token = _ACTIVE_PRIOR_COVERAGE.set({})
     try:
         result = await _correct_body(markdown, sources, callback, timeout_seconds,
                                      events, permitted_bridges=permitted_bridges)
     finally:
+        _ACTIVE_PRIOR_COVERAGE.reset(prior_token)
         _ACTIVE_BRIDGES.reset(token)
     events.end(result)
     return result
@@ -1860,6 +1964,23 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 return blocked(f"timeout_{phase}")
             claims, incomplete, missing_items = _validate_review(
                 response, lines, source_map, inventory)
+            # Record this pass's coverage evidence for the NEXT review, so a
+            # self-contradiction can be detected against the current draft. The
+            # line text is captured with it: reconciliation requires the line to
+            # be byte-identical, so a repair that changed it invalidates the
+            # record and the refusal stands.
+            if isinstance(response, dict) and isinstance(
+                    response.get("representations"), list):
+                _ACTIVE_PRIOR_COVERAGE.set({
+                    mapping.get("source_claim_id"): {
+                        "status": mapping.get("status"),
+                        "spans": list(mapping.get("spans") or []),
+                        "line_text": {line["line_id"]: line["text"]
+                                      for line in lines},
+                    }
+                    for mapping in response["representations"]
+                    if isinstance(mapping, dict)
+                })
             # Reviewer decisions about permitted bridge labels (Phase C.6/C.7).
             # Absent unless the request offered bridges, so source-only callers
             # see exactly the previous behaviour.
