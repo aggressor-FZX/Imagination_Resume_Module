@@ -156,6 +156,31 @@ class UnjudgedReview(ValueError):
         self.count = len(self.line_ids)
 
 
+class MalformedReviewAnswer(ValueError):
+    """The provider answered, but the answer could not be mapped to our shape.
+
+    Distinct from ``provider_error``, which means something unexpected happened
+    and a retry would be guesswork. Here the transport succeeded and the model
+    returned JSON; our own translation rejected it (duplicate line id,
+    out-of-range segment index, unknown key). Reporting that as a provider error
+    misattributes our validation to the network.
+
+    Measured 2026-11-07: a live Imaginative run withheld as ``provider_error``
+    while both provider calls logged ``http_status: 200, outcome: ok``. The
+    reviewer had returned an unusable answer and the adapter's generic handler
+    swallowed the real cause. ``UnjudgedLines`` was already mapped to
+    ``incomplete_review``; its sibling ``MalformedIndexedResponse`` was not,
+    even though it subclasses the same base.
+
+    Deliberately NOT retried: the answer was served, so repeating the identical
+    request is guesswork rather than recovery.
+    """
+
+    def __init__(self, phase: str | None = None):
+        super().__init__("provider answer could not be mapped to the review shape")
+        self.phase = phase
+
+
 class ProviderCallTimeout(TimeoutError):
     """One provider request exceeded its own timeout (not the overall deadline).
 
@@ -1751,6 +1776,13 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
     except ProviderCallTimeout:
         outcome = "provider_call_timeout"
         raise
+    except MalformedReviewAnswer:
+        # The transport succeeded and the model answered; our translation
+        # rejected the answer. Naming it here keeps the phase event honest —
+        # `callback_error` made a served-but-unusable answer look like a
+        # transport fault, which is how the 2026-11-07 run was misdiagnosed.
+        outcome = "malformed_answer"
+        raise
     except PrivacyReviewRequired:
         outcome = "privacy"
         raise
@@ -2295,6 +2327,12 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             # names the unresolved claim rather than a resume with a fact removed.
             return blocked("unresolved_claims")
         except _Invalid:
+            return blocked("malformed_output")
+        except MalformedReviewAnswer:
+            # The provider answered and the transport succeeded; our own
+            # translation rejected the answer. Same user-facing outcome as
+            # `_Invalid` — the draft could not be verified — but reached through
+            # the adapter rather than the engine's validator.
             return blocked("malformed_output")
         except PrivacyReviewRequired:
             return blocked("privacy_review_required")

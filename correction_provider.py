@@ -16,6 +16,7 @@ from disclosure import (
 )
 from pipeline_config import OR_SLUG_DRAFTER, estimate_cost
 from source_correction import (
+    MalformedReviewAnswer,
     PrivacyReviewRequired,
     ProviderCallTimeout,
     ProviderRateLimited,
@@ -511,8 +512,23 @@ class CorrectionProvider:
                 # output hid this live and sent the draft into a wasted repair.
                 # Deliberately NOT retried: the answer was valid, just incomplete.
                 raise UnjudgedReview(exc.line_ids) from exc
+            except correction_protocol.MalformedIndexedResponse as exc:
+                # The answer parsed as JSON but could not be mapped onto the
+                # engine's strict shape: a duplicate line id, an out-of-range
+                # segment index, an unknown key. That is OUR validation
+                # rejecting the model's answer, not a transport failure.
+                #
+                # Measured 2026-11-07: this fell through to the generic handler
+                # below and was reported as `provider_error`, so a live run
+                # looked like an OpenRouter outage when the reviewer had simply
+                # returned an unusable answer. `UnjudgedLines` was already
+                # handled; its sibling was not, even though it subclasses the
+                # same base. The engine maps `_Invalid` to `malformed_output`,
+                # so raise that instead of mislabelling our own check.
+                raise MalformedReviewAnswer(phase) from exc
         except (ProviderRateLimited, ProviderUnavailable, ProviderRejectedRequest,
-                ProviderCallTimeout, UnjudgedReview, PrivacyReviewRequired):
+                ProviderCallTimeout, UnjudgedReview, MalformedReviewAnswer,
+                PrivacyReviewRequired):
             raise
         except Exception:
             self.usage["failures"].append({"stage": "source_correction", "phase": phase,
