@@ -267,19 +267,36 @@ def _education_records_in(record_section: dict) -> list[dict]:
     return records
 
 
+def source_summary_parts(source_text: str) -> list[str]:
+    """Each document's own summary paragraph, in document order.
+
+    Kept separate rather than joined: a joined string is not a contiguous span of
+    any one source document, so a reviewer asked to cite it cannot, and the
+    completeness check reports the merged line as unconfirmed. Measured on the
+    Conservative website runs ``64145e6c`` and ``a09a004a`` (2026-11-07): the
+    merged summary was the only line the reviewer declined to confirm, twice, and
+    the run withheld as ``no_op_repair`` / ``source_completeness_uncertain``
+    because the repair correctly refused to alter verbatim source text.
+    """
+    return [words for words in
+            (_summary_in(section) for section in
+             _find_sections(_split_sections(source_text), "professional summary",
+                            "summary", "profile", "objective"))
+            if words]
+
+
 def source_summary(source_text: str) -> str:
     """The candidate's own summary paragraph, or ``""`` when the source has none.
 
     With several documents the summaries are concatenated in document order rather than
     only the first being returned. Returning the first alone made the summary rule treat
     every later document's summary sentence as text the source does not support.
+
+    Callers that WRITE the summary must use ``source_summary_parts`` so each
+    document's paragraph stays its own line; this joined form is for presence
+    checks and word comparisons.
     """
-    parts = [words for words in
-             (_summary_in(section) for section in
-              _find_sections(_split_sections(source_text), "professional summary",
-                             "summary", "profile", "objective"))
-             if words]
-    return " ".join(parts)
+    return " ".join(source_summary_parts(source_text))
 
 
 def _summary_in(record_section: dict) -> str:
@@ -698,7 +715,8 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
     than filled — the fourth requirement is "include summary content only when
     source-backed".
     """
-    summary = source_summary(source_text)
+    parts = source_summary_parts(source_text)
+    summary = " ".join(parts)
     sections = _split_sections(markdown)
     section = _find_section(sections, "professional summary", "summary")
 
@@ -708,6 +726,12 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
         index = sections.index(section)
         sections.pop(index)
         return _render_sections(sections), ["removed an unsourced professional summary"]
+
+    # Each document's summary is written as its OWN line. A single joined line is
+    # not a contiguous span of any one source document, so the reviewer cannot
+    # cite it and reports it unconfirmed; two consecutive runs withheld on exactly
+    # that line. Separate lines are each verbatim source text.
+    body = ["", *parts, ""]
 
     if section is None:
         # No summary section in the draft but the source has one. Inserting one here is
@@ -719,14 +743,21 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
         # draft whose source stated them. Declining here produced the withholding, not
         # safety.
         heading = "Professional Summary"
-        sections.insert(0, {"heading": heading, "level": 2,
-                            "lines": ["", summary, ""]})
+        sections.insert(0, {"heading": heading, "level": 2, "lines": body})
         return _render_sections(sections), ["restored the source summary"]
 
     current = " ".join(line.strip() for line in section["lines"] if line.strip())
     normalized = _strip_markers(current)
     if normalized.casefold() == summary.casefold():
-        return markdown, []
+        # The words are already right. Still split a merged paragraph into one
+        # line per document: a joined line is not a contiguous span of any single
+        # source document, so the reviewer cannot cite it and reports it
+        # unconfirmed. Measured on runs 64145e6c and a09a004a.
+        existing = [line.strip() for line in section["lines"] if line.strip()]
+        if existing == parts:
+            return markdown, []
+        section["lines"] = body
+        return _render_sections(sections), ["split the summary into one line per document"]
 
     # Only replace when the difference is an ADDITION or a dropped source word. A pure
     # restatement that shares every content word is left alone, so ordinary paraphrase
@@ -740,7 +771,7 @@ def preserve_source_summary(markdown: str, source_text: str) -> tuple[str, list[
     if not added and not lost:
         return markdown, []
 
-    section["lines"] = ["", summary, ""]
+    section["lines"] = body
     reason = ("trimmed the appended proficiency list from the summary" if added
               else "restored the source summary wording")
     return _render_sections(sections), [reason]

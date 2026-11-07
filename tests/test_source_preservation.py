@@ -759,14 +759,23 @@ def test_every_document_summary_is_read():
 
 
 def test_both_documents_summaries_survive_preservation():
-    """A merged summary naming both candidates is NOT an appended proficiency list."""
+    """A merged summary naming both candidates is NOT an appended proficiency list.
+
+    The words are kept verbatim. The only permitted change is structural: each
+    document's paragraph becomes its own line, because a joined line is not a
+    contiguous span of either source document and the reviewer cannot cite it
+    (measured on Conservative runs 64145e6c and a09a004a).
+    """
     out, changes = sp.preserve_source_facts(DRAFT_BOTH_RECORDS, COMBINED)
-    assert not any("summary" in change for change in changes), changes
+    assert not any("trimmed" in change or "restored the source summary" in change
+                   for change in changes), changes
 
     section = sp._find_section(sp._split_sections(out), "professional summary")
     text = " ".join(section["lines"])
     assert "Journeyman electrician with 8+ years" in text
     assert "Facilities maintenance technician focused on preventive maintenance" in text
+    lines = [line.strip() for line in section["lines"] if line.strip()]
+    assert len(lines) == 2, lines
 
 
 def test_every_document_education_record_is_read():
