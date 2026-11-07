@@ -213,3 +213,85 @@ def test_a_missing_item_without_a_join_upgrade_still_withholds():
         review, [{"line_id": "L1", "text": SINGLE}], {"doc": SOURCE}, inventory)
     assert claims[0]["verdict"] == "unsupported"
     assert "missing" in incomplete
+
+
+# ── 4. A number's written form is not an omission ──────────────────────────
+
+NUM_SOURCE = (
+    "## Professional Experience\n"
+    "SYNTHETIC-ONLY Diagnosed and repaired switchgear faults at 9 substations.\n"
+    "SYNTHETIC-ONLY Trained 4 apprentices on lockout/tagout procedures.\n"
+)
+
+
+def _num_review(draft_line, item_quote, item_start, item_end):
+    return {
+        "claims": [{"id": f"L1:0:{len(draft_line)}", "line_id": "L1", "start": 0,
+                    "end": len(draft_line), "verdict": "supported",
+                    "citations": [{"source_id": "doc", "start": item_start,
+                                   "end": item_end, "quote": item_quote}]}],
+        "representations": [{"source_claim_id": f"doc:{item_start}:{item_end}",
+                             "status": "missing", "spans": []}],
+    }
+
+
+def _num_item(needle):
+    start = NUM_SOURCE.index(needle)
+    end = NUM_SOURCE.index("\n", start) + 1
+    return ({"id": f"doc:{start}:{end}", "source_id": "doc", "start": start,
+             "end": end, "quote": NUM_SOURCE[start:end],
+             "classification": "required"}, start, end)
+
+
+def test_a_spelled_out_number_is_not_an_omission():
+    """The writer spelled "9" as "nine"; the fact is present.
+
+    Measured 2026-11-07 on ``realistic_candidate``: the writer produced "nine
+    substations", "four apprentices" and "six commercial properties" where the
+    source says "9", "4" and "6". The reviewer compares text, reported the items
+    missing, and the run withheld as ``source_completeness_uncertain``.
+    """
+    item, start, end = _num_item("SYNTHETIC-ONLY Diagnosed")
+    line = "- Diagnosed and repaired switchgear faults at nine substations."
+    _, incomplete, missing = sc._validate_review(
+        _num_review(line, item["quote"], start, end),
+        [{"line_id": "L1", "text": line}], {"doc": NUM_SOURCE}, [item])
+    assert incomplete == set()
+    assert missing == []
+
+
+def test_a_different_figure_is_still_an_omission():
+    """Only the WRITTEN FORM may differ; a different number is a real defect."""
+    item, start, end = _num_item("SYNTHETIC-ONLY Diagnosed")
+    line = "- Diagnosed and repaired switchgear faults at eleven substations."
+    _, incomplete, missing = sc._validate_review(
+        _num_review(line, item["quote"], start, end),
+        [{"line_id": "L1", "text": line}], {"doc": NUM_SOURCE}, [item])
+    assert "missing" in incomplete
+    assert len(missing) == 1
+
+
+def test_a_verbatim_line_reported_missing_still_withholds():
+    """A reviewer error on a verbatim line is NOT overridden.
+
+    This is the control that keeps the number-form rule from becoming a blanket
+    override of ``missing``. Seven omission controls pin it; an earlier version
+    of this rule broke all seven.
+    """
+    item, start, end = _num_item("SYNTHETIC-ONLY Diagnosed")
+    line = "- Diagnosed and repaired switchgear faults at 9 substations."
+    _, incomplete, missing = sc._validate_review(
+        _num_review(line, item["quote"], start, end),
+        [{"line_id": "L1", "text": line}], {"doc": NUM_SOURCE}, [item])
+    assert "missing" in incomplete
+    assert len(missing) == 1
+
+
+def test_a_dropped_clause_is_still_an_omission():
+    """A number-form match must not excuse other missing wording."""
+    item, start, end = _num_item("SYNTHETIC-ONLY Diagnosed")
+    line = "- Diagnosed switchgear faults at nine substations."
+    _, incomplete, missing = sc._validate_review(
+        _num_review(line, item["quote"], start, end),
+        [{"line_id": "L1", "text": line}], {"doc": NUM_SOURCE}, [item])
+    assert "missing" in incomplete

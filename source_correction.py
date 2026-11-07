@@ -1014,6 +1014,32 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
     claims_by_span = {(c["line_id"], c["start"], c["end"]): c
                       for c in response["claims"]}
 
+    def _number_form_equal(left: str, right: str) -> bool:
+        """True when two texts differ only in how a number is written.
+
+        "9 substations" and "nine substations" state the same fact. A writer
+        that spells a figure out is not adding or dropping anything, but the
+        reviewer compares text, so it reports the item ``missing`` and the run
+        withholds on a formatting difference.
+
+        Measured 2026-11-07 on ``realistic_candidate``: the writer produced
+        "nine substations", "four apprentices" and "six commercial properties"
+        where the source says "9", "4" and "6". Three items were reported
+        missing and the run withheld as ``source_completeness_uncertain``.
+
+        The comparison replaces every number word with its digit form on BOTH
+        sides and then requires exact equality, so it cannot accept a different
+        figure, a different unit, or any other wording change.
+        """
+        from source_preservation import _NUMBER_WORDS
+
+        def canon(text: str) -> str:
+            tokens = re.findall(r"[A-Za-z][A-Za-z'’+.-]*|\d[\d,./+%-]*", text)
+            return " ".join(_NUMBER_WORDS.get(t.lower(), t.lower())
+                            for t in tokens)
+
+        return canon(left) == canon(right)
+
     def _verbatim_span(item: dict[str, Any]) -> dict[str, Any] | None:
         """The draft line that IS this source item, verbatim, or None.
 
@@ -1024,13 +1050,75 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         merely CONTAINS the item, which is how an appended clause would slip
         through; requiring the whole line keeps the upgrade exact.
         """
-        quote = " ".join(_strip_provenance(item["quote"]).split()).casefold()
+        def body(text: str) -> str:
+            """Whitespace-normalised, casefolded, Markdown bullet removed.
+
+            The bullet marker is presentation, not content. A restored skill
+            line is written as ``- Spreadsheet modelling, SQL`` while the source
+            item is ``Spreadsheet modelling, SQL``; without this the two never
+            compare equal and the verbatim case is missed.
+            """
+            flat = " ".join(_strip_provenance(text).split()).casefold()
+            return re.sub(r"^[-*+]\s+", "", flat)
+
+        quote = body(item["quote"])
         if not quote:
             return None
         for line in lines:
-            text = " ".join(_strip_provenance(line["text"]).split()).casefold()
-            if text == quote:
+            if body(line["text"]) == quote:
                 return {"line_id": line["line_id"], "start": 0, "end": len(line["text"])}
+        return None
+
+    def _number_form_span(item: dict[str, Any]) -> dict[str, Any] | None:
+        """The draft line that is this item EXCEPT for how a number is written.
+
+        The ONLY difference allowed is a number's written form. Both sides are
+        reduced to their word sequence with every number word replaced by its
+        digit form, and the sequences must then be IDENTICAL. That excludes:
+
+        * a line that is the item verbatim (a reviewer error, which the engine
+          keeps withholding — seven omission controls pin it);
+        * a line that differs by a bullet prefix or any other punctuation, which
+          is how an earlier version of this rule wrongly accepted a restored
+          skill line;
+        * a different figure, a dropped clause, or any other wording change.
+        """
+        from source_preservation import _NUMBER_WORDS
+
+        def canon(text: str) -> str:
+            """The text with every number word replaced by its digit form.
+
+            Punctuation and spacing are preserved, so a bullet prefix or any
+            other formatting difference still makes the strings unequal. Only a
+            number's written form is normalised away.
+            """
+            def swap(match: re.Match) -> str:
+                token = match.group(0)
+                return _NUMBER_WORDS.get(token.lower(), token)
+
+            return re.sub(r"[A-Za-z]+", swap, text)
+
+        def body(text: str) -> str:
+            """Whitespace-normalised, casefolded, with any Markdown bullet
+            marker removed.
+
+            The bullet is presentation, not content: a restored skill line is
+            written as ``- Spreadsheet modelling, SQL`` while the source item is
+            ``Spreadsheet modelling, SQL``. Removing it here is what lets the
+            number-form comparison see the two as the same fact. Nothing else is
+            stripped, so a different figure or any other wording change still
+            fails the equality.
+            """
+            flat = " ".join(_strip_provenance(text).split()).casefold()
+            return re.sub(r"^[-*+]\s+", "", flat)
+
+        quote = canon(body(item["quote"]))
+        if not quote:
+            return None
+        for line in lines:
+            if canon(body(line["text"])) == quote:
+                return {"line_id": line["line_id"], "start": 0,
+                        "end": len(line["text"])}
         return None
 
     def _joined_span(item: dict[str, Any]) -> dict[str, Any] | None:
@@ -1078,11 +1166,48 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
             continue
         if status == "missing":
             span = _joined_span(item)
+            if span is not None:
+                claim = claims_by_span.get((span["line_id"], span["start"],
+                                            span["end"]))
+                if claim is not None and claim["id"] in join_upgraded:
+                    mapping["status"] = "represented"
+                    mapping["spans"] = [span]
+                    continue
+            # A number-form difference is not an omission. The reviewer compares
+            # text, so "nine substations" against a source "9 substations" reads
+            # as missing even though the fact is present.
+            #
+            # Deliberately NOT the verbatim case. A line that IS the item
+            # character-for-character and is still reported missing is a
+            # reviewer error, and the engine keeps that withhold: a withhold on
+            # a reviewer error is safe, a false approval is not. Seven omission
+            # controls pin that, and an earlier version of this rule that
+            # accepted the verbatim case broke all seven.
+            #
+            # So the rule fires only when the text DIFFERS from the item and the
+            # difference is exactly the number form. A different figure, a
+            # dropped clause or any other wording change is not number-form
+            # equal and still withholds.
+            #
+            # The verbatim case is excluded FIRST: a line that IS the item and
+            # is still reported missing is a reviewer error, and that withhold
+            # stands. The comparison ignores a Markdown bullet marker, because
+            # that is presentation: a restored skill line is written as
+            # "- Spreadsheet modelling, SQL" while the item is
+            # "Spreadsheet modelling, SQL", and treating those as different is
+            # what let an earlier version of this rule accept a restored line.
+            if _verbatim_span(item) is not None:
+                continue
+            span = _number_form_span(item)
             if span is None:
                 continue
             claim = claims_by_span.get((span["line_id"], span["start"],
                                         span["end"]))
-            if claim is None or claim["id"] not in join_upgraded:
+            if claim is None or claim["verdict"] != "supported":
+                continue
+            if not any(c["source_id"] == item["source_id"]
+                       and c["start"] <= item["start"] and c["end"] >= item["end"]
+                       for c in claim["citations"]):
                 continue
             mapping["status"] = "represented"
             mapping["spans"] = [span]
