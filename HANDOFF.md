@@ -1,3 +1,130 @@
+# Session 16 — Conservative delivered faithfully; Imaginative blocked by reviewer
+
+## Verification commands
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ \
+  --ignore=tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  /home/skystarved/Render_Dockers/Loader/.venv/bin/python -m pytest -p no:cacheprovider \
+  -o addopts='' -q tests/test_loader_source_preservation_offline.py
+git diff --check
+```
+
+Result: **1645 passed, 13 skipped**; real-extractor suite **17 passed** (two pytest config warnings). The two suites need separate environments because the main venv lacks `fitz`.
+
+## Deployed revisions
+
+- Imaginator `srv-d3nf73ur433s73bh9j00`: **`bc9e6df`** live (`dep-dbnb…`), health 200.
+- Frontend/backend: **`4ea9ae5`** (unchanged this session), health 200.
+- `CORRECTION_LIVE_CAPTURE` is **0** and was applied by a real deploy; verified by reading the service env var back.
+- Non-deploying branch `wip/two-mode-preservation-2026-11-07` tracks the same commits.
+
+## Milestone status
+
+| Milestone | Status |
+|---|---|
+| 1 — Honest provider-output handling | **Done.** Reasoning is never promoted to an answer; `finish_reason` other than `stop` is a failure; malformed/typed-wrong research arrays are explicit failures; a valid zero-findings response stays distinct. |
+| 2 — Preserve candidate records | **Done for the frozen DOCX/PDF inputs.** Real Loader extraction is exercised; ownership, qualifiers, skills, education shape and marker invariants are enforced. |
+| 3 — Customer journey, Conservative | **Done.** Approved through the website, PDF and DOCX downloaded and inspected, policy state transported, no unsupported clauses, no marker leak. |
+| 3 — Customer journey, Imaginative | **Not done.** Withheld on reviewer reliability (see below). |
+| 4 — Two-mode distinction | **Not demonstrated end to end.** The bridge exemption is implemented and unit-tested; no Imaginative delivery reached the files. |
+| 5 — Consistency batches | **Not started.** Requires a stable Imaginative path. |
+| 6 — Files and operational finish | **Partially done.** Conservative files verified; capture off; services healthy. |
+
+## Conservative delivery (faithful)
+
+Correlation `67c1af07-df99-44b8-ab60-b7da8089c532`, revision `8606610`, 30.2 s, 1 repair, 3 reviews, **approved**.
+
+Delivered text compared line by line against both frozen sources: all three employers, roles, dates, locations, `1,180` invoices, `14` depots, `3` years, `7` service branches, `2` branches, the four-quarter qualifier, all four skills, both education records and CPIM are present and correctly owned. No appended purpose/outcome clause, no `SYNTHETIC-ONLY` marker, no invented tool, metric or credential.
+
+Downloads: PDF 167,096 B (1 page, pdfTeX/moderncv) and DOCX 50,296 B (python-docx), both HTTP 200 with `skill_inference_policy_state` present in the request body. Text extracted from both files matches the displayed résumé.
+
+## Imaginative blocker
+
+Correlation `61bce5ef-59e7-41d4-bfbf-05fa7353555a`, revision `bc9e6df`, 15.8 s, 1 repair, 2 reviews, **withheld `source_facts_missing`**.
+
+The reviewer's second pass reported five employer/institution head lines and one bullet as `missing` although every one is present in the draft. The first pass reported only the depot-scorecard bullet. This is reviewer inconsistency, not a deterministic defect: the same heads were `represented` in the first pass of the same run.
+
+The bridge exemption itself works — the first pass no longer downgrades a representation for a permitted label. What remains is that the reviewer's coverage verdict is unreliable on this input, and the engine correctly refuses to publish on it.
+
+**Do not** override a `missing` verdict to force approval. That was measured this session: it broke six withhold controls, including the negative control proving an omitted fact is never silently accepted.
+
+## Defects fixed this session (all deployed)
+
+1. `7622305` reasoning-as-answer → explicit failure; `finish_reason` honoured; typed research arrays validated.
+2. Employer placeholder repair requires unique identity, not record order.
+3. Missing source skills are inserted in a Skills section, never over experience bullets.
+4. Streaming responses validate `finish_reason` and structured JSON; no retry after visible tokens.
+5. Appended purpose/outcome tails are trimmed against the **matched bullet**, iteratively, preserving the candidate's own prefix.
+6. Corporate suffixes (`Inc.`, `Ltd.`) are recognised as employer heads.
+7. Each document's summary is written on its own line, not merged.
+8. Bare extracted section headings are structural, including when the inventory says `required`.
+9. A skills block that omits source skills is completed from the source.
+10. Education requires the institution to be the bold head.
+11. A repair may not delete a verbatim source span the reviewer only called `uncertain`.
+12. Provenance markers are stripped at the approval point.
+13. An uncited whole source line marked `uncertain` is upgraded to `supported`.
+14. Permitted bridge labels are exempt from the introduced-content check, phrase-scoped.
+
+## Live attempts this session
+
+Direct `/analyze` diagnostics (frozen text source; **not** website tests, not credit-consuming):
+
+| Revision | Mode | Correlation | Result | s | est. USD |
+|---|---|---|---|---:|---:|
+| 7622305 | Conservative | diagcons-20f402920358 | approved | 21.6 | .0114649 |
+| 7622305 | Imaginative | diagcons-c4498f3a7831 | approved | 27.9 | .0170910 |
+| b99377e | Conservative | diagcons-ace33487af7b | withheld `source_completeness_uncertain` | 25.1 | .0135656 |
+| b99377e | Imaginative | diagcons-4156e59aa7c8 | approved but **false approval** (unsupported outcomes, lost qualifier) | 42.4 | .0145075 |
+| d2b9578 | Conservative | diagcons-a64b81c72ab2 | withheld `timeout_initial_review` | 160.1 | .0085499 |
+| d2b9578 | Imaginative | diagcons-61b1360e311a | withheld `source_completeness_uncertain` | 104.7 | .0173819 |
+
+Session subtotal **$0.082561 estimated**; all 13 retained direct attempts total **$0.167040 estimated**. These are adapter estimates and can omit failed or cancelled provider calls; they are not billed totals.
+
+Website submissions (signed-in authorized account, frozen DOCX uploads, intended job ad, Tacoma WA):
+
+| # | Revision | Mode | Correlation | Result | Credits |
+|---|---|---|---|---|---:|
+| 1 | b99377e | Conservative | — | approved, but unsupported outcomes; export 409 `receipt_policy_state_missing` | 33 |
+| 2 | d2b9578 | Imaginative | 22909c04 | withheld `source_facts_missing` | 33 |
+| 3 | d2b9578 | Conservative | 845e8e80 | approved, 4 appended purpose clauses | 33 |
+| 4 | 95db56e | Conservative | 104b7f7a | approved, dropped same-month qualifier | 33 |
+| 5 | ae354e7 | Conservative | 64145e6c | withheld `no_op_repair` | 33 |
+| 6 | ae354e7 | Conservative | a09a004a | withheld `source_completeness_uncertain` | 33 |
+| 7 | 2b13fa8 | Conservative | eae427ea | withheld `source_completeness_uncertain` | 33 |
+| 8 | 823c1b3 | Conservative | 3403b994 | withheld `source_completeness_uncertain` | 33 |
+| 9 | 65ba882 | Conservative | d5143586 | approved, 3 appended clauses | 33 |
+| 10 | 3dec9ad | Conservative | 56bc8c88 | withheld `unresolved_claims` | 33 |
+| 11 | 9a9e574 | Conservative | b2198062 | withheld `source_facts_missing` | 33 |
+| 12 | 4a90e44 | Conservative | 94c209ae | withheld `source_completeness_uncertain` | 33 |
+| 13 | 3778d0c | Conservative | d0b19921 | withheld `source_completeness_uncertain` | 33 |
+| 14 | b7fbecf | Conservative | c0b26422 | withheld `no_op_repair` | 33 |
+| 15 | 555e26b | Conservative | ebab2e2f | approved, marker leak | 33 |
+| 16 | 8606610 | Conservative | 40957281 | withheld `source_facts_missing` | 33 |
+| 17 | 8606610 | Conservative | bff386a9 | withheld `source_facts_missing` | 33 |
+| 18 | 8606610 | Conservative | 67c1af07 | **approved, faithful** | 33 |
+| 19 | 8606610 | Imaginative | 12ecfaa4 | withheld `source_completeness_uncertain` | 33 |
+| 20 | bc9e6df | Imaginative | 61bce5ef | withheld `source_facts_missing` | 33 |
+
+**20 website submissions, 660 credits.** Balance moved 836 → 143. Every attempt is recorded; none was cherry-picked or rewritten.
+
+## Next steps
+
+1. Diagnose the reviewer's coverage inconsistency on the Imaginative input. The evidence is in the retained captures: the same head lines are `represented` in pass 1 and `missing` in pass 2 of one run. Do not weaken the gate; find why the reviewer's second pass loses them.
+2. Once Imaginative delivers, run the five-per-mode stable batches and the second candidate, then the export tamper controls.
+3. HasData usage was not measured this session; the integrated job-search check ran on the Conservative submissions and returned real matches.
+
+## Uncommitted / private
+
+- Pre-existing untracked `scripts/` is intentionally excluded.
+- `captures/recovery-validation/` is git-ignored private evidence; retained, not committed.
+- Main module checkout still has its pre-existing dirty `HANDOFF.md` and untracked `docs/Plans/`.
+
+---
+
 # Local preservation checkpoint — uncommitted, 2026-11-06
 
 ## Active branch and last commit
