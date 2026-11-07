@@ -849,16 +849,29 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                       for c in response["claims"]}
 
     def _verbatim_span(item: dict[str, Any]) -> dict[str, Any] | None:
-        """The draft span that carries this source item verbatim, or None."""
+        """The draft line that IS this source item, verbatim, or None.
+
+        The comparison is whole-line, not substring. Measured on Conservative
+        website run ``40957281`` (2026-11-07): the reviewer reported the
+        supplement's summary line ``missing`` although the draft carries it
+        character-for-character. A substring test would also accept a line that
+        merely CONTAINS the item, which is how an appended clause would slip
+        through; requiring the whole line keeps the upgrade exact.
+        """
         quote = " ".join(_strip_provenance(item["quote"]).split()).casefold()
         if not quote:
             return None
         for line in lines:
-            text = _strip_provenance(line["text"])
-            if quote in " ".join(text.split()).casefold():
+            text = " ".join(_strip_provenance(line["text"]).split()).casefold()
+            if text == quote:
                 return {"line_id": line["line_id"], "start": 0, "end": len(line["text"])}
         return None
 
+    # Only ``uncertain`` is upgraded. A ``missing`` verdict is the reviewer
+    # asserting an omission, and overriding it would erase a real objection —
+    # measured: doing so broke six withhold controls, including the negative
+    # control that proves an omitted fact is never silently accepted. A withhold
+    # on a reviewer error is safe; a false approval is not.
     for mapping in response["representations"]:
         if mapping.get("status") != "uncertain":
             continue

@@ -138,6 +138,24 @@ def test_an_uncited_unsupported_verdict_is_not_upgraded():
     assert claims[0]["verdict"] == "unsupported"
 
 
+def test_a_whole_line_reported_missing_still_withholds():
+    """A ``missing`` verdict is a real objection and is never overridden.
+
+    Measured on run ``40957281``: the reviewer said ``missing`` for a line the
+    draft carries character-for-character. Overriding that broke six withhold
+    controls, including the negative control that proves an omitted fact is never
+    silently accepted. A withhold on a reviewer error is safe; a false approval
+    is not, so the engine keeps the withhold and reports it.
+    """
+    review = _review("supported", VERBATIM, SOURCE)
+    review["representations"][0].update(status="missing", spans=[])
+    lines = [{"line_id": "L1", "text": VERBATIM}]
+    claims, incomplete, missing = sc._validate_review(
+        review, lines, {"doc": SOURCE}, _inventory())
+    assert "missing" in incomplete
+    assert missing
+
+
 def test_a_span_from_an_uncited_document_is_not_upgraded():
     other = "A completely different document with unrelated wording."
     review = _review("uncertain", VERBATIM, SOURCE)
