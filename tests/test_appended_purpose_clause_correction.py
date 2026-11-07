@@ -159,3 +159,30 @@ def test_a_tail_restating_source_content_is_not_dropped():
     out, changes = sp.preserve_experience_bullets(draft, source)
     assert "removed an unsupported appended clause" not in changes
     assert "safety records" in out
+
+
+def test_a_tail_word_found_only_elsewhere_in_the_source_is_still_removed():
+    """The tail is judged against the matched bullet, not the whole document.
+
+    Measured on Conservative run ``eae427ea``: the writer appended "for accuracy"
+    to the reconciled-invoices bullet. "accuracy" occurs elsewhere in the source
+    (the skills line "Records accuracy"), so a document-wide vocabulary check
+    found nothing ungrounded, left the addition in place, and the reviewer then
+    reported the line unconfirmed — the run withheld.
+    """
+    source = ("## Professional Experience\n"
+              "**Acme** -- City, ST\n"
+              "*Analyst | 2020 - 2021*\n"
+              "- SYNTHETIC-ONLY Reconciled 1,180 fuel invoices against depot "
+              "dispensing records each quarter.\n"
+              "## Skills\n"
+              "- SYNTHETIC-ONLY Records accuracy\n")
+    draft = ("## Professional Experience\n"
+             "**Acme** -- City, ST\n"
+             "*Analyst | 2020 - 2021*\n"
+             "- Reconciled 1,180 fuel invoices quarterly against depot dispensing "
+             "records for accuracy.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert "removed an unsupported appended clause" in changes
+    assert "for accuracy" not in out
+    assert "1,180 fuel invoices" in out

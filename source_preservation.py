@@ -1681,8 +1681,19 @@ def preserve_experience_bullets(markdown: str, source_text: str,
                 # infinitive marks its own boundary, so a paraphrase prefix that
                 # clearly restates the matched source bullet is enough there.
                 prefix_ok = prefix_grounded or (is_purpose and prefix_restates)
-                if (prefix_ok and segment_is_foreign
-                        and _ungrounded_words(residual, source_words, source_stems)):
+                # Judge the tail against the MATCHED BULLET, not the whole
+                # document. Measured on Conservative run eae427ea: the writer
+                # appended "for accuracy" to the reconciled-invoices bullet. The
+                # word "accuracy" occurs elsewhere in the source (the skills line
+                # "Records accuracy"), so a document-wide vocabulary check found
+                # nothing ungrounded and left the addition in place; the reviewer
+                # then reported the line unconfirmed and the run withheld. A tail
+                # is only supported by the record it is attached to.
+                tail_ungrounded = _ungrounded_words(
+                    residual, {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
+                               if len(w) > 3},
+                    bullet_stems)
+                if (prefix_ok and segment_is_foreign and tail_ungrounded):
                     # Substitute the candidate's own source line. This module
                     # never composes prose: a kept paraphrase prefix would be a
                     # new sentence, and the provenance invariant requires every
