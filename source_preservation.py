@@ -1654,7 +1654,19 @@ def preserve_experience_bullets(markdown: str, source_text: str,
         draft_figures = _numeric_qualifiers(stripped)
         bullet_figures = _numeric_qualifiers(bullet)
         # A different source figure is a transplant. Leave it for the reviewer.
-        transplanted = bool(draft_figures - bullet_figures)
+        #
+        # A figure that appears ONLY in a trailing purpose/outcome segment is a
+        # different case: it is invented, not transplanted, and the tail trimmer
+        # below removes it along with the clause. Measured on the approved
+        # Imaginative website run ``9b291b32`` (2026-11-07): "enabling
+        # supervisors to assess performance across 14 sites" was appended to a
+        # bullet that states no figure, and the transplant guard blocked the
+        # trimmer, so the invented "14 sites" reached an approved export.
+        body_for_tail = stripped.lstrip("-").strip()
+        tail_figures: set[str] = set()
+        for start, end, _is_purpose in _trailing_purpose_boundaries(body_for_tail):
+            tail_figures |= _numeric_qualifiers(body_for_tail[end:])
+        transplanted = bool((draft_figures - bullet_figures) - tail_figures)
         if _contains_permitted_bridge(stripped, permitted_bridges):
             # A mixed clause is corrected only when its source activity is
             # matched and its figures are unchanged. Never replace the bridge
@@ -1709,6 +1721,25 @@ def preserve_experience_bullets(markdown: str, source_text: str,
     return "".join(out_lines), changes
 
 
+# A prefix ending on one of these is an incomplete clause, not a sentence.
+_DANGLING_TAIL = re.compile(
+    r"(?:,|\b(?:and|or|to|for|with|by|using|enabling|allowing|helping|"
+    r"supporting|ensuring|improving|increasing|reducing|enhancing|driving|"
+    r"delivering|boosting|including|such\s+as))\s*$",
+    re.IGNORECASE,
+)
+# A trailing comma-separated segment that OPENS with a participle is an
+# incomplete participial clause: "…, enabling supervisors" has lost the verb
+# phrase its participle governs. Measured on the approved Imaginative website run
+# ``9b291b32`` (2026-11-07), where trimming at " to " left exactly that fragment.
+_DANGLING_PARTICIPLE = re.compile(
+    r",\s*(?:enabling|allowing|helping|supporting|ensuring|improving|"
+    r"increasing|reducing|enhancing|driving|delivering|boosting|"
+    r"resulting|leading|highlighting|including)\b[^,]*$",
+    re.IGNORECASE,
+)
+
+
 def _trim_trailing_purpose(body: str, bullet: str, bullet_stems: set[str],
                            source_words: set[str], source_stems: set[str],
                            permitted_bridges: Optional[list[str]]) -> str | None:
@@ -1740,20 +1771,47 @@ def _trim_trailing_purpose(body: str, bullet: str, bullet_stems: set[str],
         prefix_ok = (not _ungrounded_words(prefix, source_words, source_stems)
                      or len(prefix_stems & bullet_stems) >= 3)
         new_source_content = (_stemmed_words(clause) & bullet_stems) - prefix_stems
-        segment_is_foreign = (not new_source_content
-                              and _numeric_qualifiers(clause)
-                              <= _numeric_qualifiers(prefix))
+        # A figure in the tail is only a reason to REFUSE when removing it would
+        # drop a fact the matched bullet actually states. Measured on the
+        # approved Imaginative website run ``9b291b32`` (2026-11-07): the writer
+        # appended "enabling supervisors to assess performance across 14 sites"
+        # to the depot-scorecard bullet. The matched bullet states no figure at
+        # all, so "14 sites" is invented, not sourced — but the previous rule
+        # refused any tail carrying a figure the prefix lacked, and the invented
+        # number survived to an approved export.
+        #
+        # The refusal is now scoped to figures the bullet DOES state and the
+        # prefix does not: those are the ones whose removal would lose a fact.
+        sourced_only_in_tail = ((_numeric_qualifiers(clause)
+                                 - _numeric_qualifiers(prefix))
+                                & _numeric_qualifiers(bullet))
+        segment_is_foreign = (not new_source_content and not sourced_only_in_tail)
         tail_ungrounded = _ungrounded_words(
             residual,
             {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
              if len(w) > 3},
             bullet_stems)
         if prefix_ok and segment_is_foreign and tail_ungrounded:
+            kept = prefix.rstrip().rstrip(",").rstrip()
+            # A prefix that ends on a participle is a dangling fragment: trimming
+            # "…, enabling supervisors to assess performance" at the " to "
+            # boundary leaves "…, enabling supervisors", which is not a sentence.
+            # Measured on the approved Imaginative website run ``9b291b32``
+            # (2026-11-07). Walk back to the previous boundary so the emitted
+            # text ends on a complete clause.
+            while _DANGLING_TAIL.search(kept) or _DANGLING_PARTICIPLE.search(kept):
+                earlier = list(_trailing_purpose_boundaries(kept))
+                if not earlier:
+                    break
+                kept = kept[:earlier[0][0]].rstrip().rstrip(",").rstrip()
+            if _DANGLING_TAIL.search(kept) or _DANGLING_PARTICIPLE.search(kept):
+                # No complete clause remains; leave the line for review.
+                return None
             # Emit the prefix EXACTLY, with no added punctuation. Appending a
             # period would make the result no longer a prefix of the draft line,
             # which is the property that proves this rule deletes rather than
             # composes.
-            return prefix.rstrip().rstrip(",").rstrip()
+            return kept
     return None
 
 

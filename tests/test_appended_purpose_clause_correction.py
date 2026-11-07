@@ -148,13 +148,32 @@ def test_supported_purpose_and_coordination_are_kept(draft, source_line):
     assert draft.strip() in out
 
 
-def test_a_new_figure_in_the_tail_is_left_for_review():
-    """Removing a tail figure could discard a sourced fact."""
+def test_an_invented_figure_in_the_tail_is_removed():
+    """A tail figure the matched bullet never states is invented, not sourced.
+
+    Measured on the approved Imaginative website run ``9b291b32`` (2026-11-07):
+    "enabling supervisors to assess performance across 14 sites" was appended to
+    a bullet that states no figure, and the invented "14 sites" reached an
+    approved export because the transplant guard refused any tail figure.
+    """
     source = "- SYNTHETIC-ONLY Reduced after-hours callouts by 27%.\n"
     draft = "- Reduced after-hours callouts by 27% to improve uptime by 40%.\n"
     out, changes = sp.preserve_experience_bullets(draft, source)
+    assert "removed an unsupported appended clause" in changes
+    assert "40%" not in out
+    # The candidate's own figure survives.
+    assert "27%" in out
+
+
+def test_a_sourced_figure_only_in_the_tail_is_left_for_review():
+    """Removing a tail figure the bullet DOES state would discard a fact."""
+    source = ("- SYNTHETIC-ONLY Reduced after-hours callouts by 27% across "
+              "6 commercial properties.\n")
+    draft = ("- Reduced after-hours callouts by 27% to support 6 commercial "
+             "properties.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
     assert "removed an unsupported appended clause" not in changes
-    assert "40%" in out
+    assert "6 commercial properties" in out
 
 
 def test_a_tail_restating_source_content_is_not_dropped():
