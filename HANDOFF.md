@@ -161,7 +161,114 @@ Content completeness is otherwise good: 3 employers, 9 bullets, 2 education
 records, 1 certification, 4 skill lines. `Projects` is empty in the source, so
 its emptiness is faithful — only the heading is missing.
 
-## RESOLVED: OpenRouter balance, and a misdiagnosis it exposed
+# Session 19 — realistic_candidate unblocked; three classification defects fixed
+
+## Deployed
+
+Imaginator **`670ecd8`** live, health 200. Branch `resumeDraft_fix` merged to
+`master` (the service deploys from `master`).
+
+## Verification
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ \
+  --ignore=tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+```
+
+**1695 passed, 13 skipped.** Export controls: **95 passed.**
+
+## Three classification defects, each measured then fixed
+
+All three withheld a faithful draft for a reason that was not about the
+candidate's content. None was model variance.
+
+### 1. A document separator is structure, not a fact (`91e2be4`)
+
+The orchestrator joins the candidate's documents with a horizontal rule, so the
+source contains `---` between them. The inventory model classified that join
+marker `uncertain`, and `_validate_inventory` withheld the run as
+`source_completeness_uncertain` before any review ran. The candidate never wrote
+the separator and no draft line can represent it. Same class as a bare section
+heading, which the engine already corrects, so it takes the same correction.
+Narrow: the whole span must be a rule and nothing else.
+
+### 2. A claim crossing a source line break cannot be cited (`91e2be4`, `dd56de1`)
+
+A citation must be an exact contiguous substring of the source. Extracted text is
+line-wrapped and carries a per-line provenance marker, so a draft line joining
+two source lines has no contiguous source substring equal to it. The reviewer
+reports `unsupported` with `citations: []` — not because the text is an addition,
+but because it has no way to express support. The repair then returns an empty
+replacement and the run withholds as `no_op_repair`.
+
+The upgrade requires at least TWO source lines, and cites the real source region
+the draft line restates. Upgrading the claim alone was not enough: the coverage
+mapping stayed `missing` for the same structural reason, so the upgrade had to
+carry into the coverage verdict too (`dd56de1`).
+
+### 3. A number's written form is not an omission (`670ecd8`)
+
+The writer produced "nine substations", "four apprentices" and "six commercial
+properties" where the source says "9", "4" and "6". The reviewer compares text,
+reported those items missing, and the run withheld with every fact present.
+
+The rule canonicalises both sides by replacing number words with their digit form
+and then requires exact equality. Punctuation and spacing are preserved, so a
+bullet prefix or any other formatting difference still makes the strings unequal.
+
+**Three refusals keep it from becoming a blanket override of `missing`:** a line
+that IS the item verbatim is excluded first (a reviewer error, and that withhold
+stands); a different figure ("eleven" against "9") is not number-form equal; a
+dropped clause is not number-form equal. An earlier version of this rule accepted
+the verbatim case and broke all seven omission controls — the suite caught it.
+
+## Malformed answers now record WHICH constraint failed (`1b53d17`)
+
+`malformed_output` said only that the answer was unusable. `MalformedIndexedResponse`
+now carries a `constraint` identifier from a closed set of fixed names (never
+model text), the adapter carries it into `MalformedReviewAnswer`, and the phase
+event reports it as `constraint` alongside outcome `malformed_answer`. The eight
+review-path raise sites name their check; inventory and restore sites keep the
+default.
+
+## Batch on the final build (`670ecd8`)
+
+| Batch | Status | Reason |
+|---|---|---|
+| bridge_opportunity / Conservative | approved | — |
+| bridge_opportunity / Imaginative | approved (2/3; one transient `source_facts_missing`) | — |
+| realistic_candidate / Conservative | approved | — |
+| realistic_candidate / Imaginative | approved | — |
+
+**Approval rate: 4/4 distinct batches approved** (bridge/Imaginative withheld once
+in three attempts, then approved twice; that single withhold is reviewer variance,
+not a code path).
+
+**Faithful delivery: 4/5 approved runs verified source-to-output (80%).** One
+approved run — `realistic_candidate` / Conservative — lost the `Projects` heading
+during the correction's repair step. See the open defect below.
+
+## OPEN DEFECT: a repair can delete an empty section heading
+
+Measured on `s18f-realistic_candidate-conservative`. The editor logged
+`Keeping empty section header 'Projects'`, so the heading was present before
+correction. The correction then revised one span, and the delivered markdown has
+five headings instead of six. Re-running `preserve_source_facts` on the delivered
+text adds `Projects` back, which proves the heading was there and was removed.
+
+The repair path (`_apply_edits`) accepts an empty replacement for any flagged
+claim, and a heading line is a claim like any other. A heading asserts no
+candidate fact, so deleting one removes structure the product promises without
+removing any content — the worst of both.
+
+Not fixed in this session: it needs a decision on whether a heading may ever be
+repair-flagged, and the fix belongs in the repair contract rather than in
+preservation. 4 of 5 approved runs carry all six headings; this is the one that
+does not.
+
+## Historical: OpenRouter balance, and a misdiagnosis it exposed
 
 The account was topped up (balance now ~$9.82). Re-running the live verification
 surfaced a second, unrelated defect that the outage had been hiding.
