@@ -1698,7 +1698,20 @@ def preserve_specific_experience_details(
                     if len(w) > 3}
     source_stems = _stemmed_words(source_text)
     replacements: dict[tuple[str, str, str], tuple[str, str]] = {}
-    normalize = lambda value: " ".join(value.split()).casefold()
+
+    def normalize(value: str) -> str:
+        """Record identity, insensitive to dash and spacing style.
+
+        Measured on the approved Conservative website run ``104b7f7a``: the
+        writer emitted ``04/2019 – Present`` (en dash) while the extracted source
+        says ``04/2019 - Present`` (hyphen). Comparing raw strings made the
+        record-identity check fail, so the qualifier repair never ran and the
+        delivered bullet kept a dropped comparison basis. Dash style is
+        formatting, not identity.
+        """
+        text = (value or "").replace("\u2013", "-").replace("\u2014", "-")
+        text = text.replace("\u2011", "-").replace("\u2212", "-")
+        return " ".join(text.split()).casefold()
 
     for draft in draft_records:
         owner = normalize(draft["head"])
