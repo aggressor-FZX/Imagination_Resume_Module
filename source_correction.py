@@ -600,17 +600,37 @@ def _is_section_heading(quote: str) -> bool:
     other document. That single word withheld a faithful draft before any
     review ran (``review_calls: 0``).
 
-    This is deliberately narrow. It matches ONLY a line that is a Markdown
-    heading whose label consists entirely of generic section-heading words
-    (the closed ``_SECTION_HEADING_WORDS`` set) plus whitespace/newlines. A
-    heading carrying any other content is NOT structural and is left exactly
-    as the model classified it, so genuinely ambiguous, mixed or substantive
-    spans still go to review.
+    This is deliberately narrow. It matches ONLY a single line whose label
+    consists entirely of generic section-heading words (the closed
+    ``_SECTION_HEADING_WORDS`` set) plus whitespace/newlines. A heading carrying
+    any other content is NOT structural and is left exactly as the model
+    classified it, so genuinely ambiguous, mixed or substantive spans still go
+    to review.
+
+    A BARE heading is included, not only a Markdown ``#`` one. Measured on
+    Conservative website run ``3403b994`` (2026-11-07): the source text comes
+    from the document reader, where section titles are styled paragraphs with no
+    ``#`` prefix. The inventory model classified ``Professional Summary``,
+    ``Professional Experience``, ``Education`` and ``Skills`` as ``uncertain``,
+    and the run withheld as ``source_completeness_uncertain`` with every draft
+    line supported. Requiring ``#`` made the rule unreachable on exactly the
+    input shape production receives.
+
+    The guard against over-matching is the closed vocabulary plus a single-line,
+    digit-free requirement: a substantive sentence contains words outside the
+    set, so it is never reclassified.
     """
     stripped = (quote or "").strip()
-    if not stripped.startswith("#"):
+    if not stripped:
         return False
-    label = stripped.lstrip("#").strip()
+    if stripped.startswith("#"):
+        label = stripped.lstrip("#").strip()
+    else:
+        # A bare heading must be exactly one line and carry no figure. A
+        # multi-line span or one containing a number is content, not a label.
+        if "\n" in stripped or "\r" in stripped or re.search(r"\d", stripped):
+            return False
+        label = stripped
     words = re.findall(r"[A-Za-z]+", label)
     return bool(words) and all(word.lower() in _SECTION_HEADING_WORDS
                                for word in words)
