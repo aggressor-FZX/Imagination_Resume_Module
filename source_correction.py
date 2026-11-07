@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import contextvars
 import hashlib
 import math
 import re
@@ -704,8 +705,22 @@ def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str
     return response["source_claims"]
 
 
+# The permitted bridge labels for the correction currently running. A
+# ContextVar keeps concurrent requests isolated: the validator is a pure function
+# of its arguments, and threading a new parameter through it would change a
+# signature that existing callers and test harnesses wrap.
+_ACTIVE_BRIDGES: "contextvars.ContextVar[tuple[dict[str, Any], ...]]" = (
+    contextvars.ContextVar("active_bridges", default=()))
+
+
+def _active_bridges() -> tuple[dict[str, Any], ...]:
+    """The validated bridge records for the current correction, if any."""
+    return _ACTIVE_BRIDGES.get()
+
+
 def _validate_review(response: Any, lines: list[dict[str, Any]],
-                     sources: dict[str, str], inventory: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], set[str], list[dict[str, Any]]]:
+                     sources: dict[str, str], inventory: list[dict[str, Any]],
+                     ) -> tuple[list[dict[str, Any]], set[str], list[dict[str, Any]]]:
     """Validate one review answer.
 
     Returns ``(claims, incomplete_statuses, missing_required_items)``. The third value
@@ -867,11 +882,12 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 return {"line_id": line["line_id"], "start": 0, "end": len(line["text"])}
         return None
 
-    # Only ``uncertain`` is upgraded. A ``missing`` verdict is the reviewer
-    # asserting an omission, and overriding it would erase a real objection —
-    # measured: doing so broke six withhold controls, including the negative
-    # control that proves an omitted fact is never silently accepted. A withhold
-    # on a reviewer error is safe; a false approval is not.
+    # Only ``uncertain`` is upgraded, and only when a claim THIS PASS upgraded
+    # from a verbatim match carries the item. A ``missing`` verdict is the
+    # reviewer asserting an omission; overriding it was measured to break six
+    # withhold controls, including the negative control that proves an omitted
+    # fact is never silently accepted. A withhold on a reviewer error is safe; a
+    # false approval is not, so the engine keeps the withhold and reports it.
     for mapping in response["representations"]:
         if mapping.get("status") != "uncertain":
             continue
@@ -882,11 +898,6 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         span = _verbatim_span(item)
         if span is None:
             continue
-        # The span must be carried by a claim THIS PASS upgraded from a verbatim
-        # match, and that claim must cite the item's own document. Requiring the
-        # upgrade (rather than merely "supported") keeps a relevance judgement
-        # intact: a reviewer that declines an item for reasons of ownership or
-        # relevance is not overridden by the item's text happening to appear.
         claim = claims_by_span.get((span["line_id"], span["start"], span["end"]))
         if claim is None or claim["id"] not in upgraded_claims:
             continue
@@ -998,8 +1009,30 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 cited_documents = [sources[citation["source_id"]]
                                    for citation in claim["citations"]
                                    if citation["source_id"] in sources]
+                # A validated, mode-permitted bridge label is authorised
+                # wording, not an introduced claim. Measured on the Imaginative
+                # website run ``12ecfaa4`` (2026-11-07): the writer inserted
+                # "using failure pattern analysis" and similar labels into
+                # otherwise faithful bullets. The reviewer marked every line
+                # supported, but this lexical check counted the label as
+                # introduced content, downgraded the representation, and the run
+                # withheld as ``source_completeness_uncertain`` — the mode's
+                # defining benefit was unreachable.
+                #
+                # The exemption is phrase-scoped: only the exact whole label is
+                # removed before the check, so an unsupported outcome sitting
+                # beside a bridge is still introduced. Conservative passes no
+                # bridges, so its behaviour is unchanged.
+                span_text = by_line[line_id]["text"][start:end]
+                for bridge in _active_bridges():
+                    label = bridge.get("skill") if isinstance(bridge, dict) else None
+                    if isinstance(label, str) and label.strip():
+                        span_text = re.sub(
+                            r"(?<![A-Za-z0-9])" + re.escape(label.strip())
+                            + r"(?![A-Za-z0-9])", " ", span_text,
+                            flags=re.IGNORECASE)
                 introduced = _introduces_beyond(
-                    by_line[line_id]["text"][start:end],
+                    span_text,
                     cited_documents or [sources[item["source_id"]]],
                     item["quote"])
                 if not introduced:
@@ -1654,8 +1687,12 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     """
     loop = asyncio.get_running_loop()
     events = _Events(observer, loop, timeout_seconds)
-    result = await _correct_body(markdown, sources, callback, timeout_seconds, events,
-                                 permitted_bridges=permitted_bridges)
+    token = _ACTIVE_BRIDGES.set(tuple(permitted_bridges or ()))
+    try:
+        result = await _correct_body(markdown, sources, callback, timeout_seconds,
+                                     events, permitted_bridges=permitted_bridges)
+    finally:
+        _ACTIVE_BRIDGES.reset(token)
     events.end(result)
     return result
 
