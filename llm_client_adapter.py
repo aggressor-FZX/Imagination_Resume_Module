@@ -156,7 +156,31 @@ class LLMClientAdapter:
                     if not str(content).strip():
                         reasoning = message.get("reasoning")
                         if isinstance(reasoning, str) and reasoning.strip():
-                            content = reasoning
+                            # A reasoning model may put its whole answer in
+                            # `reasoning` and leave `content` empty. For a
+                            # json_object request that text is usually prose,
+                            # not JSON, so handing it to json.loads makes the
+                            # stage report a parse failure and the pipeline
+                            # withhold as fallback_output (measured: both
+                            # Imaginative diagnostics on 2026-11-07). Extract
+                            # an embedded JSON object when one exists; otherwise
+                            # return an explicit empty object so the stage can
+                            # report an honest "no findings" instead of a
+                            # fabricated parse failure.
+                            if response_format and response_format.get(
+                                    "type") == "json_object":
+                                start, end = reasoning.find("{"), reasoning.rfind("}")
+                                if start != -1 and end > start:
+                                    candidate = reasoning[start:end + 1]
+                                    try:
+                                        json.loads(candidate)
+                                        content = candidate
+                                    except (ValueError, TypeError):
+                                        content = "{}"
+                                else:
+                                    content = "{}"
+                            else:
+                                content = reasoning
                     
                     # SAFETY CHECK: Truncate if response exceeds character-based safety cap
                     # JSON-object stages may receive long `reasoning` payloads (e.g. MiniMax);
