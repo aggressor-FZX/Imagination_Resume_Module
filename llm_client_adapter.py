@@ -151,36 +151,12 @@ class LLMClientAdapter:
                 logger.info("[LLM_ADAPTER] Usage recorded")
                 
                 if choices:
-                    message = choices[0].get("message", {})
+                    choice = choices[0]
+                    message = choice.get("message", {})
                     content = message.get("content") or ""
-                    if not str(content).strip():
-                        reasoning = message.get("reasoning")
-                        if isinstance(reasoning, str) and reasoning.strip():
-                            # A reasoning model may put its whole answer in
-                            # `reasoning` and leave `content` empty. For a
-                            # json_object request that text is usually prose,
-                            # not JSON, so handing it to json.loads makes the
-                            # stage report a parse failure and the pipeline
-                            # withhold as fallback_output (measured: both
-                            # Imaginative diagnostics on 2026-11-07). Extract
-                            # an embedded JSON object when one exists; otherwise
-                            # return an explicit empty object so the stage can
-                            # report an honest "no findings" instead of a
-                            # fabricated parse failure.
-                            if response_format and response_format.get(
-                                    "type") == "json_object":
-                                start, end = reasoning.find("{"), reasoning.rfind("}")
-                                if start != -1 and end > start:
-                                    candidate = reasoning[start:end + 1]
-                                    try:
-                                        json.loads(candidate)
-                                        content = candidate
-                                    except (ValueError, TypeError):
-                                        content = "{}"
-                                else:
-                                    content = "{}"
-                            else:
-                                content = reasoning
+                    if (not isinstance(content, str) or not content.strip()
+                            or choice.get("finish_reason") not in (None, "stop")):
+                        raise ValueError("Unusable provider answer")
                     
                     # SAFETY CHECK: Truncate if response exceeds character-based safety cap
                     # JSON-object stages may receive long `reasoning` payloads (e.g. MiniMax);

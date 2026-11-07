@@ -280,6 +280,28 @@ class Researcher:
             # Ensure required fields exist
             if not isinstance(data, dict):
                 raise ValueError("Response is not a JSON object")
+
+            if data.get("error") or data.get("fallback") or data.get("fallback_used"):
+                return {
+                    "skill_bridges": [], "implied_skills": [], "implied_metrics": [],
+                    "domain_vocab": [], "work_archetypes": [], "insider_tips": "",
+                    "error": "research_provider_failed", "fallback_used": True,
+                }
+
+            if not any(key in data for key in ("skill_bridges", "implied_metrics", "domain_vocab", "work_archetypes")):
+                return {
+                    "skill_bridges": [], "implied_skills": [], "implied_metrics": [],
+                    "domain_vocab": [], "work_archetypes": [], "insider_tips": "",
+                    "parse_error": "missing_research_fields", "fallback_used": True,
+                }
+
+            if any(key in data and not isinstance(data[key], list) for key in
+                   ("skill_bridges", "implied_metrics", "domain_vocab", "implied_skills", "work_archetypes")):
+                return {
+                    "skill_bridges": [], "implied_skills": [], "implied_metrics": [],
+                    "domain_vocab": [], "work_archetypes": [], "insider_tips": "",
+                    "parse_error": "invalid_research_fields", "fallback_used": True,
+                }
             
             # Set defaults for missing fields. NOTE: no invented qualifications —
             # an absent list stays absent rather than becoming a claimed finding.

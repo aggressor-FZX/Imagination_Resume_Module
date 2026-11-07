@@ -1,3 +1,44 @@
+# Session 14 — partial repair; customer credentials unavailable
+
+## Verification commands (offline; no provider traffic)
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -q -o addopts='' -p no:cacheprovider
+git diff --check
+```
+
+Result: **1493 passed, 13 skipped**. The frozen DOCX/TXT/job hashes match `tests/fixtures/bridge_opportunity/FROZEN.md`.
+
+## Active branch and last commit
+
+- Worktree `resumeDraft_fix`, parent `7622305`; see `git log -1` for the WIP commit containing this checkpoint.
+- Production Imaginator remains `76223056eb9cee9b9969db0a2f244b9f8f018db7` (`dep-dbn6rtui0phs7386udvg`, live). No production deploy or new capture activation occurred in session 14.
+- Main module checkout is on `wip/correction-timeout-attribution` and has pre-existing dirty `HANDOFF.md` and untracked `docs/Plans/`; leave these alone except the session-14 header.
+
+## Completed
+
+- [x] User explicitly renewed authorization for live testing, replacing the old six-run/$1 cap; retain all attempt outcomes and observe billing boundaries.
+- [x] Provider handling no longer turns reasoning into final output or `{}`; invalid or incomplete final content falls through the existing bounded model chain. Researcher retains explicit failure markers and rejects wrongly typed research arrays. Successful empty arrays remain distinct from failure.
+- [x] Employer placeholder repair now requires unique, nonconflicting source identity, not record order. Missing source skill lines are inserted in a skills section, never over experience bullets, and require full re-review; review call-budget exhaustion withholds honestly.
+- [x] Two live provider calls using the frozen source: direct OpenRouter Researcher request returned HTTP 200, `finish_reason=stop`, valid JSON, cost **$0.0016001865** reported by provider (3271 total tokens, 1029 reasoning tokens). The repaired local Researcher/adapter invocation returned six proposals and no fallback on first model; 3638 total tokens, estimated **$0.005544** by the adapter, actual billed cost not captured. These are provider-stage diagnostics, **not** two `/analyze` submissions. No HasData calls or credits consumed in this session.
+- [x] Imaginator and orchestrator `/health` returned HTTP 200; browser reached `orchestrator-frontend-k95q.onrender.com` but was signed out. Custom `www.cogitometric.org` failed DNS from the browser. No live customer analyses, exports or downloads in this session.
+
+## Remaining / next steps
+
+1. Restore access to the authorized website account through an existing signed-in browser session or provide `COGITO_TEST_EMAIL` and `COGITO_TEST_PASSWORD` in the terminal environment; `COGITO_STORAGE_STATE` is also supported by the documented runner. Do not reset passwords or create accounts. `IMAGINATOR_AUTH_TOKEN` was also unavailable for direct `/analyze` diagnostics. Secrets must not be placed in the handoff.
+2. Complete representative actual PDF/DOCX input preservation: paragraph-level experience bullets, unambiguous role ownership, qualifiers and per-claim bridge safety remain unproven. Current tests use plain-text extraction-shaped examples, not actual document reader output. Investigate skill restoration and duplicate source bullets across ownership before claiming fidelity.
+3. Review the WIP diff and existing model fallback usage/cost telemetry, then deploy ordinary forward commits only after validation is possible. Fallback provider attempts currently may not be separately accounted by adapter stats; record actual provider activity separately.
+4. Execute website journey both modes with frozen sources, then five recorded analyses per mode on the stable deployed revision plus second-candidate, tampered-content/policy/owner export controls, actual browser downloads, text extraction and visual PDF/DOCX inspection. Run one integrated job-search/enrichment check and account HasData usage separately.
+5. Confirm final running revision, health, and capture disabled from the runtime (last known off from session 13; not independently rechecked in session 14). Do not claim success from health 200 alone.
+
+## Uncommitted / private files
+
+- Pre-existing untracked `scripts/` is intentionally excluded from the WIP commit; private ignored captures are not staged or removed.
+- Main checkout's pre-existing dirty handoff and untracked plans remain outside this worktree commit.
+
+---
+
 # Two-Mode Skill Bridging — feature handoff (resumeDraft_fix)
 
 ## Current checkpoint — 2026-11-06 (combined repair, NOT yet deployed)

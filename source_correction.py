@@ -1036,6 +1036,103 @@ def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
 _RESTORE_MAX_ITEMS = 6
 
 
+def _source_skill_line(source_text: str, item: dict[str, Any]) -> tuple[bool, str | None]:
+    """Identify an item inside an explicitly headed source skills section.
+
+    Copy only a complete, single source line. A span crossing a line boundary is
+    still identified as a skill, but is not safe to copy or send to the generic
+    replacement selector. Section recognition is shared with preservation so
+    extracted DOCX/PDF text and Markdown use the same closed heading allowlist.
+    """
+    from source_preservation import _heading_of, _is_document_separator, _strip_markers
+
+    section = None
+    overlaps_skill = False
+    containing_line = None
+    position = 0
+    for raw in source_text.splitlines(keepends=True):
+        end = position + len(raw)
+        text = raw.rstrip("\r\n")
+        heading = _heading_of(text)
+        if heading:
+            section = heading[0].strip().casefold()
+        elif _is_document_separator(text):
+            section = None
+        is_skill = section in {"skills", "technical skills"} and heading is None
+        if is_skill and item["start"] < end and item["end"] > position:
+            overlaps_skill = True
+            if position <= item["start"] and item["end"] <= end:
+                containing_line = text
+        position = end
+    if not overlaps_skill:
+        return False, None
+    if containing_line is None:
+        return True, None
+    value = _strip_markers(containing_line).strip()
+    if not value or _is_document_separator(value):
+        return True, None
+    return True, value
+
+
+def _restore_missing_skill_lines(markdown: str, source_map: dict[str, str],
+                                 missing_items: list[dict[str, Any]]) -> tuple[str, int, set[str]]:
+    """Add source skill lines without replacing any existing draft content.
+
+    These are intermediate edits, not approvals: every line and inventory item
+    must pass the normal complete post-restoration review. Ambiguous multiple
+    draft skill sections and uncopyable spans are left missing for that gate.
+    """
+    from source_preservation import _heading_of
+
+    skills: list[str] = []
+    skill_ids: set[str] = set()
+    for item in missing_items:
+        is_skill, value = _source_skill_line(source_map[item["source_id"]], item)
+        if is_skill:
+            skill_ids.add(item["id"])
+            if value:
+                skills.append(value)
+    if not skills:
+        return markdown, 0, skill_ids
+
+    draft_lines = _lines(markdown)
+    headings = [(index, _heading_of(line["text"])) for index, line in enumerate(draft_lines)]
+    skill_headings = [(index, heading) for index, heading in headings if heading
+                      and heading[0].strip().casefold() in {"skills", "technical skills"}]
+    if len(skill_headings) > 1:
+        return markdown, 0, skill_ids
+
+    if skill_headings:
+        index = skill_headings[0][0]
+        end_index = next((i for i, heading in headings if i > index and heading), len(draft_lines))
+        insert_at = draft_lines[end_index]["absolute_start"] if end_index < len(draft_lines) else len(markdown)
+        body = draft_lines[index + 1:end_index]
+    else:
+        insert_at = len(markdown)
+        body = []
+
+    def key(value: str) -> str:
+        return " ".join(re.sub(r"^\s*(?:[-*+]\s+|•\s*)", "", value).split()).casefold()
+
+    existing = {key(line["text"]) for line in body}
+    additions = []
+    for value in skills:
+        normalized = key(value)
+        if not normalized or normalized in existing:
+            continue
+        existing.add(normalized)
+        content = re.sub(r"^\s*(?:[-*+]\s+|•\s*)", "", value).strip()
+        additions.append("- " + content)
+    if not additions:
+        return markdown, 0, skill_ids
+
+    newline = "\r\n" if "\r\n" in markdown else "\n"
+    prefix = "" if not insert_at or markdown[:insert_at].endswith(("\n", "\r")) else newline
+    header = "" if skill_headings else "## Technical Skills" + newline
+    inserted = prefix + header + newline.join(additions) + newline
+    return markdown[:insert_at] + inserted + markdown[insert_at:], len(additions), skill_ids
+
+
 def _enclosing_source_line(source_text: str, start: int, end: int) -> str:
     """The full source line an inventory item sits on."""
     left = source_text.rfind("\n", 0, start) + 1
@@ -1390,6 +1487,9 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     corrected_spans = 0
     corrected_labels = 0
     restorations = 0
+    skill_restoration_attempted = False
+    skill_restoration_applied = False
+    generic_restoration_attempted = False
     current_phase = "source_inventory"
     # Bounded recovery state for an incomplete review. Shared with the helper so the
     # "at most once" and "never after a repair" rules cannot be bypassed.
@@ -1599,9 +1699,37 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     # re-authenticates every span and every coverage verdict.
                     pass
                 else:
-                    if not restorations and missing_items:
+                    if missing_items:
+                        # A skill belongs in Skills, never in an experience line
+                        # selected merely because it shares a word. Add the source's
+                        # complete line and re-review before considering other repairs.
+                        skill_items = missing_items[:_RESTORE_MAX_ITEMS]
+                        restored = 0
+                        if not skill_restoration_attempted:
+                            skill_restoration_attempted = True
+                            restored_markdown, restored, skill_ids = _restore_missing_skill_lines(
+                                markdown, source_map, skill_items)
+                        else:
+                            skill_ids = {item["id"] for item in skill_items
+                                         if _source_skill_line(source_map[item["source_id"]], item)[0]}
+                        if restored:
+                            # The provider permits six ordinary calls; the seventh is
+                            # reserved for a partial-review completion. Never alter a
+                            # draft unless its mandatory complete review can be sent.
+                            if events.calls >= 6:
+                                return blocked("source_facts_missing")
+                            markdown = restored_markdown
+                            restorations += restored
+                            skill_restoration_applied = True
+                            recovery["repaired"] = True
+                            phase = "post_restore_review"
+                            continue
+                        if generic_restoration_attempted:
+                            return blocked("source_facts_missing")
                         targets: dict[str, dict[str, Any]] = {}
-                        for item in missing_items[:_RESTORE_MAX_ITEMS]:
+                        for item in skill_items:
+                            if item["id"] in skill_ids:
+                                continue
                             line = _pick_target_line(
                                 lines, item["quote"],
                                 _enclosing_source_line(source_map[item["source_id"]],
@@ -1611,6 +1739,11 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                             targets[line["line_id"]] = item
                         remaining = deadline - loop.time()
                         if targets and remaining > 0:
+                            # A model restoration needs both its request and a full
+                            # review, in addition to the skill restoration's review.
+                            if skill_restoration_applied and events.calls > 4:
+                                return blocked("source_facts_missing")
+                            generic_restoration_attempted = True
                             current_phase = "restore"
                             restore_payload = {
                                 "contract": _RESTORE_CONTRACT,
@@ -1720,6 +1853,12 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     restorations)
             if repairs == 2:
                 return blocked("unresolved_claims")
+            # Skill restoration adds a review to the original two-repair path.
+            # Reserve both calls for any further repair and its mandatory review;
+            # a missing source fact remains a valid reason to withhold instead.
+            if skill_restoration_applied and events.calls > 4:
+                return blocked("source_facts_missing" if "missing" in incomplete
+                               else "unresolved_claims")
             # A second repair pass costs TWO provider calls (repair + the complete
             # re-review that must follow it). When the recovery re-review has already
             # been spent, the remaining budget cannot fund that pair, and asking anyway

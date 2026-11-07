@@ -819,65 +819,92 @@ def _source_experience_records(source_text: str) -> list[dict]:
 
 
 def preserve_employer_records(markdown: str, source_text: str) -> tuple[str, list[str]]:
-    """Restore employer names and role lines the writer replaced with placeholders.
+    """Restore placeholders only when record ownership has unique exact evidence.
 
-    Measured on the Conservative diagnostic ``3abb7811``: the writer emitted
-    three identical ``**Current Employer** --`` heads and ``*Analyst |*`` role
-    lines, dropping all three real employer names, role titles and dates. The
-    reviewer then reported those source facts missing and the run withheld.
-
-    The rule is deliberately narrow and refuses to guess:
-
-    * it acts only when a draft record head is a generic placeholder (or the
-      role line has no dates), never on a real employer name;
-    * it matches draft records to source records IN ORDER, and only when the
-      counts agree -- an ambiguous mapping is left for the reviewer;
-    * it substitutes only the candidate's own source head and detail lines.
-      Bullets are left to the existing rules and the reviewer.
+    A matching employer name, complete role/date line, or verbatim bullet can
+    identify a source record. Conflicting, shared, or duplicate claims are left
+    for review; neither record order nor elimination proves ownership. This is
+    intentionally conservative about paraphrased bullets.
     """
     source_records = _source_experience_records(source_text)
     if not source_records:
         return markdown, []
 
+    generic = re.compile(r"^(current|previous|present|recent)\s+"
+                         r"(employer|company|role|position)$", re.IGNORECASE)
+
+    def normalized(value: str) -> str:
+        return " ".join(_strip_markers(value).split()).casefold()
+
     sections = _split_sections(markdown)
-    draft_records: list[tuple[dict, int, int]] = []
+    draft_records: list[dict] = []
     for section in _find_sections(sections, "professional experience",
                                   "experience", "work experience"):
+        starts = []
         for index, raw in enumerate(section["lines"]):
             head, _ = _record_head(raw)
             if head is not None:
-                draft_records.append((section, index))
-    if not draft_records or len(draft_records) != len(source_records):
-        return markdown, []
+                starts.append(index)
+        for position, index in enumerate(starts):
+            end = starts[position + 1] if position + 1 < len(starts) else len(section["lines"])
+            head, _ = _record_head(section["lines"][index])
+            detail_index = next((i for i in range(index + 1, min(index + 3, end))
+                                 if _record_detail(section["lines"][i]) is not None), None)
+            detail = (_record_detail(section["lines"][detail_index])
+                      if detail_index is not None else "")
+            bullets = {normalized(line.strip().lstrip("-").strip())
+                       for line in section["lines"][index + 1:end]
+                       if line.strip().startswith("-")
+                       and not _is_document_separator(line.strip())}
+            is_generic = bool(generic.fullmatch(head.strip()))
+            complete_detail = bool(detail and "|" in detail
+                                   and re.search(r"\d", detail.split("|", 1)[1]))
+            candidates = set()
+            for source_index, source in enumerate(source_records):
+                if generic.fullmatch(source["head"].strip()):
+                    continue
+                if ((not is_generic and normalized(head) == normalized(source["head"]))
+                        or (complete_detail and normalized(detail) == normalized(source["detail"]))
+                        or bullets.intersection(normalized(b) for b in source["bullets"])):
+                    candidates.add(source_index)
+            draft_records.append({"section": section, "index": index, "head": head,
+                                  "generic": is_generic, "detail_index": detail_index,
+                                  "detail": detail, "complete_detail": complete_detail,
+                                  "candidates": candidates})
 
-    generic = re.compile(r"^(current|previous|present|recent)\s+"
-                         r"(employer|company|role|position)$", re.IGNORECASE)
-    needs_repair = False
-    for (section, index), _source in zip(draft_records, source_records):
-        head, _ = _record_head(section["lines"][index])
-        if head and generic.match(head.strip()):
-            needs_repair = True
-            break
-        # A role line with no dates is the same placeholder shape.
-        for look in range(index + 1, min(index + 3, len(section["lines"]))):
-            detail = _record_detail(section["lines"][look])
-            if detail is not None and "|" in detail and not re.search(r"\d", detail):
-                needs_repair = True
-                break
-        if needs_repair:
-            break
-    if not needs_repair:
-        return markdown, []
+    # A source record claimed by more than one draft record has no unique owner,
+    # including when one of the claims also has conflicting evidence.
+    claims: dict[int, int] = {}
+    for record in draft_records:
+        for candidate in record["candidates"]:
+            claims[candidate] = claims.get(candidate, 0) + 1
 
-    for (section, index), source in zip(draft_records, source_records):
-        head_line = f"**{source['head']}**"
-        if source["location"]:
-            head_line += f" -- {source['location']}"
-        section["lines"][index] = head_line
-        for look in range(index + 1, min(index + 3, len(section["lines"]))):
-            if _record_detail(section["lines"][look]) is not None:
-                section["lines"][look] = f"*{source['detail']}*"
-                break
+    changed = False
+    for record in draft_records:
+        if len(record["candidates"]) != 1:
+            continue
+        source_index = next(iter(record["candidates"]))
+        source = source_records[source_index]
+        if claims[source_index] != 1:
+            continue
+        if not record["generic"] and normalized(record["head"]) != normalized(source["head"]):
+            continue
+        if (record["complete_detail"]
+                and normalized(record["detail"]) != normalized(source["detail"])):
+            continue
+        lines = record["section"]["lines"]
+        if record["generic"]:
+            head_line = f"**{source['head']}**"
+            if source["location"]:
+                head_line += f" -- {source['location']}"
+            lines[record["index"]] = head_line
+            changed = True
+        if (record["detail_index"] is not None and record["detail"]
+                and "|" in record["detail"] and not record["complete_detail"]):
+            lines[record["detail_index"]] = f"*{source['detail']}*"
+            changed = True
+    if not changed:
+        return markdown, []
     return _render_sections(sections), ["restored the source's employer and role records"]
 
 

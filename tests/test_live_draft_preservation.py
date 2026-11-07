@@ -9,7 +9,8 @@ UNCHANGED, so the reviewer reported those source facts missing and the run
 withheld as ``source_facts_missing``.
 
 These tests drive the exact draft shape through ``preserve_source_facts`` and
-assert the candidate's own facts are restored. The frozen fixture is unchanged.
+check that only demonstrably identified employer records are restored. The
+frozen fixture is unchanged.
 """
 import json
 from pathlib import Path
@@ -68,19 +69,16 @@ Operations analyst with 9 years of experience in depot reporting and fuel cost c
 """
 
 
-def test_employer_names_and_role_lines_are_restored():
-    """Placeholder employer heads and dateless roles are replaced from source."""
+def test_only_employer_with_unique_exact_evidence_is_restored():
+    """Paraphrases alone cannot establish ownership of the other records."""
     out, changes = sp.preserve_source_facts(DRAFT, _frozen_source())
     assert "restored the source's employer and role records" in changes
-    for employer in ("Harborline Transit Authority", "Cascade Freight Partners",
-                     "Ridgeline Equipment Services"):
-        assert employer in out, f"employer lost: {employer}"
-    for role in ("Fuel Reporting Analyst | 04/2019 - Present",
-                 "Cost Reporting Coordinator | 07/2015 - 03/2019",
-                 "Inventory Analyst | 08/2023 - Present"):
-        assert role in out, f"role/date lost: {role}"
-    assert "Current Employer" not in out
-    assert "*Analyst |*" not in out
+    assert "**Harborline Transit Authority** -- Tacoma, WA" in out
+    assert "*Fuel Reporting Analyst | 04/2019 - Present*" in out
+    assert "Cascade Freight Partners" not in out
+    assert "Ridgeline Equipment Services" not in out
+    assert out.count("**Current Employer**") == 2
+    assert out.count("*Analyst |*") == 2
 
 
 def test_empty_skills_and_certifications_are_filled_from_source():

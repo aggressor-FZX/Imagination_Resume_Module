@@ -387,13 +387,19 @@ class OpenRouterSafeClient:
 
                     # Validate response structure
                     if 'choices' in data and data['choices']:
-                        message = data['choices'][0].get('message', {})
+                        choice = data['choices'][0]
+                        message = choice.get('message', {})
                         content = message.get("content") or ""
-                        if not str(content).strip():
-                            reasoning = message.get("reasoning")
-                            if isinstance(reasoning, str) and reasoning.strip():
-                                content = reasoning
-                        if content:
+                        finish_reason = choice.get("finish_reason")
+                        usable = isinstance(content, str) and bool(content.strip())
+                        if finish_reason and finish_reason != "stop":
+                            usable = False
+                        if usable and response_format and response_format.get("type") == "json_object":
+                            try:
+                                usable = isinstance(json.loads(content), dict)
+                            except (ValueError, TypeError):
+                                usable = False
+                        if usable:
                             print("   ✅ Success")
                             return {
                                 "success": True,
@@ -403,7 +409,7 @@ class OpenRouterSafeClient:
                             }
 
                     # If we get here, response was 200 but malformed
-                    last_error = "Malformed response"
+                    last_error = "Unusable or incomplete response"
                     print(f"   ⚠️  {last_error}")
 
                 elif response.status_code == 429:
