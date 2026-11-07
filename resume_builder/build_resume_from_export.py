@@ -514,15 +514,30 @@ def replace_between_markers(text: str, start_marker: str, end_marker: str, repla
 
 
 def build_summary_block(resume: ResumePayload) -> str:
-    return (
-        "% TAGLINE / SUMMARY-------------------------------\n"
-        "\\vspace*{-9mm}\n"
+    """Render the summary section, heading included.
+
+    The heading is emitted only when there is summary text, matching
+    ``ensure_required_headings``: an empty summary heading would claim a summary
+    the candidate never wrote.
+
+    Measured 2026-11-07: the delivered markdown carried
+    ``## Professional Summary`` but the export dropped the label, so the summary
+    text appeared as an unlabelled paragraph under the name. The text survived;
+    the section did not.
+    """
+    parts = ["% TAGLINE / SUMMARY-------------------------------\n"]
+    parts.append("\\vspace*{-9mm}\n")
+    if resume.summary:
+        parts.append("\\section{Professional Summary}\n")
+    parts.append(
         "\\begin{center}\n"
         f"\\textit{{{latex_escape(resume.headline)}}}\n"
         "\\end{center}\n"
         "\\vspace*{1mm}\n\n"
-        f"{latex_escape(resume.summary)}\n"
     )
+    if resume.summary:
+        parts.append(f"{latex_escape(resume.summary)}\n")
+    return "".join(parts)
 
 
 def build_skill_block(resume: ResumePayload) -> str:
@@ -596,10 +611,15 @@ def generate_experience_block(resume: ResumePayload) -> str:
 
 
 def generate_projects_block(resume: ResumePayload) -> str:
-    if not resume.projects:
-        return ""
-    blocks = []
-    blocks.append("% PROJECTS-------------------------------\n\\vspace*{2mm}\n\\section{Projects}\n\\vspace*{1mm}\n")
+    """Render the Projects section, heading included even when it is empty.
+
+    ``REQUIRED_HEADINGS`` promises a Projects section and the delivered markdown
+    keeps an empty one, so dropping the heading here made the two documents
+    disagree about which sections exist. An empty section is the correct
+    representation of "this section exists and the candidate has nothing for
+    it"; nothing is invented to fill it. Measured 2026-11-07.
+    """
+    blocks = ["% PROJECTS-------------------------------\n\\vspace*{2mm}\n\\section{Projects}\n\\vspace*{1mm}\n"]
     for section in resume.projects:
         blocks.append(generate_section_body(section))
     return "".join(blocks)
@@ -733,6 +753,28 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
             p.alignment = alignment
         r = p.add_run("")
         return p, r
+
+    def add_section_heading(title):
+        """Emit one section heading with the accent rule under it.
+
+        Extracted so every section renders its heading identically, and so a
+        section with no content can still emit its heading (see the Projects
+        block below).
+        """
+        p, r = add_para(sp_before=8, sp_after=1)
+        r.text = title
+        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
+        pPr = p._element.get_or_add_pPr()
+        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
+        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
+            docx_qn('w:val'): 'single',
+            docx_qn('w:sz'): '6',
+            docx_qn('w:space'): '1',
+            docx_qn('w:color'): '1F4E79'
+        })
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+        return p
     
     # ─── HEADER (centered, like moderncv banking) ───
     p, r = add_para(sp_before=0, sp_after=0, alignment=WD_ALIGN_PARAGRAPH.CENTER)
@@ -758,27 +800,20 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
         set_run(r, size=9, italic=True)
     
     # ─── SUMMARY ───
+    # The heading is emitted only when there is summary text, matching
+    # ``ensure_required_headings``: an empty summary heading would claim a
+    # summary the candidate never wrote. Measured 2026-11-07: the markdown
+    # carried ``## Professional Summary`` but the export dropped the label, so
+    # the text appeared as an unlabelled paragraph under the name.
     if resume.summary:
-        p, r = add_para(sp_before=4, sp_after=4)
+        add_section_heading("Professional Summary")
+        p, r = add_para(sp_before=2, sp_after=4)
         r.text = resume.summary
         set_run(r, size=8)
     
     # ─── PROFESSIONAL EXPERIENCE ───
     if resume.experience:
-        p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Professional Experience"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        # Add bottom border
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
+        add_section_heading("Professional Experience")
         
         for section in resume.experience:
             p, r = add_para(sp_before=4, sp_after=0)
@@ -795,22 +830,11 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
                 set_run(r, size=9)
     
     # ─── PROJECTS ───
+    # The heading is emitted even when the section is empty: REQUIRED_HEADINGS
+    # promises it and the delivered markdown keeps it, so dropping it here made
+    # the two documents disagree about which sections exist. Measured 2026-11-07.
+    add_section_heading("Projects")
     if resume.projects:
-        p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Projects"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        # Add bottom border
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
-        
         for section in resume.projects:
             p, r = add_para(sp_before=3, sp_after=0)
             r.text = section.title
@@ -827,20 +851,7 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     
     # ─── EDUCATION ───
     if resume.education:
-        p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Education"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        # Add bottom border
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
+        add_section_heading("Education")
         
         for line in resume.education:
             p, r = add_para(sp_before=1, sp_after=1)
@@ -849,20 +860,7 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     
     # ─── CERTIFICATIONS ───
     if resume.certifications:
-        p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Certifications"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        # Add bottom border
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
+        add_section_heading("Certifications")
         
         for line in resume.certifications:
             p, r = add_para(sp_before=1, sp_after=1)
@@ -871,19 +869,7 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     
     # ─── TECHNICAL SKILLS (last section, after experience/projects/education/certs) ───
     if any(values for _, values in resume.skills):
-        p, r = add_para(sp_before=8, sp_after=1)
-        r.text = "Technical Skills"
-        set_run(r, size=12, bold=True, color=COLOR_ACCENT)
-        pPr = p._element.get_or_add_pPr()
-        pBdr = pPr.makeelement(docx_qn('w:pBdr'), {})
-        bottom = pBdr.makeelement(docx_qn('w:bottom'), {
-            docx_qn('w:val'): 'single',
-            docx_qn('w:sz'): '6',
-            docx_qn('w:space'): '1',
-            docx_qn('w:color'): '1F4E79'
-        })
-        pBdr.append(bottom)
-        pPr.append(pBdr)
+        add_section_heading("Technical Skills")
         
         for label, values in resume.skills:
             if not values:
