@@ -67,6 +67,12 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
+# ``source_preservation`` imports nothing from this module, so a module-level
+# import is safe and keeps the structural-classification helpers in one place.
+# The separator predicate is needed by ``_is_section_heading``, which runs on
+# every inventory item; a function-local import there would re-import per item.
+from source_preservation import _is_document_separator
+
 
 @dataclass(frozen=True)
 class SourceDocument:
@@ -665,6 +671,20 @@ def _is_section_heading(quote: str) -> bool:
     stripped = (quote or "").strip()
     if not stripped:
         return False
+    # A multi-document join marker is structure, not a candidate fact. The
+    # orchestrator joins the candidate's documents with a horizontal rule, so
+    # the separator is text the CANDIDATE never wrote and no draft line can
+    # represent. Measured 2026-11-07 on ``realistic_candidate``: the inventory
+    # classified the ``---`` join marker ``uncertain``, and that single span
+    # withheld a faithful draft before any review ran. It is the same class of
+    # error as a bare heading — formatting the model was told to call
+    # ``non_resume`` — so it takes the same correction.
+    #
+    # Narrow by construction: the whole span must be a horizontal rule and
+    # nothing else. A separator adjacent to content is a different span and is
+    # left exactly as the model classified it.
+    if _is_document_separator(stripped):
+        return True
     if stripped.startswith("#"):
         label = stripped.lstrip("#").strip()
     else:
@@ -880,6 +900,58 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                     return True
         return False
 
+    def _joins_adjacent_source_lines(claim: dict[str, Any]) -> bool:
+        """True when the claim is a faithful join of ADJACENT source lines.
+
+        A claim that crosses a source line break cannot be cited at all. A
+        citation must be an exact contiguous substring of the source, and the
+        source carries a line break — plus, in extracted text, a per-line
+        provenance marker — between the two halves. So the reviewer has no way
+        to express support for it and reports ``unsupported`` with
+        ``citations: []``.
+
+        Measured 2026-11-07 on ``realistic_candidate``. The source summary is
+        wrapped across two lines:
+
+            SYNTHETIC-ONLY Journeyman electrician with 12 years of electrical
+                           experience spanning
+            SYNTHETIC-ONLY commercial construction, industrial maintenance, and
+                           facility operations.
+
+        and the draft carries the two joined:
+
+            Journeyman electrician with 12 years of electrical experience
+            spanning commercial construction, industrial maintenance, and
+            facility operations.
+
+        The draft line is byte-identical to the source lines joined, yet the
+        reviewer marked it ``unsupported`` with no citations, the repair
+        returned an empty replacement, and the run withheld. The text is not an
+        addition; it is the source, re-wrapped.
+
+        The rule requires at least TWO source lines. A single-line claim CAN be
+        cited, so an uncited ``unsupported`` verdict on one is a real objection
+        and is left alone — that existing control still holds. This upgrade
+        applies only where citation is structurally impossible.
+        """
+        span = by_line[claim["line_id"]]["text"][claim["start"]:claim["end"]]
+        needle = " ".join(_strip_provenance(span).split()).casefold()
+        if not needle:
+            return False
+        for document in sources.values():
+            parts = [" ".join(_strip_provenance(line).split()).casefold()
+                     for line in document.splitlines()]
+            parts = [part for part in parts if part]
+            for start in range(len(parts)):
+                joined = parts[start]
+                for end in range(start + 1, len(parts)):
+                    joined = f"{joined} {parts[end]}"
+                    if joined == needle:
+                        return True
+                    if len(joined) > len(needle):
+                        break
+        return False
+
     upgraded_claims: set[str] = set()
     for claim in response["claims"]:
         if claim["verdict"] not in {"uncertain", "unsupported"}:
@@ -888,9 +960,17 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         # verdict is the reviewer naming a defect, and overriding it would erase
         # a real objection; ``uncertain`` is the reviewer declining to confirm,
         # which is what a verbatim source line refutes.
+        #
+        # The multi-line join form is the one exception for ``unsupported``, and
+        # only because the reviewer could not have cited the claim even if it
+        # wanted to: no contiguous source substring equals a claim that spans a
+        # line break. The text is verified directly against the source instead,
+        # which is stronger evidence than a citation, not weaker.
         if _verbatim_in_cited_source(claim) or (
                 claim["verdict"] == "uncertain" and not claim["citations"]
-                and _whole_line_in_a_source(claim)):
+                and _whole_line_in_a_source(claim)) or (
+                claim["verdict"] == "unsupported" and not claim["citations"]
+                and _joins_adjacent_source_lines(claim)):
             claim["verdict"] = "supported"
             upgraded_claims.add(claim["id"])
 
