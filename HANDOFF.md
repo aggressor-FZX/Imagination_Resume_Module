@@ -99,6 +99,39 @@ Credit value at the $5/450 tier ($0.01111/credit): 33 credits = **$0.3667**.
 So inference is **4.4% of credit value** — a **22.6×** gross margin on inference
 alone. This is API spend, not Stripe revenue.
 
+## Resume completeness — FIXED (was: two export defects)
+
+**Status: fixed in `061954a`, tests in `627d159`.** The section below is kept as
+the record of what was measured and why the fix looks the way it does.
+
+### The fix
+
+Both defects were in `resume_builder/build_resume_from_export.py`:
+
+1. `build_summary_block` now emits `\section{Professional Summary}` before the
+   summary text, and the DOCX path calls a new `add_section_heading` helper
+   instead of writing a bare paragraph. The heading stays **conditional** on
+   there being summary text, matching `ensure_required_headings`: an empty
+   summary heading would claim a summary the candidate never wrote.
+2. `generate_projects_block` and the DOCX Projects block no longer guard the
+   heading with `if resume.projects:`. The heading is unconditional; only the
+   body is conditional. Nothing is invented to fill an empty section.
+
+The DOCX renderer's five copy-pasted heading blocks (each with its own border
+`pPr`/`pBdr` construction) are now one `add_section_heading` helper, so a section
+cannot drift from the others again.
+
+### Verification
+
+- `tests/test_export_section_headings.py` (6 tests) renders real files and reads
+  them back, including a PDF/DOCX section-set comparison.
+- `tests/test_export_route_section_headings.py` (4 tests) does the same through
+  `POST /resume/export`, the endpoint the website calls, so a route-level payload
+  defect cannot hide behind a renderer-only test.
+- Full suite: **1671 passed, 13 skipped**.
+
+### What was measured before the fix
+
 ## Resume completeness — what the sections actually show
 
 Expected headings (`REQUIRED_HEADINGS`): Professional Summary, Professional
@@ -128,14 +161,38 @@ Content completeness is otherwise good: 3 employers, 9 bullets, 2 education
 records, 1 certification, 4 skill lines. `Projects` is empty in the source, so
 its emptiness is faithful — only the heading is missing.
 
+## BLOCKER: OpenRouter account is overdrawn
+
+A live website verification run on 2026-11-07 12:16 returned
+`correction_status: withheld`, `reason: provider_error`. The log shows the real
+cause:
+
+```
+"event": "provider.call", "http_status": 402, "model": "qwen/qwen3-coder",
+"outcome": "provider_error", "phase": "source_inventory"
+```
+
+`GET https://openrouter.ai/api/v1/credits` for both keys reports
+`total_credits: 1240`, `total_usage: 1240.158620078` — the account is **overdrawn
+by $0.16**. Per-key limits still show headroom (`limit_remaining` 92.51 and
+99.48), which is why the keys look healthy; the 402 is account-level.
+
+**No fresh live analysis can run until the account is topped up.** This is a
+billing state, not a code defect, and it is why the export fix was verified
+through the real `/resume/export` route in-process rather than through a new
+website run.
+
 ## Remaining work
 
-1. Emit the `Professional Summary` heading in both renderers (LaTeX + DOCX).
-2. Decide whether an empty `Projects` section should render its heading. The
-   markdown keeps it; the exports drop it. Pick one and pin it with a test.
-3. `realistic_candidate` / Conservative withhold: decide whether
+1. **Top up OpenRouter**, then re-run the live website verification to confirm
+   the six headings reach a downloaded PDF and DOCX end to end.
+2. `realistic_candidate` / Conservative withhold: decide whether
    `source_completeness_uncertain` at inventory is the intended outcome for that
    document, or whether the inventory contract is over-strict.
+3. Consider surfacing a 402 distinctly from a generic `provider_error`. A
+   billing failure currently looks identical to a transient provider fault, so
+   the operator is told "could not be verified" when the real answer is "the
+   account has no credit".
 
 ---
 
