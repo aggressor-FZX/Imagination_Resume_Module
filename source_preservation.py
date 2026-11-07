@@ -1587,6 +1587,107 @@ def preserve_experience_bullets(markdown: str, source_text: str,
     return "".join(out_lines), changes
 
 
+# These forms cover a small class of appended purpose/outcome claims, not outcomes
+# in general. A lexical mismatch is only a reason to restore a uniquely matched
+# source bullet; it is not proof that the outcome is semantically unsupported.
+_PURPOSE_OUTCOME = re.compile(
+    r"\s+(?:to\s+(?:support|enhance)|and\s+support|for\s+decision[- ]making)\b",
+    re.IGNORECASE,
+)
+_SAME_MONTH_PRIOR_YEAR = re.compile(
+    r"\b(?:same|corresponding)\s+month\s+(?:in\s+)?(?:the\s+)?"
+    r"(?:prior|previous|last)\s+year\b",
+    re.IGNORECASE,
+)
+
+
+def preserve_specific_experience_details(
+    markdown: str, source_text: str, permitted_bridges: Optional[list[str]] = None,
+) -> tuple[str, list[str]]:
+    """Restore narrowly detected losses/additions from uniquely owned source bullets.
+
+    Both documents must have one complete record for the employer with identical
+    role/date details. Matching must be unique in both directions within the role,
+    with at least four shared stems and exactly matching figures. A bridge-bearing
+    line is never replaced: preserving that authorized wording takes precedence over
+    this heuristic. Unrecognized wording, ambiguity, or transplanted figures remain
+    unchanged for the existing reviewer, not accepted as verified.
+    """
+    source_records = _source_experience_records(source_text)
+    draft_records = _source_experience_records(markdown)
+    source_words = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", source_text)
+                    if len(w) > 3}
+    source_stems = _stemmed_words(source_text)
+    replacements: dict[tuple[str, str, str], tuple[str, str]] = {}
+    normalize = lambda value: " ".join(value.split()).casefold()
+
+    for draft in draft_records:
+        owner = normalize(draft["head"])
+        sources = [r for r in source_records if normalize(r["head"]) == owner]
+        drafts = [r for r in draft_records if normalize(r["head"]) == owner]
+        if (len(sources) != 1 or len(drafts) != 1 or
+                normalize(sources[0]["detail"]) != normalize(draft["detail"])):
+            continue
+        source = sources[0]
+        matches = [(line, _best_source_bullet(line, source["bullets"]))
+                   for line in draft["bullets"]]
+        for line, bullet in matches:
+            if (bullet is None or sum(match == bullet for _, match in matches) != 1
+                    or len(_stemmed_words(line) & _stemmed_words(bullet)) < 4
+                    or _numeric_qualifiers(line) != _numeric_qualifiers(bullet)
+                    or _contains_permitted_bridge(line, permitted_bridges)):
+                continue
+            lost_period = (bool(_SAME_MONTH_PRIOR_YEAR.search(bullet))
+                           and not _SAME_MONTH_PRIOR_YEAR.search(line))
+            boundary = _PURPOSE_OUTCOME.search(line)
+            added_purpose = bool(
+                boundary and not _PURPOSE_OUTCOME.search(bullet)
+                and len(_stemmed_words(line[:boundary.start()]) & _stemmed_words(bullet)) >= 3
+                and _ungrounded_words(line[boundary.start():], source_words, source_stems)
+            )
+            if lost_period or added_purpose:
+                reason = ("restored a same-month prior-year comparison" if lost_period
+                          else "restored source wording for an appended purpose")
+                replacements[(owner, normalize(draft["detail"]), line)] = (bullet, reason)
+
+    if not replacements:
+        return markdown, []
+    out: list[str] = []
+    changes: list[str] = []
+    offset = 0
+    section = None
+    detail = ""
+    for raw in markdown.splitlines(keepends=True):
+        stripped = raw.strip()
+        heading = _heading_of(raw)
+        if heading:
+            section = heading[0].lower()
+            detail = ""
+        elif _is_document_separator(stripped) or _record_head(raw)[0] is not None:
+            detail = ""
+        elif stripped and not stripped.startswith("-"):
+            parsed_detail = _record_detail(raw)
+            if parsed_detail is not None:
+                detail = normalize(parsed_detail)
+            elif not re.search(r"[.!?]$", stripped):
+                detail = ""
+        owner = _employer_of(markdown, offset)
+        offset += len(raw)
+        line = _strip_markers(stripped).lstrip("-").strip()
+        replacement = (replacements.get((owner, detail, line))
+                       if stripped.startswith("-") and section in
+                       ("professional experience", "experience", "work experience")
+                       else None)
+        if replacement is None:
+            out.append(raw)
+            continue
+        indent = raw[:len(raw) - len(raw.lstrip())]
+        newline = "\n" if raw.endswith("\n") else ""
+        out.append(f"{indent}- {replacement[0]}{newline}")
+        changes.append(replacement[1])
+    return "".join(out), changes
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1629,10 +1730,12 @@ def preserve_source_facts(
                  preserve_quantified_qualifiers,
                  preserve_employer_records,
                  preserve_experience_bullets,
+                 preserve_specific_experience_details,
                  preserve_skills_block,
                  preserve_empty_source_sections,
                  ensure_required_headings):
         if step in (preserve_skills_block, preserve_experience_bullets,
+            preserve_specific_experience_details,
                 preserve_quantified_qualifiers):
             # Both rules understand the bridge exception: an authorised inferred
             # label must survive to semantic review. Every other rule keeps its
