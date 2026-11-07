@@ -796,10 +796,44 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 return True
         return False
 
+    def _whole_line_in_a_source(claim: dict[str, Any]) -> bool:
+        """True when the claim's span is a COMPLETE line of a source document.
+
+        Measured on Conservative website run ``9936f4e2`` (2026-11-07): the
+        reviewer marked the supplement's summary line ``uncertain`` with
+        ``citations: []``. The line is copied character-for-character from the
+        source, so it cannot be an addition — but with no citation the
+        cited-document check above cannot see that, and the run withheld twice.
+
+        The rule is deliberately the narrowest form that covers the case: the
+        span must equal an ENTIRE source line, whitespace-normalised. A
+        paraphrase, an appended clause, a partial span or a transplanted line is
+        not a whole source line and is unaffected.
+        """
+        span = by_line[claim["line_id"]]["text"][claim["start"]:claim["end"]]
+        needle = " ".join(_strip_provenance(span).split()).casefold()
+        if not needle:
+            return False
+        for document in sources.values():
+            # Split FIRST, then strip: ``_strip_markers`` collapses runs of
+            # whitespace, so stripping the whole document would merge every line
+            # into one and no single line could ever match.
+            for line in document.splitlines():
+                if " ".join(_strip_provenance(line).split()).casefold() == needle:
+                    return True
+        return False
+
     upgraded_claims: set[str] = set()
     for claim in response["claims"]:
-        if (claim["verdict"] in {"uncertain", "unsupported"}
-                and _verbatim_in_cited_source(claim)):
+        if claim["verdict"] not in {"uncertain", "unsupported"}:
+            continue
+        # The whole-line form applies ONLY to ``uncertain``. An ``unsupported``
+        # verdict is the reviewer naming a defect, and overriding it would erase
+        # a real objection; ``uncertain`` is the reviewer declining to confirm,
+        # which is what a verbatim source line refutes.
+        if _verbatim_in_cited_source(claim) or (
+                claim["verdict"] == "uncertain" and not claim["citations"]
+                and _whole_line_in_a_source(claim)):
             claim["verdict"] = "supported"
             upgraded_claims.add(claim["id"])
 

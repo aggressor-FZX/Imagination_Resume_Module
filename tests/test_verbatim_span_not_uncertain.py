@@ -93,13 +93,49 @@ def test_a_paraphrase_is_still_uncertain():
     assert claims[0]["verdict"] == "uncertain"
 
 
-def test_a_span_with_no_citation_is_not_upgraded():
+def test_an_uncited_whole_source_line_is_upgraded():
+    """Measured on run ``9936f4e2``: the reviewer cited nothing at all.
+
+    The span is an ENTIRE source line, so it cannot be an addition. A partial
+    span or a paraphrase is not a whole line and is unaffected (see the two
+    negative controls below).
+    """
     review = _review("uncertain", VERBATIM, SOURCE)
     review["claims"][0]["citations"] = []
     lines = [{"line_id": "L1", "text": VERBATIM}]
     claims, incomplete, _ = sc._validate_review(review, lines, {"doc": SOURCE},
                                                 _inventory())
+    assert claims[0]["verdict"] == "supported"
+
+
+def _uncited(verdict, text):
+    review = _review(verdict, text, SOURCE)
+    review["claims"][0].update(id=f"L1:0:{len(text)}", end=len(text), citations=[])
+    lines = [{"line_id": "L1", "text": text}]
+    return sc._validate_review(review, lines, {"doc": SOURCE}, _inventory())
+
+
+def test_an_uncited_partial_span_is_not_upgraded():
+    partial = "Operations analyst supporting stock planning"
+    claims, _, _ = _uncited("uncertain", partial)
     assert claims[0]["verdict"] == "uncertain"
+
+
+def test_an_uncited_paraphrase_is_not_upgraded():
+    paraphrase = ("Operations analyst who supports stock planning and parts "
+                  "availability for a regional equipment service network.")
+    claims, _, _ = _uncited("uncertain", paraphrase)
+    assert claims[0]["verdict"] == "uncertain"
+
+
+def test_an_uncited_unsupported_verdict_is_not_upgraded():
+    """An ``unsupported`` verdict is a named defect, not a declined confirmation."""
+    review = _review("unsupported", VERBATIM, SOURCE)
+    review["claims"][0]["citations"] = []
+    lines = [{"line_id": "L1", "text": VERBATIM}]
+    claims, incomplete, _ = sc._validate_review(review, lines, {"doc": SOURCE},
+                                                _inventory())
+    assert claims[0]["verdict"] == "unsupported"
 
 
 def test_a_span_from_an_uncited_document_is_not_upgraded():
