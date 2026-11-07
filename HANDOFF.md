@@ -36,6 +36,56 @@ The main environment lacks PyMuPDF; the existing loader environment provides it 
 
 ---
 
+# Session 15 — deployed repairs; live acceptance remains open
+
+## Verification commands
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ --ignore=tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/skystarved/Render_Dockers/Loader/.venv/bin/python -m pytest -p no:cacheprovider -o addopts='' -q tests/test_loader_source_preservation_offline.py
+git diff --check
+```
+
+Results: 1565 passed, 13 skipped; real extractor suite 17 passed (two pytest config warnings). Full tests need separate environments because the main venv lacks fitz. Frontend isolated worktree `/tmp/cogito-export-policy`: 42 publication tests passed, one older real-FastAPI test excluded after failure (`fallback_output`); integration 6 passed. Full project TypeScript check had existing errors outside edited services.
+
+## Branch and deployed revisions
+
+- Imaginator: `resumeDraft_fix` deployed to `master` **d2b957881c6f11a5230a7643428e45f289b52aef**, Render `dep-dbna5lvavr4c73a947og` live. Published nondeploying branch `wip/two-mode-preservation-2026-11-07` also points at this revision before this handoff-only commit.
+- Frontend and backend: isolated branch `fix/export-policy-state`, production `master` **4ea9ae5a02b018c4443879fbf3348295f7fc3f62**. Render frontend `dep-dbna91942hec73c8j3qg` and backend `dep-dbna91942hec73c8j35g` both live.
+- [x] Actual frozen DOCX and generated synthetic PDF extract via Loader; role ownership, qualifier repair, missing skills, bridge and narrow outcome controls tested offline. Ambiguous semantic claims still require review; no universal fidelity claim.
+- [x] Fixed missing v5 policy state in frontend export body, preserving receipt verification. Live pre-fix 409 was explicitly `receipt_policy_state_missing`. New release has not yet had an approved browser result with which to confirm downloads.
+- [x] Imaginator/orchestrator `/health` 200. Render configured `CORRECTION_LIVE_CAPTURE` disabled; runtime value not independently checked. No capture was enabled this session.
+
+## Direct attempts — all retained under `captures/recovery-validation/`
+
+Frozen text source, direct `/analyze`; these are NOT website tests, platform credit consumption, or batch acceptance. Costs below are adapter estimates, can omit failed/cancelled provider calls.
+
+| Revision | Mode | Correlation | Result | seconds | estimated USD |
+|---|---|---|---|---:|---:|
+| 7622305 | Conservative | diagcons-20f402920358 | approved | 21.6 | .0114649 |
+| 7622305 | Imaginative | diagcons-c4498f3a7831 | approved | 27.9 | .01709095 |
+| b99377e | Conservative | diagcons-ace33487af7b | withheld `source_completeness_uncertain` | 25.1 | .0135656 |
+| b99377e | Imaginative | diagcons-4156e59aa7c8 | approved but false approval: unsupported outcome clauses and lost same-month/prior-year qualifier | 42.4 | .01450745 |
+| d2b9578 | Conservative | diagcons-a64b81c72ab2 | withheld `timeout_initial_review`, cancelled provider usage unknown | 160.1 | .00854985 |
+| d2b9578 | Imaginative | diagcons-61b1360e311a | withheld `source_completeness_uncertain` | 104.7 | .0173819 |
+
+Six direct estimates total $0.08256065, not actual billed cost. Offline tests replay the b99377e false approval against d2b9578; this does not establish semantic completeness in new live output.
+
+## Website submissions — signed-in authorized account
+
+1. Conservative, b99377e + frontend 58a63d9: approved and displayed; fidelity inspection revealed unsupported purpose/outcomes. Export PDF and DOCX both 409 `receipt_policy_state_missing` because request omitted bound policy state. 33 credits, balance 836 → 803. Real integrated job matches were shown; HasData spend not determined.
+2. Imaginative, d2b9578 + frontend 4ea9ae5: withheld `source_facts_missing` (Render correlation `22909c04-c799-47db-84fe-189ff0cdbb13`), no rewrite delivered and downloads correctly disabled. Receipt dialog says 33 credits; expected balance 770, confirm account refresh. No paid retries hidden. Both selected original frozen DOCX files, intended job ad, balanced style and Tacoma, WA through website controls. Different direct and website submissions are not interchangeable.
+
+## Next steps
+
+1. Preserve the existing authorized browser session. Diagnose `source_completeness_uncertain`, `source_facts_missing`, and the 101-second initial-review provider timeout using protected synthetic capture if needed (user authorized it), preflight and shut off via real redeploy afterward. Do not loosen the publication gate. Check health and account/provider billing before further traffic.
+2. Run new Conservative and Imaginative website analyses on a stable revision and assess each source fact and bridge; compare actual browser PDF/DOCX downloads and visually inspect pages. Verify repaired v5 export with actual untampered and tampered content, policy and owner controls. The pre-fix old result used outdated frontend code and cannot validate the new release.
+3. Run five recorded analyses per mode after stability, accounting for every retry/withhold; repeat failed batches after fixes and test a second candidate. Track HasData usage separately. Do not claim the finish line reached.
+4. Main module checkout retains pre-existing dirty handoff and untracked plans. Imaginator worktree pre-existing `scripts/` remains untracked; private ignored captures are retained. `/tmp/cogito-export-policy/tsconfig.policy-check.json` is an untracked generated test config; do not commit it.
+
+---
+
 # Session 14 — partial repair; customer credentials unavailable
 
 ## Verification commands (offline; no provider traffic)
