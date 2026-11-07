@@ -525,7 +525,11 @@ class CorrectionProvider:
                 # handled; its sibling was not, even though it subclasses the
                 # same base. The engine maps `_Invalid` to `malformed_output`,
                 # so raise that instead of mislabelling our own check.
-                raise MalformedReviewAnswer(phase) from exc
+                #
+                # The constraint identifier is carried through so the specific
+                # failed check is recorded, not just "malformed".
+                raise MalformedReviewAnswer(
+                    phase, getattr(exc, "constraint", "unspecified")) from exc
         except (ProviderRateLimited, ProviderUnavailable, ProviderRejectedRequest,
                 ProviderCallTimeout, UnjudgedReview, MalformedReviewAnswer,
                 PrivacyReviewRequired):

@@ -87,7 +87,35 @@ def test_provider_raises_the_mapped_exception_not_a_generic_one():
 
     source = inspect.getsource(correction_provider.CorrectionProvider.__call__)
     assert "except correction_protocol.MalformedIndexedResponse" in source
-    assert "raise MalformedReviewAnswer(phase)" in source
+    assert "raise MalformedReviewAnswer(" in source
+    # The constraint identifier must be carried through, so the specific failed
+    # check is recorded rather than only "malformed".
+    assert 'getattr(exc, "constraint"' in source
     # And the re-raise list must include it, or the generic handler below
     # re-labels it as provider_error.
     assert "MalformedReviewAnswer," in source
+
+
+def test_the_constraint_identifier_reaches_the_phase_event():
+    """The specific failed check must be recorded, not just `malformed_output`.
+
+    Measured 2026-11-07: a run withheld as `provider_error` and the specific
+    constraint was unrecoverable after the fact. The reason code alone says only
+    that the answer was unusable.
+    """
+    import inspect
+
+    source = inspect.getsource(sc._invoke)
+    assert "malformed_constraint" in source
+    assert "constraint=malformed_constraint" in source
+    # It must be initialised before the try block, or the `finally` raises
+    # NameError on the success path.
+    assert "malformed_constraint: str | None = None" in source
+
+
+def test_the_exception_carries_a_constraint():
+    exc = sc.MalformedReviewAnswer("initial_review", "duplicate_line_verdict")
+    assert exc.constraint == "duplicate_line_verdict"
+    assert exc.phase == "initial_review"
+    # A default keeps every existing raise site working.
+    assert sc.MalformedReviewAnswer().constraint == "unspecified"

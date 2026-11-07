@@ -147,7 +147,22 @@ def _is_heading(text: str) -> bool:
 
 
 class MalformedIndexedResponse(Exception):
-    """The index-list answer could not be mapped onto the strict shape."""
+    """The index-list answer could not be mapped onto the strict shape.
+
+    ``constraint`` names WHICH check failed, as a short fixed identifier. The
+    reason code alone (``malformed_output``) says only that the answer was
+    unusable; it does not say whether the model returned a duplicate line id, an
+    out-of-range segment index, an unknown key, or a bad bridge decision. Without
+    that, a live failure can only be re-diagnosed by re-running it.
+
+    The value is a fixed identifier from a closed set, never model text, so it is
+    safe to log. Measured 2026-11-07: a run withheld as ``provider_error`` and
+    the specific constraint was unrecoverable after the fact.
+    """
+
+    def __init__(self, constraint: str = "unspecified"):
+        super().__init__(f"malformed indexed response: {constraint}")
+        self.constraint = constraint
 
 
 class UnjudgedLines(MalformedIndexedResponse):
@@ -673,11 +688,11 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
     """Map the verdict/status index lists onto the engine's strict review shape."""
     items, lines = request.get("_items"), request.get("_lines")
     if type(items) is not list or type(lines) is not list:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("request_missing_items_or_lines")
     allowed = (set(_VERDICT_KEYS) | set(_STATUS_KEYS)
                | {_EVIDENCE_KEY, BRIDGE_DECISION_KEY, BRIDGE_NARROWED_KEY})
     if type(response) is not dict or not set(response) <= allowed:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("response_not_a_dict_or_unknown_key")
     bridge_answers = _bridge_answers(response, request)
     # A category the model omitted is "not judged", never approval: lines and
     # required segments then default to uncertain, which withholds.
@@ -685,13 +700,13 @@ def strict_review_from_indexed(response: Any, request: dict[str, Any]) -> dict[s
     for verdict in _VERDICT_KEYS:
         for line_id in _line_list(response.get(verdict, []), verdict, lines):
             if line_id in verdicts:
-                raise MalformedIndexedResponse
+                raise MalformedIndexedResponse("duplicate_line_verdict")
             verdicts[line_id] = verdict
     statuses: dict[int, str] = {}
     for status in _STATUS_KEYS:
         for index in _index_list(response.get(status, []), status, len(items)):
             if index in statuses:
-                raise MalformedIndexedResponse
+                raise MalformedIndexedResponse("line_id_not_in_draft")
             statuses[index] = status
     # A line the model did not place in any verdict list was never judged. The
     # contract requires exactly one verdict per line, and a live model omitted two
@@ -924,14 +939,14 @@ def indexed_restore_request(payload: dict[str, Any]) -> dict[str, Any]:
     """
     items, lines = payload.get("source_claims"), payload.get("lines")
     if type(items) is not list or not items or type(lines) is not list or not lines:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("duplicate_segment_status")
     segments = []
     item_indices = {}
     for index, item in enumerate(items):
         if (type(item) is not dict or type(item.get("id")) is not str
                 or not item["id"] or item["id"] in item_indices
                 or type(item.get("quote")) is not str or not item["quote"].strip()):
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("segment_index_out_of_range")
         item_indices[item["id"]] = index
         segments.append({"index": index, "text": item["quote"]})
     requested = []
@@ -944,14 +959,14 @@ def indexed_restore_request(payload: dict[str, Any]) -> dict[str, Any]:
                 or type(line.get("source_claim_id")) is not str
                 or line["source_claim_id"] not in item_indices
                 or line["source_claim_id"] in used_items):
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("evidence_key_unknown")
         item_id = line["source_claim_id"]
         used_items.add(item_id)
         target_by_line[line["line_id"]] = item_id
         requested.append({"line_id": line["line_id"], "text": line["text"],
                           "segment_index": item_indices[item_id]})
     if used_items != set(item_indices):
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("bridge_decision_shape")
     return {"contract": RESTORE_CONTRACT, "segments": segments, "lines": requested,
             "_lines": requested, "_targets": target_by_line}
 

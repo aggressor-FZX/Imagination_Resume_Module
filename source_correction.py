@@ -182,9 +182,12 @@ class MalformedReviewAnswer(ValueError):
     request is guesswork rather than recovery.
     """
 
-    def __init__(self, phase: str | None = None):
+    def __init__(self, phase: str | None = None, constraint: str = "unspecified"):
         super().__init__("provider answer could not be mapped to the review shape")
         self.phase = phase
+        # Which check failed, as a fixed identifier from a closed set. Never
+        # model text, so it is safe to log and to return in a diagnostic field.
+        self.constraint = constraint
 
 
 class ProviderCallTimeout(TimeoutError):
@@ -1866,10 +1869,12 @@ class _Events:
                   budget_ms=_ms(budget), elapsed_ms=self.elapsed_ms(),
                   deadline_ms=self.deadline_ms)
 
-    def end_phase(self, phase: str, outcome: str, budget: float, phase_elapsed: float) -> None:
+    def end_phase(self, phase: str, outcome: str, budget: float, phase_elapsed: float,
+                  constraint: str | None = None) -> None:
+        extra = {"constraint": constraint} if constraint else {}
         self.emit("correction.phase_end", phase=phase, outcome=outcome,
                   request_index=self.calls, elapsed_ms=_ms(phase_elapsed),
-                  budget_left_ms=_ms(budget - phase_elapsed))
+                  budget_left_ms=_ms(budget - phase_elapsed), **extra)
 
     def end(self, result: CorrectionResult) -> None:
         self.emit("correction.end", status=result.status, reason=result.reason,
@@ -1897,6 +1902,9 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
     if events is not None:
         events.start_phase(phase, timeout)
     outcome = "ok"
+    # Set only on the malformed-answer path; the `finally` below reads it on
+    # every path, so it must exist before the try block.
+    malformed_constraint: str | None = None
     offer_budget = getattr(callback, "set_budget", None)
     if callable(offer_budget):
         try:
@@ -1923,12 +1931,16 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
     except ProviderCallTimeout:
         outcome = "provider_call_timeout"
         raise
-    except MalformedReviewAnswer:
+    except MalformedReviewAnswer as exc:
         # The transport succeeded and the model answered; our translation
         # rejected the answer. Naming it here keeps the phase event honest —
         # `callback_error` made a served-but-unusable answer look like a
         # transport fault, which is how the 2026-11-07 run was misdiagnosed.
+        #
+        # The constraint identifier names WHICH check failed, so the specific
+        # defect is recorded rather than only "malformed".
         outcome = "malformed_answer"
+        malformed_constraint = getattr(exc, "constraint", None)
         raise
     except PrivacyReviewRequired:
         outcome = "privacy"
@@ -1946,7 +1958,8 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
         raise
     finally:
         if events is not None:
-            events.end_phase(phase, outcome, timeout, loop.time() - phase_started)
+            events.end_phase(phase, outcome, timeout, loop.time() - phase_started,
+                             constraint=malformed_constraint)
 
 
 async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
