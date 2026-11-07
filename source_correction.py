@@ -1991,6 +1991,20 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 if changes:
                     commentary = ("Correction " + " and ".join(changes)
                                   + "; the complete result was reviewed again. " + commentary)
+                # A repair edit can reintroduce a provenance marker: measured on
+                # Conservative website run ``ebab2e2f`` (2026-11-07), the
+                # delivered education line read
+                # ``SYNTHETIC-ONLY Inland Records Institute -- Fife, WA``. The
+                # marker is fixture metadata, never a resume fact, so the
+                # invariant is enforced once at the approval point rather than
+                # trusting every edit path to uphold it.
+                from source_preservation import (
+                    _PROVENANCE_MARKERS as _MARKERS,
+                    _render_sections as _render,
+                    _split_sections as _split,
+                )
+                if any(marker in markdown for marker in _MARKERS):
+                    markdown = _render(_split(markdown))
                 return CorrectionResult(
                     "approved", markdown, None,
                     commentary,
