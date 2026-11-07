@@ -11,14 +11,14 @@ This module provides a robust way to interact with OpenRouter API:
 
 import json
 import time
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Iterator
 import requests
 from config import settings
 
 TokenCallback = Callable[[str], None]
 
 
-def _iter_sse_lines_utf8(response) -> List[str]:
+def _iter_sse_lines_utf8(response) -> Iterator[str]:
     """Yield decoded SSE lines, decoding UTF-8 explicitly.
 
     ``requests`` sets ``response.encoding`` from the Content-Type charset, and for a
@@ -28,36 +28,27 @@ def _iter_sse_lines_utf8(response) -> List[str]:
     non-ASCII character became mojibake: an en dash arrived as ``â€“``, a
     non-breaking hyphen as ``â€'``.
 
-    Server-Sent Events are defined as UTF-8, so decode that way and only fall back
-    when the bytes are genuinely not valid UTF-8. A lossy conversion is never applied
-    to text that already decoded correctly, so legitimate names and accented words
-    are left intact.
+    Server-Sent Events are defined as UTF-8. Reject undecodable bytes instead of
+    replacing them and potentially accepting corrupted structured content.
 
-    A response object that exposes no byte stream (a test double, or an already
-    decoded body) is read through ``iter_lines`` as before.
+    Decode each complete line explicitly while leaving the response incremental.
+    ``iter_lines`` joins split byte chunks before yielding a line. Content-only
+    response doubles use the same requests line splitter through an adapter.
     """
-    if not hasattr(response, "iter_content"):
-        return list(response.iter_lines(decode_unicode=True))
+    if hasattr(response, "iter_lines"):
+        lines = response.iter_lines(decode_unicode=False)
+    else:
+        class ContentAdapter:
+            def iter_content(self, chunk_size, decode_unicode=False):
+                return response.iter_content(chunk_size=chunk_size)
 
-    chunks: List[bytes] = []
-    for raw in response.iter_content(chunk_size=8192):
-        if not raw:
-            continue
-        chunks.append(raw)
+        lines = requests.Response.iter_lines(ContentAdapter(), decode_unicode=False)
 
-    blob = b"".join(chunks)
-    if not blob:
-        return []
-
-    try:
-        text = blob.decode("utf-8")
-    except UnicodeDecodeError:
-        # Not UTF-8 after all (or truncated mid-character on a bad connection).
-        # Replacing undecodable bytes is the only remaining honest option, and it is
-        # confined to this already-invalid stream.
-        text = blob.decode("utf-8", errors="replace")
-
-    return text.splitlines()
+    for raw in lines:
+        if isinstance(raw, bytes):
+            yield raw.decode("utf-8")
+        else:
+            yield raw
 
 
 class OpenRouterSafeClient:
@@ -221,7 +212,9 @@ class OpenRouterSafeClient:
             fallback_models: Optional list of models to try if primary fails
             timeout: HTTP read timeout in seconds for each attempt
             stream: When True, use SSE streaming and accumulate content
-            on_token: Optional callback invoked with each content delta (stream only)
+            on_token: Optional callback invoked with each content delta (stream only).
+                Such deltas are provisional until the result reports success. Once
+                invoked, failures do not retry another model to avoid mixing output.
             response_format: Provider structured-output request, e.g.
                 ``{"type": "json_object"}``. Forwarded verbatim. It was previously
                 accepted by the adapter but never placed on the wire, so every
@@ -265,6 +258,7 @@ class OpenRouterSafeClient:
         last_error = None
         for attempt, model_id in enumerate(models_to_try, 1):
             print(f"\n🔄 Attempt {attempt}/{len(models_to_try)}")
+            emitted_tokens = False
 
             # Verify model is available
             if not self._is_model_available(model_id):
@@ -304,14 +298,10 @@ class OpenRouterSafeClient:
                     if response.status_code == 200:
                         content_parts: List[str] = []
                         usage: Dict[str, Any] = {}
-                        # Decode the stream ourselves instead of relying on
-                        # ``iter_lines(decode_unicode=True)``. That helper uses the
-                        # response's inferred encoding, and ``requests`` infers
-                        # ISO-8859-1 for a ``text/*`` content type with no charset —
-                        # which is exactly what OpenRouter returns. UTF-8 punctuation
-                        # therefore arrived as mojibake ("03/2020 â<80><93> Present"),
-                        # and those corrupted bytes travelled into the writer draft
-                        # and through to the reviewer. SSE is UTF-8 by specification.
+                        finish_reason = None
+                        stream_error = None
+                        # requests may infer ISO-8859-1 for text/event-stream;
+                        # SSE is UTF-8 regardless of the inferred charset.
                         for raw_line in _iter_sse_lines_utf8(response):
                             if not raw_line:
                                 continue
@@ -319,34 +309,80 @@ class OpenRouterSafeClient:
                             if not line.startswith("data:"):
                                 continue
                             data_str = line[5:].strip()
-                            if not data_str or data_str == "[DONE]":
+                            if not data_str:
                                 continue
+                            if data_str == "[DONE]":
+                                break
                             try:
                                 chunk = json.loads(data_str)
-                            except Exception:
-                                continue
+                            except (ValueError, TypeError):
+                                stream_error = "Malformed stream event"
+                                break
+                            if not isinstance(chunk, dict):
+                                stream_error = "Malformed stream event"
+                                break
+                            if chunk.get("error") is not None:
+                                stream_error = "Provider stream error"
+                                break
                             if chunk.get("usage"):
                                 usage = chunk["usage"]
                             choices = chunk.get("choices") or []
                             if not choices:
                                 continue
-                            delta = (choices[0].get("delta") or {}).get("content") or ""
+                            if not isinstance(choices, list) or not isinstance(choices[0], dict):
+                                stream_error = "Malformed stream event"
+                                break
+                            choice = choices[0]
+                            delta = (choice.get("delta") or {}).get("content") or ""
                             if not delta:
-                                delta = ((choices[0].get("message") or {}).get("content")) or ""
+                                delta = ((choice.get("message") or {}).get("content")) or ""
                             if delta:
+                                if not isinstance(delta, str) or finish_reason is not None:
+                                    stream_error = "Malformed stream event"
+                                    break
                                 content_parts.append(delta)
                                 if on_token:
+                                    # The callback may publish before raising; assume it did.
+                                    emitted_tokens = True
                                     try:
                                         on_token(delta)
                                     except Exception:
                                         pass
+                            reason = choice.get("finish_reason")
+                            if reason is not None:
+                                if finish_reason is not None and reason != finish_reason:
+                                    stream_error = "Conflicting stream finish status"
+                                    break
+                                finish_reason = reason
                         content = "".join(content_parts)
-                        if content.strip():
+                        if stream_error:
+                            last_error = stream_error
+                        elif finish_reason is None:
+                            last_error = "Missing stream finish status"
+                        elif finish_reason != "stop":
+                            last_error = "Incomplete or failed stream"
+                        elif not content.strip():
+                            last_error = "Empty stream content"
+                        elif response_format and response_format.get("type") == "json_object":
+                            try:
+                                def reject_constant(_value):
+                                    raise ValueError("Invalid JSON constant")
+                                parsed = json.loads(content, parse_constant=reject_constant)
+                                if not isinstance(parsed, dict):
+                                    raise ValueError("Expected JSON object")
+                            except (ValueError, TypeError):
+                                last_error = "Invalid stream JSON object"
+                            else:
+                                last_error = None
+                        else:
+                            last_error = None
+                        if last_error is None:
                             print(f"   ✅ Stream success ({len(content)} chars)")
                             data = {
                                 "id": f"stream-{model_id}",
                                 "model": model_id,
-                                "choices": [{"message": {"role": "assistant", "content": content}}],
+                                "choices": [{"message": {"role": "assistant", "content": content},
+                                             "finish_reason": finish_reason}],
                                 "usage": usage,
                             }
                             return {
@@ -355,7 +391,6 @@ class OpenRouterSafeClient:
                                 "model_used": model_id,
                                 "content": content,
                             }
-                        last_error = "Empty stream content"
                         print(f"   ⚠️  {last_error}")
                     elif response.status_code == 429:
                         last_error = "Rate limit exceeded (429)"
@@ -371,6 +406,8 @@ class OpenRouterSafeClient:
                     else:
                         last_error = f"HTTP {response.status_code}"
                         print(f"   ⚠️  {last_error}")
+                    if emitted_tokens:
+                        break
                     continue
 
                 response = requests.post(
@@ -440,6 +477,8 @@ class OpenRouterSafeClient:
             except Exception:
                 last_error = "Provider request failed"
                 print(f"   💥 {last_error}")
+            if emitted_tokens:
+                break
 
         # All attempts failed
         return {

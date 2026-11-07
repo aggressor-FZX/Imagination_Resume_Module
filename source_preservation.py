@@ -304,7 +304,10 @@ def source_quantified_facts(source_text: str) -> list[dict]:
     digit and share no meaning.
     """
     facts: list[dict] = []
-    for raw in (source_text or "").splitlines():
+    offset = 0
+    for raw in (source_text or "").splitlines(keepends=True):
+        line_offset = offset
+        offset += len(raw)
         line = _strip_markers(raw).strip().lstrip("-").strip()
         if not line:
             continue
@@ -316,6 +319,7 @@ def source_quantified_facts(source_text: str) -> list[dict]:
                 "unit": match.group("unit").lower(),
                 "source_line": line,
                 "qualifiers": _qualifier_words(line, match.start(), match.end()),
+                "offset": line_offset,
             })
     return facts
 
@@ -538,45 +542,42 @@ def _record_detail(raw: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def _employer_of(text: str, up_to: int) -> str:
-    """The most recent employer line above ``up_to``, normalised.
+    """Resolve the current marked or located employer; stop at unknown boundaries.
 
-    Used to keep a restoration inside the record it belongs to. A source bullet states an
-    accomplishment *for a particular employer*, and substituting it under a different
-    employer's heading moves a fact between records — the misattribution class the answer
-    key forbids, and something a figure-plus-unit match cannot see on its own.
-
-    Both record shapes are recognised, for the reason given on ``_record_head``: a source
-    extracted from a real ``.docx`` has no bold markers, so reading only bold lines
-    returned ``""`` for every line of such a source. An empty employer DISABLES the scoping
-    check in the caller, so attribution protection would have switched itself off silently
-    on exactly the input shape that reaches production, while continuing to work on the
-    hand-written fixtures.
-
-    Returns ``""`` when no employer line is found, which disables the scoping rather than
-    guessing at a boundary. At the top of a record that is the correct answer: a section
-    heading, not an employer, precedes the first role.
+    An empty result means unknown ownership, not permission to infer an owner.
     """
     prefix = text[:up_to]
-    for raw in reversed(prefix.splitlines()):
+    lines = prefix.splitlines()
+    if prefix and not prefix.endswith(("\n", "\r")):
+        lines = lines[:-1]
+    owner = ""
+    for index, raw in enumerate(lines):
         stripped = raw.strip()
         if not stripped:
             continue
-        bold = _BOLD_LINE.match(stripped)
-        if bold is not None:
-            return _strip_markers(bold.group("bold")).strip().casefold()
-        # A section heading ends the search: walking past it would return the PREVIOUS
-        # record's employer and scope a restoration to the wrong person's job.
-        if _bare_heading(stripped):
-            return ""
-        located = _LOCATION_SUFFIX.match(_strip_markers(stripped))
-        if located is not None:
-            head = located.group("head").strip()
-            if head and not head.startswith("-") and not head.endswith("."):
-                return head.casefold()
-    return ""
+        if _heading_of(raw) or _is_document_separator(stripped):
+            owner = ""
+            continue
+        head, _ = _record_head(raw)
+        if head is not None:
+            owner = head.casefold()
+            continue
+        # An unrecognised head immediately followed by a role is still a
+        # boundary, not evidence that the preceding employer owns this role.
+        following = next((line for line in lines[index + 1:] if line.strip()), "")
+        if _record_detail(following) is not None:
+            owner = ""
+        elif (not stripped.startswith(("-", "•")) and
+              _record_detail(raw) is None and not re.search(r"[.!?]$", stripped)):
+            # A bare, non-sentence line could be an unknown employer or layout
+            # boundary. Do not attach subsequent facts to the previous owner.
+            owner = ""
+    return owner
 
 
-def preserve_quantified_qualifiers(markdown: str, source_text: str) -> tuple[str, list[str]]:
+def preserve_quantified_qualifiers(markdown: str, source_text: str,
+                                   permitted_bridges: Optional[list[str]] = None
+                                   ) -> tuple[str, list[str]]:
     """Restore a quantified fact whose governing qualifier the draft lost.
 
     The rule is deliberately narrow, and every constraint below was added after a measured
@@ -600,10 +601,13 @@ def preserve_quantified_qualifiers(markdown: str, source_text: str) -> tuple[str
         return markdown, []
 
     by_key: dict[tuple[str, str], list[dict]] = {}
+    records = _source_experience_records(source_text)
+    repeated = {r["head"].casefold() for r in records
+                if sum(other["head"].casefold() == r["head"].casefold()
+                       for other in records) > 1}
     for fact in facts:
         fact = dict(fact)
-        fact["employer"] = _employer_of(source_text,
-                                        source_text.find(fact["source_line"]))
+        fact["employer"] = _employer_of(source_text, fact["offset"])
         by_key.setdefault((fact["value"].rstrip("+"), fact["unit"]), []).append(fact)
 
     changes: list[str] = []
@@ -613,7 +617,8 @@ def preserve_quantified_qualifiers(markdown: str, source_text: str) -> tuple[str
         stripped = raw.strip()
         line_employer = _employer_of(markdown, offset)
         offset += len(raw)
-        if not stripped or stripped.startswith("#") or _BOLD_LINE.match(stripped) \
+        if line_employer in repeated or _contains_permitted_bridge(stripped, permitted_bridges) \
+            or not stripped or stripped.startswith("#") or _BOLD_LINE.match(stripped) \
                 or _ITALIC_LINE.match(stripped) or _is_date_record_line(stripped):
             out_lines.append(raw)
             continue
@@ -642,7 +647,7 @@ def _qualifier_repair_for(line: str, by_key: dict[tuple[str, str], list[dict]],
         key = (match.group("value").rstrip("+"), match.group("unit").lower())
         qualifying: list[str] = []
         for fact in by_key.get(key, []):
-            if employer and fact["employer"] and fact["employer"] != employer:
+            if not employer or not fact["employer"] or fact["employer"] != employer:
                 # A different record's accomplishment. Never transplanted.
                 continue
             lost = {_stem(word) for word in fact["qualifiers"]} - words_here
@@ -799,21 +804,39 @@ def _source_experience_records(source_text: str) -> list[dict]:
                                   "professional experience", "experience",
                                   "work experience"):
         current: dict | None = None
-        for raw in section["lines"]:
+        lines = section["lines"]
+        for index, raw in enumerate(lines):
+            value = _strip_markers(raw).strip()
+            if not value:
+                continue
+            if _is_document_separator(value):
+                current = None
+                continue
             head, location = _record_head(raw)
             if head is not None:
                 current = {"head": head, "location": location,
                            "detail": "", "bullets": []}
                 records.append(current)
                 continue
+            following = next((line for line in lines[index + 1:] if line.strip()), "")
+            if _record_detail(following) is not None:
+                current = None
+                continue
             if current is None:
                 continue
             detail = _record_detail(raw)
             if detail is not None:
-                current["detail"] = detail
+                if (current["detail"] or "|" not in detail or
+                        not re.search(r"\d", detail.split("|", 1)[1])):
+                    current = None
+                else:
+                    current["detail"] = detail
                 continue
-            value = _strip_markers(raw).strip()
-            if value.startswith("-") and not _is_document_separator(value):
+            if not value.startswith("-") and not re.search(r"[.!?]$", value):
+                current = None
+                continue
+            if current["detail"] and (value.startswith("-") or
+                                      re.search(r"[.!?]$", value)):
                 current["bullets"].append(value.lstrip("-").strip())
     return [r for r in records if r["head"] and r["detail"]]
 
@@ -1218,20 +1241,24 @@ def _source_bullets(source_text: str) -> list[str]:
 
 
 def _source_bullets_with_employer(source_text: str) -> list[tuple[str, str]]:
-    """``(bullet, employer)`` for each Markdown source bullet.
-
-    The employer is the most recent record heading above the bullet. An empty
-    employer means ownership could not be established; a caller must not use
-    that bullet for an automatic substitution.
-    """
-    out: list[tuple[str, str]] = []
+    """Index complete extracted records and retain legacy marked-bullet input."""
+    out = [(bullet, record["head"].casefold())
+           for record in _source_experience_records(source_text)
+           for bullet in record["bullets"]]
+    indexed = set(out)
     offset = 0
+    section = None
     for raw in (source_text or "").splitlines(keepends=True):
         stripped = raw.strip()
-        if stripped.startswith("-"):
+        heading = _heading_of(raw)
+        if heading:
+            section = heading[0].lower()
+        if (stripped.startswith("-") and not _is_document_separator(stripped)
+                and (section is None or section in ("professional experience", "experience", "work experience"))):
             text = _strip_markers(stripped).lstrip("-").strip()
-            if text:
-                out.append((text, _employer_of(source_text, offset)))
+            pair = (text, _employer_of(source_text, offset))
+            if text and pair not in indexed:
+                out.append(pair)
         offset += len(raw)
     return out
 
@@ -1330,6 +1357,48 @@ def _ungrounded_words(text: str, source_words: set[str],
     return found
 
 
+def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[str]],
+                                  source_words: set[str], source_stems: set[str]
+                                  ) -> str | None:
+    """Remove a separable, lexically ungrounded clause without erasing a bridge.
+
+    Only comma-delimited or coordinated participial clauses are considered. The
+    original activity and each retained clause stay verbatim; this is not a
+    semantic verdict on claims that share source vocabulary or lack a boundary.
+    """
+    boundaries = list(re.finditer(r",\s+|\s+and\s+(?=[a-z][a-z'-]*ing\b)", line))
+    if not boundaries:
+        return None
+    prefix = line[:boundaries[0].start()]
+    if _ungrounded_words(_without_permitted_bridges(prefix, permitted_bridges),
+                         source_words, source_stems):
+        return None
+    segments = []
+    for index, boundary in enumerate(boundaries):
+        end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(line)
+        segments.append((boundary.group(), line[boundary.end():end]))
+    # Do not delete a clause carrying a bridge, even if it contains other words.
+    # Those inseparable claims are outside this narrow text correction.
+    removed = False
+    kept = prefix
+    kept_clause = False
+    for separator, clause in segments:
+        if (not _contains_permitted_bridge(clause, permitted_bridges)
+                and _ungrounded_words(clause, source_words, source_stems)):
+            removed = True
+            continue
+        if not kept_clause and separator.lstrip().startswith("and"):
+            kept += ", " + clause
+        else:
+            kept += separator + clause
+        kept_clause = True
+    if not removed or not _contains_permitted_bridge(kept, permitted_bridges):
+        return None
+    if line.rstrip().endswith(".") and not kept.rstrip().endswith("."):
+        kept = kept.rstrip() + "."
+    return kept
+
+
 def preserve_experience_bullets(markdown: str, source_text: str,
                                 permitted_bridges: Optional[list[str]] = None
                                 ) -> tuple[str, list[str]]:
@@ -1374,46 +1443,57 @@ def preserve_experience_bullets(markdown: str, source_text: str,
     * A bullet whose PREFIX is itself ungrounded is the writer's own paraphrase
       with an appended clause. Existing tests pin that class as a reviewer/writer
       concern, not a deterministic preservation one, so it is left untouched.
-    * Only a Markdown-bullet source line can be matched. A DOCX-style extraction
-      has no bullet markers, so this rule leaves that format to the reviewer.
-    * A clause that is (or contains) a validated, mode-permitted skill bridge is
-      left for the semantic reviewer. A lexical check cannot see intent, and
-      erasing an authorised inferred label would delete legitimate content.
+        * Plain paragraphs are indexed only within a recognisable, dated experience
+            record. Incomplete or ambiguous structures are left for review.
+        * A permitted bridge survives a separable, lexically ungrounded outcome
+            clause being removed. Inseparable claims still require semantic review.
 
-    A correction always substitutes the candidate's own source line. It never
-    truncates or composes a new sentence, which would be prose generation and
-    would produce a line that exists in neither the draft nor the source.
+        Otherwise a correction substitutes the candidate's own source line. Bridge
+        corrections retain the draft's existing activity and bridge wording.
     """
     source_words = {w.lower() for w in
                     re.findall(r"[A-Za-z][A-Za-z\-]+", source_text or "")
                     if len(w) > 3}
     source_stems = _stemmed_words(source_text or "")
     scoped_bullets = _source_bullets_with_employer(source_text)
-    source_figures = _numeric_qualifiers(source_text)
+    records = _source_experience_records(source_text)
+    repeated = {r["head"].casefold() for r in records
+                if sum(other["head"].casefold() == r["head"].casefold()
+                       for other in records) > 1}
+    structured_source = any(_record_head(line)[0] is not None
+                            for line in source_text.splitlines())
+    structured_draft = any(_record_head(line)[0] is not None
+                           for line in markdown.splitlines())
 
     out_lines: list[str] = []
     changes: list[str] = []
     draft_offset = 0
+    section = None
     for raw in markdown.splitlines(keepends=True):
         stripped = raw.strip()
-        if not stripped.startswith("-"):
+        heading = _heading_of(raw)
+        if heading:
+            section = heading[0].lower()
+        if (not stripped.startswith("-") or _is_document_separator(stripped)
+                or (section is not None and section not in
+                    ("professional experience", "experience", "work experience"))):
             draft_offset += len(raw)
             out_lines.append(raw)
             continue
         # Ownership scoping. A source bullet from a DIFFERENT employer must
         # never be substituted into this draft bullet -- that would move a fact
-        # between records. When the source has only one employer (or none is
-        # marked at all), ownership is unambiguous and the rule may act. When
-        # there are several employers and this draft bullet's owner cannot be
-        # established, leave it for the reviewer rather than guessing.
+        # between records. Unknown ownership in a structured source or draft
+        # must be left for review; legacy unstructured marked bullets remain
+        # supported only when neither side contains employer records.
         draft_employer = _employer_of(markdown, draft_offset)
         draft_offset += len(raw)
         source_employers = {employer for _, employer in scoped_bullets
                             if employer}
-        if len(source_employers) > 1 and not draft_employer:
+        if (draft_employer in repeated or
+            (not draft_employer and (source_employers or structured_source or structured_draft))):
             out_lines.append(raw)
             continue
-        if draft_employer and source_employers:
+        if draft_employer and (source_employers or structured_source):
             candidates = [text for text, employer in scoped_bullets
                           if employer == draft_employer]
         else:
@@ -1439,6 +1519,20 @@ def preserve_experience_bullets(markdown: str, source_text: str,
         bullet_figures = _numeric_qualifiers(bullet)
         # A different source figure is a transplant. Leave it for the reviewer.
         transplanted = bool(draft_figures - bullet_figures)
+        if _contains_permitted_bridge(stripped, permitted_bridges):
+            # A mixed clause is corrected only when its source activity is
+            # matched and its figures are unchanged. Never replace the bridge
+            # with a whole source line or hide a figure transplant.
+            trimmed = None
+            if draft_figures == bullet_figures:
+                trimmed = _trim_unshared_bridge_outcome(
+                    stripped, permitted_bridges, source_words, source_stems)
+            if trimmed is not None:
+                out_lines.append(f"{indent}{trimmed}{newline}")
+                changes.append("removed an unsupported appended clause")
+            else:
+                out_lines.append(raw)
+            continue
         if not transplanted and bullet_figures - draft_figures:
             out_lines.append(f"{indent}- {bullet}{newline}")
             changes.append("restored a dropped material qualifier")
@@ -1447,12 +1541,7 @@ def preserve_experience_bullets(markdown: str, source_text: str,
         if comma > 0 and not transplanted:
             prefix = stripped[:comma]
             clause = stripped[comma + 1:]
-            # A permitted inferred label is authorised for semantic review, but
-            # ONLY for its exact phrase. It must not shield an unsupported
-            # outcome sitting beside it in the same clause ("applying trend
-            # analysis and ensuring accurate reporting"). Remove the label from
-            # the clause before judging the rest; if the remainder still
-            # introduces ungrounded content, the whole bullet is corrected.
+            # Judge the trailing clause against the full source vocabulary.
             residual = _without_permitted_bridges(clause, permitted_bridges)
             # No figure exemption: a faithful paraphrase that restates a source
             # number introduces no ungrounded content word, while an invented
@@ -1512,7 +1601,8 @@ def preserve_source_facts(
                  preserve_skills_block,
                  preserve_empty_source_sections,
                  ensure_required_headings):
-        if step in (preserve_skills_block, preserve_experience_bullets):
+        if step in (preserve_skills_block, preserve_experience_bullets,
+                preserve_quantified_qualifiers):
             # Both rules understand the bridge exception: an authorised inferred
             # label must survive to semantic review. Every other rule keeps its
             # original source-only contract.

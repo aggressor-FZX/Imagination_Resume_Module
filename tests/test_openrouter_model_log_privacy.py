@@ -54,9 +54,11 @@ def test_availability_fallback_and_success_are_private(monkeypatch, capsys, capl
         def json(self):
             return {"model": USED, "choices": [{"message": {"content": "safe response"}}]}
 
-        def iter_lines(self, decode_unicode=True):
-            yield 'data: {"choices":[{"delta":{"content":"safe response"}}]}'
-            yield "data: [DONE]"
+        def iter_lines(self, decode_unicode=False):
+            assert decode_unicode is False
+            yield b'data: {"choices":[{"delta":{"content":"safe response"},"finish_reason":null}]}'
+            yield b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}'
+            yield b"data: [DONE]"
 
     monkeypatch.setattr("openrouter_safe_client.requests.get", lambda *a, **kw: ModelResponse())
     calls = []
@@ -75,6 +77,33 @@ def test_availability_fallback_and_success_are_private(monkeypatch, capsys, capl
     assert calls == [FALLBACK]
     assert tokens == (["safe response"] if stream else [])
     assert_private(capsys, caplog)
+
+
+def test_content_only_stream_splits_utf8_incrementally():
+    from openrouter_safe_client import _iter_sse_lines_utf8
+
+    class Response:
+        def iter_content(self, chunk_size=8192):
+            yield b'data: caf\xc3'
+            yield b'\xa9\n\ndata: next\n'
+            raise AssertionError("read ahead past the requested lines")
+
+    lines = _iter_sse_lines_utf8(Response())
+    assert next(lines) == "data: café"
+    assert next(lines) == ""
+    assert next(lines) == "data: next"
+
+
+@pytest.mark.parametrize("chunks", [[b'data: \xff\n'], [b'data: \xc3']])
+def test_content_only_stream_rejects_invalid_utf8(chunks):
+    from openrouter_safe_client import _iter_sse_lines_utf8
+
+    class Response:
+        def iter_content(self, chunk_size=8192):
+            yield from chunks
+
+    with pytest.raises(UnicodeDecodeError):
+        list(_iter_sse_lines_utf8(Response()))
 
 
 def test_timeout_does_not_log_or_return_model(monkeypatch, capsys, caplog):

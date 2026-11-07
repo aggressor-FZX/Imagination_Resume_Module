@@ -47,8 +47,8 @@ deterministic layer that corrects writer output BEFORE review. It now:
 * restores a bullet that dropped a numeric qualifier, including a spelled-out
   number such as "four quarters";
 * leaves a faithful paraphrase untouched -- verbatim copying is NOT required;
-* refuses a figure transplant, a DOCX-style source, and a bullet whose prefix
-  is itself ungrounded, so no gate is weakened.
+* refuses a figure transplant, an unstructured plain-text source, and a bullet
+    whose prefix is itself ungrounded, so no gate is weakened.
 
 These tests assert the DESIRED behavior on the exact retained failing output:
 it must be corrected, not merely characterized as currently accepted. The
@@ -232,8 +232,8 @@ def test_a_figure_transplant_is_left_for_the_reviewer():
     assert changes == []
 
 
-def test_a_docx_style_source_is_left_to_the_reviewer():
-    """No Markdown bullet markers means this rule does not apply."""
+def test_an_unstructured_plain_source_is_left_to_the_reviewer():
+    """A plain paragraph without an identifiable record is not attributed."""
     source = "Performed preventive maintenance on shop welding equipment.\n"
     draft = "- Performed preventive maintenance on shop welding equipment, ensuring uptime.\n"
     out, changes = sp.preserve_experience_bullets(draft, source)
@@ -282,10 +282,8 @@ def test_a_permitted_skill_bridge_survives_experience_bullet_correction():
 def test_a_permitted_bridge_does_not_authorise_an_outcome_in_the_same_bullet():
     """The bridge exemption is phrase-scoped, not clause-scoped.
 
-    A validated label may stand, but it must not shield an unsupported outcome
-    sitting beside it. The whole bullet is corrected from the candidate's own
-    source line, so neither the invented outcome nor the inferred label is
-    silently approved by a lexical rule.
+    A validated label may stand, but it must not shield a separable unsupported
+    outcome sitting beside it. The activity and permitted bridge both survive.
     """
     source = ("**SYNTHETIC-ONLY Acme Corp**\n"
               "- SYNTHETIC-ONLY Compared weekly sales figures across 12 branches.\n")
@@ -296,8 +294,34 @@ def test_a_permitted_bridge_does_not_authorise_an_outcome_in_the_same_bullet():
         draft, source, permitted_bridges=["trend analysis"])
     assert "ensuring accurate reporting" not in out
     assert "removed an unsupported appended clause" in changes
-    # The candidate's real activity survives, verbatim from the source.
-    assert "Compared weekly sales figures across 12 branches." in out
+    assert "Compared weekly sales figures across 12 branches" in out
+    assert "applying trend analysis" in out
+
+
+@pytest.mark.parametrize("suffix", [
+    "applying trend analysis and ensuring accurate reporting.",
+    "ensuring accurate reporting and applying trend analysis.",
+    "applying trend analysis, ensuring accurate reporting.",
+])
+def test_separable_outcome_is_removed_without_erasing_bridge(suffix):
+    source = ("**Acme Corp**\n"
+              "- Compared weekly sales figures across 12 branches.\n")
+    draft = ("**Acme Corp**\n- Compared weekly sales figures across 12 branches, "
+             + suffix + "\n")
+    out, changes = sp.preserve_experience_bullets(draft, source, ["trend analysis"])
+    assert "ensuring accurate reporting" not in out
+    assert "applying trend analysis" in out
+    assert "Compared weekly sales figures across 12 branches" in out
+    assert changes == ["removed an unsupported appended clause"]
+
+
+def test_grounded_outcome_and_permitted_bridge_are_preserved_together():
+    source = ("**Acme Corp**\n"
+              "- Compared weekly sales figures across 12 branches.\n"
+              "- Prepared accurate reporting.\n")
+    draft = ("**Acme Corp**\n- Compared weekly sales figures across 12 branches, "
+             "applying trend analysis and ensuring accurate reporting.\n")
+    assert sp.preserve_experience_bullets(draft, source, ["trend analysis"]) == (draft, [])
 
 
 def test_a_permitted_bridge_alone_is_not_erased():
@@ -398,6 +422,7 @@ def test_bridge_plus_outcome_through_the_correction_path_is_not_approved():
         draft, source, permitted_bridges=["trend analysis"])
     assert "ensuring accurate reporting" not in preserved, (
         "preservation let the unsupported outcome through")
+    assert "trend analysis" in preserved
 
     class ApprovingReviewer:
         """Marks every line supported -- the observed false-approval mode."""
@@ -442,6 +467,7 @@ def test_bridge_plus_outcome_through_the_correction_path_is_not_approved():
         "the unsupported outcome reached the delivered text")
     assert "Compared weekly sales figures across 12 branches" in delivered or (
         result.status == "withheld")
+    assert "trend analysis" in delivered or result.status == "withheld"
 
 
 # --- 5. The observed case is real (retained evidence) ----------------------

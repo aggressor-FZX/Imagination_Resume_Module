@@ -1,3 +1,41 @@
+# Local preservation checkpoint — uncommitted, 2026-11-06
+
+## Active branch and last commit
+
+- Worktree `resumeDraft_fix`, branch `resumeDraft_fix`, HEAD `05e9c04`, nine commits ahead of `origin/resumeDraft_fix`. No commit or deployment was made for this checkpoint, at user request.
+
+## Completed
+
+- [x] Reproduced the three adjacent failures: two mixed bridge/outcome cases and an obsolete extracted-format assertion.
+- [x] For an identified same-owner source bullet with matching figures, remove separable lexically ungrounded outcome clauses while retaining the candidate activity and permitted bridge. Added paired bridge-only/bridge-plus-outcome, grounded-outcome, ordering, correction-path, and PDF-loader controls.
+- [x] Updated the extracted-format expectation only for the observed repairs; two other outcome clauses remain outside the lexical rule's scope.
+- [x] Offline broad suite: 1508 passed, 13 skipped; loader suite: 17 passed, with two pytest configuration warnings. `git diff --check` passed.
+
+## Remaining / next steps
+
+1. Review the uncommitted diff, including the prior extracted-record and ownership changes. Do not commit or deploy without user authorization.
+2. Mixed claims that are inseparable, share source vocabulary, lack reliable ownership, or involve transplanted/dropped figures are not deterministically resolved by this narrow rule. They may still be left to semantic review; the scripted false-approval test covers the separable case only. Investigate explicit fail-closed handling before claiming general bridge/outcome safety.
+3. Live customer workflow, actual downloads, and representative additional documents remain unverified. The PDF fixture is digitally generated, not an OCR or complex-layout test; the DOCX fixtures remain frozen.
+
+## Uncommitted / dirty files
+
+- Modified: `source_preservation.py`, `tests/test_exported_outcome_wording_regression.py`, `tests/test_extracted_source_format.py`, `tests/test_loader_source_preservation_offline.py`, and this `HANDOFF.md`.
+- Untracked: `tests/test_extracted_ownership_safety.py` (current offline safety regressions) and pre-existing `scripts/` (not examined or staged). All are intentionally unstaged per user request.
+
+## Verification commands
+
+Run from `/home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix`:
+
+```sh
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/Loader/.venv/bin/python -m pytest tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -q -o addopts='' -p no:cacheprovider --ignore=tests/test_loader_source_preservation_offline.py
+git diff --check
+```
+
+The main environment lacks PyMuPDF; the existing loader environment provides it but lacks pytest-asyncio, producing two configuration warnings for its focused run.
+
+---
+
 # Session 14 — partial repair; customer credentials unavailable
 
 ## Verification commands (offline; no provider traffic)

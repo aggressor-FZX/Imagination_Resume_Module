@@ -1,9 +1,8 @@
 """Offline Loader-to-preservation checks; no model, network, or fixture writes.
 
 The frozen DOCX files are read directly. The two-page synthetic PDF is created
-only in pytest's temporary directory. Strict xfails document desired behavior
-that the current deterministic preservation layer does not provide; they are
-not claims about the separate semantic reviewer or the complete pipeline.
+only in pytest's temporary directory. These tests are not claims about the
+separate semantic reviewer or the complete pipeline.
 """
 from __future__ import annotations
 
@@ -125,16 +124,15 @@ def test_docx_ownership_can_be_restored_from_exact_role_and_dates(docx_source):
     assert "restored the source's employer and role records" in changes
 
 
-def test_docx_exact_bullet_alone_does_not_identify_placeholder_current_behavior(docx_source):
+def test_docx_exact_bullet_alone_identifies_placeholder(docx_source):
     bullet = "Reconciled 1,180 fuel invoices against depot dispensing records each quarter."
     draft = _draft("Current Employer", "Tacoma, WA", "Analyst |", bullet)
     output, changes = sp.preserve_source_facts(draft, docx_source)
     assert bullet in docx_source and bullet in output
-    assert "**Current Employer**" in output
-    assert "restored the source's employer and role records" not in changes
+    assert "**Harborline Transit Authority**" in output
+    assert "restored the source's employer and role records" in changes
 
 
-@pytest.mark.xfail(strict=True, reason="DOCX paragraph extraction loses bullet markers; exact bullet is not indexed for employer recovery")
 def test_docx_exact_bullet_should_identify_placeholder(docx_source):
     draft = _draft("Current Employer", "Tacoma, WA", "Analyst |",
                    "Reconciled 1,180 fuel invoices against depot dispensing records each quarter.")
@@ -169,7 +167,6 @@ def test_pdf_empty_skills_restore_extracted_facts(pdf_source):
     assert "Lockout/tagout" in output
 
 
-@pytest.mark.xfail(strict=True, reason="PDF plain text lacks bullet markers needed to recover the omitted number-word qualifier")
 def test_pdf_missing_four_quarters_should_be_restored(pdf_source):
     draft = _draft("Beta Power", "Kent, WA", "Technician | 01/2020 - Present",
                    "Compared quarterly inspections against historical records to set maintenance priorities.")
@@ -177,7 +174,6 @@ def test_pdf_missing_four_quarters_should_be_restored(pdf_source):
     assert "prior four quarters" in output
 
 
-@pytest.mark.xfail(strict=True, reason="PDF plain text lacks bullet markers needed to remove the unsupported appended clause")
 def test_pdf_unsupported_appended_clause_should_be_removed(pdf_source):
     draft = _draft("Beta Power", "Kent, WA", "Technician | 01/2020 - Present",
                    "Inspected electrical systems and maintained safety records, ensuring flawless regulatory compliance.")
@@ -185,7 +181,20 @@ def test_pdf_unsupported_appended_clause_should_be_removed(pdf_source):
     assert "flawless regulatory compliance" not in output
 
 
-def test_docx_missing_qualifier_and_unsupported_clause_current_behavior(docx_source):
+@pytest.mark.parametrize("suffix,removed", [
+    ("applying trend analysis and ensuring flawless regulatory compliance.", True),
+    ("applying trend analysis.", False),
+])
+def test_pdf_bridge_survives_with_or_without_separable_outcome(pdf_source, suffix, removed):
+    draft = _draft("Beta Power", "Kent, WA", "Technician | 01/2020 - Present",
+                   "Inspected electrical systems and maintained safety records, " + suffix)
+    output, changes = sp.preserve_source_facts(draft, pdf_source, ["trend analysis"])
+    assert "applying trend analysis" in output
+    assert "flawless regulatory compliance" not in output
+    assert ("removed an unsupported appended clause" in changes) is removed
+
+
+def test_docx_missing_qualifier_and_unsupported_clause_are_repaired(docx_source):
     missing = "Compared quarterly parts usage against historical records to set reorder points."
     unsupported = ("Reconciled 1,180 fuel invoices against depot dispensing records each quarter, "
                    "ensuring flawless regulatory compliance.")
@@ -196,12 +205,13 @@ def test_docx_missing_qualifier_and_unsupported_clause_current_behavior(docx_sou
     output, changes = sp.preserve_source_facts(draft, docx_source)
     assert "prior four quarters" in docx_source
     assert "flawless regulatory compliance" not in docx_source
-    assert missing in output and unsupported in output
-    assert "restored a dropped material qualifier" not in changes
-    assert "removed an unsupported appended clause" not in changes
+    assert missing not in output and unsupported not in output
+    assert "prior four quarters" in output
+    assert "flawless regulatory compliance" not in output
+    assert "restored a dropped material qualifier" in changes
+    assert "removed an unsupported appended clause" in changes
 
 
-@pytest.mark.xfail(strict=True, reason="DOCX paragraphs are not indexed as source bullets for dropped numeric qualifiers")
 def test_docx_missing_four_quarters_should_be_restored(docx_source):
     draft = _draft("Ridgeline Equipment Services", "Fife, WA", "Inventory Analyst | 08/2023 - Present",
                    "Compared quarterly parts usage against historical records to set reorder points.")
@@ -209,7 +219,6 @@ def test_docx_missing_four_quarters_should_be_restored(docx_source):
     assert "prior four quarters" in output
 
 
-@pytest.mark.xfail(strict=True, reason="DOCX paragraphs are not indexed as source bullets for unsupported appended clauses")
 def test_docx_unsupported_appended_clause_should_be_removed(docx_source):
     draft = _draft("Harborline Transit Authority", "Tacoma, WA", "Fuel Reporting Analyst | 04/2019 - Present",
                    "Reconciled 1,180 fuel invoices against depot dispensing records each quarter, ensuring flawless regulatory compliance.")

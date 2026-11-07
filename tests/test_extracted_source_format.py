@@ -442,19 +442,18 @@ def test_the_two_source_formats_produce_the_same_preservation_result():
     assert bare_out == marked_out
 
 
-def test_appended_outcome_clauses_are_NOT_repaired_here():
-    """[extracted-format] Explicit scope limit — this is not the semantic fix.
+def test_identifiable_extracted_records_repair_only_detectable_outcomes():
+    """[extracted-format] Structured plain records now allow scoped repairs.
 
-    Six bullets still append an outcome the source does not state. Deterministic
-    preservation is not a substitute for semantic review, and this test records that the
-    repair did not silently broaden into one.
+    Two ungrounded outcomes are removed, while the other two remain outside the
+    lexical rule's scope. This is not a general semantic fabrication check.
     """
-    out, _ = _preserved()
-    for clause in ("ensuring consistent uptime", "maintaining grid reliability",
-                   "improving safety compliance adherence", "ensuring system uptime"):
-        assert clause in out, (
-            f"{clause!r} should still be present: repairing outcome embellishment is a "
-            f"reviewer/writer change, not a preservation rule")
+    out, changes = _preserved()
+    for clause in ("maintaining grid reliability", "improving safety compliance adherence"):
+        assert clause in _draft() and clause not in out
+    for clause in ("ensuring consistent uptime", "ensuring system uptime"):
+        assert clause in out
+    assert changes.count("removed an unsupported appended clause") >= 2
 
 
 # ---------------------------------------------------------------------------
