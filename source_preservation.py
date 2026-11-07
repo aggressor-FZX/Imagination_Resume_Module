@@ -1429,6 +1429,36 @@ def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[st
     return kept
 
 
+# A purpose phrase ("to assess performance", "for budget oversight") is a
+# different shape from a participial outcome (", improving readiness"). The
+# purpose form is judged even when the prefix is a paraphrase, because the
+# infinitive itself marks the boundary. The participial form is judged only when
+# the prefix is fully grounded, which is the pre-existing, measured rule.
+_TRAILING_PURPOSE_BOUNDARY = re.compile(
+    r"\s+to\s+|\s+for\s+|\s+so\s+that\s+|\s+in\s+order\s+to\s+",
+    re.IGNORECASE,
+)
+_TRAILING_PARTICIPLE_BOUNDARY = re.compile(
+    r",\s+(?=[a-z][a-z'-]*(?:ing|ed)\b)|\s+and\s+(?=[a-z][a-z'-]*(?:ing|ed)\b)",
+    re.IGNORECASE,
+)
+
+
+def _trailing_purpose_boundaries(line: str) -> list[tuple[int, int, bool]]:
+    """Candidate ``(start, end, is_purpose)`` splits before a trailing phrase.
+
+    Returned rightmost-first so the smallest trailing segment is judged first.
+    A boundary is only a candidate: the caller still requires the trailing
+    segment to be ungrounded and to introduce no new source content before
+    removing anything.
+    """
+    spans = [(match.start(), match.end(), True)
+             for match in _TRAILING_PURPOSE_BOUNDARY.finditer(line or "")]
+    spans += [(match.start(), match.end(), False)
+              for match in _TRAILING_PARTICIPLE_BOUNDARY.finditer(line or "")]
+    return sorted(spans, reverse=True)
+
+
 def preserve_experience_bullets(markdown: str, source_text: str,
                                 permitted_bridges: Optional[list[str]] = None
                                 ) -> tuple[str, list[str]]:
@@ -1568,21 +1598,70 @@ def preserve_experience_bullets(markdown: str, source_text: str,
             out_lines.append(f"{indent}- {bullet}{newline}")
             changes.append("restored a dropped material qualifier")
             continue
-        comma = stripped.rfind(",")
-        if comma > 0 and not transplanted:
-            prefix = stripped[:comma]
-            clause = stripped[comma + 1:]
-            # Judge the trailing clause against the full source vocabulary.
-            residual = _without_permitted_bridges(clause, permitted_bridges)
-            # No figure exemption: a faithful paraphrase that restates a source
-            # number introduces no ungrounded content word, while an invented
-            # outcome does ("increased productivity by 4%"). Exempting any
-            # clause carrying a source number would admit the latter.
-            if (not _ungrounded_words(prefix, source_words, source_stems)
-                    and _ungrounded_words(residual, source_words, source_stems)):
-                out_lines.append(f"{indent}- {bullet}{newline}")
-                changes.append("removed an unsupported appended clause")
-                continue
+        # A trailing purpose/outcome segment is not always comma-delimited.
+        # Measured on the approved Conservative website run 845e8e80: the writer
+        # appended "to assess performance", "for budget oversight",
+        # "to track delivery disruptions" and "to optimize inventory" to faithful
+        # paraphrases, and the reviewer marked every line supported. The previous
+        # rule only looked at the last comma, so none of those were corrected.
+        # The rightmost boundary is used so the smallest trailing segment is
+        # judged; the prefix must still be fully grounded, and the trailing
+        # segment must introduce a content word the source never states.
+        if not transplanted:
+            bullet_stems = _stemmed_words(bullet)
+            # Judge the bullet's own text, not the Markdown marker, so a kept
+            # prefix is emitted with exactly one "- ".
+            body = stripped.lstrip("-").strip()
+            for start, end, is_purpose in _trailing_purpose_boundaries(body):
+                prefix = body[:start]
+                clause = body[end:]
+                # Judge the trailing clause against the full source vocabulary.
+                residual = _without_permitted_bridges(clause, permitted_bridges)
+                # No figure exemption: a faithful paraphrase that restates a
+                # source number introduces no ungrounded content word, while an
+                # invented outcome does ("increased productivity by 4%").
+                # Exempting any clause carrying a source number would admit the
+                # latter.
+                prefix_grounded = not _ungrounded_words(prefix, source_words, source_stems)
+                # A faithful paraphrase may also add a small qualifier in the
+                # prefix ("used weekly" for "review in the Monday meeting"). The
+                # trailing segment is still removable when the prefix clearly
+                # restates the matched source bullet, the segment shares no
+                # content with it, and the segment carries no figure. Removing a
+                # figure-bearing tail could drop a sourced fact, so it is left
+                # for review.
+                prefix_stems = _stemmed_words(prefix)
+                prefix_restates = len(prefix_stems & bullet_stems) >= 3
+                # A figure in the tail is only safe to drop when the prefix
+                # already carries it: then no sourced number is lost. A NEW
+                # figure in the tail ("reducing downtime by 27%") is left for
+                # review, because removing it could discard a sourced fact.
+                segment_figures = _numeric_qualifiers(clause)
+                # Content the tail shares with the source bullet is only
+                # acceptable when the prefix already carries it. Otherwise the
+                # tail is restating a sourced fact and must not be dropped.
+                new_source_content = ((_stemmed_words(clause) & bullet_stems)
+                                      - prefix_stems)
+                segment_is_foreign = (not new_source_content
+                                      and segment_figures <= _numeric_qualifiers(prefix))
+                # A participial tail is only judged when the prefix is fully
+                # grounded; that is the measured rule and it keeps a faithful
+                # paraphrase with a coordinated activity intact. A purpose
+                # infinitive marks its own boundary, so a paraphrase prefix that
+                # clearly restates the matched source bullet is enough there.
+                prefix_ok = prefix_grounded or (is_purpose and prefix_restates)
+                if (prefix_ok and segment_is_foreign
+                        and _ungrounded_words(residual, source_words, source_stems)):
+                    # Substitute the candidate's own source line. This module
+                    # never composes prose: a kept paraphrase prefix would be a
+                    # new sentence, and the provenance invariant requires every
+                    # changed line to be contiguous source text.
+                    out_lines.append(f"{indent}- {bullet}{newline}")
+                    changes.append("removed an unsupported appended clause")
+                    break
+            else:
+                out_lines.append(raw)
+            continue
         out_lines.append(raw)
     return "".join(out_lines), changes
 
