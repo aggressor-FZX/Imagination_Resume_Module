@@ -900,8 +900,8 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                     return True
         return False
 
-    def _joins_adjacent_source_lines(claim: dict[str, Any]) -> bool:
-        """True when the claim is a faithful join of ADJACENT source lines.
+    def _joins_adjacent_source_lines(claim: dict[str, Any]) -> dict[str, Any] | None:
+        """The source span this claim joins, or None when it is not a join.
 
         A claim that crosses a source line break cannot be cited at all. A
         citation must be an exact contiguous substring of the source, and the
@@ -937,22 +937,38 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         span = by_line[claim["line_id"]]["text"][claim["start"]:claim["end"]]
         needle = " ".join(_strip_provenance(span).split()).casefold()
         if not needle:
-            return False
-        for document in sources.values():
-            parts = [" ".join(_strip_provenance(line).split()).casefold()
-                     for line in document.splitlines()]
-            parts = [part for part in parts if part]
-            for start in range(len(parts)):
-                joined = parts[start]
-                for end in range(start + 1, len(parts)):
-                    joined = f"{joined} {parts[end]}"
+            return None
+        for source_id, document in sources.items():
+            # Track each line's real offsets so the returned citation is a
+            # genuine source span, not a synthesised one. The citation covers
+            # from the first joined line's start to the last joined line's end,
+            # which is exactly the region the draft line restates.
+            entries = []
+            position = 0
+            for raw in document.splitlines(keepends=True):
+                text = raw.rstrip("\r\n")
+                flat = " ".join(_strip_provenance(text).split()).casefold()
+                if flat:
+                    entries.append((flat, position, position + len(text)))
+                position += len(raw)
+            for start in range(len(entries)):
+                joined = entries[start][0]
+                for end in range(start + 1, len(entries)):
+                    joined = f"{joined} {entries[end][0]}"
                     if joined == needle:
-                        return True
+                        return {"source_id": source_id,
+                                "start": entries[start][1],
+                                "end": entries[end][2],
+                                "quote": document[entries[start][1]:entries[end][2]]}
                     if len(joined) > len(needle):
                         break
-        return False
+        return None
 
     upgraded_claims: set[str] = set()
+    # Claims upgraded specifically by the line-join rule. Tracked separately
+    # because the coverage upgrade below needs a different span test for them:
+    # a joined line CONTAINS its source items rather than equalling one.
+    join_upgraded: set[str] = set()
     for claim in response["claims"]:
         if claim["verdict"] not in {"uncertain", "unsupported"}:
             continue
@@ -968,11 +984,21 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
         # which is stronger evidence than a citation, not weaker.
         if _verbatim_in_cited_source(claim) or (
                 claim["verdict"] == "uncertain" and not claim["citations"]
-                and _whole_line_in_a_source(claim)) or (
-                claim["verdict"] == "unsupported" and not claim["citations"]
-                and _joins_adjacent_source_lines(claim)):
+                and _whole_line_in_a_source(claim)):
             claim["verdict"] = "supported"
             upgraded_claims.add(claim["id"])
+        elif claim["verdict"] == "unsupported" and not claim["citations"]:
+            joined = _joins_adjacent_source_lines(claim)
+            if joined is None:
+                continue
+            # Cite the real source region the draft line restates. The citation
+            # is not manufactured: it is the exact span of the source lines the
+            # claim joins, and the coverage check below requires it to COVER the
+            # inventory item before any mapping is accepted.
+            claim["verdict"] = "supported"
+            claim["citations"] = [joined]
+            upgraded_claims.add(claim["id"])
+            join_upgraded.add(claim["id"])
 
 
 
@@ -1004,18 +1030,59 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 return {"line_id": line["line_id"], "start": 0, "end": len(line["text"])}
         return None
 
+    def _joined_span(item: dict[str, Any]) -> dict[str, Any] | None:
+        """The draft line that CONTAINS this item as part of a line-join.
+
+        A joined line is not equal to any single source item, so
+        ``_verbatim_span`` cannot see it. This is the containment form, and it
+        is offered ONLY for a claim the line-join rule already upgraded — the
+        text has been verified against the source at that point, so this is
+        locating the item inside verified text, not asserting support.
+
+        The item's own quote must appear in the line, whitespace-normalised, so
+        an item whose text the line does not carry is still reported missing.
+        """
+        quote = " ".join(_strip_provenance(item["quote"]).split()).casefold()
+        if not quote:
+            return None
+        for line in lines:
+            text = " ".join(_strip_provenance(line["text"]).split()).casefold()
+            if quote and quote in text:
+                return {"line_id": line["line_id"], "start": 0,
+                        "end": len(line["text"])}
+        return None
+
     # Only ``uncertain`` is upgraded, and only when a claim THIS PASS upgraded
     # from a verbatim match carries the item. A ``missing`` verdict is the
     # reviewer asserting an omission; overriding it was measured to break six
     # withhold controls, including the negative control that proves an omitted
     # fact is never silently accepted. A withhold on a reviewer error is safe; a
     # false approval is not, so the engine keeps the withhold and reports it.
+    #
+    # The one addition is a ``missing`` mapping whose item is carried by a line
+    # the JOIN rule upgraded. That is not overriding an omission: the reviewer
+    # could not cite the line at all, so it reported the item missing for the
+    # same structural reason it reported the claim unsupported. The text has
+    # already been verified against the source, and the item's own quote is
+    # required to appear in it, so a genuinely absent item still withholds.
     for mapping in response["representations"]:
-        if mapping.get("status") != "uncertain":
+        status = mapping.get("status")
+        if status not in {"uncertain", "missing"}:
             continue
         item = next((entry for entry in inventory
                      if entry["id"] == mapping.get("source_claim_id")), None)
         if item is None:
+            continue
+        if status == "missing":
+            span = _joined_span(item)
+            if span is None:
+                continue
+            claim = claims_by_span.get((span["line_id"], span["start"],
+                                        span["end"]))
+            if claim is None or claim["id"] not in join_upgraded:
+                continue
+            mapping["status"] = "represented"
+            mapping["spans"] = [span]
             continue
         span = _verbatim_span(item)
         if span is None:

@@ -146,3 +146,70 @@ def test_a_join_of_non_adjacent_source_lines_is_refused():
                "substations.")
     claims, _, _ = _validate("unsupported", skipped, [])
     assert claims[0]["verdict"] == "unsupported"
+
+
+# ── 3. Coverage must follow the claim upgrade ──────────────────────────────
+
+def _coverage_review(verdict, text, status):
+    """A review whose claim verdict and coverage mapping are set independently."""
+    start = SOURCE.index("SYNTHETIC-ONLY Journeyman")
+    end = SOURCE.index("\n", start) + 1
+    return {
+        "claims": [{"id": f"L1:0:{len(text)}", "line_id": "L1", "start": 0,
+                    "end": len(text), "verdict": verdict, "citations": []}],
+        "representations": [{"source_claim_id": f"doc:{start}:{end}",
+                             "status": status, "spans": []}],
+    }, [{"id": f"doc:{start}:{end}", "source_id": "doc", "start": start,
+         "end": end, "quote": SOURCE[start:end], "classification": "required"}]
+
+
+def test_a_join_upgrade_also_resolves_the_coverage_mapping():
+    """Upgrading the claim alone left the run withheld.
+
+    The reviewer reports the item ``missing`` for the same structural reason it
+    reported the claim ``unsupported``: it cannot cite a line that crosses a
+    source line break. Upgrading only the claim left ``incomplete`` non-empty and
+    the run still withheld as ``source_completeness_uncertain``.
+    """
+    review, inventory = _coverage_review("unsupported", JOINED, "missing")
+    claims, incomplete, missing = sc._validate_review(
+        review, [{"line_id": "L1", "text": JOINED}], {"doc": SOURCE}, inventory)
+    assert claims[0]["verdict"] == "supported"
+    assert incomplete == set()
+    assert missing == []
+
+
+def test_the_join_upgrade_cites_the_real_source_region():
+    """The citation must be the actual source span, not a synthesised one."""
+    review, inventory = _coverage_review("unsupported", JOINED, "missing")
+    claims, _, _ = sc._validate_review(
+        review, [{"line_id": "L1", "text": JOINED}], {"doc": SOURCE}, inventory)
+    citation = claims[0]["citations"][0]
+    assert SOURCE[citation["start"]:citation["end"]] == citation["quote"]
+    assert "Journeyman electrician" in citation["quote"]
+    assert "facility operations" in citation["quote"]
+
+
+def test_a_missing_item_not_carried_by_the_joined_line_still_withholds():
+    """A genuinely absent item is not rescued by an unrelated join upgrade."""
+    review, inventory = _coverage_review("unsupported", JOINED, "missing")
+    # Point the item at a source line the joined draft line does NOT contain.
+    other_start = SOURCE.index("SYNTHETIC-ONLY Diagnosed")
+    other_end = SOURCE.index("\n", other_start) + 1
+    inventory[0].update({"id": f"doc:{other_start}:{other_end}",
+                         "start": other_start, "end": other_end,
+                         "quote": SOURCE[other_start:other_end]})
+    review["representations"][0]["source_claim_id"] = inventory[0]["id"]
+    _, incomplete, missing = sc._validate_review(
+        review, [{"line_id": "L1", "text": JOINED}], {"doc": SOURCE}, inventory)
+    assert "missing" in incomplete
+    assert len(missing) == 1
+
+
+def test_a_missing_item_without_a_join_upgrade_still_withholds():
+    """The coverage rescue is gated on the claim having been join-upgraded."""
+    review, inventory = _coverage_review("unsupported", SINGLE, "missing")
+    claims, incomplete, missing = sc._validate_review(
+        review, [{"line_id": "L1", "text": SINGLE}], {"doc": SOURCE}, inventory)
+    assert claims[0]["verdict"] == "unsupported"
+    assert "missing" in incomplete
