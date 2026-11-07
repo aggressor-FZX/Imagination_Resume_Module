@@ -752,6 +752,84 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
             position = claim["end"]
         if position != len(by_line[line_id]["text"]):
             raise _Invalid
+    # A span that is VERBATIM the candidate's own text cannot be an unsupported
+    # addition. Measured on Conservative website run ``d0b19921`` (2026-11-07):
+    # the reviewer marked the supplement's summary line ``uncertain`` even though
+    # it is copied character-for-character from the source. The repair then
+    # deleted it (the model returned an empty replacement), the re-review
+    # correctly reported the source fact missing, and the run withheld as
+    # ``source_completeness_uncertain`` — after destroying a sourced fact.
+    #
+    # The correction is narrow: only an exact, whitespace-normalised substring of
+    # a document the claim itself cites is upgraded. A paraphrase, an appended
+    # clause, a transplanted figure or a word from an uncited document is
+    # untouched, so every existing refusal still applies.
+    from source_preservation import _strip_markers as _strip_provenance
+
+    def _verbatim_in_cited_source(claim: dict[str, Any]) -> bool:
+        span = by_line[claim["line_id"]]["text"][claim["start"]:claim["end"]]
+        needle = " ".join(_strip_provenance(span).split()).casefold()
+        if not needle:
+            return False
+        for citation in claim["citations"]:
+            document = sources.get(citation["source_id"])
+            if not document:
+                continue
+            haystack = " ".join(_strip_provenance(document).split()).casefold()
+            if needle in haystack:
+                return True
+        return False
+
+    upgraded_claims: set[str] = set()
+    for claim in response["claims"]:
+        if (claim["verdict"] in {"uncertain", "unsupported"}
+                and claim["citations"] and _verbatim_in_cited_source(claim)):
+            claim["verdict"] = "supported"
+            upgraded_claims.add(claim["id"])
+
+    # The same principle applies to the coverage verdict. When the reviewer
+    # declines to confirm a source item but that item's own text appears verbatim
+    # in the draft, the fact IS represented; the refusal is about the reviewer's
+    # confidence, not about the document. Measured on the same run: the mapping
+    # for the supplement summary was ``uncertain`` with no spans, so the claim
+    # upgrade alone left ``incomplete`` non-empty and the run still withheld.
+    claims_by_span = {(c["line_id"], c["start"], c["end"]): c
+                      for c in response["claims"]}
+
+    def _verbatim_span(item: dict[str, Any]) -> dict[str, Any] | None:
+        """The draft span that carries this source item verbatim, or None."""
+        quote = " ".join(_strip_provenance(item["quote"]).split()).casefold()
+        if not quote:
+            return None
+        for line in lines:
+            text = _strip_provenance(line["text"])
+            if quote in " ".join(text.split()).casefold():
+                return {"line_id": line["line_id"], "start": 0, "end": len(line["text"])}
+        return None
+
+    for mapping in response["representations"]:
+        if mapping.get("status") != "uncertain":
+            continue
+        item = next((entry for entry in inventory
+                     if entry["id"] == mapping.get("source_claim_id")), None)
+        if item is None:
+            continue
+        span = _verbatim_span(item)
+        if span is None:
+            continue
+        # The span must be carried by a claim THIS PASS upgraded from a verbatim
+        # match, and that claim must cite the item's own document. Requiring the
+        # upgrade (rather than merely "supported") keeps a relevance judgement
+        # intact: a reviewer that declines an item for reasons of ownership or
+        # relevance is not overridden by the item's text happening to appear.
+        claim = claims_by_span.get((span["line_id"], span["start"], span["end"]))
+        if claim is None or claim["id"] not in upgraded_claims:
+            continue
+        if not any(c["source_id"] == item["source_id"] for c in claim["citations"]):
+            continue
+        mapping["status"] = "represented"
+        mapping["spans"] = [span]
+
     items = {item["id"]: item for item in inventory}
     claims_by_span = {(c["line_id"], c["start"], c["end"]): c for c in response["claims"]}
     seen: set[str] = set()
