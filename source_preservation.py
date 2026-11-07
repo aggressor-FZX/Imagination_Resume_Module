@@ -1097,7 +1097,22 @@ def preserve_skills_block(
     unsupported = [line for line in body
                    if not _terms_all_supported(
                        line, source_tokens, permitted)]
-    if not unsupported:
+    # A block can be lexically "supported" and still omit the candidate's real
+    # skills. Measured on Conservative website run ``56bc8c88`` (2026-11-07):
+    # the writer emitted ``**Analytics:** analytics``. Every word of that term
+    # occurs in the source, so the support check passed, but all four of the
+    # candidate's own skills were gone. The reviewer flagged the block, two
+    # repairs could not fix it, and the run withheld as ``unresolved_claims``.
+    #
+    # A source skill that the block does not carry is a missing fact, so the
+    # block is replaced by the source's own list. This is the same replacement
+    # the unsupported case performs, and it is additive in effect: the emitted
+    # lines are the candidate's own skills, verbatim.
+    present = " ".join(body).casefold()
+    missing_source_skill = any(
+        _stemmed_words(line) - _stemmed_words(present)
+        for line in source_lines)
+    if not unsupported and not missing_source_skill:
         return markdown, []
 
     # The source lines already carry their list marker; adding another produced
@@ -1115,7 +1130,10 @@ def _terms_all_supported(
 ) -> bool:
     """True when EVERY comma-separated term is sourced or is a permitted bridge."""
     allowed = permitted or set()
-    text = line.replace("**", "").strip()
+    # Strip the list marker first. A permitted bridge is compared as a whole
+    # label, so a leading "- " made "- trend analysis" fail the membership test
+    # and the block was replaced even though the label was authorised.
+    text = re.sub(r"^\s*[-*+]\s+", "", line.replace("**", "").strip())
     if ":" in text:
         text = text.split(":", 1)[1]
     terms = [t.strip() for t in text.split(",") if t.strip()]
