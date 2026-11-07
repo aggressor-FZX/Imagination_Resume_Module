@@ -161,7 +161,70 @@ Content completeness is otherwise good: 3 employers, 9 bullets, 2 education
 records, 1 certification, 4 skill lines. `Projects` is empty in the source, so
 its emptiness is faithful — only the heading is missing.
 
-## BLOCKER: OpenRouter account is overdrawn
+## RESOLVED: OpenRouter balance, and a misdiagnosis it exposed
+
+The account was topped up (balance now ~$9.82). Re-running the live verification
+surfaced a second, unrelated defect that the outage had been hiding.
+
+### A malformed answer was reported as a provider error
+
+A live Imaginative run withheld as `provider_error`, and the log looked like an
+outage:
+
+```
+provider.call          http_status 200  outcome ok  phase initial_review
+correction.phase_end   outcome callback_error
+correction.end         reason provider_error
+```
+
+Both provider calls returned 200 with `outcome: ok`. The reviewer had returned
+JSON that could not be mapped onto the engine's strict review shape, and the
+adapter's generic `except Exception` swallowed that as `provider_error`.
+
+`UnjudgedLines` was already mapped to `incomplete_review`. Its sibling
+`MalformedIndexedResponse` — the same base class — was not, so a duplicate line
+id or an out-of-range segment index was reported as a network fault. That sends
+an operator to check credentials when the real answer is "the reviewer returned
+an unusable answer".
+
+**Fixed in `3e8953f`:** the adapter translates it into a new
+`MalformedReviewAnswer` and re-raises; the engine maps it to `malformed_output`
+and names the phase event `malformed_answer`. The new exception is a
+`ValueError`, deliberately not a subclass of any transport exception, so an
+adapter catching `ProviderUnavailable` cannot mistake a validation failure for
+availability and retry it. Five regression tests pin the mapping, including that
+the handler precedes the generic catch-all.
+
+### Batch on the final build (`3e8953f`)
+
+| Batch | Status | Reason |
+|---|---|---|
+| bridge_opportunity / Conservative | approved | — |
+| bridge_opportunity / Imaginative | approved | 3 grounded bridges |
+| realistic_candidate / Conservative | withheld | `source_completeness_uncertain` |
+| realistic_candidate / Imaginative | withheld | `no_op_repair` |
+
+**Approval rate: 2/4 (50%). Faithful delivery: 2/2 approved (100%). False
+approvals: 0.** Both approved runs carry all six headings and zero escape
+shapes. Both withholds now report real content verdicts instead of
+`provider_error` — which is the point of the fix: the reason code now describes
+what actually happened.
+
+Note the second candidate's verdicts are not stable across runs
+(`source_completeness_uncertain` / `no_op_repair` / previously `provider_error`).
+That is model variance in the reviewer, not a code path; the withhold itself is
+consistent.
+
+### End-to-end export verification (real downloaded files)
+
+A live website run on the final build produced a PDF and DOCX that were
+downloaded and read back with PyMuPDF and python-docx:
+
+- **All six headings present in both files** (previously four).
+- **Zero escape shapes** in either file.
+- Section order correct; `Projects` present and empty with no invented content.
+
+## Historical: OpenRouter account was overdrawn
 
 A live website verification run on 2026-11-07 12:16 returned
 `correction_status: withheld`, `reason: provider_error`. The log shows the real
