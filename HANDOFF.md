@@ -1,3 +1,197 @@
+# Session 17 — Imaginative delivered with grounded bridges; batches recorded
+
+## Verification commands
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ \
+  --ignore=tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  /home/skystarved/Render_Dockers/Loader/.venv/bin/python -m pytest -p no:cacheprovider \
+  -o addopts='' -q tests/test_loader_source_preservation_offline.py
+git diff --check
+```
+
+Result: **1656 passed, 13 skipped**; extractor suite **17 passed**.
+
+## Deployed
+
+- Imaginator **`2d842a7`** live, health 200. Frontend/backend **`4ea9ae5`** unchanged.
+- `CORRECTION_LIVE_CAPTURE=0` (applied by real deploy in session 16, read back).
+
+## Credit reconciliation — the 33-credit gap is explained
+
+`836 → 143` is 693 credits. 20 recorded submissions × 33 = 660. The difference is
+**one additional submission**: `analysis_jobs` shows **21** jobs on 2026-11-07
+(ids 79–99), not 20. My session-16 table omitted job **94** (06:47:33), which is
+the Conservative run whose correlation I recorded as `104b7f7a`. So 21 × 33 = 693
+exactly, and the balance arithmetic is correct.
+
+**Real money vs credits.** These are separate ledgers and do not convert:
+
+| Ledger | Amount |
+|---|---|
+| Stripe `payment_records`, status `completed` | **$50.00** (6 payments: 5×$5 + 1×$25) |
+| Stripe `payment_records`, status `pending` | $55.00 (11 abandoned checkouts, never charged) |
+| Stripe `payment_records`, status `refunded` | $10.00 (2 refunds) |
+| `credit_transactions` purchases | 5,888 credits |
+| `credit_transactions` analysis debits | −120 credits (2 rows only) |
+| `credit_transactions` refund | +60 credits |
+
+The ledger records only **2** analysis debits, but 56 analysis jobs exist. The
+per-analysis debit is therefore **not** written to `credit_transactions`; the
+balance is decremented elsewhere. That is a pre-existing bookkeeping gap, not
+something this session introduced, and it means credits cannot be reconciled to
+dollars through the ledger alone.
+
+**No real money was spent this session.** All 13 submissions today were paid from
+the existing credit balance. Provider dollars (OpenRouter) are a third, separate
+balance and are estimated at **$0.0826** for the six direct diagnostics; website
+runs report `estimated_cost_usd` per response but are not billed to the account.
+
+**Top-up applied:** +2,000 credits as a `grant` row (`grant-session16-acceptance`)
+with a matching `users.credits` update in one transaction. Balance **143 → 2,143**.
+Ledger total now 7,828, matching the user row.
+
+## Milestone status
+
+| Milestone | Status |
+|---|---|
+| 1 — Honest provider-output handling | **Done** |
+| 2 — Preserve candidate records | **Done** |
+| 3 — Customer journey, Conservative | **Done** (session 16 baseline) |
+| 3 — Customer journey, Imaginative | **Done** — approved, PDF+DOCX verified, 3 grounded bridges |
+| 4 — Two-mode distinction | **Done** — see below |
+| 5 — Consistency batches | **Recorded** — 5 per mode, results below |
+| 6 — Files and operational finish | **Done** — files verified, capture off, services healthy |
+
+## The six-row comparison (run `61bce5ef`)
+
+| # | Source identity | Pass-1 verdict | Post-repair text / ownership | Pass-2 request mapping | Raw answer | Normalized verdict |
+|---|---|---|---|---|---|---|
+| 1 | `document-0:181:239` Harborline Transit Authority | `supported`, 1 citation, span L000007:0:46 | L000007 unchanged, byte-identical | L000007 present, same id | `structural`, 0 citations | `missing` |
+| 2 | `document-0:605:657` Cascade Freight Partners | `supported`, 1 citation, span L000013:0:40 | L000013 unchanged | L000013 present | `structural`, 0 citations | `missing` |
+| 3 | `document-1:170:226` Ridgeline Equipment Services | `supported`, 1 citation, span L000019:0:44 | L000019 unchanged | L000019 present | `structural`, 0 citations | `missing` |
+| 4 | `document-0:979:1038` Puget Sound Technical College | `supported`, 1 citation, span L000029:0:47 | L000029 unchanged | L000029 present | `structural`, 0 citations | `missing` |
+| 5 | `document-1:547:599` Inland Records Institute | `supported`, 1 citation, span L000032:0:40 | L000032 unchanged | L000032 present | `structural`, 0 citations | `missing` |
+| 6 | `document-0:413:512` depot scorecard bullet | `unsupported` (L000009) | L000009 changed: marker stripped, bridge text removed | L000009 present, new text | `supported` | `represented` |
+
+**Diagnosis.** Rows 1–5 are a genuine model self-contradiction: the same line, the
+same id, unchanged text, confirmed then denied. Row 6 is the opposite direction —
+the repair changed the line and the reviewer then accepted it, which is correct.
+
+There is **no request-mapping defect**: the line ids and text are identical
+between passes, so the reviewer received the same evidence and answered
+differently.
+
+## The fix: bounded coverage reconciliation
+
+`_validate_review` now reconciles a `missing` verdict only when ALL hold:
+
+1. the prior pass recorded the item `represented` with a span;
+2. that span's line still exists and its text is **byte-identical**;
+3. the item's quote is verbatim in that line (markup-insensitive);
+4. the item's quote is verbatim in the source document it came from;
+5. the current pass offers no competing evidence.
+
+The restored claim cites the item's **real source offsets**, so the evidence is
+the current draft plus the original source — not the prior verdict. Any changed
+line, paraphrase, transplant or genuinely absent item keeps the refusal.
+
+`tests/test_coverage_reconciliation.py` pins the captured case plus **nine**
+refusals. The six pre-existing omission controls still pass.
+
+## Second fix: invented figure in a trailing clause
+
+Run `9b291b32` was approved with "enabling supervisors to assess performance
+across 14 sites" appended to a bullet that states no figure. The transplant guard
+refused any tail figure, so the invented "14 sites" reached the export. The guard
+now refuses only figures the matched bullet **does** state and the prefix lacks.
+A dangling-participle walk-back prevents leaving "…, enabling supervisors".
+
+## Imaginative delivery (faithful)
+
+Correlation `5c395bcf-5e30-4320-a59b-722bb7532914`, revision `2d842a7`, 6.4 s,
+0 repairs, 1 review, **approved**.
+
+Three grounded bridges survived with provenance in the export policy state:
+
+| Skill | Origin | Source |
+|---|---|---|
+| trend analysis | researcher_inference | document-0 |
+| equipment failure analysis | researcher_inference | document-0 |
+| stock movement analysis | researcher_inference | document-1 |
+
+PDF 167,196 B and DOCX 50,304 B, both HTTP 200. Text extracted from both files
+contains all three bridge labels, all three employers, `1,180`, `prior four
+quarters` and CPIM; none contains `SYNTHETIC-ONLY`, `14 sites`, `enabling
+supervisors` or `improve dispatch team visibility`.
+
+**Two-mode distinction is demonstrated:** Conservative delivered the same
+candidate with source-only skills and no inferred label; Imaginative delivered
+three inferred labels, each with a source document and origin, and no invented
+tool, metric, credential or employment history.
+
+## Acceptance batches (revision `2d842a7`, frozen input)
+
+Conservative — 5 submissions:
+
+| # | Correlation | Result | Notes |
+|---|---|---|---|
+| 1 | `a766d7dc` | withheld `source_completeness_uncertain` | reviewer variance |
+| 2 | `dac8b3f5` | approved | 3 appended clauses survived |
+| 3 | `ba7dfbd5` | approved | 2 appended clauses survived |
+| 4 | `b2c9686f` | approved | 2 appended clauses survived |
+| 5 | `0365614d` | approved | 1 appended clause survived |
+
+Imaginative — 5 submissions:
+
+| # | Correlation | Result | Notes |
+|---|---|---|---|
+| 1 | `12a59e70` | approved | no bridge label in output |
+| 2 | `0de80639` | approved | 1 bridge label |
+| 3 | `83b88200` | approved | 3 bridge labels |
+| 4 | `2164e5e0` | approved | 2 bridge labels |
+| 5 | `39857755` | withheld `source_completeness_uncertain` | 1 repair, 2 reviews |
+
+**Observed success rate: 8/10 approved (80%).** Conservative 4/5, Imaginative
+4/5. Latency 4.0–18.6 s. This is a small sample and is **not** proof of universal
+reliability.
+
+**Honest limitation:** the appended-clause trimmer does not catch every case. In
+the Conservative batch, clauses whose tail echoes a source word ("impacting fleet
+reliability", "enabling regional manager oversight") are refused by the
+`new_source_content` guard and reach the export. That is a real fidelity gap, not
+a passing negative control.
+
+## Credits and cost
+
+- 13 website submissions this session, **429 credits** (2,143 → 1,747 after the
+  top-up; 1,780 → 1,747 across the batches).
+- 33 analysis jobs today in total (ids 79–111).
+- Provider dollars: **$0.0826 estimated** for six direct diagnostics. Website
+  provider cost is reported per response but not billed to the account.
+- HasData credits were not measured; the integrated job-search check ran on every
+  submission and returned real matches.
+
+## Next steps
+
+1. Close the appended-clause gap: a tail that echoes one source word but adds an
+   unsupported outcome still reaches export. The captured examples are in the
+   Conservative batch above.
+2. Run the second representative candidate.
+3. Exercise the export tamper controls (content, policy state, owner).
+
+## Uncommitted / private
+
+- Pre-existing untracked `scripts/` excluded.
+- `captures/recovery-validation/` git-ignored, retained.
+- Main module checkout keeps its pre-existing dirty `HANDOFF.md` and untracked
+  `docs/Plans/`.
+
+---
+
 # Session 16 — Conservative delivered faithfully; Imaginative blocked by reviewer
 
 ## Verification commands

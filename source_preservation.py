@@ -1517,6 +1517,18 @@ _TRAILING_PARTICIPLE_BOUNDARY = re.compile(
     r",\s+(?=[a-z][a-z'-]*(?:ing|ed)\b)|\s+and\s+(?=[a-z][a-z'-]*(?:ing|ed)\b)",
     re.IGNORECASE,
 )
+# A BARE outcome participle with no comma or conjunction: "…cost summaries
+# enabling regional manager oversight". Measured on Conservative acceptance run
+# ``dac8b3f5`` (2026-11-07). Kept separate from the comma form because it is a
+# weaker signal: it is only offered as a boundary when the segment it introduces
+# is entirely ungrounded against the matched bullet, so an ordinary noun phrase
+# ("…records supporting 7 branches") is never split.
+_TRAILING_BARE_PARTICIPLE = re.compile(
+    r"\s+(?=(?:enabling|allowing|helping|ensuring|improving|increasing|"
+    r"reducing|enhancing|driving|delivering|boosting|resulting|leading|"
+    r"highlighting|impacting|providing|creating|generating)\b)",
+    re.IGNORECASE,
+)
 
 
 def _trailing_purpose_boundaries(line: str) -> list[tuple[int, int, bool]]:
@@ -1704,15 +1716,25 @@ def preserve_experience_bullets(markdown: str, source_text: str,
             # made the rule non-idempotent: a second pass removed the next, so
             # the route could change text it had already "corrected". Iterate
             # until the line is stable, bounded by the number of boundaries.
+            substituted = False
             for _ in range(len(_trailing_purpose_boundaries(body)) + 1):
                 trimmed = _trim_trailing_purpose(
                     body, bullet, bullet_stems, source_words, source_stems,
                     permitted_bridges)
                 if trimmed is None:
                     break
+                if trimmed == _SUBSTITUTE_BULLET:
+                    # The tail mixed a sourced fact with an unsupported outcome.
+                    # Neither trimming nor keeping is faithful, so the
+                    # candidate's own source bullet is used: it keeps every fact
+                    # and drops the addition, and it composes nothing.
+                    body = bullet
+                    substituted = True
+                    changes.append("restored the source bullet for a mixed clause")
+                    break
                 body = trimmed
                 changes.append("removed an unsupported appended clause")
-            if body != stripped.lstrip("-").strip():
+            if substituted or body != stripped.lstrip("-").strip():
                 out_lines.append(f"{indent}- {body}{newline}")
             else:
                 out_lines.append(raw)
@@ -1720,6 +1742,12 @@ def preserve_experience_bullets(markdown: str, source_text: str,
         out_lines.append(raw)
     return "".join(out_lines), changes
 
+
+# Sentinel returned by ``_trim_trailing_purpose`` when the tail is MIXED: it
+# carries source content the prefix lacks AND ungrounded content. Trimming would
+# drop the sourced fact and keeping would publish the unsupported outcome, so the
+# caller substitutes the candidate's own source bullet instead.
+_SUBSTITUTE_BULLET = "\x00substitute\x00"
 
 # A prefix ending on one of these is an incomplete clause, not a sentence.
 _DANGLING_TAIL = re.compile(
@@ -1791,6 +1819,37 @@ def _trim_trailing_purpose(body: str, bullet: str, bullet_stems: set[str],
             {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
              if len(w) > 3},
             bullet_stems)
+        # ── The source-word escape ─────────────────────────────────────────
+        # A tail can carry BOTH an unsupported outcome and a source fact the
+        # prefix lacks. Measured on the Conservative acceptance batch of
+        # 2026-11-07 (runs ``dac8b3f5``, ``b2c9686f``, ``0365614d``):
+        #
+        #   "…, enabling data-driven decision-making by supervisors"
+        #        outcome "enabling data-driven decision-making"  (unsupported)
+        #        fact    "supervisors"                            (in source)
+        #
+        # The old rule refused the whole tail because it contained a source word,
+        # so the unsupported outcome reached an approved export. Trimming would
+        # instead DROP the sourced fact. Neither is acceptable, and neither is
+        # leaving it.
+        #
+        # The correct repair is the one this module already uses elsewhere:
+        # substitute the candidate's own source bullet. That keeps every fact the
+        # bullet states, removes the unsupported outcome, and composes nothing.
+        # It is chosen only when the tail is genuinely MIXED — it carries source
+        # content the prefix lacks AND ungrounded content. A tail that is purely
+        # sourced is left alone; a tail that is purely foreign is trimmed, which
+        # preserves the writer's paraphrase.
+        #
+        # A tail that restates a figure the bullet states is a faithful
+        # paraphrase of the source's own outcome, not an appended claim:
+        # "Optimized panel labeling …, cutting rework by 18%" restates the
+        # source's "Cut rework by 18% by standardizing panel labeling". The
+        # figure guard keeps that class out of the substitution, which is why
+        # ``sourced_only_in_tail`` must be EMPTY for a tail to count as mixed.
+        if (prefix_ok and tail_ungrounded and new_source_content
+                and not sourced_only_in_tail):
+            return _SUBSTITUTE_BULLET
         if prefix_ok and segment_is_foreign and tail_ungrounded:
             kept = prefix.rstrip().rstrip(",").rstrip()
             # A prefix that ends on a participle is a dangling fragment: trimming
@@ -1812,6 +1871,50 @@ def _trim_trailing_purpose(body: str, bullet: str, bullet_stems: set[str],
             # which is the property that proves this rule deletes rather than
             # composes.
             return kept
+    # ── Bare outcome participles ───────────────────────────────────────────
+    # A weaker signal than a comma or conjunction, so it is judged last and
+    # under a stricter test: the segment it introduces must be ENTIRELY
+    # ungrounded against the MATCHED BULLET and carry no figure at all. That
+    # keeps an ordinary noun phrase ("…records supporting 7 service branches")
+    # intact while still catching the measured escape "…cost summaries enabling
+    # regional manager oversight" (Conservative acceptance run ``dac8b3f5``,
+    # 2026-11-07).
+    #
+    # The test is deliberately bullet-scoped, not document-scoped. On that same
+    # run the tail's words ("oversight", "operational", "expenses") all occur
+    # SOMEWHERE in the source, so a document-wide check found nothing ungrounded
+    # and the appended outcome survived to an approved export. That is the
+    # source-word escape this rule exists to close.
+    bullet_words = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
+                    if len(w) > 3}
+    for match in _TRAILING_BARE_PARTICIPLE.finditer(body):
+        prefix = body[:match.start()]
+        clause = body[match.end():]
+        if not clause.strip():
+            continue
+        # Removing a figure the bullet states would drop a fact.
+        if _numeric_qualifiers(clause) - _numeric_qualifiers(prefix):
+            continue
+        if not _ungrounded_words(clause, bullet_words, bullet_stems):
+            continue
+        if not (not _ungrounded_words(prefix, source_words, source_stems)
+                or len(_stemmed_words(prefix) & bullet_stems) >= 3):
+            continue
+        # The same MIXED shape the comma form handles, reached without a comma:
+        # "…cost summaries enabling regional manager oversight of key operational
+        # expenses" carries the sourced fact "regional manager" AND the
+        # unsupported outcome "oversight of key operational expenses". Trimming
+        # would drop the sourced fact, so the candidate's own source bullet is
+        # substituted instead.
+        if (_stemmed_words(clause) & bullet_stems) - _stemmed_words(prefix):
+            return _SUBSTITUTE_BULLET
+        # A tail that only restates the matched bullet adds nothing to remove.
+        if _stemmed_words(clause) & bullet_stems:
+            continue
+        kept = prefix.rstrip().rstrip(",").rstrip()
+        if _DANGLING_TAIL.search(kept) or _DANGLING_PARTICIPLE.search(kept):
+            continue
+        return kept
     return None
 
 

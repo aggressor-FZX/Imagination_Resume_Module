@@ -211,3 +211,114 @@ def test_a_tail_word_found_only_elsewhere_in_the_source_is_still_removed():
     assert "removed an unsupported appended clause" in changes
     assert "for accuracy" not in out
     assert "1,180 fuel invoices" in out
+
+
+# ---------------------------------------------------------------------------
+# The source-word escape
+# ---------------------------------------------------------------------------
+# Measured on the Conservative acceptance batch of 2026-11-07 (runs
+# ``dac8b3f5``, ``b2c9686f``, ``0365614d``). Three approved bullets carried an
+# appended outcome whose tail ALSO echoed a word the source states. The old rule
+# refused the whole tail because it contained a source word, so the unsupported
+# outcome reached an approved export. Trimming instead would have dropped the
+# sourced fact. Neither is faithful, so the candidate's own source bullet is
+# substituted: every fact kept, the addition gone, nothing composed.
+
+ESCAPE_SOURCE = (
+    "## Professional Experience\n"
+    "**Cascade Freight Partners** -- Kent, WA\n"
+    "*Cost Reporting Coordinator | 07/2015 - 03/2019*\n"
+    "- SYNTHETIC-ONLY Prepared the monthly cost summary reviewed by the regional "
+    "manager.\n"
+    "- SYNTHETIC-ONLY Rebuilt the shipment delay log that the dispatch team "
+    "relies on.\n"
+    "\n"
+    "**Ridgeline Equipment Services** -- Fife, WA\n"
+    "*Inventory Analyst | 08/2023 - Present*\n"
+    "- SYNTHETIC-ONLY Maintain parts availability records for 7 service "
+    "branches.\n"
+)
+
+
+def test_a_bare_participle_tail_mixing_a_source_fact_is_substituted():
+    """No comma, and the tail carries a sourced fact plus an unsupported outcome.
+
+    "…cost summaries enabling regional manager oversight of key operational
+    expenses" — "regional manager" is in the source, "oversight of key
+    operational expenses" is not. Trimming would drop the sourced fact; keeping
+    would publish the outcome.
+    """
+    draft = ("## Professional Experience\n"
+             "**Cascade Freight Partners** -- Kent, WA\n"
+             "*Cost Reporting Coordinator | 07/2015 - 03/2019*\n"
+             "- Prepared monthly cost summaries enabling regional manager "
+             "oversight of key operational expenses.\n")
+    out, changes = sp.preserve_experience_bullets(draft, ESCAPE_SOURCE)
+    assert "restored the source bullet for a mixed clause" in changes
+    assert "oversight of key operational expenses" not in out
+    # The sourced fact survives, because the source bullet carries it.
+    assert "regional manager" in out
+    assert "Prepared the monthly cost summary reviewed by the regional manager." in out
+
+
+def test_a_comma_tail_mixing_a_source_fact_is_substituted():
+    """The comma form of the same escape, from run ``b2c9686f``."""
+    draft = ("## Professional Experience\n"
+             "**Cascade Freight Partners** -- Kent, WA\n"
+             "*Cost Reporting Coordinator | 07/2015 - 03/2019*\n"
+             "- Prepared monthly cost summaries for regional manager review, "
+             "enabling data-driven decision-making by supervisors.\n")
+    out, changes = sp.preserve_experience_bullets(draft, ESCAPE_SOURCE)
+    assert "enabling data-driven decision-making by supervisors" not in out
+    assert "regional manager" in out
+
+
+def test_a_bare_participle_tail_with_no_source_fact_is_trimmed():
+    """A purely foreign tail is still trimmed, preserving the writer's prefix."""
+    draft = ("## Professional Experience\n"
+             "**Cascade Freight Partners** -- Kent, WA\n"
+             "*Cost Reporting Coordinator | 07/2015 - 03/2019*\n"
+             "- Prepared monthly cost summaries enabling data-driven "
+             "decision-making by supervisors.\n")
+    out, changes = sp.preserve_experience_bullets(draft, ESCAPE_SOURCE)
+    assert "removed an unsupported appended clause" in changes
+    assert "data-driven decision-making" not in out
+    assert "Prepared monthly cost summaries" in out
+
+
+def test_a_bare_participle_noun_phrase_is_not_split():
+    """An ordinary noun phrase after a participle is not an appended outcome.
+
+    "…records supporting 7 service branches" states a sourced figure and adds no
+    ungrounded content, so the line is left exactly as written.
+    """
+    draft = ("## Professional Experience\n"
+             "**Ridgeline Equipment Services** -- Fife, WA\n"
+             "*Inventory Analyst | 08/2023 - Present*\n"
+             "- Maintained parts availability records supporting 7 service "
+             "branches through accurate inventory tracking.\n")
+    out, changes = sp.preserve_experience_bullets(draft, ESCAPE_SOURCE)
+    assert changes == []
+    assert "supporting 7 service branches" in out
+
+
+def test_a_faithful_restatement_of_a_source_figure_is_not_substituted():
+    """A tail restating the source's own outcome is a paraphrase, not an addition.
+
+    "Optimized panel labeling …, cutting rework by 18%" restates the source's
+    "Cut rework by 18% by standardizing panel labeling". The figure guard keeps
+    this class out of the substitution.
+    """
+    source = ("## Professional Experience\n"
+              "**Acme** -- City, ST\n"
+              "*Electrician | 2020 - 2021*\n"
+              "- SYNTHETIC-ONLY Cut rework by 18% by standardizing panel "
+              "labeling and inspection checklists.\n")
+    draft = ("## Professional Experience\n"
+             "**Acme** -- City, ST\n"
+             "*Electrician | 2020 - 2021*\n"
+             "- Optimized panel labeling and inspection workflows, cutting "
+             "rework by 18% across multiple commercial projects.\n")
+    out, changes = sp.preserve_experience_bullets(draft, source)
+    assert "restored the source bullet for a mixed clause" not in changes
+    assert "cutting rework by 18%" in out
