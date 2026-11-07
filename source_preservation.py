@@ -463,7 +463,23 @@ def preserve_education_record(markdown: str, source_text: str) -> tuple[str, lis
     # records one present institution satisfies it.
     missing_record = any(record["institution"].lower() not in body_text
                          for record in records)
-    if (has_institution and has_field and not missing_record
+    # The institution must be the BOLD HEAD of its own line, which is the shape
+    # ``_education_lines`` emits and the shape the source states. Measured on
+    # Conservative website run ``94c209ae`` (2026-11-07): the writer emitted
+    #   **Associate of Applied Science, Business Analytics** -- Puget Sound
+    #   Technical College -- 01/2015
+    # The institution and field are both present, so the presence checks passed
+    # and the record was left alone — but the degree is bolded as if it were the
+    # institution, and the reviewer reported the education record unconfirmed.
+    # A record whose institution is not its bold head is mis-shaped, not
+    # preserved.
+    mis_shaped = any(
+        not any((_BOLD_LINE.match(raw.strip()) is not None
+                 and _strip_markers(_BOLD_LINE.match(raw.strip()).group("bold"))
+                 .strip().casefold() == record["institution"].casefold())
+                for raw in body)
+        for record in records)
+    if (has_institution and has_field and not missing_record and not mis_shaped
             and not any(_bolds_a_concatenation(body, record) for record in records)):
         return markdown, []
 
