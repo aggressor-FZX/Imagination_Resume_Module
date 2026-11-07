@@ -1,3 +1,144 @@
+# Session 18 — source-word escape closed; approval vs faithful rate separated
+
+## Verification commands
+
+```
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/resumeDraft_fix
+OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ \
+  --ignore=tests/test_loader_source_preservation_offline.py -q -o addopts='' -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+  /home/skystarved/Render_Dockers/Loader/.venv/bin/python -m pytest -p no:cacheprovider \
+  -o addopts='' -q tests/test_loader_source_preservation_offline.py
+git diff --check
+```
+
+Result: **1661 passed, 13 skipped** (5 new regressions); export controls **85 passed**.
+
+## Deployed
+
+- Imaginator **`3e63eac`** live (`dep-dbnf46o473hc739ipo30`), health 200.
+- Branch `resumeDraft_fix` merged to `master` (service deploys from `master`).
+
+## The source-word escape — fixed
+
+Three approved Conservative bullets (runs `dac8b3f5`, `b2c9686f`, `0365614d`)
+carried an appended outcome whose tail ALSO echoed a word the source states:
+
+```
+"...cost summaries enabling regional manager oversight of key operational expenses"
+   "regional manager"                    -> in source
+   "oversight of key operational expenses" -> NOT in source
+```
+
+The old rule refused the whole tail because it contained a source word, so the
+unsupported outcome reached an approved export. Trimming instead would have
+dropped the sourced fact. Neither is faithful.
+
+**Repair:** substitute the candidate's own source bullet — the mechanism this
+module already uses. It keeps every fact the bullet states, removes the addition,
+and composes nothing. It fires only when the tail is genuinely MIXED (carries
+source content the prefix lacks AND ungrounded content) and never when the tail
+restates a figure the bullet states (that is a faithful paraphrase of the
+source's own outcome, e.g. "cutting rework by 18%").
+
+A bare outcome participle with no comma is a weaker signal, so it is judged last
+and **bullet-scoped**: the segment must be entirely ungrounded against the
+MATCHED BULLET and carry no figure. Bullet-scoping is the point — on `dac8b3f5`
+the tail's words all occur somewhere in the source, so a document-wide check
+found nothing ungrounded.
+
+No phrase blacklist, no global override of `missing`, no automatic removal of all
+purpose language. The six existing omission controls are unchanged.
+
+## Approval rate vs verified faithful-delivery rate
+
+These are different numbers and must be reported separately.
+
+| Batch | Approved | Faithful delivery |
+|---|---|---|
+| bridge_opportunity / Conservative | 1/1 | 1/1 |
+| bridge_opportunity / Imaginative | 1/1 | 1/1 |
+| realistic_candidate / Conservative | 0/1 (withheld) | n/a |
+| realistic_candidate / Imaginative | 1/1 | 1/1 |
+| **Total** | **3/4 (75%)** | **3/3 approved were faithful (100%)** |
+
+Session 17 reported 8/10 approved. That number was an **approval** rate; three of
+those approvals carried appended clauses, so the faithful-delivery rate was
+lower. On the final build the two rates coincide for the approved runs because
+the escape is closed — but they are still reported separately, because an
+approval is a gate decision and faithful delivery is a content property.
+
+**False approvals on the final build: 0.** Every bullet in every approved run was
+checked against the source; the three bullets that match a purpose/outcome
+pattern are verbatim source text ("...to find which equipment failed repeatedly",
+"...to set reorder points", "...for review by regional manager").
+
+## The one withhold is upstream of this change
+
+`realistic_candidate` / Conservative withholds deterministically (2/2 runs) with
+`source_completeness_uncertain`. It fires at `source_correction/source_inventory`
+— before any draft text is judged — so it is structurally upstream of the
+preservation layer and is not a regression from this session. The same candidate
+approves in Imaginative mode with 4 grounded bridges.
+
+## Inference cost vs credit cost
+
+Measured from `llm_usage_log` (service `imaginator`), 2026-11-07:
+
+| Stage | Model | Calls | USD |
+|---|---|---|---|
+| source_correction (judge) | `qwen/qwen3-coder` | 111 | 0.2958 |
+| pipeline (writer) | (unlabelled) | 112 | 0.2235 |
+| researcher | `inception/mercury-2` | 24 | 0.0359 |
+| **Total** | | **247** | **0.5552** |
+
+34 runs, 784,895 tokens, **$0.5552** total = **$0.0163/run**.
+
+Credit value at the $5/450 tier ($0.01111/credit): 33 credits = **$0.3667**.
+So inference is **4.4% of credit value** — a **22.6×** gross margin on inference
+alone. This is API spend, not Stripe revenue.
+
+## Resume completeness — what the sections actually show
+
+Expected headings (`REQUIRED_HEADINGS`): Professional Summary, Professional
+Experience, Projects, Education, Certifications, Technical Skills.
+
+The **delivered markdown** carries all six. The **exports do not**:
+
+| Section | Markdown | PDF | DOCX |
+|---|---|---|---|
+| Professional Summary | yes | **heading dropped** | **heading dropped** |
+| Professional Experience | yes | yes | yes |
+| Projects | yes (empty) | **dropped** | **dropped** |
+| Education | yes | yes | yes |
+| Certifications | yes | yes | yes |
+| Technical Skills | yes | yes | yes |
+
+Two distinct defects, both in `resume_builder/build_resume_from_export.py`:
+
+1. **Summary heading is never emitted.** `build_summary_block` writes the summary
+   text with no `\section{...}`, and the DOCX path writes `r.text =
+   resume.summary` with no heading. The text survives; the label does not.
+2. **Empty sections are omitted entirely.** `if resume.projects:` skips the
+   heading when the list is empty, so `Projects` disappears rather than appearing
+   as an empty section. `REQUIRED_HEADINGS` expects it present.
+
+Content completeness is otherwise good: 3 employers, 9 bullets, 2 education
+records, 1 certification, 4 skill lines. `Projects` is empty in the source, so
+its emptiness is faithful — only the heading is missing.
+
+## Remaining work
+
+1. Emit the `Professional Summary` heading in both renderers (LaTeX + DOCX).
+2. Decide whether an empty `Projects` section should render its heading. The
+   markdown keeps it; the exports drop it. Pick one and pin it with a test.
+3. `realistic_candidate` / Conservative withhold: decide whether
+   `source_completeness_uncertain` at inventory is the intended outcome for that
+   document, or whether the inventory contract is over-strict.
+
+---
+
 # Session 17 — Imaginative delivered with grounded bridges; batches recorded
 
 ## Verification commands
