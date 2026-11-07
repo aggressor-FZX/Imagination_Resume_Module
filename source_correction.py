@@ -122,6 +122,22 @@ class NoOpRepair(ValueError):
         self.claim_id = claim_id
 
 
+class SourcedSpanDeletion(ValueError):
+    """A repair edit would delete text that is verbatim the candidate's own.
+
+    Measured on Conservative website run ``c0b26422`` (2026-11-07): the reviewer
+    marked the supplement's summary line ``uncertain`` with no citations, and the
+    repair returned an empty replacement. The line is copied character-for-
+    character from the source, so deleting it destroys a sourced fact and the
+    re-review then correctly reports it missing. The engine refuses the deletion
+    and withholds instead of publishing a resume with a fact removed.
+    """
+
+    def __init__(self, claim_id: str = ""):
+        super().__init__("repair would delete a verbatim source span")
+        self.claim_id = claim_id
+
+
 class UnjudgedReview(ValueError):
     """The reviewer left lines out of every verdict list.
 
@@ -783,9 +799,11 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
     upgraded_claims: set[str] = set()
     for claim in response["claims"]:
         if (claim["verdict"] in {"uncertain", "unsupported"}
-                and claim["citations"] and _verbatim_in_cited_source(claim)):
+                and _verbatim_in_cited_source(claim)):
             claim["verdict"] = "supported"
             upgraded_claims.add(claim["id"])
+
+
 
     # The same principle applies to the coverage verdict. When the reviewer
     # declines to confirm a source item but that item's own text appears verbatim
@@ -1107,7 +1125,8 @@ def _apply_bridge_decisions(
 
 
 def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
-                 lines: list[dict[str, Any]]) -> str:
+                 lines: list[dict[str, Any]],
+                 source_map: Optional[dict[str, str]] = None) -> str:
     if not _exact_dict(response, {"edits"}) or type(response["edits"]) is not list:
         raise _Invalid
     flagged = {c["id"]: c for c in claims if c["verdict"] in {"unsupported", "uncertain"}}
@@ -1131,6 +1150,25 @@ def _apply_edits(markdown: str, response: Any, claims: list[dict[str, Any]],
             # model echoed the line verbatim). Reporting it separately stops the
             # failure being mis-attributed to the wire format.
             raise NoOpRepair(cid)
+        # A repair may not DELETE text that is verbatim the candidate's own when
+        # the reviewer only said it was UNCERTAIN. Measured on Conservative
+        # website run ``c0b26422`` (2026-11-07): the reviewer marked the
+        # supplement's summary line ``uncertain`` with no citations, and the
+        # repair returned an empty replacement. The line is copied
+        # character-for-character from the source, so deleting it destroys a
+        # sourced fact; the re-review then correctly reported it missing and the
+        # run withheld after the fact was already gone.
+        #
+        # An ``unsupported`` verdict is different: the reviewer has named a
+        # defect, and deleting a misattributed line is the legitimate repair for
+        # it. Only the weaker ``uncertain`` verdict is refused here.
+        if (source_map and not replacement.strip()
+                and claim["verdict"] == "uncertain"):
+            from source_preservation import _strip_markers as _strip_provenance
+            span = " ".join(_strip_provenance(markdown[a:b]).split()).casefold()
+            if span and any(span in " ".join(_strip_provenance(document).split()).casefold()
+                            for document in source_map.values()):
+                raise SourcedSpanDeletion(cid)
         edits.append((a, b, replacement))
     if seen != set(flagged):
         raise _Invalid
@@ -1998,7 +2036,8 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             edit_response = await _invoke(callback, "repair", repair_payload, remaining, events)
             if loop.time() >= deadline:
                 return blocked("timeout_repair")
-            markdown = _apply_edits(markdown, edit_response, claims, lines)
+            markdown = _apply_edits(markdown, edit_response, claims, lines,
+                                    source_map=source_map)
             corrected_spans += len(flagged)
             markdown, labels_here, ambiguous_here = _correct_unique_attribution(
                 markdown, source_map)
@@ -2031,6 +2070,11 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             continue
         except NoOpRepair:
             return blocked("no_op_repair")
+        except SourcedSpanDeletion:
+            # The repair tried to delete the candidate's own verbatim text. The
+            # fact is still present, so the honest outcome is a withhold that
+            # names the unresolved claim rather than a resume with a fact removed.
+            return blocked("unresolved_claims")
         except _Invalid:
             return blocked("malformed_output")
         except PrivacyReviewRequired:
