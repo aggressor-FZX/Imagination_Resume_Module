@@ -114,7 +114,11 @@ def test_captured_correction_does_not_repeat_clause_removal(source):
 
 
 def test_every_changed_bullet_is_the_candidates_own_wording(source):
-    """A changed BULLET must be contiguous source text, never composed prose."""
+    """A changed BULLET is source text or a prefix of the draft line.
+
+    A prefix is a deletion of an unsupported trailing clause: it writes no new
+    sentence, so it is not a second writer. Anything else would be composed prose.
+    """
     out, _ = sp.preserve_source_facts(CAPTURED_DRAFT, source)
     flat_source = " ".join(source.replace("SYNTHETIC-ONLY", "").split())
     draft_lines = {" ".join(line.strip().lstrip("- ").split())
@@ -125,7 +129,9 @@ def test_every_changed_bullet_is_the_candidates_own_wording(source):
         candidate = " ".join(line.strip().lstrip("- ").split())
         if not candidate or candidate in draft_lines:
             continue
-        assert candidate in flat_source, f"preservation invented a bullet: {candidate!r}"
+        assert candidate in flat_source or any(
+            draft_line.startswith(candidate) for draft_line in draft_lines), (
+            f"preservation invented a bullet: {candidate!r}")
 
 
 @pytest.mark.parametrize("draft,source_line", [

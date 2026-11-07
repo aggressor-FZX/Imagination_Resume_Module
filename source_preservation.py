@@ -94,6 +94,10 @@ _LOCATION_SUFFIX = re.compile(
     r"^(?P<head>.+?)\s+[-\u2013\u2014]{1,2}\s+"
     r"(?P<location>[A-Z][A-Za-z .'-]+,\s*(?:[A-Z]{2}|[A-Z][a-z]+))\s*$")
 _DETAIL_SUFFIX = re.compile(r"^(?P<body>.+?)\s*\|\s*(?P<dates>.+?)\s*$")
+# Corporate suffixes that legitimately end an employer name with a period.
+_CORPORATE_SUFFIX = re.compile(
+    r"\b(?:Inc|Ltd|Co|Corp|LLC|L\.L\.C|P\.C|PLLC|PLC|LP|LLP|GmbH|S\.A|B\.V)\.$",
+    re.IGNORECASE)
 
 
 def _bare_heading(raw: str) -> str | None:
@@ -530,7 +534,13 @@ def _record_head(raw: str) -> tuple[str | None, str]:
         return None, ""
     head = located.group("head").strip().rstrip(":")
     # A bullet or a sentence is not a record head, even when it ends in a location.
-    if not head or head.startswith("-") or head.endswith("."):
+    # A trailing period is the sentence test, EXCEPT for a corporate suffix:
+    # "Northline Fabrication, Inc. -- Spokane, WA" is an employer, and rejecting
+    # it dropped the whole first record from the extracted-format source, so its
+    # bullets were never scoped to an owner and an appended outcome survived.
+    if not head or head.startswith("-"):
+        return None, ""
+    if head.endswith(".") and not _CORPORATE_SUFFIX.search(head):
         return None, ""
     return head, located.group("location").strip()
 
@@ -1643,69 +1653,74 @@ def preserve_experience_bullets(markdown: str, source_text: str,
             # Judge the bullet's own text, not the Markdown marker, so a kept
             # prefix is emitted with exactly one "- ".
             body = stripped.lstrip("-").strip()
-            for start, end, is_purpose in _trailing_purpose_boundaries(body):
-                prefix = body[:start]
-                clause = body[end:]
-                # Judge the trailing clause against the full source vocabulary.
-                residual = _without_permitted_bridges(clause, permitted_bridges)
-                # No figure exemption: a faithful paraphrase that restates a
-                # source number introduces no ungrounded content word, while an
-                # invented outcome does ("increased productivity by 4%").
-                # Exempting any clause carrying a source number would admit the
-                # latter.
-                prefix_grounded = not _ungrounded_words(prefix, source_words, source_stems)
-                # A faithful paraphrase may also add a small qualifier in the
-                # prefix ("used weekly" for "review in the Monday meeting"). The
-                # trailing segment is still removable when the prefix clearly
-                # restates the matched source bullet, the segment shares no
-                # content with it, and the segment carries no figure. Removing a
-                # figure-bearing tail could drop a sourced fact, so it is left
-                # for review.
-                prefix_stems = _stemmed_words(prefix)
-                prefix_restates = len(prefix_stems & bullet_stems) >= 3
-                # A figure in the tail is only safe to drop when the prefix
-                # already carries it: then no sourced number is lost. A NEW
-                # figure in the tail ("reducing downtime by 27%") is left for
-                # review, because removing it could discard a sourced fact.
-                segment_figures = _numeric_qualifiers(clause)
-                # Content the tail shares with the source bullet is only
-                # acceptable when the prefix already carries it. Otherwise the
-                # tail is restating a sourced fact and must not be dropped.
-                new_source_content = ((_stemmed_words(clause) & bullet_stems)
-                                      - prefix_stems)
-                segment_is_foreign = (not new_source_content
-                                      and segment_figures <= _numeric_qualifiers(prefix))
-                # A participial tail is only judged when the prefix is fully
-                # grounded; that is the measured rule and it keeps a faithful
-                # paraphrase with a coordinated activity intact. A purpose
-                # infinitive marks its own boundary, so a paraphrase prefix that
-                # clearly restates the matched source bullet is enough there.
-                prefix_ok = prefix_grounded or (is_purpose and prefix_restates)
-                # Judge the tail against the MATCHED BULLET, not the whole
-                # document. Measured on Conservative run eae427ea: the writer
-                # appended "for accuracy" to the reconciled-invoices bullet. The
-                # word "accuracy" occurs elsewhere in the source (the skills line
-                # "Records accuracy"), so a document-wide vocabulary check found
-                # nothing ungrounded and left the addition in place; the reviewer
-                # then reported the line unconfirmed and the run withheld. A tail
-                # is only supported by the record it is attached to.
-                tail_ungrounded = _ungrounded_words(
-                    residual, {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
-                               if len(w) > 3},
-                    bullet_stems)
-                if (prefix_ok and segment_is_foreign and tail_ungrounded):
-                    # Substitute the candidate's own source line. This module
-                    # never composes prose: a kept paraphrase prefix would be a
-                    # new sentence, and the provenance invariant requires every
-                    # changed line to be contiguous source text.
-                    out_lines.append(f"{indent}- {bullet}{newline}")
-                    changes.append("removed an unsupported appended clause")
+            # A line can carry more than one unsupported tail ("..., improving
+            # readiness and reducing risk"). Removing only the last one per pass
+            # made the rule non-idempotent: a second pass removed the next, so
+            # the route could change text it had already "corrected". Iterate
+            # until the line is stable, bounded by the number of boundaries.
+            for _ in range(len(_trailing_purpose_boundaries(body)) + 1):
+                trimmed = _trim_trailing_purpose(
+                    body, bullet, bullet_stems, source_words, source_stems,
+                    permitted_bridges)
+                if trimmed is None:
                     break
+                body = trimmed
+                changes.append("removed an unsupported appended clause")
+            if body != stripped.lstrip("-").strip():
+                out_lines.append(f"{indent}- {body}{newline}")
             else:
                 out_lines.append(raw)
             continue
         out_lines.append(raw)
     return "".join(out_lines), changes
+
+
+def _trim_trailing_purpose(body: str, bullet: str, bullet_stems: set[str],
+                           source_words: set[str], source_stems: set[str],
+                           permitted_bridges: Optional[list[str]]) -> str | None:
+    """Remove one unsupported trailing purpose/outcome segment, or return None.
+
+    The emitted text is always a PREFIX of the input, so this is a deletion and
+    never composed prose. Every refusal below is a measured control:
+
+    * the tail must introduce no content the matched source bullet carries and
+      the prefix lacks — otherwise it restates a sourced fact;
+    * the tail must carry no figure the prefix does not already carry — removing
+      a sourced number would drop a fact;
+    * the tail is judged against the MATCHED BULLET, not the whole document. On
+      Conservative run ``eae427ea`` the writer appended "for accuracy"; the word
+      "accuracy" occurs elsewhere in the source (the skills line "Records
+      accuracy"), so a document-wide check found nothing ungrounded and the
+      addition survived to an approved export.
+    """
+    for start, end, _is_purpose in _trailing_purpose_boundaries(body):
+        prefix = body[:start]
+        clause = body[end:]
+        residual = _without_permitted_bridges(clause, permitted_bridges)
+        prefix_stems = _stemmed_words(prefix)
+        # A prefix that clearly restates the matched source bullet is enough,
+        # whether or not every one of its words appears in the source. Measured
+        # on Conservative run ``d5143586``: three approved bullets carried a
+        # foreign tail behind a paraphrased prefix ("reviewed weekly by
+        # operations supervisors, supporting performance tracking").
+        prefix_ok = (not _ungrounded_words(prefix, source_words, source_stems)
+                     or len(prefix_stems & bullet_stems) >= 3)
+        new_source_content = (_stemmed_words(clause) & bullet_stems) - prefix_stems
+        segment_is_foreign = (not new_source_content
+                              and _numeric_qualifiers(clause)
+                              <= _numeric_qualifiers(prefix))
+        tail_ungrounded = _ungrounded_words(
+            residual,
+            {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-]+", bullet)
+             if len(w) > 3},
+            bullet_stems)
+        if prefix_ok and segment_is_foreign and tail_ungrounded:
+            # Emit the prefix EXACTLY, with no added punctuation. Appending a
+            # period would make the result no longer a prefix of the draft line,
+            # which is the property that proves this rule deletes rather than
+            # composes.
+            return prefix.rstrip().rstrip(",").rstrip()
+    return None
 
 
 # These forms cover a small class of appended purpose/outcome claims, not outcomes

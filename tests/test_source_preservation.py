@@ -312,8 +312,12 @@ def test_no_output_line_is_invented():
         candidate = plain(line)
         if not candidate or candidate in draft_lines:
             continue
-        # A changed line must be the source's own wording, contiguously.
-        assert candidate in flat_source, (
+        # A changed line must be either the source's own wording, contiguously,
+        # or a PREFIX of a draft line. A prefix is a deletion of an unsupported
+        # trailing clause: it writes no new sentence, so it is not a second
+        # writer. Anything else would be composed prose.
+        assert candidate in flat_source or any(
+            draft_line.startswith(candidate) for draft_line in draft_lines), (
             f"preservation invented a line: {line.strip()!r}")
 
 

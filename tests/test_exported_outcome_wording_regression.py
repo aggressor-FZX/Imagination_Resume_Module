@@ -174,7 +174,12 @@ def test_the_supported_figures_and_records_survive_the_correction():
 
 
 def test_every_changed_line_is_the_candidates_own_wording():
-    """The repair substitutes source text; it never composes a new sentence."""
+    """The repair substitutes source text or deletes a tail; it never composes.
+
+    A changed line is either the candidate's own source wording, contiguously, or
+    a PREFIX of the draft line. A prefix is a deletion of an unsupported trailing
+    clause and writes no new sentence.
+    """
     corrected, _ = sp.preserve_source_facts(_retained_markdown(), _frozen_source())
     source = _frozen_source().replace("SYNTHETIC-ONLY", "")
     draft_lines = {line.strip().lstrip("- ").strip()
@@ -183,7 +188,9 @@ def test_every_changed_line_is_the_candidates_own_wording():
         candidate = line.strip().lstrip("- ").strip()
         if not candidate or candidate in draft_lines or line.strip().startswith("#"):
             continue
-        assert candidate in source, f"preservation invented a line: {candidate!r}"
+        assert candidate in source or any(
+            draft_line.startswith(candidate) for draft_line in draft_lines), (
+            f"preservation invented a line: {candidate!r}")
 
 
 # --- 3. Faithful paraphrase control: verbatim copying is NOT required -------

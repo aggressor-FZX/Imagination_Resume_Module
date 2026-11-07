@@ -445,15 +445,17 @@ def test_the_two_source_formats_produce_the_same_preservation_result():
 def test_identifiable_extracted_records_repair_only_detectable_outcomes():
     """[extracted-format] Structured plain records now allow scoped repairs.
 
-    Two ungrounded outcomes are removed, while the other two remain outside the
-    lexical rule's scope. This is not a general semantic fabrication check.
+    All four ungrounded outcomes are removed. The rule was widened after the
+    Conservative website runs of 2026-11-07 showed that a purpose tail behind a
+    paraphrased prefix ("used weekly by supervisors, supporting performance
+    tracking") survived the narrower version and reached an approved export.
+    This is still a lexical rule, not a general semantic fabrication check.
     """
     out, changes = _preserved()
-    for clause in ("maintaining grid reliability", "improving safety compliance adherence"):
+    for clause in ("maintaining grid reliability", "improving safety compliance adherence",
+                   "ensuring consistent uptime", "ensuring system uptime"):
         assert clause in _draft() and clause not in out
-    for clause in ("ensuring consistent uptime", "ensuring system uptime"):
-        assert clause in out
-    assert changes.count("removed an unsupported appended clause") >= 2
+    assert changes.count("removed an unsupported appended clause") >= 4
 
 
 # ---------------------------------------------------------------------------
