@@ -662,7 +662,17 @@ def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str
         # substantive or genuinely ambiguous span keeps its ``uncertain``
         # classification and still withholds. Measured on capture
         # 2dc8b2b7-d3c7-4b24-bf66-fff4018833e9.
-        if (item["classification"] == "uncertain"
+        #
+        # ``required`` is corrected for the same reason. Measured on Conservative
+        # website run ``b2198062`` (2026-11-07): the inventory marked the bare
+        # headings ``Professional Summary`` and ``Professional Experience``
+        # ``required``. The draft carries them as ``## Professional Summary`` and
+        # ``## Professional Experience``, so the reviewer could not map the bare
+        # quote to the marked line, reported both ``missing``, and the run
+        # withheld as ``source_facts_missing`` even though every heading and
+        # every fact was present. A heading is not a fact to be represented; it
+        # is structure, and the draft's own heading is what carries it.
+        if (item["classification"] in {"uncertain", "required"}
                 and _is_section_heading(item["quote"])):
             item["classification"] = "non_resume"
         ids.add(item["id"])

@@ -110,10 +110,28 @@ def test_only_the_uncertain_bare_heading_is_corrected():
     assert by_quote["- SYNTHETIC-ONLY Maintained parts records.\n"] == "required"
 
 
-def test_a_non_uncertain_heading_is_left_untouched():
-    """The correction is not a blanket rewrite of headings."""
+def test_a_required_heading_is_also_structural():
+    """A heading is structure, not a fact to be represented.
+
+    Measured on Conservative website run ``b2198062`` (2026-11-07): the inventory
+    marked the bare headings ``Professional Summary`` and ``Professional
+    Experience`` ``required``. The draft carries them as ``## Professional
+    Summary``, so the reviewer could not map the bare quote to the marked line,
+    reported both ``missing``, and the run withheld as ``source_facts_missing``
+    with every heading and fact present.
+    """
     response, sources = _inventory(
-        ("required", HEADING),  # model said required -- leave it alone
+        ("required", HEADING),
+        ("non_resume", "## Education\n"),
+    )
+    validated = sc._validate_inventory(response, sources)
+    assert [item["classification"] for item in validated] == ["non_resume", "non_resume"]
+
+
+def test_a_required_substantive_span_is_left_untouched():
+    """The correction is not a blanket rewrite of required spans."""
+    response, sources = _inventory(
+        ("required", SUBSTANTIVE),
         ("non_resume", "## Education\n"),
     )
     validated = sc._validate_inventory(response, sources)
