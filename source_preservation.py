@@ -1357,14 +1357,25 @@ def _ungrounded_words(text: str, source_words: set[str],
     return found
 
 
+_OUTCOME_PARTICIPLE = re.compile(
+    r"^(?:ensuring|improving|increasing|reducing|preventing|achieving|"
+    r"delivering|boosting|enhancing|resulting|leading|highlighting)\b",
+    re.IGNORECASE,
+)
+
+
 def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[str]],
-                                  source_words: set[str], source_stems: set[str]
+                                  source_words: set[str], source_stems: set[str],
+                                  source_bullet: str,
                                   ) -> str | None:
-    """Remove a separable, lexically ungrounded clause without erasing a bridge.
+    """Remove a narrowly identifiable distinct outcome without erasing a bridge.
 
     Only comma-delimited or coordinated participial clauses are considered. The
-    original activity and each retained clause stay verbatim; this is not a
-    semantic verdict on claims that share source vocabulary or lack a boundary.
+    absence of a word in the source is not proof that a paraphrase is unsupported:
+    an ordinary activity, or an outcome sharing content with the matched source
+    bullet, is retained for semantic review. Even an outcome-shaped clause without
+    shared content is only a lexical heuristic, not a semantic verdict. The original
+    activity and every retained clause stay verbatim.
     """
     boundaries = list(re.finditer(r",\s+|\s+and\s+(?=[a-z][a-z'-]*ing\b)", line))
     if not boundaries:
@@ -1377,14 +1388,33 @@ def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[st
     for index, boundary in enumerate(boundaries):
         end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(line)
         segments.append((boundary.group(), line[boundary.end():end]))
-    # Do not delete a clause carrying a bridge, even if it contains other words.
-    # Those inseparable claims are outside this narrow text correction.
+    # An outcome-shaped paraphrase can itself be the only representation of a
+    # source activity (records -> documentation). Before removing anything,
+    # require each coordinated source clause to have some lexical representation
+    # outside the proposed removals. This is a refusal guard, not proof of fidelity.
+    source_bullet_words = _stemmed_words(source_bullet)
+    removable = [
+        bool(_OUTCOME_PARTICIPLE.match(clause)
+             and not _contains_permitted_bridge(clause, permitted_bridges)
+             and not (_stemmed_words(clause) & source_bullet_words)
+             and _ungrounded_words(clause, source_words, source_stems))
+        for _, clause in segments
+    ]
+    retained_text = prefix + " " + " ".join(
+        clause for (_, clause), remove in zip(segments, removable) if not remove)
+    retained_words = _stemmed_words(_without_permitted_bridges(retained_text, permitted_bridges))
+    source_clauses = re.split(r"\s+and\s+|[,;]", source_bullet, flags=re.IGNORECASE)
+    if any(words and not words & retained_words
+           for words in (_stemmed_words(part) for part in source_clauses)):
+        return None
+    # A bridge or an overlap with the matched source bullet makes the clause
+    # potentially source-related. Leave it intact for semantic review rather than
+    # treating an unfamiliar synonym (such as records -> logs) as an invention.
     removed = False
     kept = prefix
     kept_clause = False
-    for separator, clause in segments:
-        if (not _contains_permitted_bridge(clause, permitted_bridges)
-                and _ungrounded_words(clause, source_words, source_stems)):
+    for (separator, clause), remove in zip(segments, removable):
+        if remove:
             removed = True
             continue
         if not kept_clause and separator.lstrip().startswith("and"):
@@ -1445,8 +1475,9 @@ def preserve_experience_bullets(markdown: str, source_text: str,
       concern, not a deterministic preservation one, so it is left untouched.
         * Plain paragraphs are indexed only within a recognisable, dated experience
             record. Incomplete or ambiguous structures are left for review.
-        * A permitted bridge survives a separable, lexically ungrounded outcome
-            clause being removed. Inseparable claims still require semantic review.
+        * A permitted bridge survives a separable, outcome-shaped, lexically
+            ungrounded clause being removed only when it shares no content with
+            the matched source bullet. Ambiguous claims require semantic review.
 
         Otherwise a correction substitutes the candidate's own source line. Bridge
         corrections retain the draft's existing activity and bridge wording.
@@ -1526,7 +1557,7 @@ def preserve_experience_bullets(markdown: str, source_text: str,
             trimmed = None
             if draft_figures == bullet_figures:
                 trimmed = _trim_unshared_bridge_outcome(
-                    stripped, permitted_bridges, source_words, source_stems)
+                    stripped, permitted_bridges, source_words, source_stems, bullet)
             if trimmed is not None:
                 out_lines.append(f"{indent}{trimmed}{newline}")
                 changes.append("removed an unsupported appended clause")

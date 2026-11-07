@@ -1,4 +1,6 @@
 """Offline safety controls for extracted experience records."""
+import pytest
+
 import source_preservation as sp
 
 
@@ -103,6 +105,92 @@ def test_faithful_plain_source_paraphrase_is_preserved():
              "*Electrician | 2015 - 2019*\n"
              "- Electrical systems were inspected and safety records maintained.\n")
     assert sp.preserve_experience_bullets(draft, SOURCE) == (draft, [])
+
+
+def test_bridge_does_not_delete_supported_records_paraphrase():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and maintaining safety logs.\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+def test_bridge_keeps_supported_paraphrase_but_removes_distinct_outcome():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and maintaining safety logs, "
+             "ensuring flawless regulatory compliance.\n")
+    out, changes = sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"])
+    assert "applying trend analysis and maintaining safety logs" in out
+    assert "ensuring flawless regulatory compliance" not in out
+    assert changes == ["removed an unsupported appended clause"]
+
+
+def test_bridge_leaves_source_related_ambiguous_outcome_for_review():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and ensuring safety compliance.\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+def test_outcome_shaped_paraphrase_without_shared_words_is_left_for_review():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and ensuring proper documentation.\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+@pytest.mark.parametrize("suffix", [
+    "applying trend analysis and maintaining safety logs.",
+    "maintaining safety logs and applying trend analysis.",
+    "maintaining safety logs, applying trend analysis.",
+    "applying trend analysis while maintaining safety logs.",
+    "applying trend analysis and performing safety checks.",
+])
+def test_bridge_retains_activity_paraphrases_in_any_position(suffix):
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, " + suffix + "\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+@pytest.mark.parametrize("suffix", [
+    "maintaining safety logs, ensuring flawless regulatory compliance, applying trend analysis.",
+    "ensuring flawless regulatory compliance and applying trend analysis and maintaining safety logs.",
+])
+def test_distinct_outcome_removed_between_preserved_paraphrase_and_bridge(suffix):
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, " + suffix + "\n")
+    out, changes = sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"])
+    assert "maintaining safety logs" in out
+    assert "applying trend analysis" in out
+    assert "ensuring flawless regulatory compliance" not in out
+    assert changes == ["removed an unsupported appended clause"]
+
+
+def test_inseparable_bridge_and_outcome_remain_for_semantic_review():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis to guarantee flawless compliance.\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+def test_bridge_with_transplanted_figure_is_not_silently_trimmed():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and ensuring 100% compliance.\n")
+    assert sp.preserve_experience_bullets(draft, SOURCE, ["trend analysis"]) == (draft, [])
+
+
+def test_full_preservation_keeps_paraphrase_and_removes_distinct_outcome():
+    draft = ("## Professional Experience\n**Alpha Electric** -- Tacoma, WA\n"
+             "*Electrician | 2015 - 2019*\n"
+             "- Inspected electrical systems, applying trend analysis and maintaining safety logs, "
+             "ensuring flawless regulatory compliance.\n")
+    out, changes = sp.preserve_source_facts(draft, SOURCE, ["trend analysis"])
+    assert "applying trend analysis and maintaining safety logs" in out
+    assert "ensuring flawless regulatory compliance" not in out
+    assert "removed an unsupported appended clause" in changes
 
 
 def test_paraphrase_and_permitted_bridge_survive_whole_line_replacements():
