@@ -202,3 +202,51 @@ def test_no_heading_is_duplicated():
     for name in ("Professional Summary", "Professional Experience", "Projects",
                  "Education", "Certifications", "Technical Skills"):
         assert out.count(f"## {name}") == 1, name
+
+
+# ── 5. A heading created by the pipeline is filled, not left empty ─────────
+
+def test_a_section_the_writer_omitted_is_filled_from_the_source():
+    """The heading must exist BEFORE the empty-section fill runs.
+
+    Measured 2026-11-07 on ``realistic_candidate`` / Imaginative: the writer
+    emitted no ``## Certifications`` section at all, so the fill rule had nothing
+    to fill, and ``ensure_required_headings`` then added the heading EMPTY. The
+    candidate's own certification was dropped and the reviewer correctly reported
+    it missing.
+
+    Ordering is the whole fix: the fill rule only fills a section that exists, so
+    the heading must be created first. No content is invented — the fill rule
+    still copies only the candidate's own source lines.
+    """
+    import source_preservation as sp
+
+    source = (
+        "## Professional Experience\n"
+        "SYNTHETIC-ONLY Fabricated structural steel assemblies.\n"
+        "## Certifications\n"
+        "SYNTHETIC-ONLY Washington 01 Journey Level Electrician License.\n"
+    )
+    # The writer omitted the Certifications section entirely.
+    draft = ("## Professional Experience\n"
+             "- Fabricated structural steel assemblies.\n")
+
+    out, changes = sp.preserve_source_facts(draft, source)
+    assert "## Certifications" in out
+    assert "Washington 01 Journey Level Electrician License" in out
+    assert "filled an empty certifications section from the source" in changes
+
+
+def test_an_omitted_section_with_no_source_content_stays_empty():
+    """A heading is added, but nothing is invented to fill it."""
+    import source_preservation as sp
+
+    source = ("## Professional Experience\n"
+              "SYNTHETIC-ONLY Fabricated structural steel assemblies.\n")
+    draft = ("## Professional Experience\n"
+             "- Fabricated structural steel assemblies.\n")
+
+    out, _ = sp.preserve_source_facts(draft, source)
+    assert "## Certifications" in out
+    body = out.split("## Certifications")[1].split("##")[0]
+    assert body.strip() == ""

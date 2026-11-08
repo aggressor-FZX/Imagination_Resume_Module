@@ -2076,8 +2076,19 @@ def preserve_source_facts(
                  preserve_experience_bullets,
                  preserve_specific_experience_details,
                  preserve_skills_block,
-                 preserve_empty_source_sections,
-                 ensure_required_headings):
+                 # Headings BEFORE the empty-section fill. Measured 2026-11-07
+                 # on ``realistic_candidate`` / Imaginative: the writer emitted
+                 # no ``## Certifications`` section at all, so the fill rule had
+                 # nothing to fill, and ``ensure_required_headings`` then added
+                 # the heading EMPTY. The candidate's own certification was
+                 # dropped and the reviewer correctly reported it missing.
+                 #
+                 # Ordering is the whole fix: the fill rule only fills a section
+                 # that exists, so the heading must be created first. This adds
+                 # no content — the heading is structure, and the fill rule still
+                 # copies only the candidate's own source lines.
+                 ensure_required_headings,
+                 preserve_empty_source_sections):
         if step in (preserve_skills_block, preserve_experience_bullets,
             preserve_specific_experience_details,
                 preserve_quantified_qualifiers):
