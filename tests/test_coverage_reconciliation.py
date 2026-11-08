@@ -225,3 +225,92 @@ def test_an_uncertain_verdict_is_not_reconciled():
     review = _review("uncertain", "uncertain", [])
     claims, incomplete, _ = _validate(review, _prior_represented())
     assert "uncertain" in incomplete
+
+
+# --- The write-back chain: a downgrade must not be re-approved next pass ----
+
+def test_a_downgraded_claim_is_not_reconciled_on_the_next_review():
+    """End-to-end: pass 1 downgrades an over-claim, pass 2 cannot restore it.
+
+    ``_validate_review`` downgrades a ``represented`` claim to ``uncertain``
+    when ``_introduces_beyond`` finds a name the cited sources never state. That
+    downgrade used to be assigned to a local variable and never written back to
+    the mapping, so ``_ACTIVE_PRIOR_COVERAGE`` — which reads the mapping — filed
+    the over-claim as ``represented`` WITH spans.
+
+    That is precisely the shape coverage reconciliation restores. So the defect
+    was not only a wrong diagnostic count: a later pass could have re-approved
+    the very over-claim the check had just refused.
+
+    This drives both passes through the real ``_validate_review`` and the real
+    prior-coverage record, so it fails if either half of the chain regresses.
+    """
+    # Pass 1: the head line is offered as represented, but its span introduces
+    # "Agile" and "Scrum", which the source never states.
+    over_claim_line = "**Harborline Transit Authority** -- Tacoma, WA (Agile, Scrum)"
+    lines = [dict(line) for line in LINES]
+    lines[1] = {"line_id": "L2", "text": over_claim_line}
+    span_end = len(over_claim_line)
+
+    pass1 = {
+        "claims": [
+            {"id": "L1:0:26", "line_id": "L1", "start": 0, "end": 26,
+             "verdict": "structural", "citations": []},
+            {"id": f"L2:0:{span_end}", "line_id": "L2", "start": 0,
+             "end": span_end, "verdict": "supported",
+             "citations": HEAD_CITATION},
+            {"id": "L3:0:44", "line_id": "L3", "start": 0, "end": 44,
+             "verdict": "structural", "citations": []},
+            {"id": "L4:0:46", "line_id": "L4", "start": 0, "end": 46,
+             "verdict": "supported",
+             "citations": [{"source_id": "doc", "start": BULLET_START,
+                            "end": BULLET_END, "quote": BULLET_QUOTE}]},
+        ],
+        "representations": [
+            {"source_claim_id": HEAD_ID, "status": "represented",
+             "spans": [{"line_id": "L2", "start": 0, "end": span_end}]},
+            {"source_claim_id": BULLET_ID, "status": "represented",
+             "spans": [{"line_id": "L4", "start": 0, "end": 46}]},
+        ],
+    }
+
+    token = sc._ACTIVE_PRIOR_COVERAGE.set(None)
+    try:
+        _, incomplete, _ = sc._validate_review(
+            pass1, lines, {"doc": SOURCE}, INVENTORY)
+    finally:
+        sc._ACTIVE_PRIOR_COVERAGE.reset(token)
+
+    # Pass 1 refused the over-claim...
+    assert "uncertain" in incomplete
+    # ...and the mapping now says so, which is what the next pass reads.
+    head_mapping = next(m for m in pass1["representations"]
+                        if m["source_claim_id"] == HEAD_ID)
+    assert head_mapping["status"] == "uncertain"
+    assert head_mapping["spans"] == []
+
+    # Pass 2: the reviewer now calls the head missing. Reconciliation must NOT
+    # restore it, because the prior record is `uncertain`, not `represented`.
+    prior = {
+        HEAD_ID: {"status": head_mapping["status"],
+                  "spans": list(head_mapping["spans"]),
+                  "line_text": {line["line_id"]: line["text"] for line in lines}},
+        BULLET_ID: {"status": "represented",
+                    "spans": [{"line_id": "L4", "start": 0, "end": 46}],
+                    "line_text": {line["line_id"]: line["text"]
+                                  for line in lines}},
+    }
+    # The head line is longer than the fixture's, so build pass 2 against the
+    # actual line length rather than reusing `_review`'s fixed 0:46 span.
+    pass2 = _review("missing", "structural", [])
+    pass2["claims"][1] = {"id": f"L2:0:{span_end}", "line_id": "L2", "start": 0,
+                          "end": span_end, "verdict": "structural",
+                          "citations": []}
+    claims, incomplete2, _ = _validate(pass2, prior, lines=lines)
+
+    assert "missing" in incomplete2, (
+        "a downgraded over-claim was reconciled back to represented on the next "
+        "review — the write-back is not reaching prior coverage")
+    head_claim = next(c for c in claims if c["line_id"] == "L2")
+    assert head_claim["verdict"] == "structural"
+    assert head_claim["citations"] == []
