@@ -4,14 +4,34 @@
   "pdf": {
     "file": "live-conservative.pdf",
     "pages": 1,
-    "page_rect_pt": [612.0, 792.0],
+    "page_rect_pt": [
+      612.0,
+      792.0
+    ],
     "text_blocks": 18,
     "blocks_outside_page": 0,
-    "fonts_embedded": ["CGGGZJ+TeXGyrePagella-Bold", "HDOURL+TeXGyrePagella-Regular"],
+    "fonts_embedded": [
+      "CGGGZJ+TeXGyrePagella-Bold",
+      "HDOURL+TeXGyrePagella-Regular"
+    ],
     "characters": 1830,
     "headings_present": 6,
-    "heading_order_observed": ["Professional Summary","Professional Experience","Projects","Technical Skills","Education","Certifications"],
-    "heading_order_expected": ["Professional Summary","Professional Experience","Projects","Education","Certifications","Technical Skills"],
+    "heading_order_observed": [
+      "Professional Summary",
+      "Professional Experience",
+      "Projects",
+      "Technical Skills",
+      "Education",
+      "Certifications"
+    ],
+    "heading_order_expected": [
+      "Professional Summary",
+      "Professional Experience",
+      "Projects",
+      "Education",
+      "Certifications",
+      "Technical Skills"
+    ],
     "defect": "Section order did not match the delivered markdown: Technical Skills was emitted before Education and Certifications. Root cause: main_template.tex placed the % TECHNICAL SKILLS slot before % EDUCATION, and render_template replaced slots in that physical order. The DOCX kept the markdown order, so the two exports of one run disagreed.",
     "status": "FIXED in this session; regression tests added."
   },
@@ -20,14 +40,64 @@
     "paragraphs": 31,
     "tables": 0,
     "headings_present": 6,
-    "heading_order_observed": ["Professional Summary","Professional Experience","Projects","Education","Certifications","Technical Skills"],
+    "heading_order_observed": [
+      "Professional Summary",
+      "Professional Experience",
+      "Projects",
+      "Education",
+      "Certifications",
+      "Technical Skills"
+    ],
     "heading_style": "Normal",
     "defect": "Section headings carry the 'Normal' paragraph style, so the DOCX has no outline/navigation structure and no heading semantics for screen readers or Word's navigation pane.",
     "status": "OPEN - reported, not fixed in this session."
   },
   "content_observations": [
-    {"observation": "## Projects is present but empty", "judgment": "CORRECT - the source fixtures contain no projects. An empty heading is the honest representation; nothing was invented to fill it."},
-    {"observation": "Technical Skills lists four lines with overlapping items (thermographic inspection, NFPA 70E, lockout/tagout appear twice)", "judgment": "FAITHFUL - the two source files each carry their own Skills block with exactly these four lines. The duplication is in the source, not introduced by the pipeline."},
-    {"observation": "DOCX shows literal '--' where the PDF renders an en dash", "judgment": "COSMETIC - normalize_dash maps en/em dash to '--' for LaTeX, which typesets it as an en dash; the DOCX writes the same '--' literally. Same content, different typography."}
-  ]
+    {
+      "observation": "## Projects is present but empty",
+      "judgment": "CORRECT - the source fixtures contain no projects. An empty heading is the honest representation; nothing was invented to fill it."
+    },
+    {
+      "observation": "Technical Skills lists four lines with overlapping items (thermographic inspection, NFPA 70E, lockout/tagout appear twice)",
+      "judgment": "FAITHFUL - the two source files each carry their own Skills block with exactly these four lines. The duplication is in the source, not introduced by the pipeline."
+    },
+    {
+      "observation": "DOCX shows literal '--' where the PDF renders an en dash",
+      "judgment": "COSMETIC - normalize_dash maps en/em dash to '--' for LaTeX, which typesets it as an en dash; the DOCX writes the same '--' literally. Same content, different typography."
+    }
+  ],
+  "post_fix_verification": {
+    "measured": "2026-11-07 after deploy d53d6be",
+    "source": "Files downloaded from a second live website run (Conservative, same fixtures).",
+    "pdf": {
+      "pages": 1,
+      "heading_order": [
+        "Professional Summary",
+        "Professional Experience",
+        "Projects",
+        "Education",
+        "Certifications",
+        "Technical Skills"
+      ],
+      "order_matches_required": true,
+      "blocks_outside_page": 0,
+      "fonts_embedded": [
+        "CGGGZJ+TeXGyrePagella-Bold",
+        "HDOURL+TeXGyrePagella-Regular"
+      ]
+    },
+    "docx": {
+      "heading_order": [
+        "Professional Summary",
+        "Professional Experience",
+        "Projects",
+        "Education",
+        "Certifications",
+        "Technical Skills"
+      ],
+      "order_matches_required": true,
+      "headings_present": "6/6"
+    },
+    "verdict": "Both exports now emit the six sections in REQUIRED_HEADINGS order and agree with each other. The PDF order defect is closed."
+  }
 }
