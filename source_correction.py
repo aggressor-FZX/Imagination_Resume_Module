@@ -701,6 +701,95 @@ def _is_section_heading(quote: str) -> bool:
                                for word in words)
 
 
+def _restore_missing_headings(markdown: str, draft: str) -> tuple[str, list[str]]:
+    """Re-insert a canonical section heading that correction removed.
+
+    A heading asserts no candidate fact. It names a section the product promises
+    and the delivered markdown is expected to carry, so losing one removes
+    structure without removing content — the worst of both. Measured on
+    ``realistic_candidate`` / Conservative (2026-11-07): the editor logged
+    ``Keeping empty section header 'Projects'``, the repair then revised one
+    span, and the approved markdown carried five headings instead of six.
+
+    The invariant is stated against the DRAFT this correction was given, not
+    against the source: a heading that was present when correction started must
+    still be present when it approves. That is exactly "survive correction", and
+    it is the narrowest possible scope — a document that never had a heading
+    gains nothing, and a heading the writer never emitted is not invented.
+
+    This runs at the approval point, after every edit, so it is the last word on
+    structure. It is a STRUCTURE repair and changes no existing character, which
+    is why it does not require re-review.
+
+    Deliberately narrow, in four ways:
+
+    1. Only the canonical names in ``REQUIRED_HEADINGS`` are restored, matched
+       through ``_HEADING_ALIASES`` so an existing ``## Skills`` counts as
+       ``Technical Skills`` and is not duplicated.
+    2. A heading is recognised only as a BARE line — the whole line is the name,
+       optionally with a Markdown ``#`` marker. A factual sentence that happens
+       to begin with "Projects" is not a heading and is never treated as one.
+    3. A section that is already present is left exactly where it is. Nothing is
+       moved, reordered or duplicated.
+    4. Only a heading the DRAFT carried is restorable, so nothing is invented.
+
+    Returns ``(markdown, changes)``. ``changes`` holds short, content-free
+    descriptions fit for a log line.
+    """
+    from source_preservation import (
+        REQUIRED_HEADINGS,
+        _HEADING_ALIASES,
+        _heading_of,
+    )
+
+    def canonical_headings(text: str) -> set[str]:
+        found_names: set[str] = set()
+        for raw in (text or "").splitlines():
+            found = _heading_of(raw)
+            if found is None:
+                continue
+            canonical = _HEADING_ALIASES.get(found[0].strip().lower())
+            if canonical:
+                found_names.add(canonical)
+        return found_names
+
+    present = canonical_headings(markdown)
+    # Only a heading the DRAFT carried is restorable. This is the difference
+    # between repairing structure that was removed and inventing a structure the
+    # document never had: a draft that legitimately carries no section headings
+    # (a plain-text fixture, a single-section document) must not gain six.
+    #
+    # Measured 2026-11-07: an earlier version restored every promised heading
+    # unconditionally and broke 40 tests, because minimal fixtures that never had
+    # headings suddenly grew a full skeleton.
+    draft_headings = canonical_headings(draft)
+    wanted = [name for name in REQUIRED_HEADINGS if name in draft_headings]
+    missing = [name for name in wanted if name not in present]
+    if not missing:
+        return markdown, []
+
+    # Insert each missing heading immediately BEFORE the first section that the
+    # promised order places after it, so the document keeps the promised order
+    # without moving anything that already exists. When no later section exists,
+    # append at the end.
+    lines = (markdown or "").splitlines()
+    changes: list[str] = []
+    for name in missing:
+        later = wanted[wanted.index(name) + 1:]
+        insert_at = len(lines)
+        for index, raw in enumerate(lines):
+            found = _heading_of(raw)
+            if found is None:
+                continue
+            canonical = _HEADING_ALIASES.get(found[0].strip().lower())
+            if canonical in later:
+                insert_at = index
+                break
+        lines.insert(insert_at, f"## {name}")
+        changes.append(f"restored the {name} heading")
+    return "\n".join(lines), changes
+
+
 def _validate_inventory(response: Any, sources: dict[str, str]) -> list[dict[str, Any]]:
     if not _exact_dict(response, {"source_claims"}) or type(response["source_claims"]) is not list:
         raise _Invalid
@@ -2139,6 +2228,11 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     corrected_labels = 0
     restorations = 0
     skill_restoration_attempted = False
+    # The draft as correction received it. The section-structure invariant is
+    # stated against this: a canonical heading present here must still be
+    # present at approval. Captured before any edit so a repair cannot erase the
+    # evidence of what it removed.
+    draft_at_entry = markdown
     skill_restoration_applied = False
     generic_restoration_attempted = False
     current_phase = "source_inventory"
@@ -2527,6 +2621,34 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 )
                 if any(marker in markdown for marker in _MARKERS):
                     markdown = _render(_split(markdown))
+                # ── Section-structure invariant ────────────────────────────
+                # A bare canonical heading must survive correction. Measured on
+                # ``realistic_candidate`` / Conservative (2026-11-07): the
+                # editor logged ``Keeping empty section header 'Projects'``, the
+                # repair then revised one span, and the approved markdown carried
+                # five headings instead of six. Re-running preservation on the
+                # delivered text added ``Projects`` back, which proves the
+                # heading was present and was removed.
+                #
+                # This is a STRUCTURE repair, not a content edit, so it does not
+                # require re-review: it inserts a heading line and changes no
+                # existing character. It is deliberately narrow:
+                #
+                #   * only the canonical names in ``REQUIRED_HEADINGS`` (plus the
+                #     aliases that map onto them) are restored;
+                #   * only as a BARE heading — a line that is exactly the name,
+                #     with no other text — so a factual sentence that happens to
+                #     begin with "Projects" is never treated as a heading;
+                #   * only when the section is genuinely absent, so an existing
+                #     heading is never duplicated or moved;
+                #   * the summary stays conditional, matching
+                #     ``ensure_required_headings``: an empty summary heading would
+                #     claim a summary the candidate never wrote.
+                markdown, structure_changes = _restore_missing_headings(
+                    markdown, draft_at_entry)
+                if structure_changes:
+                    commentary = ("Correction " + " and ".join(structure_changes)
+                                  + "; " + commentary)
                 return CorrectionResult(
                     "approved", markdown, None,
                     commentary,
