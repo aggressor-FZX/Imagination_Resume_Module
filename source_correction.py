@@ -1543,6 +1543,25 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
             raise _Invalid
         if status == "represented" and unsubstantiated:
             status, spans = "uncertain", []
+            # Write the downgrade back to the mapping, not just to the local
+            # variable. Two things read the mapping afterwards and both were
+            # wrong while this stayed local:
+            #
+            #   * the `correction.completeness` diagnostic counts
+            #     `status == "uncertain"` on the mapping, so a run withheld
+            #     BECAUSE of a downgrade reported `uncertain_source_claims: 0`
+            #     and looked like it had withheld for no reason at all;
+            #   * `_ACTIVE_PRIOR_COVERAGE` records the mapping's status for the
+            #     next pass, so a downgraded claim was filed as `represented`
+            #     WITH spans. Coverage reconciliation restores exactly that
+            #     shape, so a later pass could have re-approved the over-claim
+            #     this check had just refused.
+            #
+            # Measured 2026-11-07 on live run `78ace8c5`: withheld as
+            # `source_completeness_uncertain` with `uncertain_source_claims: 0`
+            # and `required_source_claims: 30`.
+            mapping["status"] = "uncertain"
+            mapping["spans"] = []
 
         if status in {"missing", "uncertain"}:
             incomplete.add(status)

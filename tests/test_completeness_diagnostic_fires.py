@@ -88,3 +88,56 @@ def test_both_refusal_sites_use_an_in_scope_inventory():
     assert "items.get(mapping.get(" not in source, (
         "the diagnostic reads `items`, which is local to _validate_review — the "
         "exact NameError the guard hides")
+
+
+def test_a_downgraded_representation_is_written_back_to_the_mapping():
+    """The over-claim downgrade must reach the mapping, not just a local.
+
+    Measured 2026-11-07 on live run ``78ace8c5``: the run withheld as
+    ``source_completeness_uncertain`` while the diagnostic reported
+    ``uncertain_source_claims: 0`` and ``required_source_claims: 30``. The
+    withhold was correct — ``_introduces_beyond`` had downgraded a
+    ``represented`` claim to ``uncertain`` — but the downgrade was assigned to a
+    local ``status`` variable and never written back, so:
+
+      * the diagnostic counted the raw ``represented`` and reported zero, making
+        a correct withhold look arbitrary; and
+      * ``_ACTIVE_PRIOR_COVERAGE`` filed the claim as ``represented`` WITH
+        spans, which is exactly the shape coverage reconciliation restores — so
+        a later pass could re-approve the over-claim this check had refused.
+
+    This drives the real ``_validate_review`` with a span that shares a content
+    word with its item but introduces a name the source never states.
+    """
+    lines = [{"line_id": "L1",
+              "text": "- Standardized inspection checklists using Agile, Scrum "
+                      "and Gantt charts."}]
+    sources = {"S1": "Standardized inspection checklists for the depot."}
+    inventory = [{"id": "C1", "source_id": "S1", "classification": "required",
+                  "quote": "inspection checklists", "start": 13, "end": 34}]
+    span_end = len(lines[0]["text"])
+    response = {
+        "claims": [{
+            "id": f"L1:0:{span_end}", "line_id": "L1", "start": 0, "end": span_end,
+            "verdict": "supported",
+            "citations": [{"source_id": "S1", "start": 13, "end": 34,
+                           "quote": "inspection checklists"}],
+        }],
+        "representations": [{
+            "source_claim_id": "C1", "status": "represented",
+            "spans": [{"line_id": "L1", "start": 0, "end": len(lines[0]["text"])}],
+        }],
+    }
+
+    claims, incomplete, _ = sc._validate_review(
+        response, lines, sources, inventory)
+
+    # The verdict is unchanged: this is still a withhold.
+    assert "uncertain" in incomplete
+    assert claims[0]["verdict"] == "supported"
+    # ...but the mapping now says so, which is what the diagnostic and the
+    # prior-coverage record both read.
+    assert response["representations"][0]["status"] == "uncertain", (
+        "the downgrade stayed local, so the diagnostic reports zero uncertain "
+        "claims and prior coverage files an over-claim as represented")
+    assert response["representations"][0]["spans"] == []
