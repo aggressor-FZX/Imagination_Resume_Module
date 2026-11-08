@@ -191,10 +191,10 @@ def _fold(value: str) -> str:
 def _index_list(response: Any, key: str, upper: int) -> list[int]:
     values = response if type(response) is list else response.get(key)
     if type(values) is not list:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("index_list_not_a_list")
     for value in values:
         if type(value) is not int or not 0 <= value < upper:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("index_out_of_range")
     return values
 
 
@@ -608,11 +608,11 @@ def _evidence_map(value: Any, line_ids: set[str], upper: int) -> dict[str, list[
     if value is None:
         return {}
     if type(value) is not dict:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("evidence_not_a_dict")
     named: dict[str, list[int]] = {}
     for key, indices in value.items():
         if type(key) is not str or key not in line_ids:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("evidence_key_not_a_line")
         named[key] = sorted(set(_index_list(indices, _EVIDENCE_KEY, upper)))
     return named
 
@@ -620,7 +620,7 @@ def _evidence_map(value: Any, line_ids: set[str], upper: int) -> dict[str, list[
 def _line_list(values: Any, key: str, lines: list[dict[str, Any]]) -> list[str]:
     """Read a verdict list of line ids (the contract's form) or of positions."""
     if type(values) is not list:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("verdict_list_not_a_list")
     resolved = []
     for value in values:
         if type(value) is int and 0 <= value < len(lines):
@@ -628,7 +628,7 @@ def _line_list(values: Any, key: str, lines: list[dict[str, Any]]) -> list[str]:
         elif type(value) is str and any(line["line_id"] == value for line in lines):
             resolved.append(value)
         else:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("verdict_entry_not_a_line")
     return resolved
 
 
@@ -653,34 +653,34 @@ def _bridge_answers(
     if raw is None:
         return {}
     if type(raw) is not dict:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("bridge_decisions_not_a_dict")
     narrowed_raw = response.get(BRIDGE_NARROWED_KEY) or {}
     if type(narrowed_raw) is not dict:
-        raise MalformedIndexedResponse
+        raise MalformedIndexedResponse("bridge_narrowed_not_a_dict")
 
     known_ids = {b["id"] for b in visible if type(b) is dict and b.get("id")}
     out: dict[str, dict[str, str]] = {}
     for bridge_id, decision in raw.items():
         if type(bridge_id) is not str or bridge_id not in known_ids:
             # A reviewer-invented bridge is not admitted.
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("bridge_id_unknown")
         if type(decision) is not str or decision not in _BRIDGE_DECISIONS:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("bridge_decision_word_unknown")
         if bridge_id in out:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("bridge_decision_duplicate")
         replacement = ""
         if decision == "narrow":
             candidate = narrowed_raw.get(bridge_id)
             if type(candidate) is not str or not candidate.strip():
-                raise MalformedIndexedResponse
+                raise MalformedIndexedResponse("bridge_narrowed_replacement_missing")
             replacement = candidate.strip()
         out[bridge_id] = {"decision": decision, "replacement": replacement}
     for bridge_id in narrowed_raw:
         if type(bridge_id) is not str or bridge_id not in known_ids:
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("bridge_narrowed_id_unknown")
         if bridge_id not in out or out[bridge_id]["decision"] != "narrow":
             # A replacement for a bridge that was not narrowed is incoherent.
-            raise MalformedIndexedResponse
+            raise MalformedIndexedResponse("bridge_narrowed_not_narrowed")
     return out
 
 
