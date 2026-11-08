@@ -119,3 +119,31 @@ def test_the_exception_carries_a_constraint():
     assert exc.phase == "initial_review"
     # A default keeps every existing raise site working.
     assert sc.MalformedReviewAnswer().constraint == "unspecified"
+
+
+def test_the_constraint_survives_the_event_sanitizer():
+    """The identifier must reach the log, or it cannot be diagnosed.
+
+    Measured 2026-11-08: three live runs withheld as `malformed_output` and the
+    phase event carried no `constraint` key at all, because the sanitizer is an
+    allow-list and neither the new outcome nor the new field was on it. The
+    identifier existed in the exception and was dropped on the way to the log.
+    """
+    import correction_events as ce
+
+    event = {"event": "correction.phase_end", "phase": "initial_review",
+             "outcome": "malformed_answer",
+             "constraint": "duplicate_line_verdict", "request_index": 2}
+    clean = ce.sanitize(event)
+    assert clean.get("outcome") == "malformed_answer"
+    assert clean.get("constraint") == "duplicate_line_verdict"
+
+
+def test_a_non_identifier_constraint_is_dropped():
+    """The field is a closed-set identifier, never model text."""
+    import correction_events as ce
+
+    event = {"event": "correction.phase_end", "phase": "initial_review",
+             "outcome": "malformed_answer",
+             "constraint": "some model text with spaces", "request_index": 2}
+    assert "constraint" not in ce.sanitize(event)

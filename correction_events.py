@@ -42,7 +42,13 @@ PHASES = frozenset({"source_inventory", "initial_review", "repair", "post_patch_
 # once they existed, so the sanitizer silently dropped the very events that explain
 # a retry sequence. Keep this list in step with what the adapter can emit.
 PHASE_OUTCOMES = frozenset({"ok", "deadline", "provider_call_timeout", "callback_timeout",
-                            "callback_error", "privacy", "cancelled"})
+                            "callback_error", "privacy", "cancelled",
+                            # The transport succeeded and the model answered;
+                            # our translation rejected the answer. Distinct
+                            # from `callback_error`, which made a
+                            # served-but-unusable answer look like a transport
+                            # fault.
+                            "malformed_answer"})
 FINISH_REASONS = frozenset({"stop", "length", "other"})
 PROVIDER_OUTCOMES = frozenset({"ok", "provider_call_timeout", "provider_error",
                                "provider_rate_limited", "provider_unavailable",
@@ -50,7 +56,12 @@ PROVIDER_OUTCOMES = frozenset({"ok", "provider_call_timeout", "provider_error",
 
 _FIELDS = (_INTEGER_FIELDS | _FLOAT_FIELDS
            | {"event", "correlation_id", "phase", "outcome", "status", "reason",
-              "model", "finish_reason", "timeout_category", "provider"})
+              "model", "finish_reason", "timeout_category", "provider",
+              # Which check a malformed answer failed, as a fixed identifier
+              # from a closed set. `malformed_output` alone says only that the
+              # answer was unusable, so a live failure could only be
+              # re-diagnosed by re-running it.
+              "constraint"})
 
 
 def _bounded_int(value):
@@ -87,6 +98,13 @@ def sanitize(event):
                 clean[key] = value
         elif key == "outcome":
             if value in PHASE_OUTCOMES | PROVIDER_OUTCOMES | {"approved", "withheld"}:
+                clean[key] = value
+        elif key == "constraint":
+            # A fixed identifier from a closed set, never model text. The
+            # pattern is the same one used for other short identifiers, so
+            # anything that is not a plain lowercase token is dropped rather
+            # than logged.
+            if type(value) is str and _IDENTIFIER.fullmatch(value):
                 clean[key] = value
         elif key == "finish_reason":
             if value in FINISH_REASONS:
