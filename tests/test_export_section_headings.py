@@ -150,3 +150,49 @@ def test_pdf_and_docx_agree_on_the_section_set(tmp_path):
     in_docx = {h for h in REQUIRED if h in docx_text}
     in_pdf = {h for h in REQUIRED if h in pdf_text}
     assert in_docx == in_pdf == set(REQUIRED)
+
+
+def _heading_order(text):
+    """Return the required headings in the order they appear in ``text``."""
+    found = []
+    for heading in REQUIRED:
+        index = text.find(heading)
+        if index != -1:
+            found.append((index, heading))
+    return [heading for _, heading in sorted(found)]
+
+
+def test_docx_keeps_the_promised_section_order():
+    """The DOCX must follow ``REQUIRED_HEADINGS``, not an arbitrary order."""
+    result = build_resume_from_payload_base64(dict(PAYLOAD))
+    text = _docx_text(result["docx_base64"])
+    assert _heading_order(text) == list(REQUIRED)
+
+
+@pytest.mark.skipif(
+    not (shutil.which("pdflatex") and shutil.which("pdftotext")),
+    reason="real renderer toolchain (pdflatex/pdftotext) not installed",
+)
+def test_pdf_keeps_the_promised_section_order(tmp_path):
+    """The PDF must follow ``REQUIRED_HEADINGS`` too.
+
+    Measured 2026-11-07 on a live run: the LaTeX template placed Technical
+    Skills BEFORE Education and Certifications, so the PDF silently reordered
+    the delivered markdown while the DOCX kept it. Both files carried all six
+    headings, so the section-set tests above passed; only the order was wrong.
+    """
+    result = build_resume_from_payload_base64(dict(PAYLOAD))
+    text = _pdf_text(result["pdf_base64"], tmp_path)
+    assert _heading_order(text) == list(REQUIRED)
+
+
+@pytest.mark.skipif(
+    not (shutil.which("pdflatex") and shutil.which("pdftotext")),
+    reason="real renderer toolchain (pdflatex/pdftotext) not installed",
+)
+def test_pdf_and_docx_agree_on_the_section_order(tmp_path):
+    """The two exports of one run must not disagree about section order."""
+    result = build_resume_from_payload_base64(dict(PAYLOAD))
+    docx_order = _heading_order(_docx_text(result["docx_base64"]))
+    pdf_order = _heading_order(_pdf_text(result["pdf_base64"], tmp_path))
+    assert docx_order == pdf_order == list(REQUIRED)

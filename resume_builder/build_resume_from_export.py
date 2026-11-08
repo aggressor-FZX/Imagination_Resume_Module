@@ -571,10 +571,17 @@ def render_template(template_text: str, resume: ResumePayload) -> str:
 
     rendered = replace_between_markers(rendered, "% TAGLINE / SUMMARY-------------------------------", "% PROFESSIONAL EXPERIENCE-------------------------------", build_summary_block(resume))
     rendered = replace_between_markers(rendered, "% PROFESSIONAL EXPERIENCE-------------------------------", "% ML AND ANALYTICS PROJECTS-------------------------------", generate_experience_block(resume))
-    rendered = replace_between_markers(rendered, "% ML AND ANALYTICS PROJECTS-------------------------------", "% TECHNICAL SKILLS-------------------------------", generate_projects_block(resume))
-    rendered = replace_between_markers(rendered, "% TECHNICAL SKILLS-------------------------------", "% EDUCATION-------------------------------", build_skill_block(resume))
+    # Slot order here MUST match the physical marker order in main_template.tex,
+    # which follows ``source_preservation.REQUIRED_HEADINGS``:
+    #   Summary -> Experience -> Projects -> Education -> Certifications -> Skills
+    # Measured 2026-11-07: the template used to place Technical Skills before
+    # Education/Certifications, so the PDF silently reordered the delivered
+    # markdown while the DOCX kept it. The two exports disagreed about section
+    # order for the same run.
+    rendered = replace_between_markers(rendered, "% ML AND ANALYTICS PROJECTS-------------------------------", "% EDUCATION-------------------------------", generate_projects_block(resume))
     rendered = replace_between_markers(rendered, "% EDUCATION-------------------------------", "% CERTIFICATIONS-------------------------------", generate_education_block(resume))
-    rendered = replace_between_markers(rendered, "% CERTIFICATIONS-------------------------------", "% PUBLICATION-------------------------------", generate_certification_block(resume))
+    rendered = replace_between_markers(rendered, "% CERTIFICATIONS-------------------------------", "% TECHNICAL SKILLS-------------------------------", generate_certification_block(resume))
+    rendered = replace_between_markers(rendered, "% TECHNICAL SKILLS-------------------------------", "% PUBLICATION-------------------------------", build_skill_block(resume))
     rendered = replace_between_markers(rendered, "% PUBLICATION-------------------------------", "\\end{document}", generate_publication_block(resume))
     return rendered
 

@@ -1,0 +1,18 @@
+{
+  "measured": "2026-11-07",
+  "target": "https://orchestrator-backend-isj7.onrender.com/api/ml/imagination/export",
+  "method": "Captured the real export request the website issues, then replayed it from the page context (so auth headers and cookies are the browser's own) with one field altered per case.",
+  "results": [
+    {"case": "control_unmodified", "status": 200, "reason": null,
+     "note": "The unmodified replay succeeds, so a 409 below is caused by the alteration, not by the replay itself."},
+    {"case": "injected_employer", "status": 409, "reason": "receipt_content_mismatch",
+     "alteration": "Inserted '**Northrop Grumman** -- Falls Church, VA' into final_written_section_markdown."},
+    {"case": "swapped_headline", "status": 409, "reason": "receipt_render_content_mismatch",
+     "alteration": "Set headline to 'Chief Technology Officer' in the structured payload."},
+    {"case": "no_receipt", "status": 409, "reason": "receipt_missing",
+     "alteration": "Removed publication_receipt."},
+    {"case": "corrupt_receipt", "status": 409, "reason": "receipt_signature_invalid",
+     "alteration": "Replaced the last 4 characters of the signed receipt with 'AAAA'."}
+  ],
+  "verdict": "4/4 tamper cases refused, each with a distinct reason; the unmodified control is accepted."
+}
