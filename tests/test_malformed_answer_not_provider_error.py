@@ -147,3 +147,4 @@ def test_a_non_identifier_constraint_is_dropped():
              "outcome": "malformed_answer",
              "constraint": "some model text with spaces", "request_index": 2}
     assert "constraint" not in ce.sanitize(event)
+
