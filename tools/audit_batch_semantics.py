@@ -267,10 +267,25 @@ def disputed_sentences(markdown: str, ledger: dict, source: str) -> list[dict]:
     src_flat = norm(source)
     out = []
     for body in output_lines(markdown):
-        # An employer/institution head is structure, and it is in the source
-        # verbatim. It is not a claim to judge. The shape is
-        # "**Name** -- Location", so it does not END with "**".
+        # An employer/institution head is structure, and it is normally in the
+        # source verbatim. The shape is "**Name** -- Location", so it does not
+        # END with "**".
+        #
+        # The "it is in the source" half used to be ASSUMED, and a negative
+        # control caught it: injecting "**Northrop Grumman** -- Falls Church, VA"
+        # into an otherwise clean output produced zero findings, because every
+        # head line was skipped before anything compared it to the source. An
+        # invented employer is the single most damaging addition a resume can
+        # carry, so the assumption is now checked rather than trusted.
         if re.match(r"^\*\*[^*]+\*\*", body):
+            name = re.sub(r"^\*\*([^*]+)\*\*.*$", r"\1", body).strip()
+            if name and norm(name) in src_flat:
+                continue
+            out.append({"sentence": body,
+                        "novel_words": [name] if name else [],
+                        "source_evidence": [],
+                        "note": "employer/institution head not present in the "
+                                "source"})
             continue
         if re.match(r"^\*[^*]+\*$", body):
             continue
