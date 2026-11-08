@@ -86,17 +86,31 @@ REVIEW_CONTRACT = (
 
 # Appended only when the request actually offers permitted bridge labels.
 BRIDGE_DECISION_CONTRACT = (
-    " This request ALSO lists permitted transferable-skill labels under `bridges`,"
-    " each with the candidate segment index that supports it. For every bridge id,"
-    " additionally return \"bridge_decisions\":{\"<bridge_id>\":\"accept\"|"
-    "\"narrow\"|\"remove\"} and, when narrowing, \"bridge_narrowed\":"
-    "{\"<bridge_id>\":\"<weaker general label>\"}. accept = the candidate segment"
-    " justifies exactly this general label; narrow = a weaker general label is"
-    " justified but this one overstates it; remove = the segment does not justify"
-    " the label at all. A label names a general capability; it must not name a"
-    " specific algorithm, product, credential, metric or proficiency level. Answer"
-    " for every bridge id you were given, exactly once. A narrowed label must be"
-    " supported by the SAME segment."
+    # The payload sends each bridge as {"id", "skill", "evidence"} — the id, the
+    # label, and the candidate text that supports it. It does NOT send a segment
+    # index. The contract used to say "each with the candidate segment index that
+    # supports it", which described a field that is not there; a reviewer reading
+    # it had to guess what to key its answer on, and on 2026-11-08 one answered
+    # with an id it invented, which the engine correctly refused as
+    # `bridge_id_unknown`.
+    #
+    # The contract now describes the payload exactly and states the id rule
+    # plainly: copy the `id` value verbatim, do not construct one.
+    " This request ALSO lists permitted transferable-skill labels under `bridges`."
+    " Each entry has `id`, `skill` and `evidence`: `id` is the identifier you must"
+    " answer with, `skill` is the label being judged, and `evidence` is the"
+    " candidate text that supports it."
+    " For every bridge, additionally return \"bridge_decisions\":"
+    "{\"<id>\":\"accept\"|\"narrow\"|\"remove\"} and, when narrowing,"
+    " \"bridge_narrowed\":{\"<id>\":\"<weaker general label>\"}."
+    " Copy each `id` EXACTLY as given; do not invent, abbreviate or renumber one."
+    " accept = the evidence justifies exactly this general label; narrow = a weaker"
+    " general label is justified but this one overstates it; remove = the evidence"
+    " does not justify the label at all. A label names a general capability; it"
+    " must not name a specific algorithm, product, credential, metric or"
+    " proficiency level. Answer for every bridge id you were given, exactly once,"
+    " and use no other id. A narrowed label must be supported by the SAME"
+    " evidence."
 )
 
 _CLASSIFICATIONS = ("required", "non_resume", "uncertain")

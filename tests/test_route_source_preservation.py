@@ -328,12 +328,24 @@ def boundaries(monkeypatch):
     # The writer's raw markdown is captured where preservation reads it, i.e. as the
     # input to preserve_source_facts and the output of the model call. Recording the
     # model's own return is the honest "before" value.
+    #
+    # Preservation now runs on TWO paths: the new pipeline (which composes the
+    # document without the editor) and the editor itself. The first call is the
+    # pipeline's, so recording "the first call" would capture the pipeline's
+    # input rather than the editor's. The seam this test is about is the
+    # EDITOR's, so the recorder only notes the call made from
+    # ``stages.star_editor``.
     real_preserve = source_preservation.preserve_source_facts
+    import inspect as _inspect
 
-    def recording_preserve(markdown, source_text):
-        note("editor_before_preservation", markdown)
-        out = real_preserve(markdown, source_text)
-        note("preservation_result", out[0])
+    def recording_preserve(markdown, source_text, **kwargs):
+        caller = _inspect.stack()[1].filename
+        from_editor = "star_editor" in caller
+        if from_editor:
+            note("editor_before_preservation", markdown)
+        out = real_preserve(markdown, source_text, **kwargs)
+        if from_editor:
+            note("preservation_result", out[0])
         return out
 
     monkeypatch.setattr(source_preservation, "preserve_source_facts",

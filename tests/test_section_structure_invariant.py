@@ -250,3 +250,42 @@ def test_an_omitted_section_with_no_source_content_stays_empty():
     assert "## Certifications" in out
     body = out.split("## Certifications")[1].split("##")[0]
     assert body.strip() == ""
+
+
+# ── 6. Preservation must run on the path the website actually uses ─────────
+
+def test_the_new_pipeline_runs_source_preservation():
+    """The website's route composes without the editor, so preservation must
+    run in the pipeline itself.
+
+    Measured 2026-11-08 on ``realistic_candidate``: three of five
+    Conservative/Imaginative runs withheld as ``source_completeness_uncertain``
+    with the summary lines and the second education record reported missing,
+    while ``preserve_source_facts`` on the same draft restored all four items.
+    The rules lived only in ``stages/star_editor.py``, and the new pipeline never
+    runs the editor.
+    """
+    import inspect
+
+    import imaginator_new_integration as pipeline
+
+    source = inspect.getsource(pipeline.run_new_pipeline_async)
+    assert "preserve_source_facts" in source, (
+        "the new pipeline no longer runs source preservation")
+    # It must be applied to the markdown the response carries.
+    assert "final_written_section_markdown" in source
+    # And a failure must not lose the draft.
+    assert "Source preservation failed" in source
+
+
+def test_the_pipeline_preservation_is_not_a_second_writer():
+    """It copies the candidate's own lines; it never composes prose."""
+    import inspect
+
+    import imaginator_new_integration as pipeline
+
+    source = inspect.getsource(pipeline.run_new_pipeline_async)
+    start = source.index("preserve_source_facts")
+    region = source[max(0, start - 2000):start + 2000]
+    # The call passes the candidate's own source text, not model output.
+    assert "resume_text" in region

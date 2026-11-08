@@ -1,0 +1,1034 @@
+[
+ {
+  "label": "finalB-bridge_opportunity-conservative-1",
+  "fixture": "bridge_opportunity",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Built depot scorecard used in weekly operations meetings",
+    "novel_words": [
+     "meetings",
+     "used",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Prepared monthly cost summaries reviewed by regional management.",
+    "novel_words": [
+     "summaries"
+    ],
+    "source_evidence": [
+     "- Prepared the monthly cost summary reviewed by the regional manager.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt shipment delay log used by dispatch team",
+    "novel_words": [
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records supporting 7 service branches.",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-conservative-2",
+  "fixture": "bridge_opportunity",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.",
+    "novel_words": [
+     "comparing"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "- Reconciled 1,180 fuel invoices against depot dispensing records each quarter."
+    ]
+   },
+   {
+    "sentence": "Built the depot scorecard reviewed by supervisors in weekly operations meetings.",
+    "novel_words": [
+     "meetings",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by the dispatch team.",
+    "novel_words": [
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records for 7 service branches.",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-conservative-3",
+  "fixture": "bridge_opportunity",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Built depot scorecards reviewed by supervisors during weekly operations meetings.",
+    "novel_words": [
+     "during",
+     "meetings",
+     "scorecards",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Prepared monthly cost summaries reviewed by the regional manager",
+    "novel_words": [
+     "summaries"
+    ],
+    "source_evidence": [
+     "- Prepared the monthly cost summary reviewed by the regional manager.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by dispatch teams",
+    "novel_words": [
+     "teams",
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records supporting 7 service branches across regions.",
+    "novel_words": [
+     "maintained",
+     "regions"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-conservative-4",
+  "fixture": "bridge_opportunity",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.",
+    "novel_words": [
+     "comparing"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "- Reconciled 1,180 fuel invoices against depot dispensing records each quarter."
+    ]
+   },
+   {
+    "sentence": "Built the depot scorecard reviewed by supervisors during weekly operations meetings.",
+    "novel_words": [
+     "during",
+     "meetings",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by the dispatch team",
+    "novel_words": [
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records for 7 service branches",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   },
+   {
+    "sentence": "Flagged slow-moving stock and proposed a reduction plan later adopted for 2 branches.",
+    "novel_words": [
+     "later"
+    ],
+    "source_evidence": [
+     "- Flagged slow-moving stock and proposed the reduction plan adopted for 2 branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-conservative-5",
+  "fixture": "bridge_opportunity",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.",
+    "novel_words": [
+     "comparing"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "- Reconciled 1,180 fuel invoices against depot dispensing records each quarter."
+    ]
+   },
+   {
+    "sentence": "Built the depot scorecard reviewed by supervisors during weekly operations meetings.",
+    "novel_words": [
+     "during",
+     "meetings",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by the dispatch team.",
+    "novel_words": [
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records for 7 service branches.",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-imaginative-1",
+  "fixture": "bridge_opportunity",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "period-over-period analysis",
+   "invoice reconciliation",
+   "failure pattern analysis"
+  ],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots using period-over-period analysis to highlight variances.",
+    "novel_words": [
+     "analysis",
+     "highlight",
+     "period-over-period",
+     "using",
+     "variances"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Built depot performance scorecards reviewed weekly by operations supervisors for decision-making.",
+    "novel_words": [
+     "decision-making",
+     "performance",
+     "scorecards",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Audited 3 years of maintenance cost records to identify repeat equipment failures through failure pattern analysis.",
+    "novel_words": [
+     "analysis",
+     "failure",
+     "failures",
+     "identify",
+     "pattern",
+     "through"
+    ],
+    "source_evidence": [
+     "- Audited 3 years of maintenance cost records to find which equipment failed repeatedly.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Prepared monthly cost summaries for review by regional managers",
+    "novel_words": [
+     "managers",
+     "summaries"
+    ],
+    "source_evidence": [
+     "- Prepared the monthly cost summary reviewed by the regional manager.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by dispatch teams",
+    "novel_words": [
+     "teams",
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records across 7 service branches",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-imaginative-2",
+  "fixture": "bridge_opportunity",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "trend analysis",
+   "scorecard development",
+   "invoice reconciliation",
+   "failure analysis",
+   "stock planning"
+  ],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Reconciled 1,180 fuel invoices against depot dispensing records each quarter via invoice reconciliation processes.",
+    "novel_words": [
+     "processes",
+     "reconciliation"
+    ],
+    "source_evidence": [
+     "- Reconciled 1,180 fuel invoices against depot dispensing records each quarter.",
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year."
+    ]
+   },
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots using trend analysis, comparing each month to the same month in the prior year.",
+    "novel_words": [
+     "analysis",
+     "comparing",
+     "trend",
+     "using"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Built the depot scorecard through scorecard development, enabling supervisors to review performance during weekly operations meetings.",
+    "novel_words": [
+     "development",
+     "during",
+     "enabling",
+     "meetings",
+     "performance",
+     "through",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Audited 3 years of maintenance cost records to identify repeat equipment failures through failure analysis techniques.",
+    "novel_words": [
+     "analysis",
+     "failure",
+     "failures",
+     "identify",
+     "techniques",
+     "through"
+    ],
+    "source_evidence": [
+     "- Audited 3 years of maintenance cost records to find which equipment failed repeatedly.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by dispatch teams",
+    "novel_words": [
+     "teams",
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records across 7 service branches",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-imaginative-3",
+  "fixture": "bridge_opportunity",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "trend analysis",
+   "invoice reconciliation",
+   "failure analysis",
+   "inventory record maintenance",
+   "slow-moving stock identification"
+  ],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Built the depot scorecard reviewed by supervisors in weekly operations meetings",
+    "novel_words": [
+     "meetings",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots using trend analysis, comparing each month against the same month in the prior year.",
+    "novel_words": [
+     "analysis",
+     "comparing",
+     "trend",
+     "using"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "- Reconciled 1,180 fuel invoices against depot dispensing records each quarter."
+    ]
+   },
+   {
+    "sentence": "Audited 3 years of maintenance cost records to identify repeat equipment failures through failure analysis.",
+    "novel_words": [
+     "analysis",
+     "failure",
+     "failures",
+     "identify",
+     "through"
+    ],
+    "source_evidence": [
+     "- Audited 3 years of maintenance cost records to find which equipment failed repeatedly.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt the shipment delay log used by the dispatch team",
+    "novel_words": [
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records for 7 service branches through systematic inventory record maintenance.",
+    "novel_words": [
+     "maintained",
+     "systematic",
+     "through"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   },
+   {
+    "sentence": "Identified slow-moving stock and proposed a reduction plan adopted by 2 branches using slow-moving stock identification techniques.",
+    "novel_words": [
+     "identification",
+     "identified",
+     "techniques",
+     "using"
+    ],
+    "source_evidence": [
+     "- Flagged slow-moving stock and proposed the reduction plan adopted for 2 branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-bridge_opportunity-imaginative-4",
+  "fixture": "bridge_opportunity",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "trend analysis",
+   "invoice reconciliation",
+   "stock planning",
+   "inventory accuracy"
+  ],
+  "omissions": [
+   {
+    "kind": "omission",
+    "fact": "prior four quarters",
+    "detail": "metric absent for Ridgeline Equipment Services"
+   }
+  ],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots using trend analysis; enabled year-over-year comparisons for operations review.",
+    "novel_words": [
+     "analysis",
+     "comparisons",
+     "enabled",
+     "trend",
+     "using",
+     "year-over-year"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Built depot performance scorecards leveraged in weekly leadership reviews",
+    "novel_words": [
+     "leadership",
+     "leveraged",
+     "performance",
+     "reviews",
+     "scorecards",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Rebuilt shipment delay logs used by dispatch teams",
+    "novel_words": [
+     "logs",
+     "teams",
+     "used"
+    ],
+    "source_evidence": [
+     "- Rebuilt the shipment delay log that the dispatch team relies on.",
+     "## Professional Summary"
+    ]
+   },
+   {
+    "sentence": "Maintained inventory accuracy across 7 service branches through centralized parts availability tracking.",
+    "novel_words": [
+     "accuracy",
+     "centralized",
+     "maintained",
+     "through",
+     "tracking"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   },
+   {
+    "sentence": "Flagged slow-moving stock and proposed reduction plans adopted across 2 branches",
+    "novel_words": [
+     "plans"
+    ],
+    "source_evidence": [
+     "- Flagged slow-moving stock and proposed the reduction plan adopted for 2 branches.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Executed stock planning via quarterly usage comparisons, informing reorder point adjustments for branch supplies.",
+    "novel_words": [
+     "adjustments",
+     "comparisons",
+     "executed",
+     "informing",
+     "supplies"
+    ],
+    "source_evidence": [
+     "- Compared quarterly parts usage against the prior four quarters to set reorder points.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   }
+  ],
+  "defects": 1
+ },
+ {
+  "label": "finalB-bridge_opportunity-imaginative-5",
+  "fixture": "bridge_opportunity",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "period-over-period analysis",
+   "inventory optimization"
+  ],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Tracked monthly fuel consumption across 14 depots using period-over-period analysis to highlight variances.",
+    "novel_words": [
+     "analysis",
+     "highlight",
+     "period-over-period",
+     "using",
+     "variances"
+    ],
+    "source_evidence": [
+     "- Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Built depot performance scorecards reviewed weekly by operations supervisors for decision-making.",
+    "novel_words": [
+     "decision-making",
+     "performance",
+     "scorecards",
+     "weekly"
+    ],
+    "source_evidence": [
+     "- Built the depot scorecard that supervisors review in the Monday operations meeting.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Prepared monthly cost summaries for review by regional management",
+    "novel_words": [
+     "summaries"
+    ],
+    "source_evidence": [
+     "- Prepared the monthly cost summary reviewed by the regional manager.",
+     "Operations analyst with 9 years of experience in depot reporting and fuel cost control across public transit operations."
+    ]
+   },
+   {
+    "sentence": "Maintained parts availability records across 7 service branches",
+    "novel_words": [
+     "maintained"
+    ],
+    "source_evidence": [
+     "- Maintain parts availability records for 7 service branches.",
+     "Operations analyst supporting stock planning and parts availability for a regional equipment service network."
+    ]
+   },
+   {
+    "sentence": "Flagged slow-moving stock and proposed inventory optimization plans adopted by 2 branches.",
+    "novel_words": [
+     "optimization",
+     "plans"
+    ],
+    "source_evidence": [
+     "- Flagged slow-moving stock and proposed the reduction plan adopted for 2 branches.",
+     "- Parts inventory, stock level planning"
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-conservative-1",
+  "fixture": "realistic_candidate",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-conservative-2",
+  "fixture": "realistic_candidate",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-conservative-3",
+  "fixture": "realistic_candidate",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-conservative-4",
+  "fixture": "realistic_candidate",
+  "mode": "conservative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Fabricated and repaired structural steel assemblies for 14 industrial contracts using shop welding equipment.",
+    "novel_words": [
+     "using"
+    ],
+    "source_evidence": [
+     "- Fabricated and repaired structural steel assemblies for 14 industrial contracts.",
+     "- Performed preventive maintenance on shop welding and cutting equipment."
+    ]
+   },
+   {
+    "sentence": "Pulled and terminated branch circuits during 31 commercial buildouts under licensed supervision.",
+    "novel_words": [
+     "during",
+     "supervision"
+    ],
+    "source_evidence": [
+     "- Pulled and terminated branch circuits on 31 commercial buildouts.",
+     "- Completed 8,000 apprenticeship hours under a licensed journeyman."
+    ]
+   },
+   {
+    "sentence": "Completed 8,000 apprenticeship hours fulfilling journeyman certification requirements.",
+    "novel_words": [
+     "certification",
+     "fulfilling",
+     "requirements"
+    ],
+    "source_evidence": [
+     "- Completed 8,000 apprenticeship hours under a licensed journeyman.",
+     "Journeyman electrician with 12 years of electrical experience spanning"
+    ]
+   },
+   {
+    "sentence": "Diagnosed and repaired switchgear faults across 9 substations supporting grid reliability.",
+    "novel_words": [
+     "across",
+     "grid",
+     "reliability",
+     "supporting"
+    ],
+    "source_evidence": [
+     "- Diagnosed and repaired switchgear faults at 9 substations.",
+     "- Fabricated and repaired structural steel assemblies for 14 industrial contracts."
+    ]
+   },
+   {
+    "sentence": "Reduced average fault-response time from 4.5 hours to 2.75 hours through systematic troubleshooting.",
+    "novel_words": [
+     "systematic",
+     "through",
+     "troubleshooting"
+    ],
+    "source_evidence": [
+     "- Cut average fault-response time from 4.5 hours to 2.75 hours.",
+     "- Completed 8,000 apprenticeship hours under a licensed journeyman."
+    ]
+   },
+   {
+    "sentence": "Reduced after-hours callouts by 27% by implementing thermographic inspections.",
+    "novel_words": [
+     "implementing"
+    ],
+    "source_evidence": [
+     "- Reduced after-hours callouts by 27% by adding thermographic inspections.",
+     "- Conduit bending, switchgear troubleshooting, thermographic inspection"
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-conservative-5",
+  "fixture": "realistic_candidate",
+  "mode": "conservative",
+  "status": "withheld",
+  "reason": "source_completeness_uncertain",
+  "bridges": [],
+  "note": "withheld; no output to audit"
+ },
+ {
+  "label": "finalB-realistic_candidate-imaginative-1",
+  "fixture": "realistic_candidate",
+  "mode": "imaginative",
+  "status": "withheld",
+  "reason": "source_completeness_uncertain",
+  "bridges": [],
+  "note": "withheld; no output to audit"
+ },
+ {
+  "label": "finalB-realistic_candidate-imaginative-2",
+  "fixture": "realistic_candidate",
+  "mode": "imaginative",
+  "status": "approved",
+  "reason": null,
+  "bridges": [
+   "preventive maintenance",
+   "fault diagnosis",
+   "thermographic inspection"
+  ],
+  "omissions": [],
+  "ownership": [],
+  "prohibited": [],
+  "markers": [],
+  "disputed": [
+   {
+    "sentence": "Fabricated and repaired structural steel assemblies for 14 industrial contracts using shop tools.",
+    "novel_words": [
+     "tools",
+     "using"
+    ],
+    "source_evidence": [
+     "- Fabricated and repaired structural steel assemblies for 14 industrial contracts.",
+     "commercial construction, industrial maintenance, and facility operations."
+    ]
+   },
+   {
+    "sentence": "Performed preventive maintenance on welding and cutting equipment to ensure operational readiness.",
+    "novel_words": [
+     "ensure",
+     "operational",
+     "readiness"
+    ],
+    "source_evidence": [
+     "- Performed preventive maintenance on shop welding and cutting equipment.",
+     "commercial construction, industrial maintenance, and facility operations."
+    ]
+   },
+   {
+    "sentence": "Pulled and terminated branch circuits during 31 commercial buildouts",
+    "novel_words": [
+     "during"
+    ],
+    "source_evidence": [
+     "- Pulled and terminated branch circuits on 31 commercial buildouts.",
+     "commercial construction, industrial maintenance, and facility operations."
+    ]
+   },
+   {
+    "sentence": "Diagnosed and repaired switchgear faults across 9 substations using fault diagnosis techniques.",
+    "novel_words": [
+     "across",
+     "diagnosis",
+     "techniques",
+     "using"
+    ],
+    "source_evidence": [
+     "- Diagnosed and repaired switchgear faults at 9 substations.",
+     "- Fabricated and repaired structural steel assemblies for 14 industrial contracts."
+    ]
+   },
+   {
+    "sentence": "Trained 4 apprentices on lockout/tagout safety procedures",
+    "novel_words": [
+     "safety"
+    ],
+    "source_evidence": [
+     "- Trained 4 apprentices on lockout/tagout procedures.",
+     "- Lockout/tagout, NFPA 70E"
+    ]
+   },
+   {
+    "sentence": "Reduced average fault-response time from 4.5 hours to 2.75 hours through systematic troubleshooting.",
+    "novel_words": [
+     "systematic",
+     "through",
+     "troubleshooting"
+    ],
+    "source_evidence": [
+     "- Cut average fault-response time from 4.5 hours to 2.75 hours.",
+     "- Completed 8,000 apprenticeship hours under a licensed journeyman."
+    ]
+   },
+   {
+    "sentence": "Reduced after-hours callouts by 27% by implementing thermographic inspections across facilities.",
+    "novel_words": [
+     "across",
+     "facilities",
+     "implementing"
+    ],
+    "source_evidence": [
+     "- Reduced after-hours callouts by 27% by adding thermographic inspections.",
+     "- Conduit bending, switchgear troubleshooting, thermographic inspection"
+    ]
+   }
+  ],
+  "defects": 0
+ },
+ {
+  "label": "finalB-realistic_candidate-imaginative-3",
+  "fixture": "realistic_candidate",
+  "mode": "imaginative",
+  "status": "withheld",
+  "reason": "malformed_output",
+  "bridges": [],
+  "note": "withheld; no output to audit"
+ },
+ {
+  "label": "finalB-realistic_candidate-imaginative-4",
+  "fixture": "realistic_candidate",
+  "mode": "imaginative",
+  "status": "withheld",
+  "reason": "source_completeness_uncertain",
+  "bridges": [],
+  "note": "withheld; no output to audit"
+ },
+ {
+  "label": "finalB-realistic_candidate-imaginative-5",
+  "fixture": "realistic_candidate",
+  "mode": "imaginative",
+  "status": "withheld",
+  "reason": "malformed_output",
+  "bridges": [],
+  "note": "withheld; no output to audit"
+ }
+]

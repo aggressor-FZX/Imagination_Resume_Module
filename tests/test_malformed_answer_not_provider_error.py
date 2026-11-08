@@ -148,3 +148,60 @@ def test_a_non_identifier_constraint_is_dropped():
              "constraint": "some model text with spaces", "request_index": 2}
     assert "constraint" not in ce.sanitize(event)
 
+
+
+# ── The bridge contract must describe the payload it ships with ────────────
+
+def test_the_bridge_contract_describes_the_fields_actually_sent():
+    """A contract that names a field the payload lacks makes the id a guess.
+
+    Measured 2026-11-08: the contract said each bridge came "with the candidate
+    segment index that supports it", but the payload sends `id`, `skill` and
+    `evidence` — no index. A reviewer reading the contract had to guess what to
+    key its answer on, and one answered with an invented id, which the engine
+    correctly refused as `bridge_id_unknown`.
+    """
+    import correction_protocol as cp
+
+    contract = cp.BRIDGE_DECISION_CONTRACT
+    # The fields the payload actually carries.
+    for field in ("id", "skill", "evidence"):
+        assert f"`{field}`" in contract, field
+    # The field the payload does NOT carry must not be promised.
+    assert "segment index" not in contract
+    # And the id rule must be stated plainly.
+    assert "Copy each `id` EXACTLY as given" in contract
+    assert "use no other id" in contract
+
+
+def test_the_unknown_id_refusal_is_retained():
+    """The contract fix must not weaken the refusal.
+
+    An invented id leaves the real bridge unreviewed, so approving would publish
+    a label nobody judged. The refusal is the correct behaviour and stays.
+    """
+    import correction_protocol as cp
+
+    request = {"bridges": [{"id": "b1", "skill": "trend analysis",
+                            "evidence": "x"}]}
+    response = {"bridge_decisions": {"bridge-99-invented": "accept"}}
+    try:
+        cp._bridge_answers(response, request)
+    except cp.MalformedIndexedResponse as exc:
+        assert exc.constraint == "bridge_id_unknown"
+    else:
+        raise AssertionError("an invented bridge id must still be refused")
+
+
+def test_every_offered_bridge_must_be_answered():
+    """Completeness is still required: an unanswered bridge is not an approval."""
+    import correction_protocol as cp
+
+    request = {"bridges": [{"id": "b1", "skill": "a", "evidence": "x"},
+                           {"id": "b2", "skill": "b", "evidence": "y"}]}
+    # Answering only one is accepted by the parser (the engine treats the
+    # unanswered one as not-accepted), but the contract still demands both.
+    answers = cp._bridge_answers({"bridge_decisions": {"b1": "accept"}}, request)
+    assert set(answers) == {"b1"}
+    assert "Answer for every bridge id you were given, exactly once" in \
+        cp.BRIDGE_DECISION_CONTRACT

@@ -1259,6 +1259,53 @@ async def run_new_pipeline_async(
         # Extract final output
         final_output = result.get("final_output", {})
 
+        # ── Source preservation on THIS path ───────────────────────────────
+        # The new pipeline composes its document without the STAR editor, and
+        # the editor is where `preserve_source_facts` lives. So every
+        # preservation rule was skipped here: a summary the writer paraphrased
+        # or dropped, an education record it omitted, a certification it never
+        # emitted, all reached the reviewer as-is and were correctly reported
+        # missing.
+        #
+        # Measured 2026-11-08 on ``realistic_candidate``: three of five
+        # Conservative/Imaginative runs withheld as
+        # `source_completeness_uncertain` with the summary lines and the second
+        # education record reported missing, while `preserve_source_facts` on
+        # the same draft restored all four items.
+        #
+        # The rules are the ones the editor applies, with the same contract:
+        # they copy the candidate's own source lines, never compose prose, and a
+        # failure here must not lose an otherwise usable draft.
+        # ``resume_text`` is a named parameter of this function, not a kwarg.
+        _preserve_source = resume_text
+        _preserve_markdown = final_output.get("final_written_section_markdown")
+        if isinstance(_preserve_source, str) and _preserve_source.strip() \
+                and isinstance(_preserve_markdown, str) and _preserve_markdown.strip():
+            try:
+                from source_preservation import preserve_source_facts
+                _bridge_labels = [
+                    b.get("skill") for b in (kwargs.get("skill_bridges") or [])
+                    if isinstance(b, dict) and b.get("skill")
+                ]
+                if _bridge_labels:
+                    _preserved, _changes = preserve_source_facts(
+                        _preserve_markdown, _preserve_source,
+                        permitted_bridges=_bridge_labels)
+                else:
+                    _preserved, _changes = preserve_source_facts(
+                        _preserve_markdown, _preserve_source)
+                if _changes:
+                    final_output["final_written_section_markdown"] = _preserved
+                    final_output["source_preservation"] = list(_changes)
+                    logger.info(
+                        "[NEW_PIPELINE] Preserved source facts: %s",
+                        "; ".join(_changes))
+            except Exception:
+                # A safety net, not a load-bearing stage: a failure must not
+                # lose an otherwise usable draft. The gate and the correction
+                # engine still apply.
+                logger.error("[NEW_PIPELINE] Source preservation failed")
+
         # STAGE 4: Quick ATS Score Calculation — skip if pipeline was large
         # to avoid OOM from holding all pipeline data + new LLM response in memory
         logger.info("[NEW_PIPELINE] Stage 4/4: ATS Score Calculation")
