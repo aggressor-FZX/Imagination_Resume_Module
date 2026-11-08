@@ -2436,6 +2436,28 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     # against the ORIGINAL evidence and cannot resurrect a
                     # removal.
                     permitted_bridges = bridge_outcome.bridges
+                    # Keep the ContextVar in step with the narrowed deck.
+                    #
+                    # `_ACTIVE_BRIDGES` is set once at `correct()` entry from
+                    # the ORIGINAL records, but `_introduces_beyond` reads it
+                    # through `_active_bridges()`. Assigning only the local
+                    # name left that reader looking at the PRE-narrowing
+                    # labels, which is wrong in both directions:
+                    #
+                    #   * the label now in the draft (the replacement) was not
+                    #     exempt, so a legitimately narrowed phrase could be
+                    #     counted as introduced content; and
+                    #   * the superseded label stayed exempt, so a phrase the
+                    #     candidate never chose kept protection it had lost.
+                    #
+                    # A removal had the same problem: the dead label kept its
+                    # exemption. Measured 2026-11-07 on the real engine, a
+                    # scripted narrow from "trend analysis" to "Reporting" left
+                    # `_active_bridges()` returning ('trend analysis',) on all
+                    # four calls, including both post-narrow reviews.
+                    #
+                    # Tests: tests/test_bridge_permission_lifecycle.py.
+                    _ACTIVE_BRIDGES.set(tuple(permitted_bridges or ()))
                 if bridge_outcome.requires_review:
                     # A narrowed label was applied but has not been re-reviewed
                     # yet. The complete review below is what authorises it; until
