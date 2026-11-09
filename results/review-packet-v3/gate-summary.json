@@ -1,0 +1,321 @@
+[
+  {
+    "case_id": "faithful_paraphrase",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "faithful_paraphrase",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "faithful_paraphrase",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "faithful_paraphrase",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "supported_method",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "supported_method",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "supported_method",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "supported_method",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "unsupported_method",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "unsupported_method",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "unsupported_method",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "proposed_exact_owned_source_bullet",
+    "re_review_decision": "revise",
+    "release": false,
+    "release_reason": "re_review_not_approved"
+  },
+  {
+    "case_id": "unsupported_method",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "proposed_exact_owned_source_bullet",
+    "re_review_decision": "revise",
+    "release": false,
+    "release_reason": "re_review_not_approved"
+  },
+  {
+    "case_id": "missing_fact",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "missing_fact",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "missing_fact",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "missing_fact",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [
+      "passage_not_in_draft:Built the depot scorecard that supervisors review in the Mon",
+      "passage_not_in_draft:Compared quarterly parts usage against the prior four quarte",
+      "passage_not_in_draft:Prepared the monthly cost summary reviewed by the regional m"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "initial_review_unverifiable"
+  },
+  {
+    "case_id": "wrong_record_attribution",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "initial_review_unverifiable"
+  },
+  {
+    "case_id": "wrong_record_attribution",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "wrong_record_attribution",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "wrong_record_attribution",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [
+      "passage_not_in_draft:**\"08/2023 - Present\"** under Ridgeline Equipment Services"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "initial_review_unverifiable"
+  },
+  {
+    "case_id": "transferable_skill",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "transferable_skill",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "transferable_skill",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "transferable_skill",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [],
+    "repair_status": "ambiguous_or_multiple_issues",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "revision_unresolved"
+  },
+  {
+    "case_id": "omitted_record",
+    "cell": "current+advisory",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "omitted_record",
+    "cell": "current+enabled",
+    "initial_decision": "none",
+    "initial_problems": [
+      "decision_missing"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "format_mismatch_json_answer_to_prose_gate"
+  },
+  {
+    "case_id": "omitted_record",
+    "cell": "revised+advisory",
+    "initial_decision": "revise",
+    "initial_problems": [
+      "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+      "revise_without_actionable_issue"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "initial_review_unverifiable"
+  },
+  {
+    "case_id": "omitted_record",
+    "cell": "revised+enabled",
+    "initial_decision": "revise",
+    "initial_problems": [
+      "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal"
+    ],
+    "repair_status": "not_attempted",
+    "re_review_decision": "none",
+    "release": false,
+    "release_reason": "initial_review_unverifiable"
+  }
+]

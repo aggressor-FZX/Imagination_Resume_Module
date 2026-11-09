@@ -1,0 +1,37 @@
+# Seven-case review packet
+
+Each case file contains the sources, the reviewed draft, every cell's raw model decision, reported issues, proposed corrections, re-review result, and the binding-gate outcome.
+
+**Expected labels are in `EXPECTED_LABELS.md`, deliberately separate.**
+
+| Case | Mutation | Cells present |
+|---|---|---|
+| [`faithful_paraphrase`](cases/faithful_paraphrase.md) | `reword_only` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`supported_method`](cases/supported_method.md) | `reword_sourced_method` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`unsupported_method`](cases/unsupported_method.md) | `append_unsourced_method` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`missing_fact`](cases/missing_fact.md) | `delete_sourced_bullet` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`wrong_record_attribution`](cases/wrong_record_attribution.md) | `move_fact_to_other_employer` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`transferable_skill`](cases/transferable_skill.md) | `add_capability_clause` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+| [`omitted_record`](cases/omitted_record.md) | `delete_whole_record` | current+advisory, current+enabled, revised+advisory, revised+enabled |
+
+---
+
+## Binding-gate outcomes
+
+**Released: 0 of 28.** The gate is fail-closed: it released nothing from the retained answers.
+
+| Reason | Count | Cells |
+|---|---|---|
+| `format_mismatch_json_answer_to_prose_gate` | 13 | current+advisory/faithful_paraphrase, current+advisory/missing_fact, current+advisory/omitted_record, current+advisory/supported_method, current+advisory/transferable_skill, current+advisory/unsupported_method … |
+| `revision_unresolved` | 8 | revised+advisory/faithful_paraphrase, revised+advisory/missing_fact, revised+advisory/supported_method, revised+advisory/transferable_skill, revised+advisory/wrong_record_attribution, revised+enabled/faithful_paraphrase … |
+| `initial_review_unverifiable` | 5 | current+advisory/wrong_record_attribution, revised+advisory/omitted_record, revised+enabled/missing_fact, revised+enabled/omitted_record, revised+enabled/wrong_record_attribution |
+| `re_review_not_approved` | 2 | revised+advisory/unsupported_method, revised+enabled/unsupported_method |
+
+### Does the gate honour approve / revise / cannot_assess?
+
+- **approve** — honoured: an initial valid `approve` releases immediately, and no retained answer contains one.
+- **revise** — honoured: never releases on the first `revise`. Release requires an unambiguously applicable repair AND a new valid `approve` of the corrected text. Two cells reached a repair; both re-reviews still said `revise`, so both withheld.
+- **cannot_assess** — honoured: withholds. Not exercised by any retained answer.
+- **unreadable/unverifiable** — withholds, and is reported as its own reason rather than being treated as a refusal.
+
+The gate behaviour above is a claim about the RELEASE RULE only. It says nothing about whether any objection was correct — that is what the review of the per-case objections is for.
