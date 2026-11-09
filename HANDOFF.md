@@ -1,4 +1,124 @@
-# Binding-decision experiment handoff — 2026-11-09
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 2)
+
+## Checkpoint 2 — release-override repair accepted; calibration frozen, not run
+
+**Start here for current state.** Checkpoint 1 (below) is still valid history.
+
+- **Active branch:** `experiment/llm-led-approval`. Pushed remote HEAD at the start
+  of this checkpoint: `ad4132e358edbc34fe1be6f3ad0fa0b0edb6791d`. This checkpoint's
+  work is committed on top of it (see the last commit on the branch).
+- **Production untouched.** Empty diff vs `master` for `source_correction.py`,
+  `correction_provider.py`, `app.py`, `publication_gate.py`, `stages/`, `models.py`,
+  `orchestrator.py`, `imaginator_flow.py`. The only tracked non-experiment edits are
+  in `decision_contract.py` (prompt text + a fingerprint helper); that module has no
+  production importer — verified by grep.
+- **The gate was not redesigned and the matrix was not rerun.** No provider calls
+  were made in this checkpoint.
+
+### Completed in this checkpoint
+
+1. **Pushed** `ad4132e` → remote; exact remote HEAD reported and verified
+   (ahead/behind `0 0`).
+2. **Denominator fixed.** Candidate success/failure now counts only
+   **contract-compatible prose with a retained response: 14 cells**. 13 legacy JSON
+   envelopes (a different contract) and 1 truncated cell are reported separately, not
+   dropped. `review_packet.py` and `gate_axes.py` compute this independently, with a
+   cross-check test (`test_the_packet_readme_and_the_axes_module_agree_on_the_denominator`)
+   because they diverged once (15 vs 14).
+3. **Four axes reported separately** (`experiment/gate_axes.py` →
+   `results/review-packet-v3/GATE_AXES.md`): initial judgment, edit applicability,
+   corrected-document approval, release. No composite score exists.
+4. **Item 7 enforced in code.** A retained re-review of a *different* document is
+   reported as **no observation** (`None`), never as approval or refusal. 5 of the 7
+   retained re-reviews answered a different document.
+5. **Positive control added** (`tests/test_gate_controls.py`, 12 tests): a valid
+   `approve` releases, parametrised over all three approve cases, asserting exactly
+   one provider call — alongside `revise` and `cannot_assess` controls and a test that
+   all three produce distinct release reasons.
+6. **Scaffold limitations documented separately** from reviewer errors (FINDINGS §3):
+   one-issue-only, single-line/single-bullet, exact-owned-bullet, no auto-omission,
+   omit-marker-with-commentary refused. 12 of 14 cells never reached a proposal, and
+   8 of those were refused for scaffold narrowness.
+7. **Reviewer instructions refined** with four general evidence principles
+   (overlapping dates are a fact; synonymy permitted; missing facts must be named;
+   facts stay under their record). Mode-independent, no fixture knowledge.
+   `contract_fingerprint()` freezes the prompt identity.
+8. **Bounded calibration prepared and FROZEN, not run**: 7 existing + 10 unfamiliar
+   paired controls in two new domains; 27-call / $1.00 ceiling; instructions sha256
+   `4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b`; fixture
+   fingerprint `b4b73e68b4d69b394216ccf5b68be6c5239719d31809b4fa9f5c394eff25a224`;
+   mode `imaginative` (matching all 28 retained cells).
+9. **Source-linked judgments** (`experiment/judgments.py` →
+   `results/review-packet-v3/JUDGMENTS.md`): every objection quoted against the
+   declared defect. Verdicts: 5 detected, 2 detected-with-a-miscitation, 1
+   not-detected, 6 invented.
+
+### Corrections to earlier claims
+
+- **"The reviewer caught 2 of 4 defects" was arm-specific.** In `revised+enabled` it
+  caught 3 of 4 (`missing_fact` included). Only the advisory arm missed
+  `missing_fact`. Do not restate it as a general rate.
+- **"omitted_record was asserted the opposite" understates it.** The cell contains a
+  miscitation *and* a correct grounded omission claim. It is now
+  `detected_with_a_miscitation`, not a flat failure.
+
+### Remaining steps (in order)
+
+1. **Decide the calibration budget** (27 calls / $1.00 ceiling already frozen) and run
+   `python -m experiment.run_calibration --out results/calibration-v1` **once,
+   unchanged**. Do not edit the instructions before the run; the frozen hash proves
+   they did not drift.
+2. **Obtain the independent blind audit** of `results/binding-audit-v3/blind/`
+   (28 verified entries, mapping in sibling `private-key.json`). Nothing in this
+   checkpoint substitutes for it.
+3. **Only after 1–2**, consider widening the repair scaffold (multi-issue,
+   exact-bullet relaxation) — FINDINGS §3 shows scaffold narrowness, not reviewer
+   error, causes most withholds.
+4. `guest-publication-trust` (`e097e36`) still needs a PR + merge (no secret
+   required).
+
+### Not established by this checkpoint
+
+- **No positive release on a corrected document.** 0 of 14 released; the two valid
+  re-reviews both said `revise`. approve→release is proven only by unit control.
+- **No audit, no calibration result, no field-reliability estimate.**
+- **Detection ≠ correction.** A `detected` verdict means the objection named the
+  defect; it says nothing about whether the repair is right.
+
+### Dirty / untracked files
+
+- `experiment/audit_packet_v3.py` — untracked, from a failed subagent invocation.
+  Intentionally unstaged. Preserve it; do not commit it as verified work.
+
+### Verification
+
+```bash
+cd /home/skystarved/Render_Dockers/Imagination_Resume_Module/.worktrees/decision-experiment
+env -u CORRECTION_PROVIDER_DISCLOSURE OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y \
+  IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ \
+  -o addopts='' -p no:cacheprovider -q \
+  --ignore=tests/test_loader_source_preservation_offline.py \
+  --ignore=tests/test_exported_outcome_wording_regression.py
+```
+
+Expected `1994 passed, 14 skipped`. The two ignored modules are pre-existing
+failures unrelated to this work: one needs `fitz`, the other needs a `captures/`
+fixture absent from this worktree (verified failing at the pre-change commit).
+
+Offline artifact regeneration (no provider calls):
+
+```bash
+python -B -m experiment.review_packet --out results/review-packet-v3
+python -B -m experiment.gate_axes     --out results/review-packet-v3
+python -B -m experiment.judgments     --out results/review-packet-v3/JUDGMENTS.md
+python -B -m experiment.calibration_cases --check
+python -B -m experiment.run_calibration --out results/calibration-v1 --dry-run
+```
+
+---
+
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 1)
 
 - **Active branch:** `experiment/llm-led-approval`; base before this work:
   `b1e4792`. The current commit is the experiment-only binding replay handoff.

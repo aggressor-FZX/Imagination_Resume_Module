@@ -152,7 +152,14 @@ def make_asker(api_key: str | None = None, *,
                     prompt_tokens=int(usage.get("prompt_tokens") or 0),
                     completion_tokens=int(usage.get("completion_tokens") or 0),
                     total_tokens=int(usage.get("total_tokens") or 0),
-                    cost_usd=float(usage.get("total_cost") or 0.0),
+                    # OpenRouter's chat-completions `usage` object carries `cost`.
+                    # Reading only `total_cost` reported $0.00 for every call and
+                    # made the cost ceiling unenforceable. Both keys are accepted,
+                    # in order of authority, so a provider change cannot silently
+                    # zero the budget again.
+                    cost_usd=float(usage.get("cost")
+                                   if usage.get("cost") is not None
+                                   else (usage.get("total_cost") or 0.0)),
                     max_tokens=max_tokens,
                     model=str(data.get("model") or chosen_model),
                     provider=str(data.get("provider") or ""),
