@@ -309,20 +309,23 @@ def test_a_reference_refusal_is_a_refusal_not_an_operational_failure():
 def test_every_approve_case_draft_covers_its_sources():
     """Held-out cases must be VALID before their expectations mean anything.
 
-    Discovered while replaying: every case supplies both source documents but a
-    draft that omits the `Ridgeline Equipment Services` record from the
-    supplement. A faithful reviewer MUST flag that omission, so the cases
+    Discovered while replaying: every v1 case supplied both source documents but a
+    draft that omitted the `Ridgeline Equipment Services` record from the
+    supplement. A faithful reviewer MUST flag that omission, so the three cases
     expecting `approve` were unsatisfiable and the model was right every time it
     refused them.
 
-    This test is the guard for NEXT time: an approve-case whose draft drops a
-    source record is not a valid test of approval.
+    This guard now checks the ACTIVE fixture (`cases_v2`, the corrected complete
+    two-document baseline). The v1 fixture is deliberately NOT repaired in place:
+    it is the record of what actually ran, and the frozen archive depends on it.
+    `test_v1_fixture_is_recorded_as_invalid` below asserts it is still recognised
+    as invalid, so the history cannot be quietly rewritten.
     """
-    from experiment.cases import CASES
+    from experiment.cases_v2 import CASES_V2
     import re as _re
 
     offenders = []
-    for case in CASES:
+    for case in CASES_V2:
         if case.expectation != "approve":
             continue
         employers = set(_re.findall(r"\*\*([A-Z][A-Za-z ]+)\*\* --",
@@ -333,3 +336,27 @@ def test_every_approve_case_draft_covers_its_sources():
     assert offenders == [], (
         "these approve-cases drop a source record, so they cannot be approved "
         f"faithfully: {offenders}")
+
+
+def test_v1_fixture_is_recorded_as_invalid():
+    """The v1 cases must still be recognisably invalid, not retro-fixed.
+
+    If someone "repairs" `experiment/cases.py` in place, the frozen archive in
+    `results/comparison-20261109-0719` stops corresponding to the fixture that
+    produced it and the original findings become unverifiable. The defect belongs
+    on record; the correction belongs in `cases_v2`.
+    """
+    from experiment.cases import CASES as V1
+    import re as _re
+
+    offenders = []
+    for case in V1:
+        if case.expectation != "approve":
+            continue
+        employers = set(_re.findall(r"\*\*([A-Z][A-Za-z ]+)\*\* --",
+                                    " ".join(case.sources.values())))
+        missing = [e for e in employers if e not in case.draft_before_trim]
+        if missing:
+            offenders.append(case.case_id)
+    assert sorted(offenders) == ["faithful_paraphrase", "supported_method",
+                                 "transferable_skill"]

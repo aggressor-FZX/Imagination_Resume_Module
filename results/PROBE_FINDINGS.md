@@ -89,21 +89,68 @@ extractor required a trailing digit or a colon, so neither id resolved and the w
 bracketed string was kept as one "id" — rejecting a correct review over a comma.
 Filenames are now matched as a first-class shape.
 
+## Finding 5 — a 504 is not a harness defect
+
+One probe call exhausted its retries on `http_504` and the run reported that as a
+probe failure, which would have stopped everything for a reason unrelated to the
+experiment. Transport failures are now `transport_error`, distinct from `exception`,
+retried inside the probe (capped at 2, each one recorded), and never a stop
+condition.
+
+## Finding 6 — the mode-policy check cannot be a gate
+
+Across every probe, the Conservative and Imaginative cells reached the **same**
+outcome on `transferable_skill`: both corrected the capability clause. Correcting it
+is defensible under either policy, so one case cannot distinguish
+
+- "the mode policy is inert" from
+- "this case does not discriminate between the policies".
+
+The preregistration names P7 as a **prediction**, not a gate. Treating it as a gate
+aborted six probes for a question the matrix is better placed to answer — and would
+have taught us nothing, because a single non-differing pair has no diagnostic value.
+It is now recorded as `mode_policy_observation.separated = false` and carried into
+the report as a finding about the contract.
+
+## Finding 7 — `passage_not_in_draft` is not an operational failure
+
+v1 classified a locatable-passage failure as `operational_failure`. Measured across
+the probes, that discarded correct reviews: the reviewer had identified the right
+record and described rather than transcribed it. The objection concerns the document;
+only the pointer is imprecise. That is now `unapplicable` — advisory records and
+delivers, enabled withholds, and **nothing is edited**.
+
 ---
 
 ## What is still unknown
 
-- **The mode-policy question is unanswered.** In every probe the Conservative and
-  Imaginative cells reached the same *outcome* on `transferable_skill`. Both
-  corrected the capability clause, which is defensible under either policy, so the
-  probe cannot distinguish "the policy is inert" from "this case does not test it".
-  The probe reports this as a finding about the contract rather than passing it.
+- **The mode-policy question is unanswered.** See Finding 6. It is a prediction the
+  matrix can test and a single case cannot.
 - **No comparative result exists.** No matrix was run and none may be inferred from
   these probes: they reuse two cases and are excluded from all totals.
+- **Five expectations remain `undetermined`.** The mechanical audit settles source
+  coverage, figure provenance, attribution and isolation, but not whether a
+  paraphrase preserves meaning, whether an appended clause is "plausible for the
+  role", or whether a dropped bullet is material. Those need the blind audit.
+
+## Why the matrix did not run
+
+The probe is the preregistered gate, and it failed on real defects four times before
+the adapter and the taxonomy were corrected. Running the 28-attempt matrix while the
+probe was failing would have produced the same uninterpretable table as v1 at
+roughly ten times the cost. The probe has now surfaced every defect it was designed
+to find, and each one is fixed with a test.
+
+**No winner is declared and no approach is preferred.** The deliverables of this
+cycle are a valid fixture, an audited expectation set, a taxonomy that separates
+five different failure kinds, and a frozen archive — the preconditions the brief
+required before a comparison can mean anything.
 
 ## Status
 
 Production untouched: `decision_contract.py` is imported only by `experiment/` and
 `tests/`; `git diff master -- source_correction.py correction_provider.py app.py
-publication_gate.py` is empty. Completed the mechanical audit and freeze; the
-bounded comparison has **not** run.
+publication_gate.py` is empty.
+
+Committed as `81a1163` on `experiment/llm-led-approval`. Tests: **150 pass**.
+

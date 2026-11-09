@@ -776,10 +776,17 @@ def score_v2(attempt: AttemptV2, case: FrozenCase) -> dict[str, Any]:
         pass  # evidence did not verify: reported separately, not a judgement
     elif expected == "approve":
         correct_approval = is_approval
-        false_refusal = outcome in {OUTCOME_REFUSED, OUTCOME_OPERATIONAL}
+        # Only an actual REFUSAL is a false refusal. An operational failure is its
+        # own column and is not evidence about faithfulness in either direction.
+        #
+        # Measured while reporting the v2 matrix (2026-11-09): counting an
+        # operational failure as a false refusal put the same attempt in two
+        # columns and inflated the failure count for the arm that hit more parser
+        # problems. That is precisely the conflation item 5 of the brief forbids.
+        false_refusal = outcome == OUTCOME_REFUSED
     elif expected == "revise":
         false_approval = is_approval
-        false_refusal = (outcome in {OUTCOME_REFUSED, OUTCOME_OPERATIONAL}
+        false_refusal = (outcome == OUTCOME_REFUSED
                          and attempt.outcome_reason
                          != REASON_REVISE_UNRESOLVED_ENABLED)
 
@@ -797,8 +804,20 @@ def score_v2(attempt: AttemptV2, case: FrozenCase) -> dict[str, Any]:
         "false_refusal": false_refusal,
         "operational_failure": outcome == OUTCOME_OPERATIONAL,
         "parser_ok": not attempt.structural_problems,
+        # A verdict was actually reached only if the attempt completed, avoided a
+        # reference failure, AND produced a semantic outcome.
+        #
+        # Measured on the v2 matrix (2026-11-09): `unsupported_method` expects
+        # `revise` and came back `operational_failure`, which scored as
+        # semantically CORRECT because "not approved" was compared against
+        # "expects revise". The harness had failed to parse the answer; crediting
+        # it with a correct judgement is the same category conflation this work
+        # exists to remove. An operational failure reaches NO verdict, so its
+        # semantic score is None, not True.
         "semantic_ok": ((is_approval == (expected == "approve"))
-                        if (complete and not reference_failure) else None),
+                        if (complete and not reference_failure
+                            and outcome in {OUTCOME_APPROVED, OUTCOME_REFUSED})
+                        else None),
         "reference_verdicts": attempt.reference_verdicts,
         "cost_usd": attempt.cost_usd,
         "latency_s": attempt.latency_s,
