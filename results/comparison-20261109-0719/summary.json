@@ -1,0 +1,46 @@
+{
+  "current+advisory": {
+    "cases": 6,
+    "correct_approvals": 0,
+    "false_approvals": 0,
+    "false_refusals": 6,
+    "operational_failures": 5,
+    "semantic_correct": 3,
+    "cost_usd": 0.0,
+    "latency_s_total": 78.99,
+    "latency_s_mean": 13.16
+  },
+  "current+enabled": {
+    "cases": 6,
+    "correct_approvals": 0,
+    "false_approvals": 0,
+    "false_refusals": 6,
+    "operational_failures": 6,
+    "semantic_correct": 3,
+    "cost_usd": 0.0,
+    "latency_s_total": 56.99,
+    "latency_s_mean": 9.5
+  },
+  "revised+advisory": {
+    "cases": 6,
+    "correct_approvals": 0,
+    "false_approvals": 0,
+    "false_refusals": 6,
+    "operational_failures": 5,
+    "semantic_correct": 3,
+    "cost_usd": 0.0,
+    "latency_s_total": 57.89,
+    "latency_s_mean": 9.65
+  },
+  "revised+enabled": {
+    "cases": 6,
+    "correct_approvals": 0,
+    "false_approvals": 0,
+    "false_refusals": 6,
+    "operational_failures": 5,
+    "semantic_correct": 3,
+    "cost_usd": 0.0,
+    "latency_s_total": 35.94,
+    "latency_s_mean": 5.99
+  }
+}

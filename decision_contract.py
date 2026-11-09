@@ -199,6 +199,9 @@ class Issue:
     # resolve. NOT a judgement about whether the explanation is true.
     passage_resolves: bool = False
     sources_resolve: bool = False
+    # True when an `omitted` issue quotes SOURCE text rather than draft text,
+    # because the missing content has no draft presence to quote.
+    reports_omission: bool = False
 
 
 @dataclass
@@ -274,7 +277,7 @@ def parse_decision(raw: Any) -> Decision:
     if not match:
         return Decision(decision="", structural_problems=["decision_missing"],
                         raw=raw[:2000])
-    decision = _normalise_decision(match.group(1))
+    decision = _normalise_decision(_strip_markup_wrapping(match.group(1)))
     if decision is None:
         return Decision(decision="", structural_problems=["decision_word_unknown"],
                         raw=raw[:2000])
@@ -315,6 +318,77 @@ def parse_decision(raw: Any) -> Decision:
                       rationale=" ".join(rationale_lines)[:2000], raw=raw[:8000])
     _check_shape(parsed)
     return parsed
+
+
+def _strip_markup_wrapping(value: str) -> str:
+    """Remove Markdown emphasis the model wraps around a single token.
+
+    The model routinely decorates the decision word and the problem word:
+
+        Decision: **revise**
+          problem: **unsupported**
+
+    Measured on the retained comparison run (2026-11-09): every `revised` cell
+    answered with bold-wrapped values, and the parser then reported
+    `problem_word_unknown:**unsupported**` — a presentation difference, not a
+    semantic error.
+
+    Deliberately narrow, because a passage may legitimately contain emphasis:
+
+    * only a value whose ENTIRE content is one emphasis span is unwrapped;
+    * leading/trailing `*`/`_` runs are trimmed only when they are balanced around
+      the whole value;
+    * interior markup is untouched, so `*Role | 01/2020*` keeps its asterisks and
+      the passage still matches the draft.
+    """
+    text = (value or "").strip()
+    if not text:
+        return text
+    changed = True
+    while changed and len(text) > 2:
+        changed = False
+        for mark, width in (("**", 4), ("*", 2), ("__", 4), ("_", 2)):
+            if (text.startswith(mark) and text.endswith(mark)
+                    and len(text) >= width):
+                text = text[width // 2:len(text) - (width // 2)].strip()
+                changed = True
+                break
+    return text
+
+
+def _canonical_passage(value: str) -> str:
+    """The passage, with the omission marker canonicalised.
+
+    An omission has NO passage by definition, so the model writes the marker in
+    whatever decoration it is using that turn. Observed on the retained run:
+    `(omitted)`, `*(omitted)*`, `**omitted**`, and bare `omitted`. Only the first
+    was recognised, and the rest were then reported `passage_not_in_draft` — a
+    nonsensical complaint, since the whole point is that the text is absent.
+
+    All of those forms are normalised to `(omitted)`. This cannot widen
+    acceptance of CONTENT: a passage that is genuinely quoted text never
+    collapses to the marker, because the marker words must be the entire value.
+    """
+    text = _unquote(_strip_markup_wrapping(value))
+    stripped = text.strip().strip("()[]{}:;,.*_`'\"").strip().lower()
+    if stripped in {"omitted", "omit", "omission", "missing"}:
+        return OMITTED_MARKER
+    return text
+
+
+def _normalise_problem(value: str) -> str:
+    """The problem word, with harmless presentation removed.
+
+    Only the FIRST word of the field is taken (the model sometimes writes
+    "unsupported: the source does not …"), and emphasis/decorative characters are
+    stripped. A genuinely unknown word still fails, so this widens acceptance of
+    FORMATTING, never of MEANING.
+    """
+    text = _strip_markup_wrapping(value).strip()
+    if not text:
+        return ""
+    word = text.split()[0].strip(".:;,()[]*_`'\"")
+    return word.lower()
 
 
 def _unquote(value: str) -> str:
@@ -402,9 +476,8 @@ def _issue_from(fields: dict[str, str]) -> Issue:
     if correction and correction.lower() in {"(omit)", "omit", "none", "-"}:
         correction = None
     return Issue(
-        passage=_unquote(fields.get("passage", "")),
-        problem=(fields.get("problem", "") or "").strip().lower().split()[0]
-        if fields.get("problem") else "",
+        passage=_canonical_passage(fields.get("passage", "")),
+        problem=_normalise_problem(fields.get("problem", "")),
         why=fields.get("why", "").strip(),
         sources=sources,
         correction=correction,
@@ -423,8 +496,11 @@ def _check_shape(decision: Decision) -> None:
     if decision.decision == DECISION_REVISE and not decision.issues:
         decision.structural_problems.append("revise_without_issues")
     if decision.decision == DECISION_REVISE and not decision.usable_corrections():
-        missing = [i for i in decision.issues if i.passage == OMITTED_MARKER]
-        if not missing:
+        # An omission legitimately carries `(omit)` instead of a replacement: the
+        # fix is to ADD a sourced fact, not to rewrite a passage. Requiring a
+        # replacement here made the most common correct revision unrepresentable.
+        omits_any = any(i.problem == PROBLEM_OMITTED for i in decision.issues)
+        if not omits_any:
             decision.structural_problems.append("revise_without_correction")
     if decision.decision == DECISION_CANNOT_ASSESS and not decision.rationale:
         decision.structural_problems.append("cannot_assess_without_reason")
@@ -440,13 +516,36 @@ def resolve_references(decision: Decision, draft: str,
     design's exhaustive bookkeeping bought no faithfulness.
     """
     flat_draft = " ".join((draft or "").split())
+    # Tolerate a caller that passes something other than a mapping: resolution
+    # must never crash a review, and a wrong container is a caller bug that should
+    # degrade to "no sources resolvable" rather than raising inside the parser.
+    source_values = (sources.values() if isinstance(sources, dict)
+                     else (sources or []))
+    flat_sources = " ".join(
+        " ".join(str(text).split()) for text in source_values)
     for issue in decision.issues:
         passage = " ".join((issue.passage or "").split())
         if not passage or passage == OMITTED_MARKER:
             # An omission has no passage by definition; it is legitimate.
             issue.passage_resolves = passage == OMITTED_MARKER
+        elif passage in flat_draft:
+            issue.passage_resolves = True
+        elif issue.problem == PROBLEM_OMITTED and passage in flat_sources:
+            # `omitted` means the fact is ABSENT from the draft, so "the exact
+            # draft text affected" cannot be satisfied by construction — there is
+            # no such text. The model therefore quotes the SOURCE text that is
+            # missing, which is the useful thing to report.
+            #
+            # Observed on the retained run (2026-11-09): the reviewer correctly
+            # identified a dropped source fact, quoted the source line, and was
+            # rejected with `passage_not_in_draft` — a nonsensical complaint for
+            # an omission. Quoting the source is accepted here ONLY when the
+            # problem is `omitted` AND the text really is in a source. An
+            # invented passage still fails both tests.
+            issue.passage_resolves = True
+            issue.reports_omission = True
         else:
-            issue.passage_resolves = passage in flat_draft
+            issue.passage_resolves = False
 
         if not issue.sources:
             # No reference offered. Acceptable for an omission (the fact is
@@ -504,11 +603,18 @@ def decide_from_text(raw: Any, draft: str, sources: dict[str, str]) -> Decision:
         # sourced fact, so `(omit)` is the correct correction and must not be
         # treated as "no correction given". Requiring a replacement passage for
         # omitted content would make the most useful revision impossible.
+        # An omission is actionable when the reviewer either supplied a
+        # replacement or grounded the missing fact in a real source. The latter
+        # covers the common and correct shape where the correction is `(omit)`:
+        # the fix is to ADD a sourced fact, and the source reference is what makes
+        # that possible. This still cannot launder invention — `reports_omission`
+        # is only set when the quoted text really is in a source document.
         actionable = [i for i in decision.issues
                       if i.passage_resolves
                       and (i.correction
-                           or (i.problem == PROBLEM_OMITTED
-                               and i.passage == OMITTED_MARKER))]
+                           or i.problem == PROBLEM_OMITTED
+                           and (i.passage == OMITTED_MARKER
+                                or (i.reports_omission and i.sources_resolve)))]
         if not actionable:
             decision.structural_problems.append("revise_without_actionable_issue")
     return decision
