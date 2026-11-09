@@ -1,25 +1,35 @@
-"""A completeness contract between the candidate's source and the approved résumé.
+"""A WHOLE-SECTION presence check between the candidate's source and the résumé.
 
-The system can already produce complete, correctly ordered résumés, and it has
-meaningful safety checks. It cannot yet claim that every submission reliably
-carries every source-backed section, and this module is the honest boundary
-between those two statements.
+Read the name carefully: this is a *section* contract, not a completeness proof.
 
-What this checks, decided mechanically because each part is decidable:
+What it establishes — and only this:
 
-  * every section the SOURCE provides is still non-empty in the approved
-    markdown — Education, Certifications, Skills, Projects, Experience;
-  * a section that is present but EMPTY in the output while the source provides
-    content for it is a loss, not a formatting choice.
+  * a section the SOURCE populates is not left EMPTY in the approved markdown
+    (Professional Experience, Projects, Education, Certifications, Technical
+    Skills, and the conditional Professional Summary);
+  * an empty section where the source had content is a loss, not a formatting
+    choice.
 
-What this deliberately does NOT do:
+What it does NOT establish, and must never be described as establishing:
 
-  * It does not demand that a section exist when the source has none. A
-    candidate with no projects gets an empty Projects section, and that is
-    correct, not a failure.
+  * **record-level completeness.** A section with ONE surviving record satisfies
+    this check while another employer is silently dropped. That case is pinned by
+    ``test_a_section_with_one_surviving_record_satisfies_the_contract``, which
+    asserts the check PASSES while a record is lost. Record-level loss belongs to
+    the per-item coverage check, not here.
+  * that every qualification survived. It counts sections, not facts.
+  * that the wording is faithful. A paraphrase, an omission inside a bullet and a
+    re-attributed metric are all invisible to this module.
+
+So a document passing this contract proves its five core sections carry content.
+It does not prove the résumé is complete.
+
+Other things it deliberately does not do:
+
+  * It does not demand a section exist when the source has none. A candidate with
+    no projects gets an empty Projects section, and that is correct.
   * It does not compare prose. Whether a bullet is a faithful paraphrase is a
-    semantic question answered by the reviewer and the preservation rules; this
-    contract only asks whether the section's content is still there at all.
+    semantic question answered by the reviewer and the preservation rules.
   * It does not repair anything. Repair happens in ``source_preservation``; this
     module answers one question — should this document be published?
 
@@ -52,49 +62,27 @@ CONTRACTED = (
     "Technical Skills",
 )
 
-# ── The appearance decision, stated once ─────────────────────────────────
+# ── How an empty section appears: one rule, all three formats ────────────
 #
-# How a genuinely empty section should appear, decided here so it is a rule
-# rather than an accident of which renderer ran:
-#
-#   MARKDOWN — the heading is emitted with no body. ``ensure_required_headings``
-#              promises six named sections and the delivered Markdown carries
-#              them, so a consumer parsing the Markdown sees a section it can
-#              recognise even when the candidate has nothing for it.
-#
-#   PDF/DOCX — an empty section is OMITTED, heading and all. Measured
-#              2026-11-08 on a sparse payload: the DOCX carried Summary,
-#              Experience, Projects and Technical Skills and simply had no
-#              Education or Certifications headings, because
-#              ``generate_education_block`` and the DOCX equivalent return early
-#              on an empty list.
-#
-# Those two are deliberately different, and the difference is the point: the
-# Markdown is the interchange form (structure is information there), while the
-# exported document is what a human reads, and an empty heading with a rule under
-# it reads as a mistake or a gap in the candidate's history. Omitting it is the
-# honest appearance.
-#
-# RESOLVED policy: the five core sections are always present, in every format.
-#
-# Measured 2026-11-08 on a candidate with no experience, education, projects,
-# certifications or skills:
+# RESOLVED 2026-11-08. Measured before the decision, on a candidate with no
+# experience, education, projects, certifications or skills:
 #
 #   Markdown  Professional Experience, Projects, Education, Certifications,
 #             Technical Skills
 #   PDF       Projects only
 #   DOCX      Projects only
 #
-# Three artefacts of one run disagreed about which sections exist. The project
-# requirement is that all five CORE sections remain present without inventing
-# content, so the renderers were changed to match the Markdown rather than the
-# other way round: a section the candidate has nothing for is shown as a named,
-# empty section, and nothing is fabricated to fill it.
+# Three artefacts of ONE run disagreed about which sections exist. The project
+# requirement is that all five core sections remain present without inventing
+# content, so the renderers were changed to match the Markdown: a section the
+# candidate has nothing for is shown as a named, empty section, and nothing is
+# fabricated to fill it.
 #
-# An earlier attempt made ``Projects`` conditional instead, to match
-# Education/Certifications. That was the wrong direction — it satisfied an
-# asymmetry rather than removing it, and it broke the accepted guarantee that
-# every promised heading reaches the exported file.
+# An earlier attempt went the other way (make ``Projects`` conditional to match
+# Education/Certifications). That was reverted: it satisfied an asymmetry
+# instead of removing it, and it broke the accepted guarantee that every
+# promised heading reaches the exported file.
+#
 CORE_SECTIONS = (
     "Professional Experience",
     "Projects",

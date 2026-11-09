@@ -570,8 +570,42 @@ def test_a_section_with_one_surviving_record_satisfies_the_contract():
 
 
 def test_the_contract_documents_its_own_scope():
-    """The module says what it does and does not prove, in its own docstring."""
+    """The module states what it proves AND what it does not.
+
+    A check whose docstring only lists what it catches invites the reader to
+    assume that is all there is to catch. The overstatement this replaces called
+    the module "a completeness contract", which a whole-section check cannot
+    honour: it counts sections and never counts facts.
+    """
     doc = contract.__doc__ or ""
-    assert "non-empty" in doc.lower() or "empty" in doc.lower()
-    assert "record" in doc.lower(), (
-        "the module must state that it is not a record-level completeness proof")
+    lowered = doc.lower()
+    # The scope statement must be about sections, not about completeness.
+    assert "whole-section" in lowered, (
+        "the docstring must name the check as whole-section presence")
+    assert "not a completeness proof" in lowered or \
+        "not prove the résumé is complete" in lowered, (
+        "the docstring must explicitly deny being a completeness proof")
+    # And it must name the record-level limit concretely.
+    assert "record-level" in lowered
+    assert "one surviving record" in lowered
+
+
+def test_the_docstring_does_not_claim_completeness_it_cannot_deliver():
+    """Guard against the wording drifting back into overstatement.
+
+    Checked as CLAIMS, not as raw substrings. The docstring legitimately uses
+    phrases like "that every qualification survived" inside the sentence "it does
+    NOT establish that every qualification survived". A naive substring ban fails
+    on the very denial it is trying to require, so this looks for the claim
+    without a negation in front of it.
+    """
+    import re
+
+    doc = (contract.__doc__ or "").lower()
+    for phrase in ("every qualification", "every submission reliably"):
+        for match in re.finditer(re.escape(phrase), doc):
+            before = doc[max(0, match.start() - 120):match.start()]
+            negated = re.search(r"(\bnot\b|never|cannot|doesn't|n't)", before)
+            assert negated, (
+                f"the docstring asserts {phrase!r} without denying it, which "
+                "this check cannot establish")

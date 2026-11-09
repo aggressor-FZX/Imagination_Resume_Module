@@ -43,6 +43,28 @@ remaining record passes while another is lost. That limit is pinned by
 
 ## Artifacts
 
-- `captures/final/acceptance4/conservative-a4.json` — withheld attempt, retained
-- `captures/final/acceptance4/conservative-a4b.json` — approved, verbatim server response
-- `captures/final/acceptance4/conservative.pdf`, `conservative.docx` — the files the site produced
+**CORRECTION, 2026-11-08.** An earlier version of this file called
+`conservative-a4.json` a "withheld attempt, retained". That was wrong and
+contradicted the table above it. Verified from the files themselves:
+
+| Artifact | runId | Status | Evidence |
+|---|---|---|---|
+| `conservative-a4.json` | `88e76998-a5a9-4337-9130-da4462278ae1` | **approved** | `status: completed`, `requires_review: false`, 1891-byte markdown, receipt present |
+| `conservative-a4b.json` | `052aa72d-120d-4034-b11f-28fb2d34c9b6` | **approved** | `status: completed`, `requires_review: false`, 1893-byte markdown, receipt present |
+
+**No retained artifact was withheld.** The one withheld submission in the log
+(`b6851d64-4d82-4153-baf9-1576e6a61a0b`, `source_completeness_uncertain`) left no
+payload, because the sink was not running when it happened. That is why the
+attempt log above has a withheld row with no artifact beside it.
+
+What the service log shows for the retained runs, by outcome shape:
+
+- one approval with `repairs: 1, reviews: 2` (a repair happened)
+- one approval with `repairs: 0, reviews: 1` (clean first pass)
+
+Which artifact is which is **not** established here. The two payloads differ by
+2 bytes (1891 vs 1893) and that alone is not evidence. Recording the ambiguity
+rather than inventing a correlation.
+
+- `conservative.pdf`, `conservative.docx` — the files the site produced for the
+  final approved run.
