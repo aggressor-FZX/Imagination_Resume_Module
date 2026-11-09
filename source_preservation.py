@@ -1509,8 +1509,34 @@ def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[st
 # purpose form is judged even when the prefix is a paraphrase, because the
 # infinitive itself marks the boundary. The participial form is judged only when
 # the prefix is fully grounded, which is the pre-existing, measured rule.
+#
+# ``using`` and ``toward`` / ``in compliance with`` are the same shape: they open
+# a qualifying phrase that the prefix does not contain. Measured on the retained
+# Imaginative false approval ``43917767`` (2026-11-08), which shipped
+#
+#   "Fabricated structural steel assemblies for 14 industrial contracts using
+#    blueprint specifications."
+#   "Completed 8,000 apprenticeship hours toward journeyman certification in
+#    compliance with state standards."
+#
+# against a source that says only "Fabricated and repaired structural steel
+# assemblies for 14 industrial contracts." and "Completed 8,000 apprenticeship
+# hours under a licensed journeyman."
+#
+# Neither was corrected because neither phrase was recognised as a boundary, so
+# the trimmer never inspected them. Adding them is NOT a phrase blacklist: the
+# boundary only decides WHERE to look, and the existing measured rules still
+# decide whether anything is removed - the tail must introduce content the
+# matched bullet does not carry, must not drop a sourced figure, and a mixed tail
+# substitutes the candidate's own bullet rather than composing prose.
+#
+# The same widening must not disturb the faithful paraphrases that delivered on
+# the accepted runs; `using welding`, `under supervision of`, `through targeted
+# diagnostics` and `by implementing` are all pinned as refusals in
+# tests/test_retained_imaginative_false_approval.py.
 _TRAILING_PURPOSE_BOUNDARY = re.compile(
-    r"\s+to\s+|\s+for\s+|\s+so\s+that\s+|\s+in\s+order\s+to\s+",
+    r"\s+to\s+|\s+for\s+|\s+so\s+that\s+|\s+in\s+order\s+to\s+"
+    r"|\s+using\s+|\s+toward\s+|\s+in\s+compliance\s+with\s+",
     re.IGNORECASE,
 )
 _TRAILING_PARTICIPLE_BOUNDARY = re.compile(

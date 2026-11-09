@@ -18,17 +18,33 @@ This file pins the requirement in the terms it was given:
   * unsupported additions must be corrected or withheld;
   * faithful paraphrases must still pass.
 
-## What is fixed here and what is not
+## Both defects are fixed, at different layers
 
-FIXED (``_validate_review``): a candidate-level skills page cited alongside a
-role no longer establishes tool use inside that role. See
-``test_candidate_skill_vs_role_evidence.py``.
+1. ``_validate_review``: a candidate-level skills page cited alongside a role no
+   longer establishes tool use inside that role. See
+   ``test_candidate_skill_vs_role_evidence.py``.
 
-NOT FIXED: the deterministic check catches a capitalised NAME or an unbacked
-FIGURE in an added clause. It does not catch added LOWERCASE qualifiers, and
-``blueprint specifications`` / ``state standards`` are exactly that shape. The
-tests below mark those cases ``xfail`` with a strict reason rather than being
-deleted, softened, or quietly skipped: the requirement stands and is unmet.
+2. ``source_preservation``: the retained additions ARE now corrected. The check
+   that missed them was never the right place to catch them — it compares
+   content words and only fires on capitalised names and unbacked figures, and no
+   lexical measure separates ``using blueprint specifications`` from the faithful
+   ``through targeted diagnostics`` (both introduce novel words; measured).
+   What actually distinguishes them is SHAPE: each is a trailing qualifying
+   phrase that the prefix does not contain. ``_TRAILING_PURPOSE_BOUNDARY``
+   recognised ``to`` / ``for`` / ``so that`` / ``in order to`` but not
+   ``using`` / ``toward`` / ``in compliance with``, so the existing, already
+   tested trimmer never inspected these clauses.
+
+   Widening the boundary is not a phrase blacklist: it only decides WHERE to
+   look. The trimmer's measured rules still decide whether anything is removed,
+   and a mixed tail substitutes the candidate's own source bullet rather than
+   composing prose. Result on the retained draft: ``blueprint specifications`` is
+   trimmed, and the apprenticeship bullet is restored to the source's own
+   wording.
+
+``test_faithful_paraphrases_are_not_flagged`` pins the four accepted paraphrases
+against the SAME widened boundary, so a future change cannot buy detection by
+breaking legitimate rewriting.
 """
 import pytest
 
@@ -56,29 +72,72 @@ RED_ITEM = ("SYNTHETIC-ONLY Reduced after-hours callouts by 27% by adding "
 # ── The two delivered additions ───────────────────────────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="UNFIXED: an added lowercase qualifier ('using blueprint "
-           "specifications') is not caught - the check only flags capitalised "
-           "names and unbacked figures in added clauses",
+RETENTION_DRAFT = """## Professional Experience
+**Northline Fabrication, Inc.** -- Spokane, WA
+*Welder / Maintenance Helper | 03/2012 - 09/2015*
+- Fabricated structural steel assemblies for 14 industrial contracts using blueprint specifications.
+
+**Kettle Falls Electrical Contractors** -- Spokane, WA
+*Electrical Apprentice | 10/2015 - 06/2019*
+- Completed 8,000 apprenticeship hours toward journeyman certification in compliance with state standards.
+"""
+
+RETENTION_SOURCE = (
+    "Professional Experience\n"
+    "Northline Fabrication, Inc. -- Spokane, WA\n"
+    "Welder / Maintenance Helper | 03/2012 - 09/2015\n"
+    "Fabricated and repaired structural steel assemblies for 14 industrial "
+    "contracts.\n"
+    "Kettle Falls Electrical Contractors -- Spokane, WA\n"
+    "Electrical Apprentice | 10/2015 - 06/2019\n"
+    "Completed 8,000 apprenticeship hours under a licensed journeyman.\n"
 )
-def test_blueprint_specifications_addition_is_caught():
-    """THE RETAINED DEFECT, verbatim."""
-    span = ("- Fabricated structural steel assemblies for 14 industrial contracts "
-            "using blueprint specifications.")
-    assert sc._introduces_beyond(span, [SOURCE], FAB_ITEM) != []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="UNFIXED: 'toward journeyman certification in compliance with state "
-           "standards' adds no capitalised name and no figure",
-)
-def test_state_standards_addition_is_caught():
-    """THE RETAINED DEFECT, verbatim."""
-    span = ("- Completed 8,000 apprenticeship hours toward journeyman "
-            "certification in compliance with state standards.")
-    assert sc._introduces_beyond(span, [SOURCE], APP_ITEM) != []
+def _preserved(markdown=RETENTION_DRAFT, source=RETENTION_SOURCE):
+    from source_preservation import preserve_source_facts
+    return preserve_source_facts(markdown, source)
+
+
+@pytest.mark.parametrize("addition", [
+    "blueprint specifications",
+    "journeyman certification",
+    "state standards",
+])
+def test_the_retained_additions_are_removed_by_preservation(addition):
+    """THE RETAINED DEFECT, verbatim, through the real correction path.
+
+    These are NOT asserted against ``_introduces_beyond``. That helper compares
+    content words and only fires on capitalised names and unbacked figures, and
+    no lexical measure separates these clauses from the faithful paraphrases
+    below — ``through targeted diagnostics`` introduces just as many novel words.
+    The cause was READER-side: the trailing-purpose boundary did not recognise
+    ``using`` / ``toward`` / ``in compliance with``, so the existing trimmer
+    never looked at these clauses.
+
+    Asserting at the helper would have proved nothing while looking green.
+    """
+    out, _changes = _preserved()
+    assert addition not in out, (
+        f"{addition!r} survived preservation and would have been published")
+
+
+def test_the_retained_additions_module_message_stays_faithful():
+    """The corrections must not damage the facts they were attached to."""
+    out, _changes = _preserved()
+    assert ("Fabricated structural steel assemblies for 14 industrial contracts"
+            in out)
+    assert "8,000 apprenticeship hours" in out
+    assert "journeyman" in out
+
+
+def test_preservation_reports_the_corrections_it_made():
+    """A silent correction and a missed correction look the same from outside."""
+    out, changes = _preserved()
+    bullet_changes = [c for c in changes
+                      if "appended clause" in c or "mixed clause" in c]
+    assert bullet_changes, f"no bullet correction was reported: {changes}"
+    assert len(out) > 0
 
 
 # ── Additions the check DOES catch (these must never regress) ─────────────

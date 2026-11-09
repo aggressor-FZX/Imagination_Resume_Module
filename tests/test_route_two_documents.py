@@ -578,15 +578,17 @@ def test_supported_summary_approves_whether_the_clauses_are_split_by_a_newline_o
 # half of that pair.
 # ---------------------------------------------------------------------------
 
+# An appended unbacked qualification is now CORRECTED rather than withheld, so it
+# is asserted by its own test below instead of appearing here.
+#
+# Measured 2026-11-08, when the trailing-purpose boundary was widened to include
+# "using" / "toward": "…across 40+ job sites using AutoCAD and SCADA" is now
+# trimmed back to "…across 40+ job sites" by preservation before the gate runs.
+# The published document contains neither "AutoCAD" nor "SCADA", so the defect is
+# corrected rather than published — which is the outcome the requirement allows.
+# The alternative, approving the text WITH the invented tools, would be a false
+# approval and is forbidden by the test that replaces this case.
 CASES_WITHHELD = {
-    # A supported sentence with an unsupported qualification appended. The scripted
-    # reviewer matches the line as a whole — most of the line IS the source bullet — so
-    # the engine, not the reviewer, has to notice that "AutoCAD" and "SCADA" appear in
-    # neither document.
-    "appended_unbacked_tools": DRAFT_BOTH_RECORDS.replace(
-        "- Installed commercial electrical systems across 40+ job sites.",
-        "- Installed commercial electrical systems across 40+ job sites using "
-        "AutoCAD and SCADA."),
     # An employer's record under another employer's name.
     "transplanted_employer_label": DRAFT_BOTH_RECORDS.replace(
         "**Cascade Power Solutions, LLC** -- Example City, WA",
@@ -694,6 +696,44 @@ def test_preservation_repairs_a_summary_append_before_the_gate_sees_it(
         "the appended qualification must not survive into the published document")
     # The supported summary it was appended to is still there.
     assert "Journeyman electrician with 8+ years" in markdown
+
+
+def test_a_bullet_appended_tool_list_is_corrected_not_published(
+        monkeypatch, tmp_path):
+    """[route-two-doc] A bullet's unbacked tool list is now trimmed, not published.
+
+    This case used to be a withhold control: the appended "using AutoCAD and
+    SCADA" carried capitalised names that appeared in neither document, and no
+    repair existed for a bullet, so the gate withheld.
+
+    Measured 2026-11-08, after the trailing-purpose boundary was widened to
+    include "using", preservation now trims the clause before the gate runs. The
+    run approves and the published document does not contain the invented tools.
+
+    Asserted three ways, because "corrected" and "approved anyway" look identical
+    if you only check the status:
+
+    * the invented tools are absent from the published document;
+    * the faithful prefix the clause was appended to survives;
+    * the surviving bullet is the source's own wording, not a composed sentence.
+    """
+    draft = DRAFT_BOTH_RECORDS.replace(
+        "- Installed commercial electrical systems across 40+ job sites.",
+        "- Installed commercial electrical systems across 40+ job sites using "
+        "AutoCAD and SCADA.")
+    body, _reviewer, _tmp = _run_route(monkeypatch, tmp_path, draft)
+
+    markdown = body.get("final_written_section_markdown") or ""
+    if body.get("correction_status") == "withheld":
+        # Withholding is also acceptable: nothing is published at all.
+        assert markdown == ""
+        assert body.get("publication_receipt") is None
+        return
+    assert "AutoCAD" not in markdown, "the invented tool reached the document"
+    assert "SCADA" not in markdown, "the invented tool reached the document"
+    assert "Installed commercial electrical systems across 40+ job sites" in markdown
+    # Nothing was composed: the kept text is a prefix of what the writer wrote.
+    assert "using" not in markdown.lower()
 
 
 # ---------------------------------------------------------------------------
