@@ -1,0 +1,62 @@
+{
+  "plan": {
+    "models": [
+      "google/gemma-4-31b-it",
+      "google/gemini-2.5-flash-lite",
+      "xiaomi/mimo-v2.6-flash",
+      "openai/gpt-4o-mini"
+    ],
+    "cases": [
+      "faithful_paraphrase",
+      "cal_ops_faithful",
+      "unsupported_method",
+      "wrong_record_attribution",
+      "omitted_record"
+    ],
+    "logical_calls": 20,
+    "attempts_per_call": 2,
+    "max_requests": 40,
+    "max_spend_usd": 0.1,
+    "max_tokens": 8192,
+    "mode": "imaginative",
+    "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+    "ceiling_statement": "Request ceiling is HARD, checked before every HTTP attempt including retries. The $0.10 figure is enforced against OBSERVED cost only and is not a proof of maximum spend; any response without usage is recorded as unknown spend, not zero."
+  },
+  "model_substitution": {
+    "requested": "xiaomi/mimo-v2-flash",
+    "used": "xiaomi/mimo-v2.6-flash",
+    "reason": "xiaomi/mimo-v2-flash is not present in the OpenRouter catalogue; xiaomi/mimo-v2.6-flash is the nearest available MiMo Flash."
+  },
+  "cast": [
+    {
+      "case_id": "faithful_paraphrase",
+      "group": "familiar",
+      "probe": "clean_paraphrase",
+      "expected": "approve"
+    },
+    {
+      "case_id": "cal_ops_faithful",
+      "group": "unfamiliar",
+      "probe": "clean_paraphrase",
+      "expected": "approve"
+    },
+    {
+      "case_id": "unsupported_method",
+      "group": "familiar",
+      "probe": "unsupported_method",
+      "expected": "revise"
+    },
+    {
+      "case_id": "wrong_record_attribution",
+      "group": "familiar",
+      "probe": "wrong_record",
+      "expected": "revise"
+    },
+    {
+      "case_id": "omitted_record",
+      "group": "familiar",
+      "probe": "omitted_record",
+      "expected": "revise"
+    }
+  ]
+}

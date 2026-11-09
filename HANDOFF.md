@@ -1,3 +1,62 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 7)
+
+## Checkpoint 7 — review status corrected, count fixed, model screen staged (NO CALLS)
+
+**Start here.** Checkpoints 1–6 remain valid history. **No provider calls were made.**
+No production change, no repairs, no automatic dismissal of objections.
+
+### 1. Source-linked review downgraded to agent assessment
+
+`results/cross-model-v1/MANUAL_INSPECTION.md` now carries a status banner: it is a
+**completed agent assessment, not an independent human audit**. It was produced by the
+same agent that ran the experiments, so its verdicts are a documented reading to be
+challenged, not ground truth.
+
+### 2. Materiality proposal count fixed
+
+The case table listed **11** cases (3 clean + 8 defective) while the prose said 12 and
+"recall 8/9". Corrected to 11 cases / 8 defective; budget now 22 calls / 44 requests.
+**The proposed Qwen/GPT batch was NOT run.**
+
+### 3. Model availability resolved — one requested slug does not exist
+
+Checked against `GET /api/v1/models` (432 entries, zero-cost):
+
+| Requested | Status |
+|---|---|
+| `google/gemma-4-31b-it` | available |
+| `google/gemini-2.5-flash-lite` | available |
+| `xiaomi/mimo-v2-flash` | **NOT PRESENT** → `xiaomi/mimo-v2.6-flash` used, substitution declared |
+| `openai/gpt-4o-mini` | available (baseline) |
+
+The MiMo catalogue has `v2.5`, `v2.5-pro`, `v2.6-pro`, `v2.6-pro-ultraspeed`,
+`v2.6-flash` — no plain `v2`. **Substitution needs confirmation.**
+
+### 4. Screen prepared, awaiting authorization
+
+`experiment/model_screen.py` + `results/model-screen-v1/PRE_EXECUTION_BRIEF.md`.
+
+- **Cases:** `faithful_paraphrase`, `cal_ops_faithful` (approve);
+  `unsupported_method`, `wrong_record_attribution`, `omitted_record` (revise).
+  Frozen drafts and sources reused verbatim.
+- **Policy:** the existing frozen contract, one policy for all four models. The
+  untested materiality instruction is **not** applied.
+- **Limit:** 20 calls, **40-request hard ceiling**, **$0.10 observed-cost stop**,
+  projected $0.0144, no re-reviews.
+- **Reporting:** valid judgment / actual detection / invented objection / missed
+  defect, separately. No inference from decision words or keywords.
+- **Classifier validated offline first:** 14 tests against already-recorded answers,
+  including that gpt's `approve`-plus-issues answer is reported invalid + missed,
+  never as a release.
+
+Execute with `python -m experiment.model_screen --authorized`.
+
+### Verification
+
+`2088 passed, 14 skipped`; production diff vs `master` empty.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 6)
 
 ## Checkpoint 6 — manual adjudication, corrected claims, materiality proposal

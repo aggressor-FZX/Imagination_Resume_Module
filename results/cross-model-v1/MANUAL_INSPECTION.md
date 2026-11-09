@@ -1,5 +1,13 @@
 # Manual inspection — seven matched cases, both models, every material issue
 
+> **Status: completed agent assessment, not an independent human audit.**
+> This document was produced by the same agent that ran the experiments. It is a
+> careful reading of the recorded bytes against the frozen sources, with every
+> objection quoted so a third party can check any verdict — but it is **not**
+> independent adjudication. No human reviewer and no separate auditor has validated
+> these classifications. Treat the verdicts as a documented assessment to be
+> challenged, not as ground truth.
+
 This is a human read of the raw answers against the exact sources and drafts, not a
 rubric score. **Every material issue is adjudicated**, not only the best-matching
 one. Source text and draft text are quoted so each verdict can be checked.

@@ -100,16 +100,20 @@ Three deliberate design choices:
 
 ## Proposed frozen test
 
-### Cases — 12, all already frozen, no new authoring
+### Cases — 11, all already frozen, no new authoring
 
-| Group | Cases | Why |
-|---|---|---|
-| Clean drafts (must **approve**) | `faithful_paraphrase`, `cal_ops_faithful`, `cal_lab_faithful` | The three that both models currently refuse. This is the primary endpoint. |
-| Genuine method defects (must **revise**, correct clause) | `unsupported_method`, `cal_ops_unsupported`, `cal_lab_unsupported` | Guards against over-suppression on the most common real defect. |
-| Omission / wrong-record (must **revise**, omission named) | `omitted_record`, `cal_lab_omitted`, `cal_ops_omitted`, `cal_lab_missing`, `wrong_record_attribution` | Guards the failure mode the instruction most plausibly harms. |
+| Group | Cases | Count | Why |
+|---|---|---|---|
+| Clean drafts (must **approve**) | `faithful_paraphrase`, `cal_ops_faithful`, `cal_lab_faithful` | 3 | The three that both models currently refuse. This is the primary endpoint. |
+| Genuine method defects (must **revise**, correct clause) | `unsupported_method`, `cal_ops_unsupported`, `cal_lab_unsupported` | 3 | Guards against over-suppression on the most common real defect. |
+| Omission / wrong-record (must **revise**, omission named) | `omitted_record`, `cal_lab_omitted`, `cal_ops_omitted`, `cal_lab_missing`, `wrong_record_attribution` | 5 | Guards the failure mode the instruction most plausibly harms. |
+| **Total** | | **11** | 3 clean + **8 defective** |
 
-Twelve cases, drawn only from the two existing frozen fixtures. No new drafts, no new
+Eleven cases, drawn only from the two existing frozen fixtures. No new drafts, no new
 sources, no fixture edits.
+
+> Count corrected from an earlier "12 cases / recall 8 of 9", which did not match the
+> table. The table's rows are authoritative: 3 clean, 8 defective, 11 total.
 
 ### Models and arms
 
@@ -126,7 +130,7 @@ Recorded now so the result cannot be reinterpreted afterwards:
 
 | Outcome | Reading |
 |---|---|
-| clean drafts approve ≥ 2/3 **and** defect recall stays 8/9 | the instruction works; proceed to a delivery test |
+| clean drafts approve ≥ 2/3 **and** defect recall stays 8/8 | the instruction works; proceed to a delivery test |
 | clean drafts approve ≥ 2/3 **and** defect recall drops | over-suppression; the rule trades one failure for another |
 | clean drafts still 0–1/3 | materiality is not instruction-addressable with these models; stop iterating the prompt |
 
@@ -134,13 +138,13 @@ Recorded now so the result cannot be reinterpreted afterwards:
 
 | | |
 |---|---|
-| Cases | 12 |
+| Cases | **11** |
 | Models | 2 |
 | Arms | 1 |
-| Logical review calls | **24** (12 × 2) |
+| Logical review calls | **22** (11 × 2) |
 | Attempts per call | 2 |
-| **Hard request ceiling** | **48** |
-| Expected spend | ≈ **$0.020** (13 of 24 cases at the observed $0.0005–$0.0012/call) |
+| **Hard request ceiling** | **44** |
+| Expected spend | ≈ **$0.020** (22 calls at the observed $0.0005–$0.0012 per call) |
 | **Observed-cost ceiling** | **$0.10** |
 | Re-reviews | **none** — this tests judgement only; adding the repair path adds a second variable |
 
