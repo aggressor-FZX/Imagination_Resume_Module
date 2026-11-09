@@ -22,8 +22,14 @@ Machine-readable output: `calibration.json`. Generated report: `CALIBRATION.md`.
 
 ## 1. Accurate judgments
 
-"Accurate" here means the reviewer's own words named the defect the fixture
-actually contains. Verified against source/draft ground truth per case.
+> **Superseded measure.** This section reported "named the needle", which locates a
+> passage but is not a semantic accuracy measure: a reviewer can name the fact and
+> still get its source-presence, draft-presence, ownership or correction wrong.
+> See `DETECTION_RUBRIC.md` for the five-criterion grading: **10 of 12 complete
+> detections**, not 12 of 12. The two failures are `cal_lab_missing` (never names
+> the owning record) and `cal_ops_missing` (claims a figure is absent from a source
+> that contains it, and proposes no correction). The per-case quoting below remains
+> accurate as a locator.
 
 ### Unfamiliar — 8 of 8 defective cases identified
 
@@ -197,7 +203,9 @@ diagnose the specific objections before adding another mechanism.
 
 **Not yet.** The condition is met for detection and not met for approval:
 
-- defective drafts: **12 of 12** named the real defect (8 unfamiliar, 4 familiar);
+- defective drafts: **10 of 12 complete detections** on the five criteria
+  (`DETECTION_RUBRIC.md`); the two gaps are `cal_lab_missing` (ownership never
+  named) and `cal_ops_missing` (false claim about the source, no correction);
 - faithful drafts: **1 of 5 approved** (`cal_ops_faithful`), 4 refused on invented
   grounds.
 

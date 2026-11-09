@@ -27,7 +27,7 @@ Declared defect: `reword_only` — The baseline itself, paraphrased throughout. 
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft assigns Ridgeline Equipment Services to Fife, WA, but candidate-main.txt lists "Ridgeline Equipment Services -- Fife, WA" under a different role and timeframe than what i |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft assigns Ridgeline Equipment Services to Fife, WA, but candidate-main.txt lists "Ridgeline Equipment Services -- Fife, WA" under a different role and timeframe than what i |
 | 2 | `unsupported` | - Maintained parts availability records for 7 service branches. | yes | While this statement paraphrases the source accurately, it shifts from active verb (“Maintain”) to passive (“Maintained”), which changes the tense without clear justification based |
 | 3 | `omitted` | - Compared quarterly parts usage with the prior four quarters to set reorder points. | yes | The phrasing of this bullet matches the source closely, but because the role itself appears misplaced due to conflicting timelines between documents, the entire section should be r |
 
@@ -37,7 +37,7 @@ Declared defect: `reword_sourced_method` — 'Cut ... by' -> 'Reduced ... throug
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft correctly lists Ridgeline Equipment Services and aligns with the dates and duties listed in the supplement. However, the main resume omits this role entirely, which could |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft correctly lists Ridgeline Equipment Services and aligns with the dates and duties listed in the supplement. However, the main resume omits this role entirely, which could |
 | 2 | `unsupported` | Reduced rework by 18% through standardizing panel labeling. | yes | While the source supports that rework was reduced by 18% via standardization, the draft adds a causal mechanism (“through”) that implies a direct cause-effect relationship beyond w |
 
 ### `unsupported_method` / `revised+advisory` — **detected**
@@ -64,7 +64,7 @@ Declared defect: `move_fact_to_other_employer` — Attaches the 1,180-invoice fi
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The employment dates for Ridgeline Equipment Services (08/2023 – Present) overlap with Harborline Transit Authority (04/2019 – Present), but the source lists Ridgeline as a current |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The employment dates for Ridgeline Equipment Services (08/2023 – Present) overlap with Harborline Transit Authority (04/2019 – Present), but the source lists Ridgeline as a current |
 | 2 | `misattributed` | Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter. | yes | The draft merges two separate responsibilities from different employers into one bullet under Cascade Freight Partners. Preparing a monthly cost summary belongs to Cascade Freight  |
 
 ### `transferable_skill` / `revised+advisory` — **invented_objection**
@@ -73,7 +73,7 @@ Declared defect: `add_capability_clause` — Adds 'demonstrating reconciliation 
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft places Ridgeline Equipment Services as a current role starting in August 2023, but candidate-main.txt lists Harborline Transit Authority as the current role ("04/2019 - P |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The draft places Ridgeline Equipment Services as a current role starting in August 2023, but candidate-main.txt lists Harborline Transit Authority as the current role ("04/2019 - P |
 | 2 | `unsupported` | - Compared quarterly parts usage with the prior four quarters to set reorder points. | yes | While the action is listed in the supplement, there's no indication of employment dates or job title associated with this specific task in the main document, so its attribution to  |
 | 3 | `unsupported` | - Produced the depot scorecard that supervisors review in the Monday operations meeting. | yes | The phrase “demonstrating reconciliation and audit capability” was added in the draft and not present in the source. It introduces an interpretation beyond what is stated. |
 
@@ -91,8 +91,8 @@ Declared defect: `reword_only` — The baseline itself, paraphrased throughout. 
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | *Inventory Analyst \| 08/2023 - Present* | yes | The draft places Ridgeline Equipment Services in Fife, WA, but according to the source document, this role overlaps temporally with the current role at Harborline Transit Authority |
-| 2 | `unsupported` | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* | yes | The candidate cannot simultaneously hold two full-time positions marked as “Present.” The supplemental file lists Ridgeline as “08/2023 – Present,” while the main file has Harborli |
+| 1 | `misattributed` | *Inventory Analyst \| 08/2023 - Present | yes | The draft places Ridgeline Equipment Services in Fife, WA, but according to the source document, this role overlaps temporally with the current role at Harborline Transit Authority |
+| 2 | `unsupported` | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | yes | The candidate cannot simultaneously hold two full-time positions marked as “Present.” The supplemental file lists Ridgeline as “08/2023 – Present,” while the main file has Harborli |
 
 ### `supported_method` / `revised+enabled` — **invented_objection**
 
@@ -100,8 +100,8 @@ Declared defect: `reword_sourced_method` — 'Cut ... by' -> 'Reduced ... throug
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches.  | yes | The employment dates for Ridgeline Equipment Services are inconsistent between the draft and source. The draft says "08/2023 - Present", but candidate-main.txt shows a gap from 03/ |
-| 2 | `unsupported` | **Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator \| 07/2015 - 03/2019* - Reduced rework by 18% through standardizing panel labelin | yes | The phrase “through standardizing panel labeling” implies a causal mechanism not present in the source. While the action of standardizing labeling is supported, attaching the outco |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. -  | yes | The employment dates for Ridgeline Equipment Services are inconsistent between the draft and source. The draft says "08/2023 - Present", but candidate-main.txt shows a gap from 03/ |
+| 2 | `unsupported` | Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator \| 07/2015 - 03/2019* - Reduced rework by 18% through standardizing panel labeling. | yes | The phrase “through standardizing panel labeling” implies a causal mechanism not present in the source. While the action of standardizing labeling is supported, attaching the outco |
 
 ### `unsupported_method` / `revised+enabled` — **detected**
 
@@ -129,7 +129,7 @@ Declared defect: `move_fact_to_other_employer` — Attaches the 1,180-invoice fi
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `unsupported` | **"08/2023 - Present"** under Ridgeline Equipment Services | **NO** | The candidate-supplement.txt states employment at Ridgeline Equipment Services began in August 2023, but candidate-main.txt lists Harborline Transit Authority as "04/2019 – Present |
+| 1 | `unsupported` | "08/2023 - Present"** under Ridgeline Equipment Services | **NO** | The candidate-supplement.txt states employment at Ridgeline Equipment Services began in August 2023, but candidate-main.txt lists Harborline Transit Authority as "04/2019 – Present |
 | 2 | `misattributed` | Compared quarterly parts usage with the prior four quarters to set reorder points. | yes | While the action described matches the source, it's attributed to Ridgeline Equipment Services in the draft, but candidate-supplement.txt also contains other responsibilities liste |
 | 3 | `misattributed` | Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter. | yes | These two actions were separate bullet points under Cascade Freight Partners in the source and have been merged into one sentence in a way that implies the regional manager reviewe |
 
@@ -139,7 +139,7 @@ Declared defect: `add_capability_clause` — Adds 'demonstrating reconciliation 
 
 | # | problem | passage (as quoted) | in draft? | why |
 |---|---|---|---|---|
-| 1 | `misattributed` | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches.  | yes | The draft lists Ridgeline Equipment Services as "08/2023 - Present", but candidate-supplement.txt indicates the role started in August 2023 and is ongoing; however, the main resume |
+| 1 | `misattributed` | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. -  | yes | The draft lists Ridgeline Equipment Services as "08/2023 - Present", but candidate-supplement.txt indicates the role started in August 2023 and is ongoing; however, the main resume |
 | 2 | `unsupported` | Operations analyst with nine years of experience in depot reporting and fuel cost control across public transit operations. | yes | While the phrasing matches the source, the total experience spans more than just public transit operations due to inclusion of Ridgeline Equipment Services (inventory analysis) and |
 
 ### `omitted_record` / `revised+enabled` — **detected_with_a_miscitation**

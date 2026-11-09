@@ -567,7 +567,7 @@ _No re-review was performed in the retained run._
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft assigns Ridgeline Equipment Services to Fife, WA, but candidate-main.txt lists "Ridgeline Equipment Services -- Fife, WA" under a different role and timeframe than what is presented in the d | candidate-main.txt, candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft assigns Ridgeline Equipment Services to Fife, WA, but candidate-main.txt lists "Ridgeline Equipment Services -- Fife, WA" under a different role and timeframe than what is presented in the d | candidate-main.txt, candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 2 | - Maintained parts availability records for 7 service branches. | `unsupported` | While this statement paraphrases the source accurately, it shifts from active verb (“Maintain”) to passive (“Maintained”), which changes the tense without clear justification based on separation from  | candidate-supplement.txt | Maintain parts availability records for 7 service branches. | passage ✓ / sources ✓ |
 | 3 | - Compared quarterly parts usage with the prior four quarters to set reorder points. | `omitted` | The phrasing of this bullet matches the source closely, but because the role itself appears misplaced due to conflicting timelines between documents, the entire section should be reassigned or removed | candidate-supplement.txt | — | passage ✓ / sources ✓ |
 
@@ -646,15 +646,14 @@ Issues:
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | *Inventory Analyst \| 08/2023 - Present* | `misattributed` | The draft places Ridgeline Equipment Services in Fife, WA, but according to the source document, this role overlaps temporally with the current role at Harborline Transit Authority (which is listed as | candidate-supplement.txt | *(omit)* | passage ✓ / sources ✓ |
-| 2 | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* | `unsupported` | The candidate cannot simultaneously hold two full-time positions marked as “Present.” The supplemental file lists Ridgeline as “08/2023 – Present,” while the main file has Harborline Transit also list | candidate-main.txt, candidate-supplement.txt | *(omit)* or request clarification on actual work period or concurrent roles Note: If the candidate confirms that Ridgeline was a contract/temporary role overlap | passage ✓ / sources ✓ |
+| 1 | *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft places Ridgeline Equipment Services in Fife, WA, but according to the source document, this role overlaps temporally with the current role at Harborline Transit Authority (which is listed as | candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 2 | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `unsupported` | The candidate cannot simultaneously hold two full-time positions marked as “Present.” The supplemental file lists Ridgeline as “08/2023 – Present,” while the main file has Harborline Transit also list | candidate-main.txt, candidate-supplement.txt | (omit)* or request clarification on actual work period or concurrent roles Note: If the candidate confirms that Ridgeline was a contract/temporary role overlapp | passage ✓ / sources ✓ |
 
 ### Proposed corrections
 
 | passage | proposed replacement | locatable in draft | omit marker |
 |---|---|---|---|
-| *Inventory Analyst | 08/2023 - Present* | *(omit)* | yes | no |
-| **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst | 08/2023 - Present* | *(omit)* or request clarification on actual work period or concurrent roles Note: If the candidate confirms that Ridgeli | yes | no |
+| **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst | 08/2023 - Present | (omit)* or request clarification on actual work period or concurrent roles Note: If the candidate confirms that Ridgelin | yes | YES |
 
 ### Re-review
 

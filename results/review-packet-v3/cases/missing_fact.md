@@ -1064,21 +1064,21 @@ Issues:
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | `omitted` | The draft removed a key factual detail present in the source that reflects a core responsibility and measurable activity. | candidate-main.txt | **Reconciled 1,180 fuel invoices against depot dispensing records each quarter.** | passage ✓ / sources ✓ |
-| 2 | Built the depot scorecard that supervisors review in the Monday operations meeting. | `unsupported` | While the draft says "Produced the depot scorecard...", the original wording "Built the depot scorecard..." is more precise and directly attributable. Changing the verb alters the implied action witho | candidate-main.txt | **Built the depot scorecard that supervisors review in the Monday operations meeting.** | passage ✗ / sources ✓ |
-| 3 | Compared quarterly parts usage against the prior four quarters to set reorder points. | `misattributed` | The draft changes “against” to “with,” which while minor, introduces unnecessary variation from the source phrasing without benefit and could affect clarity or searchability. | candidate-supplement.txt | **Compared quarterly parts usage against the prior four quarters to set reorder points.** | passage ✗ / sources ✓ |
-| 4 | Cut rework by 18% by standardizing panel labeling across the terminal fleet. | `unsupported` | The draft changes “Cut rework” to “Reduced rework,” which alters the specificity of the accomplishment unnecessarily. | candidate-main.txt | **Cut rework by 18% by standardizing panel labeling across the terminal fleet.** | passage ✓ / sources ✓ |
-| 5 | Prepared the monthly cost summary reviewed by the regional manager. | `unsupported` | The draft adds “that the regional manager reviewed,” changing the passive construction to active. This addition implies direct involvement not stated in the source. | candidate-main.txt | **Prepared the monthly cost summary reviewed by the regional manager.** | passage ✗ / sources ✓ |
+| 1 | Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | `omitted` | The draft removed a key factual detail present in the source that reflects a core responsibility and measurable activity. | candidate-main.txt | Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | passage ✓ / sources ✓ |
+| 2 | Built the depot scorecard that supervisors review in the Monday operations meeting. | `unsupported` | While the draft says "Produced the depot scorecard...", the original wording "Built the depot scorecard..." is more precise and directly attributable. Changing the verb alters the implied action witho | candidate-main.txt | Built the depot scorecard that supervisors review in the Monday operations meeting. | passage ✗ / sources ✓ |
+| 3 | Compared quarterly parts usage against the prior four quarters to set reorder points. | `misattributed` | The draft changes “against” to “with,” which while minor, introduces unnecessary variation from the source phrasing without benefit and could affect clarity or searchability. | candidate-supplement.txt | Compared quarterly parts usage against the prior four quarters to set reorder points. | passage ✗ / sources ✓ |
+| 4 | Cut rework by 18% by standardizing panel labeling across the terminal fleet. | `unsupported` | The draft changes “Cut rework” to “Reduced rework,” which alters the specificity of the accomplishment unnecessarily. | candidate-main.txt | Cut rework by 18% by standardizing panel labeling across the terminal fleet. | passage ✓ / sources ✓ |
+| 5 | Prepared the monthly cost summary reviewed by the regional manager. | `unsupported` | The draft adds “that the regional manager reviewed,” changing the passive construction to active. This addition implies direct involvement not stated in the source. | candidate-main.txt | Prepared the monthly cost summary reviewed by the regional manager. | passage ✗ / sources ✓ |
 
 ### Proposed corrections
 
 | passage | proposed replacement | locatable in draft | omit marker |
 |---|---|---|---|
-| Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | **Reconciled 1,180 fuel invoices against depot dispensing records each quarter.** | NO | no |
-| Built the depot scorecard that supervisors review in the Monday operations meeting. | **Built the depot scorecard that supervisors review in the Monday operations meeting.** | NO | no |
-| Compared quarterly parts usage against the prior four quarters to set reorder points. | **Compared quarterly parts usage against the prior four quarters to set reorder points.** | NO | no |
-| Cut rework by 18% by standardizing panel labeling across the terminal fleet. | **Cut rework by 18% by standardizing panel labeling across the terminal fleet.** | yes | no |
-| Prepared the monthly cost summary reviewed by the regional manager. | **Prepared the monthly cost summary reviewed by the regional manager.** | NO | no |
+| Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | Reconciled 1,180 fuel invoices against depot dispensing records each quarter. | NO | no |
+| Built the depot scorecard that supervisors review in the Monday operations meeting. | Built the depot scorecard that supervisors review in the Monday operations meeting. | NO | no |
+| Compared quarterly parts usage against the prior four quarters to set reorder points. | Compared quarterly parts usage against the prior four quarters to set reorder points. | NO | no |
+| Cut rework by 18% by standardizing panel labeling across the terminal fleet. | Cut rework by 18% by standardizing panel labeling across the terminal fleet. | yes | no |
+| Prepared the monthly cost summary reviewed by the regional manager. | Prepared the monthly cost summary reviewed by the regional manager. | NO | no |
 
 ### Re-review
 

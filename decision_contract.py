@@ -273,8 +273,28 @@ class Decision:
 OMITTED_MARKER = "(omitted)"
 
 _DECISION_RE = re.compile(r"^\s*decision\s*:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
-_FIELD_RE = re.compile(r"^\s*[-*]?\s*(passage|problem|sources|why|correction)\s*:\s*(.*)$",
-                       re.IGNORECASE)
+# The field name may be wrapped in Markdown emphasis, with the colon inside or
+# outside the markers. Measured on the calibration run (2026-11-09): one answer
+# wrote `**problem:** **omitted**`, the regex matched nothing, ZERO issues were
+# parsed, and a complete, correct detection of a dropped bullet was recorded as
+# `revise_without_issues`. The envelope was well-formed in meaning and rejected for
+# decoration — the same defect class this contract exists to remove.
+#
+#   passage: X        -> matched
+#   **problem:** X    -> matched (colon inside the markers)
+#   **problem**: X    -> matched (colon outside)
+#
+# The value is captured VERBATIM, including any emphasis around it. That matters:
+# `_strip_markup_wrapping` only unwraps emphasis that is balanced around the whole
+# value, so consuming the leading markers here would strip one side and leave the
+# other — which is exactly how a correction came out as
+# `Reconciled ... each quarter.**` with a dangling pair. Only the FIELD NAME is
+# de-emphasised by this regex.
+_FIELD_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:\*{1,3}|_{1,3}|`)*\s*"
+    r"(passage|problem|sources|why|correction)\s*(?:\*{1,3}|_{1,3}|`)*\s*:\s*"
+    r"(.*)$",
+    re.IGNORECASE)
 
 
 def _normalise_decision(word: str) -> str | None:
@@ -327,7 +347,11 @@ def parse_decision(raw: Any) -> Decision:
             continue
         field_match = _FIELD_RE.match(stripped)
         if field_match:
-            name, value = field_match.group(1).lower(), field_match.group(2).strip()
+            name = field_match.group(1).lower()
+            # `sources` is left raw: `_parse_sources` handles its brackets and
+            # quotes, and de-emphasising first would eat legitimate bracket text.
+            value = (field_match.group(2).strip() if name == "sources"
+                     else _clean_field_value(field_match.group(2)))
             if name == "passage":
                 if current and current.get("passage"):
                     issues.append(_issue_from(current))
@@ -406,7 +430,54 @@ def _canonical_passage(value: str) -> str:
     stripped = text.strip().strip("()[]{}:;,.*_`'\"").strip().lower()
     if stripped in {"omitted", "omit", "omission", "missing"}:
         return OMITTED_MARKER
-    return text
+    return _strip_trailing_emphasis(text)
+
+
+def _strip_trailing_emphasis(text: str) -> str:
+    """Remove unmatched Markdown emphasis left on the END of a passage.
+
+    Measured on the calibration run (2026-11-09): with the field regex fixed to
+    accept `**problem:**`, six passages arrived as
+
+        Reconciled 1,180 fuel invoices against depot dispensing records each quarter.*
+
+    — the model bolded the passage value but the field splitter consumed only the
+    leading marker. The stray `*` then failed an exact source match, so a
+    legitimate `omitted` issue that quoted REAL source text lost its
+    source-quote acceptance and was reported `passage_not_in_draft`. That in turn
+    made a correct detection look like a miscitation.
+
+    Only TRAILING marker runs are removed, and only when they are decoration: the
+    value must still be non-empty afterwards. A passage that legitimately ends in
+    an asterisk as content is unaffected because `_plain` still has to match.
+    """
+    trimmed = (text or "").rstrip()
+    cleaned = re.sub(r"(?:\*{1,3}|_{2,3}|`{1,3})\s*$", "", trimmed).strip()
+    return cleaned or trimmed
+
+
+def _clean_field_value(value: str) -> str:
+    """Remove Markdown decoration from a field VALUE without touching its content.
+
+    The shapes that need handling, all observed:
+
+        **problem:** **unsupported**     -> `unsupported`
+        **passage:** *Some draft text.*  -> `Some draft text.`
+        correction: **Text.**            -> `Text.`
+        passage: Some *interior* text    -> unchanged
+
+    Order matters. A balanced pair is unwrapped first (that is the only case where
+    both ends are decoration); then a surviving run on either END is removed. The
+    balanced-first order is what stopped a correct correction being applied as
+    `Reconciled … each quarter.**` — one side consumed by the field splitter and
+    the other left behind, so the pair never looked balanced.
+    """
+    text = (value or "").strip()
+    if not text:
+        return text
+    text = _strip_markup_wrapping(text).strip()
+    text = re.sub(r"^(?:\*{1,3}|_{2,3}|`{1,3})\s*", "", text).strip()
+    return _strip_trailing_emphasis(text)
 
 
 def _normalise_problem(value: str) -> str:

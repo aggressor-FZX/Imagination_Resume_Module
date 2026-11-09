@@ -617,7 +617,7 @@ _No re-review was performed in the retained run._
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The employment dates for Ridgeline Equipment Services (08/2023 – Present) overlap with Harborline Transit Authority (04/2019 – Present), but the source lists Ridgeline as a current role without indica | candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The employment dates for Ridgeline Equipment Services (08/2023 – Present) overlap with Harborline Transit Authority (04/2019 – Present), but the source lists Ridgeline as a current role without indica | candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 2 | Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter. | `misattributed` | The draft merges two separate responsibilities from different employers into one bullet under Cascade Freight Partners. Preparing a monthly cost summary belongs to Cascade Freight Partners, while reco | candidate-main.txt | Prepared the monthly cost summary reviewed by the regional manager. Approved version would reflect these corrections accordingly. | passage ✓ / sources ✓ |
 
 ### Proposed corrections
@@ -699,7 +699,7 @@ Approved version would reflect these corrections accordingly.
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | **"08/2023 - Present"** under Ridgeline Equipment Services | `unsupported` | The candidate-supplement.txt states employment at Ridgeline Equipment Services began in August 2023, but candidate-main.txt lists Harborline Transit Authority as "04/2019 – Present", indicating curren | candidate-main.txt, candidate-supplement.txt | — | passage ✗ / sources ✓ |
+| 1 | "08/2023 - Present"** under Ridgeline Equipment Services | `unsupported` | The candidate-supplement.txt states employment at Ridgeline Equipment Services began in August 2023, but candidate-main.txt lists Harborline Transit Authority as "04/2019 – Present", indicating curren | candidate-main.txt, candidate-supplement.txt | — | passage ✗ / sources ✓ |
 | 2 | Compared quarterly parts usage with the prior four quarters to set reorder points. | `misattributed` | While the action described matches the source, it's attributed to Ridgeline Equipment Services in the draft, but candidate-supplement.txt also contains other responsibilities listed without explicit d | candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 3 | Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter. | `misattributed` | These two actions were separate bullet points under Cascade Freight Partners in the source and have been merged into one sentence in a way that implies the regional manager reviewed both summaries and | candidate-main.txt | "- Prepared the monthly cost summary reviewed by the regional manager.\n- Reconciled 1,180 fuel invoices against depot dispensing records each quarter." Final n | passage ✓ / sources ✓ |
 
@@ -719,7 +719,7 @@ _No re-review was performed in the retained run._
 - repair status: `not_attempted`
 - re-review decision: `none`
 - gate result: **WITHHOLD** (`initial_review_unverifiable`)
-- initial structural problems: `passage_not_in_draft:**"08/2023 - Present"** under Ridgeline Equipment Services`
+- initial structural problems: `passage_not_in_draft:"08/2023 - Present"** under Ridgeline Equipment Services`
 
 > The prose answer could not be used as a verdict: a structural problem remained after parsing (see the problems listed).
 

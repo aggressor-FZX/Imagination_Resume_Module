@@ -432,15 +432,15 @@ _No re-review was performed in the retained run._
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft correctly lists Ridgeline Equipment Services and aligns with the dates and duties listed in the supplement. However, the main resume omits this role entirely, which could imply it's new or u | candidate-supplement.txt | No change needed for content, but formatting should match other entries. | passage ✓ / sources ✓ |
-| 2 | Reduced rework by 18% through standardizing panel labeling. | `unsupported` | While the source supports that rework was reduced by 18% via standardization, the draft adds a causal mechanism (“through”) that implies a direct cause-effect relationship beyond what is stated. This  | candidate-main.txt | *Reduced rework by 18% by standardizing panel labeling.* Approved as corrected. | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft correctly lists Ridgeline Equipment Services and aligns with the dates and duties listed in the supplement. However, the main resume omits this role entirely, which could imply it's new or u | candidate-supplement.txt | No change needed for content, but formatting should match other entries. | passage ✓ / sources ✓ |
+| 2 | Reduced rework by 18% through standardizing panel labeling. | `unsupported` | While the source supports that rework was reduced by 18% via standardization, the draft adds a causal mechanism (“through”) that implies a direct cause-effect relationship beyond what is stated. This  | candidate-main.txt | Reduced rework by 18% by standardizing panel labeling. Approved as corrected. | passage ✓ / sources ✓ |
 
 ### Proposed corrections
 
 | passage | proposed replacement | locatable in draft | omit marker |
 |---|---|---|---|
-| *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst | 08/2023 - Present | No change needed for content, but formatting should match other entries. | yes | no |
-| Reduced rework by 18% through standardizing panel labeling. | *Reduced rework by 18% by standardizing panel labeling.* Approved as corrected. | yes | no |
+| Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst | 08/2023 - Present | No change needed for content, but formatting should match other entries. | yes | no |
+| Reduced rework by 18% through standardizing panel labeling. | Reduced rework by 18% by standardizing panel labeling. Approved as corrected. | yes | no |
 
 ### Re-review
 
@@ -506,14 +506,14 @@ Approved as corrected.
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. - Compared | `misattributed` | The employment dates for Ridgeline Equipment Services are inconsistent between the draft and source. The draft says "08/2023 - Present", but candidate-main.txt shows a gap from 03/2019 to at least 04/ | candidate-supplement.txt | — | passage ✓ / sources ✓ |
-| 2 | **Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator \| 07/2015 - 03/2019* - Reduced rework by 18% through standardizing panel labeling. | `unsupported` | The phrase “through standardizing panel labeling” implies a causal mechanism not present in the source. While the action of standardizing labeling is supported, attaching the outcome directly to that  | candidate-main.txt | Reduced rework by 18% while standardizing panel labeling across the terminal fleet. | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. - Compared q | `misattributed` | The employment dates for Ridgeline Equipment Services are inconsistent between the draft and source. The draft says "08/2023 - Present", but candidate-main.txt shows a gap from 03/2019 to at least 04/ | candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 2 | Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator \| 07/2015 - 03/2019* - Reduced rework by 18% through standardizing panel labeling. | `unsupported` | The phrase “through standardizing panel labeling” implies a causal mechanism not present in the source. While the action of standardizing labeling is supported, attaching the outcome directly to that  | candidate-main.txt | Reduced rework by 18% while standardizing panel labeling across the terminal fleet. | passage ✓ / sources ✓ |
 
 ### Proposed corrections
 
 | passage | proposed replacement | locatable in draft | omit marker |
 |---|---|---|---|
-| **Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator | 07/2015 - 03/2019* - Reduced rework by 18% throug | Reduced rework by 18% while standardizing panel labeling across the terminal fleet. | yes | no |
+| Cascade Freight Partners** -- Kent, WA *Cost Reporting Coordinator | 07/2015 - 03/2019* - Reduced rework by 18% through  | Reduced rework by 18% while standardizing panel labeling across the terminal fleet. | yes | no |
 
 ### Re-review
 

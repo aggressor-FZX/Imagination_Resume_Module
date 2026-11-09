@@ -846,7 +846,7 @@ _No re-review was performed in the retained run._
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | *Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft places Ridgeline Equipment Services as a current role starting in August 2023, but candidate-main.txt lists Harborline Transit Authority as the current role ("04/2019 - Present"), making it  | candidate-main.txt, candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present | `misattributed` | The draft places Ridgeline Equipment Services as a current role starting in August 2023, but candidate-main.txt lists Harborline Transit Authority as the current role ("04/2019 - Present"), making it  | candidate-main.txt, candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 2 | - Compared quarterly parts usage with the prior four quarters to set reorder points. | `unsupported` | While the action is listed in the supplement, there's no indication of employment dates or job title associated with this specific task in the main document, so its attribution to Ridgeline is not cle | candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 3 | - Produced the depot scorecard that supervisors review in the Monday operations meeting. | `unsupported` | The phrase “demonstrating reconciliation and audit capability” was added in the draft and not present in the source. It introduces an interpretation beyond what is stated. | candidate-main.txt | - Built the depot scorecard that supervisors review in the Monday operations meeting. | passage ✓ / sources ✓ |
 
@@ -906,7 +906,7 @@ Issues:
 
 | # | passage | problem | why | sources | correction | resolves |
 |---|---|---|---|---|---|---|
-| 1 | **Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. - Compared | `misattributed` | The draft lists Ridgeline Equipment Services as "08/2023 - Present", but candidate-supplement.txt indicates the role started in August 2023 and is ongoing; however, the main resume source (candidate-m | candidate-supplement.txt | — | passage ✓ / sources ✓ |
+| 1 | Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst \| 08/2023 - Present* - Maintained parts availability records for 7 service branches. - Compared q | `misattributed` | The draft lists Ridgeline Equipment Services as "08/2023 - Present", but candidate-supplement.txt indicates the role started in August 2023 and is ongoing; however, the main resume source (candidate-m | candidate-supplement.txt | — | passage ✓ / sources ✓ |
 | 2 | Operations analyst with nine years of experience in depot reporting and fuel cost control across public transit operations. | `unsupported` | While the phrasing matches the source, the total experience spans more than just public transit operations due to inclusion of Ridgeline Equipment Services (inventory analysis) and Cascade Freight Par | candidate-main.txt | Operations analyst with nine years of experience in depot reporting, fuel cost control, and inventory management across public transit and freight logistics env | passage ✓ / sources ✓ |
 
 ### Proposed corrections

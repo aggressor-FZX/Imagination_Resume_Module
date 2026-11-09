@@ -1,3 +1,77 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 5)
+
+## Checkpoint 5 — five-criterion detection, two parser fixes, cross-model comparison
+
+**Start here.** Checkpoints 1–4 remain valid history. This checkpoint changes how
+detection is MEASURED and answers whether the incumbent model is the bottleneck.
+
+### 1. "Named the needle" retired as an accuracy measure
+
+`experiment/detection_rubric.py` grades each defective case on the five criteria the
+brief names: fact identified / in source (and stated) / in draft (and stated) / owning
+employer / correct correction. Output:
+`results/calibration-v1/DETECTION_RUBRIC.md`.
+
+**Headline corrected from "12 of 12" to 10 of 12.** The two gaps are real reviewer
+errors, not grader strictness:
+
+- `cal_lab_missing` — names the 24-hour fact and says it is missing, but **never
+  says whose record owns it**.
+- `cal_ops_missing` — claims the 94% figure is "not present in the source file". It
+  **is** in `ops-supplement.txt`. It then proposes no correction.
+
+### 2. Two parser defects found while building the rubric
+
+Both converted CORRECT answers into rejected ones — the class that most flatters a
+reviewer's apparent accuracy:
+
+| Defect | Effect | State |
+|---|---|---|
+| `**problem:** value` unparsed | complete correct detection recorded as ZERO issues | **fixed** (field regex accepts emphasis either side of the colon) |
+| trailing emphasis on a passage (`… each quarter.*`) | legitimate `omitted` quote lost source-quote acceptance → reported as a miscitation | **fixed** (`_strip_trailing_emphasis`) |
+
+Non-regressive: retained matrix tallies are byte-identical afterwards (6 / 5 / 1 / 2)
+and all retained artifacts regenerate unchanged.
+
+### 3. Cross-model comparison — is qwen the bottleneck?
+
+`experiment/cross_model.py`, results in `results/cross-model-v1/`. Seven frozen
+drafts, identical sources, identical instruction text (`4261e9cb…`), identical mode.
+**Only the model differs.** Cost $0.002249, 7/14 requests, 0 unmetered.
+
+| | qwen/qwen3-coder | openai/gpt-4o-mini |
+|---|---|---|
+| usable answers | 5 / 7 | 5 / 7 |
+| **claims source-stated concurrency impossible** | **2** | **0** |
+| objects to permitted synonymy | 2 | 2 |
+| clean drafts approved | 1 / 3 | **0 / 3** |
+| defective drafts fully detected | 4 / 4 | **3 / 4** |
+
+**Verdict: the incumbent is a substantial part of the bottleneck, not the whole of
+it.** The concurrency invention vanishes with a different model — strong evidence it
+is a property of that model, not of the prompt. But synonymy objections survive the
+swap, and gpt-4o-mini brings a worse failure: it **approved `omitted_record`**, a
+draft missing an entire employer record, without ever mentioning Ridgeline.
+
+### 4. Recommended next steps (both offline-testable)
+
+1. **Concurrency claims become a checkable rule, not an instruction sentence.** Two
+   instruction revisions did not stop qwen; the contract should treat a concurrency
+   claim on a source-backed overlap as an invalid objection unless the reviewer cites
+   conflicting draft text.
+2. **An omission issue must carry its owning record.** This would have caught both
+   rubric gaps and gpt-4o-mini's false approval.
+
+Do not run another broad prompt iteration. Both changes can be validated with the
+retained answers and fixtures, no provider calls.
+
+### Verification
+
+`2071 passed, 14 skipped` (two pre-existing ignored modules: missing `fitz`, missing
+`captures/`). Production diff vs `master` empty.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 4)
 
 ## Checkpoint 4 — calibration RUN COMPLETE (one shot, $0.008488)
@@ -26,8 +100,11 @@ them. Instructions and fixtures untouched.
 | exact corrected document approved | 0 | 0 |
 | pair separation | — | **2 / 8** |
 
-- **Detection is complete: 12 of 12.** Including `missing_fact`, which the retained
-  advisory arm missed — the instruction refinement demonstrably fixed it.
+- **Detection: 10 of 12 complete on the five criteria** (`results/calibration-v1/DETECTION_RUBRIC.md`),
+  not the 12 of 12 the needle check reported. Gaps: `cal_lab_missing` never names
+  the owning record; `cal_ops_missing` claims a source-backed figure is absent from
+  the source and proposes no correction. `missing_fact` IS now caught (the retained
+  advisory arm missed it), so the instruction refinement demonstrably worked.
 - **Approval is not: 2 of 5 faithful drafts approved**, 3 refused on invented grounds.
 - **Pair separation 2/8** — not 4/8 as first computed. An invalid variant is not a
   separation; `cal_ops_missing` and `cal_ops_omitted` named the defect but their
