@@ -112,7 +112,12 @@ def review_answer(payload, citation_ids, *, cite_as=None):
 
 
 def is_citation_question(payload):
-    """The citation question reuses post_patch_review but carries no claims."""
+    """Shape of the citation question: source_claim_id/quote items, no claims.
+
+    It now has its own phase name (`cite_uncertain`), so this helper is only used
+    to assert the payload the engine actually sends -- the phase name is what keeps
+    the real provider from mistaking it for a review.
+    """
     return (
         not payload.get("claims")
         and any(isinstance(c, dict) and "source_claim_id" in c
@@ -168,7 +173,7 @@ def test_uncertain_required_claim_is_repaired_when_the_fact_is_cited():
         phases.append(phase)
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             entries = []
             for item in payload["source_claims"]:
                 quote = (item.get("quote") or "").strip()
@@ -187,7 +192,7 @@ def test_uncertain_required_claim_is_repaired_when_the_fact_is_cited():
     assert result.markdown is not None
     # The draft is returned byte-identical: this repair verifies, it does not write.
     assert result.markdown == DOC_A
-    assert "post_patch_review" in phases
+    assert "cite_uncertain" in phases
 
 
 def test_a_transplanted_fact_is_still_withheld():
@@ -209,7 +214,7 @@ def test_a_transplanted_fact_is_still_withheld():
     async def callback(phase, payload):
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             entries = []
             for item in payload["source_claims"]:
                 for line in payload["lines"]:
@@ -241,7 +246,7 @@ def test_no_citation_offered_keeps_the_original_withhold():
     async def callback(phase, payload):
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             return {"citations": []}
         if phase in ("initial_review", "post_patch_review", "post_restore_review"):
             return review_answer(payload, uncertain)
@@ -259,7 +264,7 @@ def test_a_malformed_citation_answer_is_not_trusted():
     async def callback(phase, payload):
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             return {"citations": "not-a-list"}
         if phase in ("initial_review", "post_patch_review", "post_restore_review"):
             return review_answer(payload, uncertain)
@@ -278,7 +283,7 @@ def test_a_citation_to_a_claim_the_reviewer_did_not_support_is_rejected():
     async def callback(phase, payload):
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             return {"citations": [{"source_claim_id": item["source_claim_id"],
                                    "claim_id": "line-that-does-not-exist:0:5"}
                                   for item in payload["source_claims"]]}
@@ -303,7 +308,7 @@ def test_the_repair_does_not_loop_when_the_reviewer_repeats_itself():
     async def callback(phase, payload):
         if phase == "source_inventory":
             return {"source_claims": inv}
-        if phase == "post_patch_review" and is_citation_question(payload):
+        if phase == "cite_uncertain":
             question_count["n"] += 1
             return {"citations": []}
         if phase in ("initial_review", "post_patch_review", "post_restore_review"):

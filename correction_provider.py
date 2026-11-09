@@ -83,6 +83,31 @@ async def _sleep(seconds):
     """Indirection so tests can prove retry behaviour without waiting it out."""
     await asyncio.sleep(seconds)
 
+
+def _is_citation_request(payload: dict) -> bool:
+    """Whether a phase payload is the bounded citation question, not a review.
+
+    The two share the `post_patch_review` phase name and both carry `sources` and
+    `source_claims`, so they must be told apart by SHAPE:
+
+    * a review carries `lines` shaped as ``{line_id, text}``;
+    * the citation question carries ``{source_claim_id, source_id, quote}`` items
+      and ``_CITE_CONTRACT`` as its contract.
+
+    Getting this wrong is silent: the review translation wins, the model is asked
+    the wrong question, and the run withholds for a reason that looks like the
+    reviewer's fault.
+    """
+    claims = payload.get("source_claims")
+    if not isinstance(claims, list) or not claims:
+        return False
+    if payload.get("source_claims") is None or payload.get("lines") is None:
+        return False
+    return all(
+        isinstance(item, dict) and "source_claim_id" in item and "quote" in item
+        for item in claims
+    )
+
 # The disclosure gate. It is enabled only by an explicit operator setting; the
 # default (unset/false) keeps external correction disabled. Enabling it does not
 # skip the checks: `verify_disclosure` still runs against the exact payload that
@@ -253,7 +278,11 @@ class CorrectionProvider:
         # are treated as such below: same disclosure gate, same budget, same retry
         # classification, same telemetry, same capture.
         if phase not in {"source_inventory", "initial_review", "repair",
-                         "post_patch_review", "restore", "post_restore_review"}:
+                         "post_patch_review", "restore", "post_restore_review",
+                         # The bounded citation question. Permitted as an ordinary
+                         # call: it is one question about where a fact already is,
+                         # and it cannot write to the draft.
+                         "cite_uncertain"}:
             raise ValueError("correction call budget exhausted")
         # Recovery headroom is not spendable by an arbitrary caller: it exists only
         # for the engine's single completion re-review, which is the only request
@@ -275,7 +304,18 @@ class CorrectionProvider:
             if phase == "source_inventory" and "sources" in original_payload:
                 translated = correction_protocol.indexed_inventory_request(original_payload)
             elif (phase in {"initial_review", "post_patch_review", "post_restore_review"}
-                    and "sources" in original_payload and "source_claims" in original_payload):
+                    and "sources" in original_payload and "source_claims" in original_payload
+                    # …but NOT the bounded citation question, which reuses the
+                    # `post_patch_review` phase name and carries the same
+                    # `sources`/`source_claims` keys for a different purpose.
+                    #
+                    # Measured live 2026-11-09: translating it as a review made
+                    # the provider DISCARD the `citations` contract, so the model
+                    # was asked to review a draft instead of naming where a fact
+                    # already lives, answered `uncertain` again, and the run
+                    # withheld. The engine's verifier was never at fault; the
+                    # request never reached the model in the right shape.
+                    and not _is_citation_request(original_payload)):
                 # A post-restore review is a review: same question, same translation,
                 # same validation. It differs only in that the draft has changed.
                 translated = correction_protocol.indexed_review_request(original_payload)

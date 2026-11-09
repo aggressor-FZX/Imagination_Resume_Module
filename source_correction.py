@@ -2326,7 +2326,13 @@ async def _await_citation_for_uncertain(response: Any,
                   for line in lines],
     }
     try:
-        answer = await _invoke(callback, "post_patch_review", payload,
+        # A DEDICATED phase name, not a reused `post_patch_review`. Reusing the
+        # review name made the real provider translate this into a review request,
+        # which silently discarded the citation contract: measured live
+        # 2026-11-09, the model was asked to review a draft, answered `uncertain`
+        # again, and the run withheld. A distinct name means no translation path
+        # can claim it by accident.
+        answer = await _invoke(callback, "cite_uncertain", payload,
                                deadline - loop.time(), events)
     except Exception:
         # Any failure means the fact stays unconfirmed; the withhold is unchanged.
