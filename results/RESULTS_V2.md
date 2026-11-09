@@ -1,5 +1,11 @@
 # v2 four-way comparison — results
 
+> **Superseded 2026-11-09:** This is the historical report, not a valid
+> comparison of LLM-led final approval. See `BINDING_REPLAY_FINDINGS.md` and
+> `binding-replay-v3.json`. In particular, five releases overrode `revise`,
+> reference checks were not equivalent, and the reported $0.00 cost and
+> claimed verdict counts were incorrect. The 28 retained attempts remain intact.
+
 Run: `results/comparison-v2b-20261109` · **40 provider calls, $0.00 of the $2.00
 ceiling** · 28 matrix attempts + 4 probe + retries · model `qwen/qwen3-coder`,
 temperature 0 · fixture fingerprint `1aa800a3b14f22fd`.

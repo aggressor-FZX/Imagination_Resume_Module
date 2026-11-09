@@ -1,3 +1,38 @@
+# Binding-decision experiment handoff — 2026-11-09
+
+- **Active branch:** `experiment/llm-led-approval`; base before this work:
+  `b1e4792`. The current commit is the experiment-only binding replay handoff.
+- **Completed:** replayed all 28 retained v2b attempts; identified five harness
+  releases after a first `revise`; distinguished first and re-review decisions,
+  recorded rule actions, repair diffs, references and final release. Preserved the
+  28 attempts unchanged. Added a separate binding experimental candidate and
+  offline tests; semantic regex observations do not authorize release.
+- **Independent review remains open:** `results/binding-audit-v3/blind/` contains
+  all 28 evidence packets with both sources and raw reviews. The mapping is in the
+  sibling `private-key.json` and must not be shared with the auditor. Independent
+  auditor invocations returned no response; a packet is not a completed audit.
+- **Remaining steps:** 1. Have an independent reviewer judge every substantive
+  issue and initial/final document from the blind packet. 2. Resolve audit
+  disagreements without treating source-ID resolution as factual support.
+  3. Obtain an explicit remaining cost/call budget and implement trustworthy
+  per-request accounting before the bounded targeted follow-up. 4. Test only the
+  faithful, unsupported-method, wrong-record and omission cases; retain all
+  responses, including truncated/error responses and their usage.
+- **Cost correction:** prior `$0` claim was false. Retained v2b matrix+probe
+  provider `usage.cost` subtotal is $0.040509414, excluding a truncated call;
+  total spend and the previously claimed hard ceiling cannot be established.
+- **Dirty files:** inspect `git status --short` before resuming. Preserve the
+  untracked `experiment/audit_packet_v3.py` created by a failed subagent invocation;
+  it is not part of this handoff's verified packet and is intentionally unstaged.
+- **Verification:** from this worktree run `env -u CORRECTION_PROVIDER_DISCLOSURE
+  OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z
+  STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m
+  pytest tests/test_binding_replay.py tests/test_cases_v2.py
+  tests/test_decision_contract.py tests/test_decision_experiment.py
+  tests/test_replay_regressions.py -o addopts='' -p no:cacheprovider -q`.
+
+---
+
 # Session 19 — withhold causes measured and remediated
 
 **Start here.** The previous session's detail follows below; this section is the
