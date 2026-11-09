@@ -210,6 +210,92 @@ identified withholds did not move the approval rate, because the population of
 failures is larger and shifts as each cause is removed. `incomplete_review` is the
 next one to trace, and it is now measurable rather than hypothetical.
 
+## SESSION 21 — delivery restored; website acceptance BLOCKED
+
+### The retained case, and what it actually showed
+
+Input: `tests/fixtures/realistic_candidate`. Verified byte-identical to the
+originally recorded failing run by sha256
+(`captures/recovery-validation/final-realistic_candidate-imaginative-5/started.json`).
+`scripts/repro_correction_case.py` refuses to run if a hash differs.
+
+**Evidence gap, stated:** no retained `incomplete_review` case holds a draft,
+sources or exchanges — `captures/final/batch/records.json` recorded only
+`{attempt, cost, elapsed_s, fixture, label, mode, rc, reason, status}` for that
+attempt. That is insufficient to trace, so the case above was reproduced instead
+of reconstructed.
+
+**The failure was not the withhold — it was the approval.** Reproduced through the
+real adapter and the live route, the run APPROVED, and the approved markdown
+carried two clauses absent from both source documents:
+
+    source   : "Cut average fault-response time from 4.5 hours to 2.75 hours."
+    approved : "…to 2.75 hours through targeted troubleshooting protocols."
+
+    source   : "Reduced after-hours callouts by 27% by adding thermographic
+                inspections."
+    approved : "…by implementing thermographic inspections and proactive
+                maintenance strategies."
+
+### Root cause — two blind spots at the same boundary
+
+1. `_TRAILING_PURPOSE_BOUNDARY` knew `to`/`for`/`using`/`toward`/`in compliance
+   with` but not **`through` or `by`**. No boundary was offered, so
+   `_trim_trailing_purpose` — which already implements every measured guard — was
+   never called. The trimmer was correct and unreachable.
+2. `_introduces_beyond` flags only CAPITALISED names and unbacked figures. Every
+   appended word was lowercase prose.
+
+Repair: widen the boundary vocabulary only. Not a blacklist — the boundary decides
+where to look; the existing rules decide whether anything is removed. `and` was
+deliberately excluded.
+
+### A second, worse defect found by the required controls
+
+The uncertain-citation recovery called `incomplete.discard("uncertain")` after ANY
+confirmation, clearing the status for EVERY item. With three required facts and a
+citation for one, the run **approved**. That is converting uncertainty into support
+to obtain approval. Completeness is now re-checked after partial confirmation.
+
+A false control was also found and corrected: `test_a_bare_participle_noun_phrase_
+is_not_split` asserted that "through accurate inventory tracking" — a clause absent
+from its source — must survive. It pinned the same blind spot.
+
+### Validation batch, build `cbb73e5f` (predeclared, 5 attempts, none dropped)
+
+| # | http | outcome | reason | receipt |
+|---|---|---|---|---|
+| 1 | 200 | approved | – | yes |
+| 2 | 200 | approved | – | yes |
+| 3 | 200 | withheld | `no_op_repair` | no |
+| 4 | 200 | approved | – | yes |
+| 5 | 200 | withheld | `no_op_repair` | no |
+
+**3/5 approved.** Export from attempt 1: **PDF 178,056 b64 chars, DOCX 50,396**;
+files written and verified (PDF 1.7, Word 2007+, open cleanly). Wrong owner →
+`receipt_owner_mismatch`; no owner → `receipt_owner_unbound`.
+
+Inspected, all three formats agreeing: six headings present, `## Projects` empty
+with no filler, unsupported clauses absent from markdown **and** PDF **and** DOCX,
+figures (4.5 / 2.75 / 27% / 14 / 31 / 8,000) intact, 14/14 bullets present in both
+rendered files.
+
+### What is NOT done — the website path
+
+**The signed-out website flow was NOT validated, and the direct-API success above
+is not a substitute.** The exact blocker:
+
+- the live session is signed out (nav shows Login / Sign Up), and the task
+  requires an authorised signed-in test account; I will not create or alter one;
+- `POST /api/guest/session` returns **404** on the live orchestrator, because
+  `guest-publication-trust` is **not merged** (`git merge-base --is-ancestor`
+  confirms), so guest delivery cannot complete either;
+- frontend and backend both run `9d1033ea`, predating the guest work.
+
+So: the demonstrated defect is repaired and the unchanged input produces faithful,
+inspected PDF and DOCX via the API; **website acceptance remains blocked** on
+(a) a signed-in test account and (b) merging `guest-publication-trust` for guests.
+
 ## Measurement, not estimation
 
 `scripts/measure_withhold_mix.py` reports the ACTUAL mix from live events. Baseline
