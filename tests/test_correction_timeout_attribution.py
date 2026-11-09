@@ -330,11 +330,21 @@ def test_budget_is_monotonic_and_withheld_below_the_minimum():
         if previous is not None:
             assert budget <= previous + 1e-9
         previous = budget
-    assert app.correction_budget_seconds(16) == pytest.approx(120.0)
-    # The 63s pipeline time observed in an earlier live run: the old fixed 120s
-    # deadline would end at 203s, past the 180s orchestrator timeout.
-    assert 63 + 120 + app.UPSTREAM_RESPONSE_RESERVE_SECONDS > app.UPSTREAM_CLIENT_TIMEOUT_SECONDS
+    # On the JSON route the remainder binds, not the cap: 180 - 20 reserve - 16
+    # elapsed = 144. This was 120.0 until the cap was raised to 220s.
+    assert app.correction_budget_seconds(16) == pytest.approx(144.0)
+    # The cap only binds where the caller's clock leaves more than it, which is
+    # the SSE path: 300 - 20 - 16 = 264, clamped to the cap. This is the case the
+    # raise exists for -- every observed run was granted the full budget, so
+    # timeouts were the cap rather than upstream starvation.
+    assert app.correction_budget_seconds(
+        16, app.UPSTREAM_SSE_TIMEOUT_SECONDS) == pytest.approx(
+            app.MAX_CORRECTION_DEADLINE_SECONDS)
+    # The 63s pipeline time observed in an earlier live run. The CAP is no longer
+    # what binds here -- what remains of the 180s JSON clock is, which is the
+    # point of the reserve: 63 + budget + reserve must not exceed the caller.
     assert app.correction_budget_seconds(63) == pytest.approx(97.0)
+    assert 63 + app.correction_budget_seconds(63) + app.UPSTREAM_RESPONSE_RESERVE_SECONDS <= app.UPSTREAM_CLIENT_TIMEOUT_SECONDS
     assert app.correction_budget_seconds(150) is None
     assert app.correction_budget_seconds(float("nan")) is None
     assert app.correction_budget_seconds(True) is None

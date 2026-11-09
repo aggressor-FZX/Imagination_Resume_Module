@@ -330,7 +330,13 @@ def test_post_patch_review_is_required_and_schema_checked():
 
     result = run(DRAFT, callback)
     assert result.reason == "malformed_output" and result.markdown is None
-    assert (result.review_calls, result.repair_calls) == (2, 1)
+    # Three reviews now, not two: the malformed post-patch envelope gets the one
+    # bounded shape re-ask (measured cause of both live 2026-11-09
+    # malformed_output withholds -- a review answering in the wrong shape with
+    # 114s of the budget unspent). The scripted reviewer fails identically twice,
+    # so the re-ask is refused, nothing is approved, and the reason is unchanged.
+    # A malformed EDIT envelope is deliberately still not re-asked.
+    assert (result.review_calls, result.repair_calls) == (3, 1)
 
 
 def test_all_structural_is_not_accepted_as_a_resume():

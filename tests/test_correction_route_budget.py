@@ -89,9 +89,15 @@ def test_sse_budget_matches_the_run_6_measurement():
     json_budget = app.correction_budget_seconds(elapsed, app.UPSTREAM_CLIENT_TIMEOUT_SECONDS)
     sse_budget = app.correction_budget_seconds(elapsed, app.UPSTREAM_SSE_TIMEOUT_SECONDS)
     assert round(json_budget * 1000) == 53_517          # matches the live log
-    assert sse_budget == app.MAX_CORRECTION_DEADLINE_SECONDS  # the cap, not the remainder
-    # The cap is what actually bound correction in every live run.
-    assert sse_budget - json_budget == pytest.approx(66.483, abs=0.01)
+    # The cap used to bind here (it was 120s, below the 173.5s remaining). Now the
+    # SSE remainder binds instead, which is exactly the point of raising it: the
+    # measurement says 173.5s was available and the old cap discarded 53.5s of it.
+    sse_remaining = (app.UPSTREAM_SSE_TIMEOUT_SECONDS
+                     - app.UPSTREAM_RESPONSE_RESERVE_SECONDS - elapsed)
+    assert sse_budget == pytest.approx(sse_remaining, abs=0.01)
+    assert sse_budget < app.MAX_CORRECTION_DEADLINE_SECONDS
+    assert sse_budget - json_budget == pytest.approx(
+        app.UPSTREAM_SSE_TIMEOUT_SECONDS - app.UPSTREAM_CLIENT_TIMEOUT_SECONDS, abs=0.01)
 
 
 def test_budget_never_exceeds_the_caller_deadline():

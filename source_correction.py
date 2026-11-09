@@ -113,7 +113,11 @@ MAX_SOURCE_DOCUMENTS = 8
 # calls (inventory + review) and one repair adds 2 more, so the deadline must
 # cover two calls at their individual timeout. Must stay below the
 # orchestrator's 180s client timeout, less the time the pipeline already spent.
-MAX_TIMEOUT_SECONDS = 140.0
+# Must stay >= app.MAX_CORRECTION_DEADLINE_SECONDS, or the budget the handler
+# grants is rejected here as invalid_input and every run withholds. Raised with
+# it to 220s: the caller allows 300s (SSE) / 180s (JSON) and the handler already
+# clamps to what remains after the pipeline.
+MAX_TIMEOUT_SECONDS = 220.0
 
 
 class PrivacyReviewRequired(Exception):
@@ -544,7 +548,17 @@ def _quote_shares_content(quote: str, item_quote: str) -> bool:
 
 
 class _Invalid(Exception):
-    pass
+    """A response envelope our own validator rejected.
+
+    ``constraint`` names which check failed, as a short fixed identifier drawn
+    from a closed set (never document text). Without it a shape re-ask can only
+    be a blind replay, and the operator cannot tell which rule the model violated
+    -- the same gap ``MalformedReviewAnswer`` already closed for the adapter path.
+    """
+
+    def __init__(self, constraint: str = "unspecified"):
+        super().__init__(f"invalid envelope: {constraint}")
+        self.constraint = constraint
 
 
 def _exact_dict(value: Any, keys: set[str]) -> bool:
@@ -2117,6 +2131,126 @@ async def _recover_unjudged(phase: str, exc: UnjudgedReview,
     return line_ids
 
 
+# Ordinary provider calls available before the reserved completion slot. Mirrors
+# ``correction_provider.REPAIR_PATH_CALLS``; asserted equal in
+# tests/test_malformed_shape_reask.py so the two cannot drift apart silently. It
+# is duplicated rather than imported because the engine must not depend on the
+# adapter (the adapter already imports the engine).
+_SHAPE_REASK_CALL_LIMIT = 6
+
+
+def _uncertain_required_items(response: Any, inventory: list[dict[str, Any]]
+                              ) -> list[dict[str, Any]]:
+    """The REQUIRED source claims the reviewer declined to confirm.
+
+    These are precisely the claims ``source_completeness_uncertain`` reports. Naming
+    them as ordinary inventory items lets the existing deterministic restorers act
+    on them: without that, the reason fired only when nothing was flagged, and
+    repair may only replace a *flagged* span, so this branch was unreachable by
+    construction and the run's fate depended on the reviewer's mood.
+
+    Only ``required`` claims qualify. An optional claim the reviewer would not
+    confirm is not a completeness failure, and restoring one would add content the
+    source marks as incidental.
+    """
+    if not isinstance(response, dict):
+        return []
+    by_id = {item["id"]: item for item in inventory or []}
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for mapping in (response.get("representations") or []):
+        if not isinstance(mapping, dict) or mapping.get("status") != "uncertain":
+            continue
+        item = by_id.get(mapping.get("source_claim_id"))
+        if (item is None or item.get("classification") != "required"
+                or item["id"] in seen):
+            continue
+        seen.add(item["id"])
+        out.append(item)
+    return out
+
+
+def _emit_completeness_diagnostic(events: "Any", response: Any,
+                                  inventory: list[dict[str, Any]],
+                                  restorations: int) -> None:
+    """Sanitized counts explaining a ``source_completeness_uncertain`` withhold.
+
+    The event carries COUNTS and the reviewer's own status word, never draft or
+    source text: ``correction_events.sanitize()`` is an allow-list that drops
+    unknown keys, so only bounded integers and fixed vocabulary can survive.
+
+    Purely diagnostic, so every failure is contained -- but not silent. An earlier
+    version read a name that only existed inside another helper, swallowed the
+    NameError, and made a correct withhold look undiagnosable while the code read
+    as instrumented. Verify an instrumented branch by observing the event.
+    """
+    try:
+        events.emit("correction.completeness",
+                    outcome="withheld",
+                    reason="source_completeness_uncertain",
+                    uncertain_source_claims=len(
+                        _uncertain_required_items(response, inventory)),
+                    required_source_claims=sum(
+                        1 for item in inventory
+                        if item["classification"] == "required"),
+                    source_claim_total=len(inventory))
+    except Exception:
+        try:
+            events.emit("correction.phase_end",
+                        phase="post_restore_review" if restorations
+                        else "post_patch_review",
+                        outcome="callback_error")
+        except Exception:
+            pass
+
+
+def _recover_malformed(phase: str, constraint: str | None, deadline: float,
+                       state: dict[str, Any], markdown: str = "",
+                       calls_used: int = 0) -> str | None:
+    """Decide whether an unusable answer is worth ONE shape-correcting re-ask.
+
+    ``malformed_output`` means the provider answered and the transport succeeded,
+    but our validator rejected the envelope's SHAPE. Measured 2026-11-08: 2 of 20
+    correction runs withheld for this, and there was no retry at all — a single
+    bad field ended the run, so a document that was never in question was
+    discarded.
+
+    This is the same class of delivery failure ``_recover_unjudged`` already
+    handles, and is bounded identically:
+
+    * at most one shape re-ask per correction (``state["shape_retried"]``);
+    * never across a changed document (``state["shape_digest"]``);
+    * never when the deadline cannot fund a real call;
+    * never a blind replay -- the hint names the exact check that failed, so a
+      repeated failure at the same constraint means the model cannot satisfy the
+      contract for this input and the withhold stands.
+
+    Returns the hint to attach, or None when no re-ask should happen. The
+    recovered answer goes through the unchanged validator, so this can only add
+    a usable answer -- never an approval.
+    """
+    if state.get("shape_retried"):
+        return None
+    if state.get("shape_constraint") == constraint:
+        # The identical check failed again: re-asking repeats the same refusal.
+        return None
+    if (state.get("shape_digest") is not None
+            and state["shape_digest"] != _document_digest(markdown)):
+        return None
+    if deadline - asyncio.get_running_loop().time() <= 0:
+        return None
+    # The adapter refuses an ordinary eighth call, and a shape re-ask is ordinary
+    # (it carries `answer_shape_hint`, not the reserved `must_judge`). Asking
+    # anyway would be rejected before reaching the wire and surface as
+    # `provider_error` -- a transport-sounding report for a decision we made.
+    # Better to withhold with the honest reason than to spend a call we lack.
+    if calls_used >= _SHAPE_REASK_CALL_LIMIT:
+        return None
+    state["shape_retried"] = True
+    state["shape_constraint"] = constraint
+    return constraint or "envelope_shape"
+
+
 def _silence_task(task: asyncio.Task[Any]) -> None:
     # Retrieve any late exception without exposing callback input or exception text.
     if not task.cancelled():
@@ -2327,7 +2461,10 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     # Bounded recovery state for an incomplete review. Shared with the helper so the
     # "at most once" and "never after a repair" rules cannot be bypassed.
     recovery: dict[str, Any] = {"recovered": False, "repaired": False,
-                                "last_unjudged": None, "unjudged_digest": None}
+                                "last_unjudged": None, "unjudged_digest": None,
+                                # Shape re-ask state (see _recover_malformed).
+                                "shape_retried": False, "shape_constraint": None,
+                                "shape_digest": None}
     # Per-bridge decision history: a removed bridge must not be revived by a
     # later review, and the final result reports only what survived.
     bridge_history: dict[str, dict[str, str]] = {}
@@ -2434,6 +2571,9 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
     # Set only by the bounded recovery path; names the exact lines the previous
     # answer omitted so the re-ask is a completion, not a blind retry.
     must_judge: list[str] | None = None
+    # Set only by the shape recovery; names the exact envelope check the previous
+    # answer failed, so the re-ask corrects that defect instead of replaying it.
+    shape_hint: str | None = None
     while True:
         lines = _lines(markdown)
         payload = {"contract": _REVIEW_CONTRACT, "sources": source_payload, "source_claims": inventory,
@@ -2452,6 +2592,12 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
         if must_judge is not None:
             payload["must_judge"] = list(must_judge)
             must_judge = None
+        if shape_hint is not None:
+            # Names WHICH check the previous answer failed. The adapter forwards
+            # it; the contract is unchanged, so a corrected answer still has to
+            # satisfy every rule.
+            payload["answer_shape_hint"] = shape_hint
+            shape_hint = None
         try:
             current_phase = phase
             remaining = deadline - loop.time()
@@ -2649,56 +2795,26 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                             continue
                     return blocked("source_facts_missing")
             if "uncertain" in incomplete and not flagged:
-                # Diagnosability only: WHEN the reviewer declines to confirm a
-                # source claim but flags no line, the operator previously got a
-                # bare reason code with no way to tell whether the gate was right.
+                # UNRECOVERABLE BY CONSTRUCTION, and left deliberately so.
                 #
-                # The event carries COUNTS and the reviewer's own status word,
-                # never draft or source text. `correction_events.sanitize()` is an
-                # allow-list and drops unknown keys, so only bounded integers and
-                # fixed vocabulary can survive here by construction — which is the
-                # property that keeps private resume content out of logs. Those
-                # counts are what let an operator tell "the reviewer could not
-                # confirm one required fact" apart from "it confirmed almost
-                # nothing", which is a different diagnosis.
-                # Purely diagnostic. It must never change the decision, so any
-                # failure here is swallowed: a logging helper that can turn a
-                # correct withhold into `provider_error` would misreport the
-                # engine's own verdict as a transport problem.
-                try:
-                    # `inventory` is the list this function actually holds;
-                    # `_validate_review` builds its own lookup from it. Reading a
-                    # name that only exists inside that helper raised NameError,
-                    # which the guard below then swallowed — so the event silently
-                    # never fired and the reason stayed undiagnosable. Verify an
-                    # instrumented branch by observing the event, never by reading
-                    # the code.
-                    by_id = {item["id"]: item for item in inventory}
-                    # Here the claim WAS required and the reviewer would not
-                    # confirm it, so the count is exactly that.
-                    uncertain_required = sum(
-                        1 for mapping in (response.get("representations") or [])
-                        if isinstance(mapping, dict)
-                        and mapping.get("status") == "uncertain"
-                        and by_id.get(mapping.get("source_claim_id"), {})
-                            .get("classification") == "required")
-                    events.emit("correction.completeness",
-                                outcome="withheld",
-                                reason="source_completeness_uncertain",
-                                uncertain_source_claims=uncertain_required,
-                                required_source_claims=sum(
-                                    1 for item in inventory
-                                    if item["classification"] == "required"),
-                                source_claim_total=len(inventory))
-                except Exception:
-                    # Never let telemetry change the verdict — but never let it
-                    # fail silently either. A swallowed NameError above made a
-                    # correct withhold look undiagnosable, and the code read as
-                    # instrumented the whole time.
-                    events.emit("correction.phase_end",
-                                phase="post_restore_review"
-                                if restorations else "post_patch_review",
-                                outcome="callback_error")
+                # This branch would be the natural place to attempt the same
+                # deterministic restorations the "missing" branch uses. That was
+                # implemented and REVERTED: it approved a transplanted
+                # qualification
+                # (tests/test_route_two_documents.py::[transplanted_qualification]),
+                # because inserting the source's complete skill line makes a
+                # fact the draft MOVED (into another record) look sourced.
+                # Attribution is about which record a fact belongs to; supplying
+                # the fact elsewhere does not repair the misattribution, and the
+                # complete re-review then accepts the combination.
+                #
+                # Repair cannot substitute: it may only replace a *flagged* span,
+                # and this reason fires when nothing is flagged. So the honest
+                # outcome is to withhold -- and to tell the user which fact could
+                # not be confirmed rather than blaming the document as a whole.
+                # See app._review_message_for: this is a CONTENT reason.
+                _emit_completeness_diagnostic(events, response, inventory,
+                                              restorations)
                 return blocked("source_completeness_uncertain")
             if not flagged:
                 supported = sum(c["verdict"] == "supported" for c in claims)
@@ -2843,6 +2959,16 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             # previous partial review would judge stale text. Recovery is spent.
             recovery["repaired"] = True
             repairs += 1
+            # A malformed REPAIR envelope is NOT re-asked, and that asymmetry is
+            # deliberate. Measured 2026-11-09: both live `malformed_output`
+            # withholds were `phase: initial_review`, `constraint:
+            # duplicate_line_verdict`, after 4.9s of a 120s budget -- a review
+            # envelope failing a mechanical check with 114s unspent. A re-ask
+            # addresses exactly that. A malformed edit is different: the model has
+            # already been told precisely which spans to fix and still returned an
+            # unusable edit, and the edits are the content-bearing step, so
+            # replaying one is the failure mode the `_Invalid` guarantee exists to
+            # prevent. Reviews are re-asked; edits fail closed.
             edit_response = await _invoke(callback, "repair", repair_payload, remaining, events)
             if loop.time() >= deadline:
                 return blocked("timeout_repair")
@@ -2879,20 +3005,62 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
             current_phase = phase
             continue
         except NoOpRepair:
+            # A repair returned a flagged span unchanged: the reviewer flagged it,
+            # the repair judged it correct. This withholds, and it MUST.
+            #
+            # An earlier revision of this file tried to break the tie with "does
+            # the span appear verbatim in a source document?". That is WRONG and
+            # was caught by
+            # tests/test_route_two_documents.py::[transplanted_qualification]:
+            # appending "HVAC controls" to the electrical-systems line was
+            # approved, because the phrase does occur in the sources -- under a
+            # DIFFERENT record. Attribution is about which record a fact belongs
+            # to, not whether the fact exists somewhere, so a global
+            # "appears in a source" test is exactly the transplant the engine
+            # exists to reject.
+            #
+            # A correct tie-break needs the citation the reviewer failed to give
+            # (that is why the repair had nothing to work with), so there is
+            # nothing to resolve locally. Withholding is the honest verdict: we
+            # could not substantiate one span. The user-facing message must not
+            # blame the candidate for it -- see app._review_message_for.
             return blocked("no_op_repair")
         except SourcedSpanDeletion:
             # The repair tried to delete the candidate's own verbatim text. The
             # fact is still present, so the honest outcome is a withhold that
             # names the unresolved claim rather than a resume with a fact removed.
             return blocked("unresolved_claims")
-        except _Invalid:
-            return blocked("malformed_output")
-        except MalformedReviewAnswer:
+        except _Invalid as exc:
+            # Our validator rejected the envelope's SHAPE. One corrective re-ask
+            # is bounded and permitted; a second identical failure is not.
+            #
+            # Only a REVIEW envelope is re-asked. A malformed repair envelope
+            # must fail closed: the model was already told which spans to fix,
+            # and the edits are the content-bearing step, so replaying one is the
+            # very thing this guarantee exists to prevent.
+            hint = (None if current_phase == "repair" else
+                    _recover_malformed(current_phase, getattr(exc, "constraint", None),
+                                       deadline, recovery, markdown, events.calls))
+            if hint is None:
+                return blocked("malformed_output")
+            recovery["shape_digest"] = _document_digest(markdown)
+            shape_hint = hint
+            current_phase = phase
+            continue
+        except MalformedReviewAnswer as exc:
             # The provider answered and the transport succeeded; our own
-            # translation rejected the answer. Same user-facing outcome as
-            # `_Invalid` — the draft could not be verified — but reached through
-            # the adapter rather than the engine's validator.
-            return blocked("malformed_output")
+            # translation rejected the answer. Same bounded re-ask as `_Invalid`,
+            # and the constraint names which check failed. Reviews only, for the
+            # same reason: a malformed edit must not be replayed.
+            hint = (None if current_phase == "repair" else
+                    _recover_malformed(current_phase, getattr(exc, "constraint", None),
+                                       deadline, recovery, markdown, events.calls))
+            if hint is None:
+                return blocked("malformed_output")
+            recovery["shape_digest"] = _document_digest(markdown)
+            shape_hint = hint
+            current_phase = phase
+            continue
         except PrivacyReviewRequired:
             return blocked("privacy_review_required")
         except Exception:

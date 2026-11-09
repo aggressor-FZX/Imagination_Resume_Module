@@ -57,7 +57,9 @@ def test_engine_maps_a_malformed_answer_to_malformed_output():
     import inspect
 
     source = inspect.getsource(sc._correct_body)
-    malformed = source.find("except MalformedReviewAnswer:")
+    # Matches both `except MalformedReviewAnswer:` and the `as exc` form, which
+    # the bounded shape re-ask needs in order to read `exc.constraint`.
+    malformed = source.find("except MalformedReviewAnswer")
     assert malformed != -1, "the engine no longer maps MalformedReviewAnswer"
     # The handler must precede the generic catch-all that follows it, or the
     # generic one wins and the reason regresses to `provider_error`. Search for

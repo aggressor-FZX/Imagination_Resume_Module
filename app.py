@@ -150,6 +150,14 @@ async def get_api_key(api_key: str = Security(api_key_header)):
 # The header is only meaningful because the request already passed `get_api_key`;
 # an unauthenticated caller cannot set it at all.
 OWNER_IDENTITY_HEADER = "x-cogito-owner-id"
+# Distinct from the account owner. A free-trial visitor has no account, so the
+# account header is legitimately empty; sending a visitor id there would mint an
+# approval that looks account-owned but is device-owned, and export could then
+# not tell the two apart. Keeping it in its own header preserves the type at the
+# point where it matters.
+VISITOR_IDENTITY_HEADER = "x-cogito-visitor-id"
+VISITOR_OWNER_PREFIX = "visitor:"
+_VISITOR_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11,128}")
 
 
 def trusted_owner_identity(request) -> Optional[str]:
@@ -165,6 +173,58 @@ def trusted_owner_identity(request) -> Optional[str]:
         return None
     value = (raw or "").strip()
     return value or None
+
+
+def trusted_visitor_identity(request) -> Optional[str]:
+    """Free-trial device identity from the authenticated request context, or None.
+
+    Reads ONLY the dedicated header, for the same reason the account owner does:
+    a body field would let the caller nominate whose approval this is.
+
+    The value is namespaced (``visitor:<id>``) so it can never collide with an
+    account id. That distinction is load-bearing: an account id is a verified
+    login, while a device id is a cookie the user can clear. Namespacing keeps
+    every consumer able to tell which kind of claim it is holding, and export
+    refuses a visitor approval when the caller presented an account (upgrade
+    path) so a device-bound approval can never be spent under a stale cookie.
+
+    Malformed values are rejected rather than hashed: a short or odd id is a
+    caller bug, and binding an approval to it would silently weaken the binding.
+    """
+    try:
+        raw = request.headers.get(VISITOR_IDENTITY_HEADER)
+    except Exception:  # noqa: BLE001
+        return None
+    value = (raw or "").strip()
+    if not value or not _VISITOR_ID_PATTERN.fullmatch(value):
+        return None
+    # A browser fallback id is not a stable device identity, so it must not be
+    # used to bind an approval that survives the session.
+    if value.startswith("fallback_"):
+        return None
+    return VISITOR_OWNER_PREFIX + value
+
+
+def resolve_publication_owner(request):
+    """The identity an approval may be bound to, and whether it is an account.
+
+    A signed-in account always wins: it is a verified login, and an approval
+    minted under it can be re-verified later. A free-trial visitor is a real
+    person who paid with credits and is entitled to the resume they paid for, so
+    a stable device identity is a legitimate owner -- refusing it discarded
+    completed work for being logged out.
+
+    Returns ``(owner, is_account)``. ``owner`` is None only when neither identity
+    is available, which means no trustworthy binding exists and the approval must
+    not be issued.
+    """
+    account = trusted_owner_identity(request)
+    if account:
+        return account, True
+    visitor = trusted_visitor_identity(request)
+    if visitor:
+        return visitor, False
+    return None, False
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -281,6 +341,63 @@ def _mode_from_payload(payload):
         return None, None
 
 
+# Reasons that describe a failure of THIS SERVICE, not of the candidate's resume.
+# They are transient, retryable, and must never be reported as a judgement about
+# the document. Measured 2026-11-08: 6 of 9 observed withholds were in this class
+# (3 provider timeouts, 2 malformed reviewer answers, 1 no-op repair), yet all
+# nine told the user their resume "could not be verified".
+_INFRASTRUCTURE_REASONS = frozenset({
+    "provider_rate_limited", "provider_unavailable", "provider_rejected_request",
+    "provider_error", "privacy_redaction_failed", "privacy_review_required",
+    "timeout", "pipeline_budget_exhausted",
+    "timeout_source_inventory", "timeout_initial_review", "timeout_repair",
+    "timeout_post_patch_review", "timeout_restore", "timeout_post_restore_review",
+    "provider_call_timeout_source_inventory", "provider_call_timeout_initial_review",
+    "provider_call_timeout_repair", "provider_call_timeout_post_patch_review",
+    "provider_call_timeout_restore", "provider_call_timeout_post_restore_review",
+    # Our reviewer emitted an answer our own validator rejected, or declined to
+    # change a span it had itself flagged. Neither is evidence about the document.
+    "malformed_output", "malformed_source_inventory", "no_op_repair",
+    "incomplete_review", "correction_failed", "analysis_failed",
+    "receipt_unavailable", "receipt_signing_unavailable",
+    "render_contract_ambiguous", "section_contract_unavailable",
+    "source_documents_mismatch",
+})
+
+# The opposite class: the reviewer could not substantiate something IN the
+# document. Only these may be phrased as a statement about the resume.
+_CONTENT_REASONS = frozenset({
+    "source_facts_missing", "source_completeness_uncertain",
+    "source_section_missing", "attribution_conflict", "unresolved_claims",
+    "no_supported_claims", "no_required_source_claims", "invalid_input",
+})
+
+_RETRY_MESSAGE = ("Our review service could not finish checking your resume in "
+                  "time. Your resume was not rejected — please try again.")
+_CONTENT_MESSAGE = ("We could not confirm every detail of your resume against "
+                    "the document you uploaded. Please review the flagged "
+                    "details and try again.")
+
+
+def _review_message_for(reason):
+    """The user-facing sentence for a withhold, chosen by WHOSE failure it was.
+
+    One hardcoded string used to cover every reason, so a 74-second provider
+    timeout and a genuinely unplaceable source fact produced identical text:
+    "The generated resume could not be verified and needs review." That sentence
+    reads as a judgement on the candidate's document, which is false for every
+    infrastructure failure — and infrastructure failures were the majority.
+
+    An unrecognised reason is treated as infrastructure (retryable, non-
+    accusatory). That is the safe default: telling someone to re-check a resume
+    that was actually fine costs them work, while inviting a retry costs one
+    request.
+    """
+    if reason in _CONTENT_REASONS:
+        return _CONTENT_MESSAGE
+    return _RETRY_MESSAGE
+
+
 def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decision=None,
                          aggregate_skills=None, skill_inference_mode=None,
                          skill_inference_policy_version=None):
@@ -290,12 +407,20 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
     is entitled to know which policy produced the refusal. It is a plain string
     with no candidate content, so it does not weaken the withholding rule — and
     omitting it left the client unable to explain the outcome it had asked for.
+
+    ``review_message`` is derived from the reason so the user is told whose
+    failure this was; see ``_review_message_for``. ``retryable`` is the machine-
+    readable form of the same distinction, so a client can offer a retry button
+    instead of asking the user to edit a document that was never the problem.
     """
     reasons = decision.reason_codes if decision and decision.blocked() else [reason]
+    primary = reasons[0]
+    retryable = primary not in _CONTENT_REASONS
     return AnalysisResponse(
         processing_status="needs_review", requires_review=True,
-        review_reason=reasons[0], review_reasons=reasons,
-        review_message="The generated resume could not be verified and needs review.",
+        review_reason=primary, review_reasons=reasons,
+        review_message=_review_message_for(primary),
+        retryable=retryable,
         verification_coverage="none", publication_receipt=None,
         approved_export_payload=None, pipeline_status=pipeline_status,
         correction_status="withheld", correction_reason=reason,
@@ -303,10 +428,12 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "attribution_conflict": "A literal source record appears under a different label; independent review of the original record is required.",
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
+            "source_section_missing": "A section present in your uploaded document arrived empty; independent review is required.",
             "privacy_redaction_failed": "Personal identifiers could not be removed without changing the source text; independent review is required.",
             "provider_rate_limited": "The correction service was temporarily busy; no unverified rewrite was issued. Please retry.",
             "provider_unavailable": "The correction service could not be reached after retrying; no unverified rewrite was issued. Please retry.",
             "provider_rejected_request": "The correction service refused the request and retrying would repeat the refusal; this needs operator attention.",
+            "receipt_unavailable": "Your resume was approved, but the approval could not be bound to a signed-in owner, so it was not released. Sign in and export it.",
         }.get(reason, "Content withheld; independent review is required."),
         aggregate_skills=aggregate_skills,
         skill_inference_mode=skill_inference_mode,
@@ -333,7 +460,19 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
 UPSTREAM_CLIENT_TIMEOUT_SECONDS = 180.0
 UPSTREAM_SSE_TIMEOUT_SECONDS = 300.0
 UPSTREAM_RESPONSE_RESERVE_SECONDS = 20.0
-MAX_CORRECTION_DEADLINE_SECONDS = 120.0
+# Raised from 120s after measuring why runs timed out. Every observed run was
+# granted the full budget, so timeouts were never upstream starvation — the
+# 120s ceiling itself was the constraint. Measured on run 04:08:55 on 2026-11-08:
+# source_inventory 45.7s, then initial_review needed 74.3s and had exactly that,
+# ending at the deadline. Run 04:12:21 spent 33.6s + 59.2s = 92.8s and approved.
+# The two phases need ~93-120s combined, so jitter decided the outcome.
+#
+# The orchestrator allows 300s (SSE) and 180s (JSON) for the whole request, and
+# ``correction_budget_seconds`` still clamps to ``upstream - reserve - elapsed``,
+# so raising this cannot overrun the caller: a JSON caller automatically keeps
+# the smaller remaining value. The engine's own ceiling (MAX_TIMEOUT_SECONDS in
+# source_correction) must stay >= this.
+MAX_CORRECTION_DEADLINE_SECONDS = 220.0
 # Below this, one provider call (60s per-call timeout) cannot finish meaningfully;
 # do not start it.
 MIN_CORRECTION_BUDGET_SECONDS = 30.0
@@ -931,13 +1070,21 @@ async def _analyze_resume_impl(
                 "skill_bridges": _surviving_bridges(
                     (analysis_result or {}).get("skill_bridges"), final_markdown),
             }, decision)
-            owner = trusted_owner_identity(request)
+            # A free-trial visitor is a legitimate owner: they spent credits for
+            # this resume. Binding only to a signed-in account discarded an
+            # already-corrected document purely because the user was logged out
+            # (measured: 1 of 20 runs, 2026-11-08).
+            owner, owner_is_account = resolve_publication_owner(request)
             output = _issue_publication_receipt(output, owner=owner)
             if not owner or not output.get("publication_receipt") or not output.get("approved_export_payload"):
                 finish_capture(correction_result=correction, decision=decision,
                                reason="receipt_unavailable")
                 return _withhold_correction(reason="receipt_unavailable",
                     pipeline_status=status, metrics=metrics, start_time=start_time)
+            # Tells the client which kind of approval it holds, so it can ask for a
+            # sign-in before export (account-bound) or not (device-bound).
+            output["publication_owner_kind"] = (
+                "account" if owner_is_account else "visitor")
             # The compatibility experience alias must derive from the signed
             # render payload, never from the earlier Drafter output.
             output["experiences"] = [
@@ -1092,8 +1239,13 @@ async def _analyze_resume_impl(
             },
             _decision,
         )
-        output = _issue_publication_receipt(
-            output, owner=trusted_owner_identity(request))
+        # Same resolution as the fast-track path: a free-trial visitor's approval
+        # is bound to their stable device identity rather than discarded.
+        _owner, _owner_is_account = resolve_publication_owner(request)
+        output = _issue_publication_receipt(output, owner=_owner)
+        if _owner:
+            output["publication_owner_kind"] = (
+                "account" if _owner_is_account else "visitor")
 
         ## Validate output schema
         validate_output_schema(output)

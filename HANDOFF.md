@@ -1,4 +1,70 @@
-# Session 18 — source-word escape closed; approval vs faithful rate separated
+# Session 19 — withhold causes measured and remediated
+
+**Start here.** The previous session's detail follows below; this section is the
+current state.
+
+## What was measured
+
+Counting the user-visible failure banner over a 24h window (20 correction runs,
+2026-11-08T04:29 → 2026-11-09T04:13): **11 approved, 9 withheld = 45%**.
+
+**6 of the 9 withholds were our own infrastructure, not the candidate's resume** —
+3 provider timeouts, 2 malformed reviewer answers, 1 no-op repair. Only 3 were
+substantive. Every one of the 9 showed the identical sentence, *"The generated
+resume could not be verified and needs review,"* which reads as a judgement on the
+document.
+
+Two findings worth remembering:
+
+- Every run was granted the **full 120s budget** (`budget 120.0` on all 18 logged
+  runs). The timeouts were the **cap**, not upstream starvation. On run 04:08:55:
+  `source_inventory` 45.7s, then `initial_review` needed 74.3s and had exactly
+  that. Run 04:12:21 spent 33.6 + 59.2 = 92.8s and approved. Jitter decided it.
+- Both `malformed_output` withholds were `phase: initial_review`,
+  `constraint: duplicate_line_verdict`, after **4.9s of a 120s budget** — a
+  mechanical envelope defect with 114s unspent, and **no retry existed**.
+
+## What shipped (see `docs/FAILURE_MODE_REMEDIATION_2026-11-08.md`)
+
+1. **`review_message` split by whose failure it was** — infrastructure vs content,
+   plus a `retryable` field. Fixes the misattribution for all 9.
+2. **Deadline 120s → 220s** (`app.MAX_CORRECTION_DEADLINE_SECONDS` and
+   `source_correction.MAX_TIMEOUT_SECONDS`, which must stay ≥ it). Still clamped
+   to `min(cap, upstream − reserve − elapsed)`, so the JSON route keeps the
+   smaller remainder and nothing can overrun the caller.
+3. **One bounded shape re-ask for a malformed REVIEW envelope.** Reviews are
+   re-asked; edits still fail closed.
+4. **Free-trial visitors can now receive their resume.** This was the worst find:
+   `receipt_unavailable` discarded an **approved** resume because the account
+   owner header was absent, and the orchestrator only sends it when `req.user`
+   exists. Now a visitor is a legitimate owner under a `visitor:<id>` namespace,
+   with an account always taking precedence. Proven: the visitor's receipt
+   verifies for them and is refused for an account (`receipt_owner_mismatch`).
+
+Result: **4 of 9 withholds removed**, 3 remain genuinely unrecoverable, and all 9
+now report the correct cause.
+
+## Two fixes that were implemented and REVERTED — do not re-attempt
+
+Both look obviously correct; both **approve fabricated content**, caught by
+`tests/test_route_two_documents.py::[...-transplanted_qualification]`.
+
+- **No-op repair "resolve against the source"**: appending `HVAC controls` to the
+  electrical-systems line was APPROVED because the phrase exists in the sources —
+  under a *different record*. Attribution is about which record a fact belongs to,
+  not whether the fact exists somewhere. A global source-containment test is
+  exactly the transplant the engine exists to reject.
+- **`source_completeness_uncertain` deterministic restore**: same failure mode —
+  inserting the source's complete skill line makes a *moved* fact look sourced.
+
+A correct tie-break needs the citation the reviewer failed to give, which is why
+the repair had nothing to work with. Withholding stands.
+
+## Deploy requirement
+
+The visitor fix spans **two services**. Ship imaginator **and**
+orchestrator-backend together: shipping only one either keeps the old behaviour or
+refuses visitor exports.
 
 ## Verification commands
 

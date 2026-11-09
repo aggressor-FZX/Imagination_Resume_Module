@@ -83,11 +83,20 @@ def test_both_refusal_sites_use_an_in_scope_inventory():
     """
     import pathlib
     source = pathlib.Path(sc.__file__).read_text()
-    assert 'by_id = {item["id"]: item for item in inventory}' in source, (
-        "correct() no longer builds its lookup from the in-scope inventory")
+    # The lookup now lives in `_uncertain_required_items`, which takes the
+    # in-scope `inventory` as a parameter. The guard's point is unchanged: the
+    # diagnostic must resolve claim ids against `inventory`, never against
+    # `items` (which exists only inside `_validate_review`).
+    assert 'by_id = {item["id"]: item for item in inventory' in source, (
+        "the diagnostic no longer builds its lookup from the in-scope inventory")
     assert "items.get(mapping.get(" not in source, (
         "the diagnostic reads `items`, which is local to _validate_review — the "
         "exact NameError the guard hides")
+    assert "def _uncertain_required_items(" in source, (
+        "the completeness diagnostic must name the required uncertain claims "
+        "through the shared helper")
+    # The refusal site must pass the inventory it actually holds.
+    assert "_emit_completeness_diagnostic(events, response, inventory" in source
 
 
 def test_a_downgraded_representation_is_written_back_to_the_mapping():

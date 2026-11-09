@@ -451,6 +451,20 @@ class AnalysisResponse(BaseModel):
     review_reasons: Optional[List[str]] = Field(
         None, description="All machine-readable block reasons, ordered"
     )
+    # Machine-readable twin of review_message's tone. True when the withhold was
+    # OUR failure (provider timeout, malformed reviewer answer, missing receipt)
+    # and the same request may simply be repeated; False when the document itself
+    # could not be substantiated and retrying would fail identically. Declared
+    # here because AnalysisResponse silently drops undeclared keys — the same
+    # defect that once hid metrics_support from the client.
+    retryable: Optional[bool] = Field(
+        None,
+        description=(
+            "True when the withhold was an infrastructure failure and the request "
+            "may be retried unchanged; False when the document could not be "
+            "substantiated. Clients should offer a retry only when True."
+        ),
+    )
     verification_coverage: Optional[str] = Field(
         None,
         description=(
@@ -477,6 +491,16 @@ class AnalysisResponse(BaseModel):
     )
     approved_export_payload: Optional[Dict[str, Any]] = Field(
         None, description="Exact server-approved structured career content for rendering"
+    )
+    publication_owner_kind: Optional[str] = Field(
+        None,
+        description=(
+            "'account' | 'visitor'. Which identity the approval receipt is bound "
+            "to. A 'visitor' approval belongs to a free-trial device and can be "
+            "exported without signing in; an 'account' approval requires the "
+            "matching signed-in user. Declared here because AnalysisResponse "
+            "silently drops undeclared keys."
+        ),
     )
     review_message: Optional[str] = Field(
         None, description="User-facing explanation shown when review is required"
