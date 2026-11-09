@@ -25,7 +25,8 @@ Machine-readable output: `calibration.json`. Generated report: `CALIBRATION.md`.
 > **Superseded measure.** This section reported "named the needle", which locates a
 > passage but is not a semantic accuracy measure: a reviewer can name the fact and
 > still get its source-presence, draft-presence, ownership or correction wrong.
-> See `DETECTION_RUBRIC.md` for the five-criterion grading: **10 of 12 complete
+> See `DETECTION_RUBRIC.md` for the five-criterion grading: **10 of 12
+automated-rubric agreements** (not independently verified accuracy) — complete
 > detections**, not 12 of 12. The two failures are `cal_lab_missing` (never names
 > the owning record) and `cal_ops_missing` (claims a figure is absent from a source
 > that contains it, and proposes no correction). The per-case quoting below remains
@@ -203,7 +204,8 @@ diagnose the specific objections before adding another mechanism.
 
 **Not yet.** The condition is met for detection and not met for approval:
 
-- defective drafts: **10 of 12 complete detections** on the five criteria
+- defective drafts: **10 of 12 automated-rubric agreements** on the five criteria
+  (an automated count, not independently verified accuracy)
   (`DETECTION_RUBRIC.md`); the two gaps are `cal_lab_missing` (ownership never
   named) and `cal_ops_missing` (false claim about the source, no correction);
 - faithful drafts: **1 of 5 approved** (`cal_ops_faithful`), 4 refused on invented

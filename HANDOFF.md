@@ -1,3 +1,71 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 6)
+
+## Checkpoint 6 — manual adjudication, corrected claims, materiality proposal
+
+**Start here.** Checkpoints 1–5 remain valid history. No production change, no
+automatic veto, no auto-dismissal, no new model sweep.
+
+### 1. `10/12` relabelled
+
+Every place that reported "10 of 12 complete detections" now says **10 of 12
+automated-rubric agreements**, with the explicit caveat that this is a
+phrase-matching count against a hand-written truth table, **not independently
+verified detection accuracy**. The manual inspection shows why: the rubric can credit
+a correct finding while the correction attached to it is unsafe.
+
+### 2. GPT `omitted_record` finding corrected
+
+Previously recorded as "approved `omitted_record`" / "false approval". **Both were
+wrong.** The accurate statement: the raw decision word was `approve`, two issues were
+attached, the answer is **structurally invalid** (`approve_carries_issues`), and the
+omission was **missed**. **No release is demonstrated** — the run had no release path
+and the gate would reject that envelope.
+
+### 3. Manual inspection of all seven matched answers
+
+`results/cross-model-v1/MANUAL_INSPECTION.md`. Every material issue adjudicated
+against the exact source and draft, not just the best-matching one. Key results:
+
+- **17 of 17 objections on clean drafts are non-material.** Both models refuse
+  faithful documents on equivalent-word objections; qwen adds 2 invented-timeline
+  objections.
+- **qwen `cal_lab_faithful` #1 is the worst cell in the set**: its correction
+  ("omit this entry and merge duties under Tidewater") would **delete a
+  source-backed employer record** and reattribute its duties.
+- **qwen `omitted_record` #2 fabricates dates**: proposes `08/2022 - 03/2023`, which
+  appear in neither source.
+- **gpt contaminates corrections with prompt text** in 2 of 7 answers
+  (`cal_ops_unsupported`, `wrong_record_attribution`); in the latter the correction
+  would **reproduce the misattribution it just identified**.
+- **Correct finding with a safe correction: qwen 2, gpt 1.**
+
+### 4. Finding classes kept separate
+
+`owner-not-explicit` (qwen 1), `wrong ownership` (qwen 1, gpt 1), and
+`source/draft reversal` (qwen 1) are reported as distinct classes. Per-issue verdicts
+are quoted so each can be checked.
+
+### 5. Materiality instruction — proposal only, no calls
+
+`results/cross-model-v1/MATERIALITY_PROPOSAL.md`. **Offline evidence first:** two
+mechanical materiality filters were tested against all 29 recorded issues. The
+structural filter keeps 27/29; a fact-token filter keeps 22/29. **Neither works** —
+equivalence of wording, not a changed token, is what decides materiality, and that is
+the judgement under test. So the instruction is proposed as **untested**, with the
+strongest counter-argument recorded up front: both models already ignore "Do not
+require verbatim wording", so a sharper restatement may equally be ignored.
+
+Proposed frozen test: **12 existing cases × 2 models × 1 arm = 24 calls, 48-request
+hard ceiling, $0.10 observed-cost ceiling, no re-reviews.** Predictions fixed before
+the run. Awaiting authorization.
+
+### Verification
+
+`2074 passed, 14 skipped`; production diff vs `master` empty; branch
+`experiment/llm-led-approval` only.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 5)
 
 ## Checkpoint 5 — five-criterion detection, two parser fixes, cross-model comparison
@@ -12,8 +80,11 @@ brief names: fact identified / in source (and stated) / in draft (and stated) / 
 employer / correct correction. Output:
 `results/calibration-v1/DETECTION_RUBRIC.md`.
 
-**Headline corrected from "12 of 12" to 10 of 12.** The two gaps are real reviewer
-errors, not grader strictness:
+**Headline corrected from "12 of 12" to 10 of 12 automated-rubric agreements.**
+These are counts of agreement with a hand-written truth table, **not independently
+verified detection accuracy** — see
+`results/cross-model-v1/MANUAL_INSPECTION.md` for the adjudicated reading. The two
+gaps are real reviewer errors, not grader strictness:
 
 - `cal_lab_missing` — names the 24-hour fact and says it is missing, but **never
   says whose record owns it**.
@@ -50,8 +121,10 @@ drafts, identical sources, identical instruction text (`4261e9cb…`), identical
 **Verdict: the incumbent is a substantial part of the bottleneck, not the whole of
 it.** The concurrency invention vanishes with a different model — strong evidence it
 is a property of that model, not of the prompt. But synonymy objections survive the
-swap, and gpt-4o-mini brings a worse failure: it **approved `omitted_record`**, a
-draft missing an entire employer record, without ever mentioning Ridgeline.
+swap, and gpt-4o-mini brings a different failure: on `omitted_record` the **raw
+decision word was `approve` with issues attached**, so the answer is **invalid**
+(`approve_carries_issues`), and **the omission was missed**. No release is
+demonstrated — the run had no release path and the gate would reject that envelope.
 
 ### 4. Recommended next steps (both offline-testable)
 
@@ -60,7 +133,7 @@ draft missing an entire employer record, without ever mentioning Ridgeline.
    claim on a source-backed overlap as an invalid objection unless the reviewer cites
    conflicting draft text.
 2. **An omission issue must carry its owning record.** This would have caught both
-   rubric gaps and gpt-4o-mini's false approval.
+   rubric gaps and gpt-4o-mini's missed omission.
 
 Do not run another broad prompt iteration. Both changes can be validated with the
 retained answers and fixtures, no provider calls.
@@ -100,7 +173,9 @@ them. Instructions and fixtures untouched.
 | exact corrected document approved | 0 | 0 |
 | pair separation | — | **2 / 8** |
 
-- **Detection: 10 of 12 complete on the five criteria** (`results/calibration-v1/DETECTION_RUBRIC.md`),
+- **Detection: 10 of 12 automated-rubric agreements** on the five criteria
+  (`results/calibration-v1/DETECTION_RUBRIC.md`) — a phrase-matching count, NOT
+  independently verified accuracy; see `results/cross-model-v1/MANUAL_INSPECTION.md`,
   not the 12 of 12 the needle check reported. Gaps: `cal_lab_missing` never names
   the owning record; `cal_ops_missing` claims a source-backed figure is absent from
   the source and proposes no correction. `missing_fact` IS now caught (the retained

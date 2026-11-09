@@ -284,8 +284,14 @@ def test_interior_emphasis_in_a_field_value_is_preserved():
 # ── The run, graded ──────────────────────────────────────────────────────────
 
 @pytest.mark.skipif(not RUN.is_file(), reason="calibration artifact absent")
-def test_the_run_grades_ten_of_twelve_complete():
-    """Locked number: 10 of 12 defective cases met all five criteria."""
+def test_the_run_grades_ten_of_twelve_rubric_agreements():
+    """Locked number: 10 of 12 defective cases agree with all five criteria.
+
+    This is an AUTOMATED-RUBRIC AGREEMENT count, not verified accuracy. The test
+    name and the rendered report both say so, because a bare "10/12" reads as an
+    accuracy figure and it is not one — the rubric can pass a finding whose
+    correction is unsafe (see MANUAL_INSPECTION.md).
+    """
     from experiment.detection_rubric import grade_rows
     run = json.loads(RUN.read_text())
     summary = grade_rows(run["rows"])
@@ -295,3 +301,21 @@ def test_the_run_grades_ten_of_twelve_complete():
     # The two failures are named, so the prose can be checked against them.
     incomplete = {r["case_id"] for r in summary["cases"] if not r["all_complete"]}
     assert incomplete == {"cal_lab_missing", "cal_ops_missing"}
+
+
+def test_the_report_labels_its_numbers_as_rubric_agreement():
+    """A bare '10/12' must never be published without the caveat.
+
+    This guards the exact correction requested: the count is agreement with a
+    hand-written table, not independently verified detection accuracy.
+    """
+    from experiment.detection_rubric import grade_rows, render
+    payload = {"all": {"cases": 0, "complete_detection": 0, "fact_identified": 0,
+                       "no_fact_identified": 0, "criteria": {}, "undetermined": {}},
+               "cases": []}
+    text = render(payload)
+    flat = " ".join(text.lower().split())
+    assert "automated-rubric agreement" in flat
+    assert "not independently verified detection accuracy" in flat
+    # The old, misleading wording must not come back.
+    assert "complete detection (all five)" not in flat

@@ -30,7 +30,8 @@ each defective case on the five things a correct detection must establish:
 5. what actually needs **correcting**.
 
 Applied to the calibration run, this changes the headline from "12 of 12 named the
-defect" to **10 of 12 complete detections** (`results/calibration-v1/DETECTION_RUBRIC.md`):
+defect" to **10 of 12 automated-rubric agreements** — an automated count,
+not independently verified accuracy — (`results/calibration-v1/DETECTION_RUBRIC.md`):
 
 | case | result |
 |---|---|
@@ -90,14 +91,16 @@ the model, not about the wording.
 
 ### But the second model has its own, different failure
 
-gpt-4o-mini **approved `omitted_record`** — the case where an entire employer record
-is missing from the draft. Its answer is `Decision: approve` while listing three
-issues, so the envelope is rejected (`approve_carries_issues`) and it never mentions
-`Ridgeline` or `Inventory Analyst` at all.
+gpt-4o-mini **missed the omission on `omitted_record`** — the case where an entire
+employer record is missing from the draft. Precisely: its raw decision word was
+`approve`, it attached two issues to that approval, so the answer is **structurally
+invalid** (`approve_carries_issues`), and its objection set never mentions `Ridgeline`
+or `Inventory Analyst`. **No release is demonstrated** — this was a review-only run
+with no release path, and the gate would reject an `approve_carries_issues` envelope.
 
-That is a false approval of a document missing a whole record — a worse failure mode
-than a false refusal, because it would deliver the document. And its synonymy
-objections are just as pedantic as qwen's:
+The accurate description is: *raw approval word plus issues, invalid response,
+omission missed*. It is a missed defect plus a malformed answer, not a demonstrated
+release. Its synonymy objections are just as pedantic as qwen's:
 
 > "The term 'monitored' does not accurately reflect the original wording 'tracked',
 > which is a more precise description of the activity performed."
@@ -114,7 +117,8 @@ whole of it.**
 - Synonymy objections survive the change of model, so that one is **not** solved by
   swapping the reviewer — it is either an instruction problem that two revisions have
   not fixed, or a property of LLM review at this contract.
-- A second model brings its own safety failure: **false approval of an omission**.
+- A second model brings its own failure, but a different one: it **misses the
+  omission** and returns an invalid answer (`approve` + issues). No release results.
 
 So "swap the model" is not a fix on its own, and "iterate the prompt" is not a fix on
 its own. The two failures are different and need different responses.
@@ -129,8 +133,8 @@ prompt iteration:
    contract should treat a concurrency claim on a source-backed overlap as an
    *invalid objection* and require the reviewer to cite the conflicting draft text.
    That converts a prompt hope into a mechanical test.
-2. **Make an omission claim carry its owning record.** Both of the five-part rubric
-   failures, and gpt-4o-mini's false approval, are ownership failures. Requiring the
+2. **Make an omission claim carry its owning record.** Both five-criterion rubric
+   failures, and gpt-4o-mini's missed omission, are ownership failures. Requiring the
    owning employer in an omission issue is checkable offline and would have caught
    all three.
 

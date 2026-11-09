@@ -412,6 +412,15 @@ def summarise(results: list[dict], *, grouped: bool = False) -> dict:
 
 def render(summary: dict) -> str:
     lines = ["# Detection rubric — five criteria per defective case", "",
+             "> **These are AUTOMATED-RUBRIC AGREEMENT counts, not independently "
+             "verified detection accuracy.** The rubric matches phrases (a fact "
+             "token, an absence assertion, an owner name, a correction shape) "
+             "against a hand-written truth table. It has not been checked by an "
+             "independent assessor, and it grades only the BEST-MATCHING issue per "
+             "case. Manual inspection "
+             "(`results/cross-model-v1/MANUAL_INSPECTION.md`) shows it can credit a "
+             "correct finding while the attached correction is unsafe, so a pass "
+             "means \"agrees with the rubric\", not \"verified correct\".", "",
              "`fact` = the relevant fact identified. `source` = whether it is in the "
              "source, and the answer stated. `draft` = whether it is in the draft, "
              "and the answer stated. `owner` = the right employer named. "
@@ -420,7 +429,7 @@ def render(summary: dict) -> str:
 
     def table(title: str, t: dict, rows: list[dict]) -> list[str]:
         block = [f"## {title}", "",
-                 f"- complete detection (all five): "
+                 f"- automated-rubric agreement (all five): "
                  f"**{t['complete_detection']} / {t['cases']}**",
                  f"- fact identified, but not all five: "
                  f"{t['fact_identified'] - t['complete_detection']}",
