@@ -2977,12 +2977,48 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                         if (isinstance(mapping, dict)
                                 and mapping.get("source_claim_id") in confirmed_ids):
                             mapping["status"] = "represented"
+                    # Recompute the status from the UPDATED mappings rather than
+                    # clearing the flag wholesale.
+                    #
+                    # `incomplete.discard("uncertain")` was wrong and is the exact
+                    # failure mode this recovery must never have: with two pending
+                    # required facts and a citation for only one, it cleared the
+                    # status for BOTH, so confirming a single fact released a
+                    # document whose other required facts were still unconfirmed.
+                    # That converts uncertainty into support to obtain approval.
+                    #
+                    # The set is derived from what remains `uncertain` or `missing`
+                    # AFTER this confirmation, so partial confirmation leaves the
+                    # rest unresolved and the run withholds.
+                    _remaining = {
+                        str(mapping.get("status"))
+                        for mapping in (response.get("representations") or [])
+                        if isinstance(mapping, dict)
+                        and mapping.get("status") in {"uncertain", "missing"}
+                    }
                     incomplete.discard("uncertain")
+                    incomplete.update(_remaining & {"uncertain"})
+                    if "missing" in _remaining:
+                        incomplete.add("missing")
                 else:
                     _emit_completeness_diagnostic(events, response, inventory,
                                                   restorations)
                     return blocked("source_completeness_uncertain")
             if not flagged:
+                # Completeness is re-checked HERE, after any partial citation
+                # confirmation. The gate above only runs when uncertainty was
+                # present on entry; once it has confirmed a subset, the remaining
+                # unconfirmed required facts must still block release.
+                #
+                # Without this, partial confirmation fell straight through to
+                # approval: measured on the multi-fact case, three required facts
+                # were asked about, ONE was cited, and the run approved. That is
+                # precisely "convert uncertainty into support to obtain
+                # approval", and it is what the citation recovery must never do.
+                if "uncertain" in incomplete or "missing" in incomplete:
+                    _emit_completeness_diagnostic(events, response, inventory,
+                                                  restorations)
+                    return blocked("source_completeness_uncertain")
                 supported = sum(c["verdict"] == "supported" for c in claims)
                 if not supported:
                     return blocked("no_supported_claims")

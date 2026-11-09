@@ -319,3 +319,78 @@ def test_the_repair_does_not_loop_when_the_reviewer_repeats_itself():
     assert result.status == "withheld"
     # Asked once, answered once, done.
     assert question_count["n"] <= 1
+
+
+def test_confirming_one_item_does_not_clear_the_others():
+    """PARTIAL confirmation must leave the remaining uncertainty unresolved.
+
+    The first implementation called ``incomplete.discard("uncertain")`` after any
+    successful confirmation, which clears the status for EVERY item — so
+    confirming one fact released a document whose other required facts were still
+    unconfirmed. That is "convert uncertainty into support to obtain approval",
+    explicitly forbidden.
+
+    Needs two DISTINCT required facts, so the run withholds while one of them has
+    no citation. `DOC_A` alone yields a single required item, hence the local
+    three-line source.
+    """
+    source = ("## Professional Experience\n"
+              "- Journeyman Electrician, Cascade Commercial Electric\n"
+              "- Installed commercial electrical systems across 40 job sites\n"
+              "- Trained 4 apprentices on conduit bending\n")
+    draft = source
+    inv = inventory_for(source, "document-0")
+    required = [i for i in inv if i["classification"] == "required"]
+    assert len(required) >= 3, f"need several required items, got {len(required)}"
+    confirm_only = required[0]["id"]
+
+    async def callback(phase, payload):
+        if phase == "source_inventory":
+            return {"source_claims": inv}
+        if phase == "cite_uncertain":
+            # Cite ONLY the one item, and only if it is still being asked about.
+            for item in payload["source_claims"]:
+                if item["source_claim_id"] != confirm_only:
+                    continue
+                quote = (item.get("quote") or "").strip()
+                for line in payload["lines"]:
+                    if quote and quote in line["text"]:
+                        return {"citations": [{
+                            "source_claim_id": confirm_only,
+                            "claim_id": f"{line['line_id']}:0:{len(line['text'])}",
+                        }]}
+            return {"citations": []}
+        if phase in ("initial_review", "post_patch_review", "post_restore_review"):
+            return review_answer_for(payload, {i["id"] for i in required}, source)
+        return {"edits": []}
+
+    result = asyncio.run(correct(
+        draft, (SourceDocument("document-0", source),), callback, timeout_seconds=60.0))
+    assert result.status == "withheld", (
+        "confirming one item released the document while other required items "
+        "were still unconfirmed")
+    assert result.reason == "source_completeness_uncertain"
+
+
+def review_answer_for(payload, uncertain_ids, source_text):
+    """A review whose supported claims cite `source_text` exactly."""
+    out = []
+    for line in payload["lines"]:
+        text = line["text"]
+        head = text.lstrip().startswith("#")
+        at = source_text.find(text)
+        cites = []
+        if not head and at >= 0:
+            cites = [{"source_id": "document-0", "start": at,
+                      "end": at + len(text), "quote": text}]
+        out.append({
+            "id": f"{line['line_id']}:0:{len(text)}",
+            "line_id": line["line_id"], "start": 0, "end": len(text),
+            "verdict": "structural" if head else "supported",
+            "citations": cites,
+        })
+    reps = [{"source_claim_id": i["id"],
+             "status": ("non_resume" if i["classification"] == "non_resume"
+                        else "uncertain"),
+             "spans": []} for i in payload["source_claims"]]
+    return {"claims": out, "representations": reps}

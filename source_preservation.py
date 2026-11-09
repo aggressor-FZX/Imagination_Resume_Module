@@ -1536,7 +1536,27 @@ def _trim_unshared_bridge_outcome(line: str, permitted_bridges: Optional[list[st
 # tests/test_retained_imaginative_false_approval.py.
 _TRAILING_PURPOSE_BOUNDARY = re.compile(
     r"\s+to\s+|\s+for\s+|\s+so\s+that\s+|\s+in\s+order\s+to\s+"
-    r"|\s+using\s+|\s+toward\s+|\s+in\s+compliance\s+with\s+",
+    r"|\s+using\s+|\s+toward\s+|\s+in\s+compliance\s+with\s+"
+    # `through` / `by` / `via` introduce an outcome or method segment just as
+    # `to` and `for` introduce a purpose, and they are the commonest forms in
+    # this corpus. Measured on the retained realistic_candidate case
+    # (2026-11-09, fixtures/realistic_candidate, input verified byte-identical):
+    # two bullets were APPROVED carrying clauses absent from the source --
+    #   "…to 2.75 hours through targeted troubleshooting protocols."
+    #   "…by implementing thermographic inspections and proactive maintenance
+    #    strategies."
+    # Neither pattern was recognised, so no boundary was offered, so the trimmer
+    # never ran and the entity check could not see them (it only flags
+    # capitalised names, and every appended word here is lowercase prose).
+    #
+    # `by` requires a following lowercase letter so a capitalised proper noun
+    # ("by NFPA 70E") is not split at the connective: that is an entity question,
+    # which `_introduces_beyond` already handles.
+    #
+    # `and` is deliberately NOT a boundary. It joins ordinary conjunctions of
+    # sourced material ("Pulled and terminated branch circuits"), and the
+    # existing participle boundary already covers the "... and <doing>" form.
+    r"|\s+through\s+|\s+via\s+|\s+by\s+(?=[a-z])",
     re.IGNORECASE,
 )
 _TRAILING_PARTICIPLE_BOUNDARY = re.compile(

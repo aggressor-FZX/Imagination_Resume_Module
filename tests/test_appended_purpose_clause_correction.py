@@ -290,7 +290,28 @@ def test_a_bare_participle_noun_phrase_is_not_split():
     """An ordinary noun phrase after a participle is not an appended outcome.
 
     "…records supporting 7 service branches" states a sourced figure and adds no
-    ungrounded content, so the line is left exactly as written.
+    ungrounded content, so THAT part of the line is left exactly as written.
+
+    Behaviour change, 2026-11-09. This test previously also required the line to
+    be byte-identical, which kept "through accurate inventory tracking" — a
+    method clause that appears NOWHERE in `ESCAPE_SOURCE`. That was a false
+    control: it asserted that an unsupported clause must survive, and it is the
+    same blind spot that let two unsupported clauses reach an APPROVED document on
+    the retained `realistic_candidate` case:
+
+        "…to 2.75 hours through targeted troubleshooting protocols."
+        "…by implementing thermographic inspections and proactive maintenance
+         strategies."
+
+    `through` was not a recognised boundary, so the trimmer never inspected the
+    tail, and the entity check could not see it (lowercase prose only).
+
+    The assertions that matter are unchanged and still strict:
+      * the sourced figure phrase is preserved;
+      * nothing is invented to replace the removed clause
+        (`_trim_trailing_purpose` emits a PREFIX only, never composed prose);
+      * a faithful paraphrase of the SAME bullet keeps its verb rewrite — see
+        `test_a_faithful_verb_rewrite_in_an_identical_tail_is_kept` below.
     """
     draft = ("## Professional Experience\n"
              "**Ridgeline Equipment Services** -- Fife, WA\n"
@@ -298,8 +319,44 @@ def test_a_bare_participle_noun_phrase_is_not_split():
              "- Maintained parts availability records supporting 7 service "
              "branches through accurate inventory tracking.\n")
     out, changes = sp.preserve_experience_bullets(draft, ESCAPE_SOURCE)
-    assert changes == []
+    # The sourced material survives.
     assert "supporting 7 service branches" in out
+    # The unsupported method clause does not.
+    assert "accurate inventory tracking" not in out
+    assert changes == ["removed an unsupported appended clause"]
+    # Removal produced a PREFIX of the original line: no new words were composed.
+    original = ("Maintained parts availability records supporting 7 service "
+                "branches through accurate inventory tracking.")
+    kept = [line.strip()[2:] for line in out.splitlines()
+            if line.strip().startswith("- ")
+            and "supporting 7 service branches" in line]
+    assert len(kept) == 1
+    assert original.startswith(kept[0]), (
+        f"the trimmer composed text instead of trimming: {kept[0]!r}")
+
+
+def test_a_faithful_verb_rewrite_in_an_identical_tail_is_kept():
+    """A verb rewrite is not an appended claim and must survive.
+
+    "by implementing thermographic inspections" restates the source's "by adding
+    thermographic inspections" with a different verb. The trimmer refuses to
+    remove a tail that introduces no content the matched bullet lacks, so the
+    paraphrase is kept. This is the guard that stops the widened boundary from
+    becoming a rewriting engine.
+    """
+    src = ("## Professional Experience\n"
+           "**Riverbend Facilities Group** -- Coeur d'Alene, ID\n"
+           "*Maintenance Electrician | 03/2023 - Present*\n"
+           "- Reduced after-hours callouts by 27% by adding thermographic "
+           "inspections.\n")
+    draft = ("## Professional Experience\n"
+             "**Riverbend Facilities Group** -- Coeur d'Alene, ID\n"
+             "*Maintenance Electrician | 03/2023 - Present*\n"
+             "- Reduced after-hours callouts by 27% by implementing "
+             "thermographic inspections.\n")
+    out, changes = sp.preserve_experience_bullets(draft, src)
+    assert changes == []
+    assert "by implementing thermographic inspections" in out
 
 
 def test_a_faithful_restatement_of_a_source_figure_is_not_substituted():
