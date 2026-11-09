@@ -486,6 +486,50 @@ def _introduces_beyond(span: str, quotes: list[str], item_quote: str) -> list[st
     return sorted(set(introduced))
 
 
+def _is_skills_only_document(document: str) -> bool:
+    """True when a source document holds nothing but skill lists.
+
+    Such a document describes the CANDIDATE. It can prove a tool is in the
+    candidate's repertoire; it cannot prove the tool was used in a particular
+    role. The distinction is the difference between "has Tableau" and "used
+    Tableau maintaining parts records", and only the second is a claim about an
+    employer.
+
+    Deliberately narrow, so it cannot swallow real role records:
+
+    * every non-empty line must be either a heading or a skill-list line;
+    * skill-list lines are comma/pipe separated items with no sentence-ending
+      punctuation, because a skill list is not prose;
+    * a line carrying a date or a location suffix is treated as a record, not a
+      skill, since those mark an employment entry;
+    * at least one line must actually yield a skill item, so an empty or
+      heading-only document is not mistaken for a skills page.
+
+    Section names are matched against the project's existing closed allowlist, so
+    this adds no new notion of what a heading is.
+    """
+    from source_preservation import _heading_of
+
+    saw_item = False
+    for raw in (document or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if _heading_of(line):
+            continue
+        if re.search(r"\|", line) or re.search(r"\b(?:19|20)\d{2}\b", line):
+            # A pipe or a year marks an employment/education record.
+            return False
+        if re.search(r"[.;!?]", line):
+            # Sentence punctuation means prose, not a skill list.
+            return False
+        items = [piece.strip() for piece in re.split(r"[,/]", line) if piece.strip()]
+        if not items or len(items) < 2:
+            return False
+        saw_item = True
+    return saw_item
+
+
 def _quote_shares_content(quote: str, item_quote: str) -> bool:
     """True when a cited quote and the inventory item share a content word.
 
@@ -1494,9 +1538,34 @@ def _validate_review(response: Any, lines: list[dict[str, Any]],
                 # this list: the representation must be carried by a citation whose
                 # offsets actually COVER the item, and `_correct_unique_attribution`
                 # refuses a label that a source record assigns to someone else.
-                cited_documents = [sources[citation["source_id"]]
-                                   for citation in claim["citations"]
-                                   if citation["source_id"] in sources]
+                cited_documents = []
+                for citation in claim["citations"]:
+                    source_id = citation["source_id"]
+                    document = sources.get(source_id)
+                    if document is None:
+                        continue
+                    # A document that contains nothing but skill lists describes
+                    # the CANDIDATE, not any one role. It says the candidate has
+                    # a tool; it says nothing about where that tool was used, so
+                    # citing it beside the role must not silently establish tool
+                    # use inside the role.
+                    #
+                    # Measured 2026-11-07: for a bullet "Maintained parts records
+                    # for 7 branches using Tableau.", citing the role record alone
+                    # correctly flagged "Tableau", but citing the role AND the
+                    # candidate's skills page returned nothing — the attribution
+                    # passed purely because a skills list was attached to the
+                    # citation set. The role never mentioned the tool.
+                    #
+                    # Only a document that is ENTIRELY skill lists is excluded. A
+                    # fuller document that also has a skills section is left
+                    # alone, so legitimate cross-document synthesis between real
+                    # role records (the case this list was widened for) is
+                    # unchanged.
+                    if (source_id != item["source_id"]
+                            and _is_skills_only_document(document)):
+                        continue
+                    cited_documents.append(document)
                 # A validated, mode-permitted bridge label is authorised
                 # wording, not an introduced claim. Measured on the Imaginative
                 # website run ``12ecfaa4`` (2026-11-07): the writer inserted
