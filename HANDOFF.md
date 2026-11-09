@@ -1,3 +1,71 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 4)
+
+## Checkpoint 4 — calibration RUN COMPLETE (one shot, $0.008488)
+
+Results: `results/calibration-v1/RESULTS.md`; data `calibration.json`.
+
+**Budget compliance:** 18 logical calls / 27 · 18 requests / 81 · **$0.008488 / $1.00**.
+`cost_is_known: true`, **0 unmetered** responses. No retries were needed.
+
+**Metering fix (the only pre-run change):** a 2xx with missing/empty `choices` raised
+from a point no `record()` covered, so each retry dispatched an **uncounted**
+request — the ceiling did not bind that path. Now metered before raising, plus a
+safety net. `tests/test_request_metering_exact_once.py` (13 tests) asserts
+`meter.requests_sent == session.requests` on every path; reverting the fix fails 6 of
+them. Instructions and fixtures untouched.
+
+### Headline results
+
+| | familiar | unfamiliar |
+|---|---|---|
+| defect named correctly | **4 / 4** | **8 / 8** |
+| faithful drafts approved | 1 / 3 (`supported_method`, `transferable_skill`, `faithful_paraphrase` refused) | 1 / 2 (`cal_ops_faithful` approved, `cal_lab_faithful` refused) |
+| structurally invalid responses | 3 | 4 |
+| operational failures | 0 | 0 |
+| proposals drawn | 1 | 0 |
+| exact corrected document approved | 0 | 0 |
+| pair separation | — | **2 / 8** |
+
+- **Detection is complete: 12 of 12.** Including `missing_fact`, which the retained
+  advisory arm missed — the instruction refinement demonstrably fixed it.
+- **Approval is not: 2 of 5 faithful drafts approved**, 3 refused on invented grounds.
+- **Pair separation 2/8** — not 4/8 as first computed. An invalid variant is not a
+  separation; `cal_ops_missing` and `cal_ops_omitted` named the defect but their
+  envelopes failed.
+- The one drawn proposal was corrected, re-reviewed, and **refused on the invented
+  `Present`/`Present` timeline** — fixing the real defect changed nothing.
+
+### Answer to the decision point
+
+**Do not move to an integrated delivery test yet.** Defective drafts all get accurate
+revision requests, but faithful drafts do not approve. Adding a mechanism would not
+help. Diagnose, in this order:
+
+1. `Present`/`Present` concurrency read as a contradiction (half the invented
+   objections; also blocks the only re-review).
+2. Permitted synonymy still objected to ("through"/"by", "sent"/"reported").
+3. **Contract expressiveness** — 7 of 17 envelopes rejected, and the two causes are
+   structural, not judgemental: `problem: synonymous` has no representation (the
+   model tries to record *permitted* paraphrase), and omission claims quote source
+   text so `passage_not_in_draft` fires even though the correction is correctly
+   `(omit)`.
+
+### Next steps
+
+1. Fix the contract to express "permitted paraphrase" and to accept a source-quoted
+   passage for `problem: omitted`. This is parser work, no provider calls.
+2. Decide whether the timeline objection is an instruction problem (it survived the
+   refined wording) or a fixture property; the evidence says instruction.
+3. Independent blind audit of `results/binding-audit-v3/blind/` — still outstanding.
+4. Any further run is a NEW authorization; do not rerun failures selectively.
+
+### Not established
+
+One run, one model, temperature 0, 17 cases. No reliability estimate. No integrated
+delivery test. Production untouched.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 3)
 
 ## Checkpoint 3 — pre-calibration corrections; runner re-frozen, still not run
@@ -44,7 +112,7 @@ fingerprint `b4b73e68b4d69b394216ccf5b68be6c5239719d31809b4fa9f5c394eff25a224` a
 
 ### Verification
 
-`2023 passed, 14 skipped` for the suite; the only two ignored modules are the
+`2048 passed, 14 skipped` for the suite; the only two ignored modules are the
 pre-existing `fitz`/`captures` failures described at the bottom of this file.
 
 ### Remaining steps

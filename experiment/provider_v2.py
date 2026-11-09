@@ -262,11 +262,22 @@ def make_asker(api_key: str | None = None, *,
 
             requests_this_call += 1
             loop_started = asyncio.get_event_loop().time()
+            # Every dispatched request must be metered EXACTLY ONCE, whichever
+            # branch handles it. This flag is the enforcement: a branch that sets
+            # it before raising guarantees the `except` blocks do not record the
+            # same request a second time, and a branch that forgets to record is
+            # caught by the safety net below rather than vanishing from the count.
+            recorded = False
+            # Distinguishes "we got an HTTP response and could not read it" from
+            # "we never got a response at all": both are unmetered cost, but they
+            # are different operational facts and must not share a status label.
+            got_response = False
             try:
                 async with aiohttp.ClientSession(
                         timeout=aiohttp.ClientTimeout(total=timeout_s)) as session:
                     async with session.post(ENDPOINT, headers=headers,
                                             json=body) as resp:
+                        got_response = True
                         if resp.status in (429, 500, 502, 503, 504):
                             last_error = f"http_{resp.status}"
                             retries.append({"attempt": attempt_no,
@@ -276,6 +287,7 @@ def make_asker(api_key: str | None = None, *,
                             # as a request even though no usage came back.
                             await record(f"http_{resp.status}", None, False,
                                          attempt_no)
+                            recorded = True
                             if sleep_between_retries:
                                 await asyncio.sleep(2 * attempt_no)
                             continue
@@ -284,11 +296,27 @@ def make_asker(api_key: str | None = None, *,
                             last_error = f"http_{resp.status}: {detail}"
                             await record(f"http_{resp.status}", None, False,
                                          attempt_no)
+                            recorded = True
                             raise RuntimeError(last_error)
                         data = await resp.json()
                 latency = round(asyncio.get_event_loop().time() - loop_started, 3)
 
                 if "choices" not in data or not data["choices"]:
+                    # A 2xx that carries no completion. The request WAS dispatched
+                    # and may be billed, but this branch used to raise a plain
+                    # RuntimeError that no `record()` call covered, so the retry
+                    # loop could send up to three uncounted HTTP requests. Metered
+                    # here, once, before raising.
+                    #
+                    # Usage is often still present on such a response. If it is,
+                    # the cost is known and is charged to the meter; if it is not,
+                    # the request is recorded as unknown spend, never as free.
+                    partial_usage = (data.get("usage") or {}) if isinstance(
+                        data, dict) else {}
+                    partial_cost, partial_reported = _usage_cost(partial_usage)
+                    await record("ok_no_choices", partial_cost, partial_reported,
+                                 attempt_no)
+                    recorded = True
                     raise RuntimeError(
                         f"no choices in response: {json.dumps(data)[:400]}")
 
@@ -317,6 +345,7 @@ def make_asker(api_key: str | None = None, *,
                 )
                 await record("ok" if usage_reported else "ok_no_usage", cost,
                              usage_reported, attempt_no)
+                recorded = True
                 calls.append({"label": label, **result.to_dict()})
                 if result.truncated:
                     # Recorded AND raised: the attempt is kept, but marked as
@@ -332,6 +361,12 @@ def make_asker(api_key: str | None = None, *,
                 # retry so a deterministic client error is not billed three times.
                 if str(exc).startswith("http_"):
                     raise
+                if not recorded:
+                    # Safety net. If a new branch raises without metering, the
+                    # request is still counted here exactly once rather than
+                    # disappearing from the ceiling.
+                    await record("error_unmetered_branch", None, False, attempt_no)
+                    recorded = True
                 last_error = f"{type(exc).__name__}: {str(exc)[:160]}"
                 retries.append({"attempt": attempt_no, "reason": last_error,
                                 "label": label})
@@ -343,7 +378,13 @@ def make_asker(api_key: str | None = None, *,
                 last_error = f"{type(exc).__name__}: {str(exc)[:160]}"
                 retries.append({"attempt": attempt_no, "reason": last_error,
                                 "label": label})
-                await record("transport_error", None, False, attempt_no)
+                if not recorded:
+                    # A response we could not read still carries unknown cost; a
+                    # connection that never produced one is a different fact.
+                    await record(
+                        "unreadable_response" if got_response else "transport_error",
+                        None, False, attempt_no)
+                    recorded = True
                 if sleep_between_retries:
                     await asyncio.sleep(2 * attempt_no)
         raise RuntimeError(f"provider exhausted retries: {last_error}")
