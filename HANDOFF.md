@@ -161,6 +161,55 @@ Two things the trace taught, both now encoded:
 
 Suite: **1807 passed**, 13 skipped.
 
+## SESSION 20 RESULT — the traced fix works in isolation; the pipeline approves nothing
+
+Measured live after the provider fix deployed (`cdd30fe`), 2026-11-09 06:27–07:13,
+14 correction runs:
+
+```
+correction runs  : 14
+  approved       : 0
+  withheld       : 14  (100%)
+
+incomplete_review              6  [infrastructure]
+source_completeness_uncertain  4  [content]
+no_op_repair                   2  [infrastructure]
+source_facts_missing           2  [content]
+```
+
+### What was achieved
+
+- **The traced cause is fixed and verified in isolation.** The bounded citation
+  question approves when the fact is genuinely present, keeps the draft
+  byte-identical, and still withholds transplanted provenance. 6 tests pin it, and
+  `[transplanted_qualification]` still fails.
+- **A live-only integration bug was found and fixed.** The citation question was
+  being translated into a *review* request by the real provider, silently
+  discarding its contract. No scripted test could show this, because a scripted
+  callback reads the payload it is given while the real adapter rewrites it first.
+  It now has its own phase name and a shape predicate.
+- `source_completeness_uncertain` stopped appearing in the last two live batches,
+  consistent with the branch being reached differently, though that is 6 runs and
+  not proof.
+
+### What was NOT achieved — stated plainly
+
+**Zero approvals across 14 live runs.** Every submission withheld. The dominant
+cause is now `incomplete_review` (6 of 14), which is infrastructure-class and was
+**not** part of this remediation. Approvals are 0, so:
+
+- **PDF/DOCX download was never validated.** No receipt existed to export. Any
+  claim about downloaded files would be invented.
+- **The guest → sign-in → download path is unvalidated end to end.** Its
+  authorization logic is proven offline (65 tests, 43 of them route-level, 13
+  against real Redis), but not through a real browser session.
+
+The honest summary: the specific defect that was traced is repaired, and the
+pipeline still fails every request for other reasons. Fixing 4 of 9 previously
+identified withholds did not move the approval rate, because the population of
+failures is larger and shifts as each cause is removed. `incomplete_review` is the
+next one to trace, and it is now measurable rather than hypothetical.
+
 ## Measurement, not estimation
 
 `scripts/measure_withhold_mix.py` reports the ACTUAL mix from live events. Baseline
