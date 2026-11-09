@@ -1,0 +1,62 @@
+[
+ {
+  "attempt": 1,
+  "build": "cbb73e5f",
+  "input": "618d5b4ac5e62c4c",
+  "http": 200,
+  "status": "approved",
+  "reason": null,
+  "receipt": true,
+  "pdf": 178056,
+  "docx": 50396,
+  "semantic": "-"
+ },
+ {
+  "attempt": 2,
+  "build": "cbb73e5f",
+  "input": "618d5b4ac5e62c4c",
+  "http": 200,
+  "status": "approved",
+  "reason": null,
+  "receipt": true,
+  "pdf": "-",
+  "docx": "-",
+  "semantic": "-"
+ },
+ {
+  "attempt": 3,
+  "build": "cbb73e5f",
+  "input": "618d5b4ac5e62c4c",
+  "http": 200,
+  "status": "withheld",
+  "reason": "no_op_repair",
+  "receipt": false,
+  "pdf": "-",
+  "docx": "-",
+  "semantic": "-"
+ },
+ {
+  "attempt": 4,
+  "build": "cbb73e5f",
+  "input": "618d5b4ac5e62c4c",
+  "http": 200,
+  "status": "approved",
+  "reason": null,
+  "receipt": true,
+  "pdf": "-",
+  "docx": "-",
+  "semantic": "-"
+ },
+ {
+  "attempt": 5,
+  "build": "cbb73e5f",
+  "input": "618d5b4ac5e62c4c",
+  "http": 200,
+  "status": "withheld",
+  "reason": "no_op_repair",
+  "receipt": false,
+  "pdf": "-",
+  "docx": "-",
+  "semantic": "-"
+ }
+]
