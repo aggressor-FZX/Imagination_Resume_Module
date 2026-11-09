@@ -7,8 +7,11 @@
 ### Axis 1 — initial judgment
 
 - decisions: `{'revise': 14}`
-- agrees with preregistered expectation: `{False: 6, True: 8}`
-- *Agreement with the preregistered expectation is one mechanical fact, not evidence the objection was correct.*
+- **agreement classes:** `{'disagree': 6, 'agree': 4, 'invalid_response': 4}`
+- success/failure denominator (valid exact matches only): **10**
+- agrees / disagrees: `{False: 6, True: 4, None: 4}`
+- *Agreement requires a valid answer and an EXACT match with the preregistered decision. cannot_assess, invalid responses and operational failures are reported separately and never counted as either agreement or disagreement.*
+- *Agreement is one mechanical fact, not evidence the objection was correct.*
 
 ### Axis 2 — edit applicability (a property of the scaffold)
 
@@ -18,8 +21,10 @@
 
 ### Axis 3 — approval of the exact proposed document
 
-- `{None: 12, 'not_approved': 2}`
+- `{None: 12, 'invalid_re_review': 1, 'not_approved': 1}`
+- re-review decisions: `{None: 12, 'revise': 2}`
 - re-review document identity: `{'different_document': 5, 'same_document': 2, None: 7}`
+- *Approval counts only when the re-review answered the EXACT proposed document and its own decision was a valid `approve`. Gate release is recorded separately because it also depends on proposal applicability.*
 - *A retained re-review of a different document is reported as no observation, never as an approval or a refusal.*
 
 ### Axis 4 — release
@@ -33,7 +38,7 @@
 |---|---|---|---|---|---|
 | `faithful_paraphrase` | `revised+advisory` | `revise` | `ambiguous_or_multiple_issues` | `None` | withhold (`revision_unresolved`) |
 | `supported_method` | `revised+advisory` | `revise` | `ambiguous_or_multiple_issues` | `None` | withhold (`revision_unresolved`) |
-| `unsupported_method` | `revised+advisory` | `revise` | `proposed_exact_owned_source_bullet` | `not_approved` | withhold (`re_review_not_approved`) |
+| `unsupported_method` | `revised+advisory` | `revise` | `proposed_exact_owned_source_bullet` | `invalid_re_review` | withhold (`re_review_not_approved`) |
 | `missing_fact` | `revised+advisory` | `revise` | `ambiguous_or_multiple_issues` | `None` | withhold (`revision_unresolved`) |
 | `wrong_record_attribution` | `revised+advisory` | `revise` | `ambiguous_or_multiple_issues` | `None` | withhold (`revision_unresolved`) |
 | `transferable_skill` | `revised+advisory` | `revise` | `ambiguous_or_multiple_issues` | `None` | withhold (`revision_unresolved`) |

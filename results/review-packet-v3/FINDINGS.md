@@ -28,11 +28,36 @@ error in a new place.
 
 ## 2. Initial judgment (axis 1)
 
-All 14 prose cells returned `revise`. **8 agree** with the preregistered label,
-**6 disagree**.
+All 14 prose cells returned `revise`. **Agreement now requires a valid exact match**,
+which changes the numbers materially from the preliminary packet:
 
-Agreement is one mechanical fact, not evidence an objection was correct — see §5. Two
-of the four defect cases agree for partly the wrong reason.
+| Agreement class | Count |
+|---|---|
+| `agree` (valid answer, exact decision match) | **4** |
+| `disagree` (valid answer, wrong decision) | **6** |
+| `invalid_response` (decision word present, envelope rejected) | **4** |
+| `cannot_assess` | 0 |
+| `operational_failure` | 0 |
+
+**Success/failure rate denominator: 10** — not 14.
+
+### Correction to the preliminary figure
+
+The preliminary packet reported **8 agree / 6 disagree** over 14 cells. That was
+wrong, for two reasons the current code fixes:
+
+1. It compared booleans — `(decision == "approve") == (expected == "approve")` — so
+   a `cannot_assess` answer on a `revise` case scored as agreement, because both
+   sides evaluate to `False`. A withhold is not a revision request.
+2. It counted an answer as a verdict even when the parser had **rejected the
+   envelope**. Four cells return the word `revise` while carrying
+   `passage_not_in_draft` or `revise_without_actionable_issue`; those are not usable
+   verdicts and are now `invalid_response`.
+
+Both errors inflated the reviewer's apparent accuracy. The honest reading is
+**4 of the 10 usable answers agree**, and 4 answers were not usable at all.
+
+Agreement remains one mechanical fact, not evidence an objection was correct — §5.
 
 ## 3. Edit applicability — a property of the scaffold (axis 2)
 
@@ -77,9 +102,20 @@ was scaffold narrowness.
 reported as **no observation** — `None`, never an approval and never a refusal. Five
 cells would otherwise have been scored on an answer about the wrong text.
 
-Of the two valid re-reviews, **0 approved** the proposal: both still said `revise`.
-The corrected-document approval axis therefore has **no positive observation** in the
-retained data.
+**Approval now counts only when the re-review is valid AND says `approve`** (item 2).
+Reading it off gate release would have attributed a scaffold property to the
+reviewer, since release also requires the proposal to have been applicable.
+
+| Valid re-review outcome | Count |
+|---|---|
+| `approved` | **0** |
+| `not_approved` (valid, said `revise`) | 1 |
+| `invalid_re_review` (right document, unusable answer) | 1 |
+
+The corrected-document approval axis has **no positive observation** in the retained
+data. The one cell that refused (`unsupported_method`, enabled arm) did so with a
+usable verdict; the other (`unsupported_method`, advisory arm) answered the right
+document but its envelope was rejected, which is neither an approval nor a refusal.
 
 ## 5. Are the objections correct? (source-linked, `JUDGMENTS.md`)
 
@@ -116,8 +152,9 @@ What it does consistently:
 
 The six `invented_objection` verdicts on three faithful documents across two arms are
 the strongest finding here, and the inventions are nameable:
-- a `Present`/`Present` overlap declared "impossible" (both sources state both roles
-  as Present);
+- a `Present`/`Present` overlap declared "impossible", when the two sources state it
+  themselves (`Fuel Reporting Analyst | 04/2019 - Present` in the main document;
+  `Inventory Analyst | 08/2023 - Present` in the supplement);
 - "through" vs "by" declared an added causal mechanism (the source says "by");
 - verb tense `Maintained`/`Maintain` and preposition `with`/`against` raised on a
   document with no declared defect at all.
@@ -181,12 +218,54 @@ from the instructions recorded with it.
   mode `imaginative` (matching all 28 retained cells), instructions sha256
   `4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b`, fixture
   fingerprint `b4b73e68b4d69b394216ccf5b68be6c5239719d31809b4fa9f5c394eff25a224`.
-- **Bounded**: ceiling **27 calls** (17 first + at most 10 re-reviews) and **$1.00**,
-  enforced before each call.
+- **Bounded, and the ceiling is now provable.** 27 **logical** calls (17 first + at
+  most 10 re-reviews) × 3 attempts = a **hard ceiling of 81 HTTP requests**, checked
+  before *every* attempt including retries. The previous "$1.00 / 27 calls" statement
+  counted one unit per logical call and was therefore not a limit at all — a retried
+  call could send three requests while the budget advanced once.
+
+### Accounting that does not overclaim (item 3)
+
+| Ceiling | Is it hard? |
+|---|---|
+| 81 HTTP requests | **yes** — checked before each attempt, retries included |
+| $1.00 | **no** — enforced against *observed* cost only |
+
+`RequestMeter` records every attempt, including 429/5xx and transport errors, and
+sets `cost_is_known = False` if any response omitted usage. It then reports
+`unmetered_caveat` rather than asserting a spend limit it cannot prove. A missing
+usage object is treated as **unknown cost, not zero** — the original `$0.00` bug.
+
 - **Re-review guard**: the re-review prompt is built from the proposal and the
   recovered document is asserted equal to it; a mismatch raises.
 
 **No calls have been made.** `--dry-run` validated the plan only.
+
+The prompts, cases and budget plan were re-frozen **after** the three behavioural
+fixes, and their identity is unchanged by that work: instructions sha256
+`4261e9cb…` and fixture `b4b73e68…` are the same values as before. Only the
+accounting and classification code changed, which is what "freeze the runner" has to
+mean if the freeze is to be checkable.
+
+### Offline regressions added before the freeze (item 4)
+
+`tests/test_calibration_accounting.py` — 23 tests, no provider calls:
+
+| Behaviour | Regression | The bug it would catch |
+|---|---|---|
+| exact agreement | `test_semantic_agreement_requires_a_valid_exact_match` (9 parametrised cases) | boolean comparison scoring `cannot_assess` as agreement |
+| | `test_the_rate_denominator_excludes_non_verdicts` | counting invalid/operational cells in the rate |
+| corrected-doc approval | `test_approval_requires_valid_and_approve_not_merely_release` | reading approval off gate release |
+| | `test_an_invalid_re_review_is_reported_separately_from_a_refusal` | collapsing unreadable into refusal |
+| request accounting | `test_a_retried_call_reports_every_request_it_sent` | one unit per logical call |
+| | `test_a_transport_error_is_metered_as_an_attempt` | timeouts vanishing from the count |
+| | `test_missing_usage_is_not_zero_cost` | treating unknown spend as free |
+| | `test_the_meter_refuses_to_send_beyond_the_ceiling` | a ceiling that does not bind |
+
+One of these tests found a real bug while being written: a transport error left
+`cost_is_known = True`, because only the `ok_no_usage` status incremented the
+unmetered counter. Fixed — any attempt without reported usage now makes spend
+unknown.
 
 ## 10. What this checkpoint does NOT establish
 

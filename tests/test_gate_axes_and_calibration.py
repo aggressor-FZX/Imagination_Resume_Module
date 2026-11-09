@@ -113,7 +113,10 @@ def test_a_re_review_of_a_different_document_is_no_observation():
             if r["axis_re_review_document_identity"] == "same_document"]
     assert len(same) == 2
     for row in same:
-        assert row["axis_corrected_document_approval"] in ("approved", "not_approved")
+        # Item 2: the three valid-document outcomes are distinct. Neither a valid
+        # refusal nor an unreadable answer may be reported as approval.
+        assert row["axis_corrected_document_approval"] in (
+            "approved", "not_approved", "invalid_re_review")
 
 
 def test_document_from_prompt_recovers_the_reviewed_text_exactly():
@@ -229,10 +232,15 @@ def test_the_calibration_prompt_round_trips_the_exact_document():
 
 
 def test_the_calibration_plan_is_bounded_and_frozen(tmp_path):
-    from experiment.run_calibration import freeze
+    from experiment.run_calibration import (
+        ATTEMPTS_PER_CALL, DEFAULT_MAX_REQUESTS, MAX_LOGICAL_CALLS, freeze,
+    )
     frozen = freeze()
-    assert frozen["max_calls"] == len(CASES_V2) + 2 * len(CALIBRATION_CASES)
-    assert frozen["max_calls"] == 27
+    assert frozen["max_logical_calls"] == len(CASES_V2) + 2 * len(CALIBRATION_CASES)
+    assert frozen["max_logical_calls"] == 27
+    # The provable ceiling is REQUEST-based, because a logical call can retry.
+    assert frozen["max_requests"] == MAX_LOGICAL_CALLS * ATTEMPTS_PER_CALL
+    assert frozen["max_requests"] == DEFAULT_MAX_REQUESTS == 81
     assert frozen["instructions_sha256"] == frozen["contract_fingerprint"]
     assert frozen["calibration_fixture_fingerprint"] == cal.cases_fingerprint()
     # The frozen text is the text the contract produces NOW; any edit breaks this.
@@ -243,9 +251,15 @@ def test_the_calibration_plan_is_bounded_and_frozen(tmp_path):
 
 
 def test_provider_cost_reads_the_cost_key_not_total_cost():
-    """The $0.00 cost bug: `usage.cost` is the field OpenRouter actually sends."""
-    import inspect
-    from experiment import provider_v2
-    source = inspect.getsource(provider_v2.make_asker)
-    assert 'usage.get("cost")' in source
-    assert 'usage.get("total_cost")' in source
+    """The $0.00 cost bug: `usage.cost` is the field OpenRouter actually sends.
+
+    The parsing moved into `_usage_cost` when per-request metering was added, so
+    this asserts on that helper directly — behaviour, not source text.
+    """
+    from experiment.provider_v2 import _usage_cost
+    assert _usage_cost({"cost": 0.004}) == (0.004, True)
+    assert _usage_cost({"total_cost": 0.007}) == (0.007, True)
+    # `cost` wins when both are present.
+    assert _usage_cost({"cost": 0.004, "total_cost": 0.007}) == (0.004, True)
+    # Missing usage is UNKNOWN, not free: reported=False, cost 0.0.
+    assert _usage_cost({}) == (0.0, False)

@@ -1,3 +1,71 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 3)
+
+## Checkpoint 3 — pre-calibration corrections; runner re-frozen, still not run
+
+**Start here.** Checkpoints 1–2 below remain valid history. The gate controls,
+denominator correction, document-identity checks and instruction refinement are
+accepted as complete and were **not** reopened.
+
+### What changed in this checkpoint (accounting and classification only)
+
+Three behaviours were quietly flattering the numbers; each is now fixed and locked by
+an offline regression.
+
+1. **Semantic agreement requires a valid exact match.** The old check compared
+   booleans, so `cannot_assess` on a `revise` case scored as *agreement* (both `False`)
+   and a structurally invalid `revise` scored as agreement whenever the case expected
+   `revise`. Corrected result for the retained cells:
+   `{agree: 4, disagree: 6, invalid_response: 4}` — **rate denominator 10, not 14**.
+   The preliminary packet's "8 agree / 6 disagree" was wrong in both directions.
+2. **Corrected-document approval needs a valid re-review that says `approve`.** It was
+   read off gate release, which also depends on proposal applicability — a scaffold
+   property reported as a reviewer verdict. Now: 0 approved, 1 `not_approved`, 1
+   `invalid_re_review`.
+3. **Per-request accounting.** A logical call can send up to 3 HTTP requests and each
+   may be billed. `RequestMeter` meters every attempt (429/5xx and transport errors
+   included) and refuses the request that would cross the ceiling. The hard ceiling is
+   now **81 requests**; the `$1.00` figure is enforced against *observed* cost only and
+   is explicitly not a proof of maximum spend. Missing usage is **unknown cost, not
+   zero**.
+
+Written up in `results/review-packet-v3/FINDINGS.md` §2, §4, §9 and the compact table
+in `results/review-packet-v3/JUDGMENT_TABLE.md`.
+
+### Frozen plan (unchanged identity)
+
+The rework touched accounting and classification only. Instructions sha256
+`4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b` and fixture
+fingerprint `b4b73e68b4d69b394216ccf5b68be6c5239719d31809b4fa9f5c394eff25a224` are
+**the same values as before**, which is what makes the freeze checkable.
+
+- 17 cases (7 familiar + 10 unfamiliar paired controls), mode `imaginative`
+- 27 logical calls × 3 attempts = **81 requests (hard)**, **$1.00** observed-cost
+- re-review prompt asserted to contain exactly the proposal, else raise
+
+### Verification
+
+`2023 passed, 14 skipped` for the suite; the only two ignored modules are the
+pre-existing `fitz`/`captures` failures described at the bottom of this file.
+
+### Remaining steps
+
+1. **Authorize the bounded calibration run** and execute it **once, unchanged**:
+   `python -m experiment.run_calibration --out results/calibration-v1`
+   Do not edit the prompt mid-run; the frozen hash re-check raises if it drifts.
+2. Report unfamiliar-case results and the judgement table together. Decide between
+   "move toward a bounded integrated delivery test" (if faithful drafts approve and
+   defective drafts get accurate revision requests) and "diagnose the specific
+   objections" (if not).
+3. Independent blind audit of `results/binding-audit-v3/blind/` remains outstanding.
+4. Only after 1–3, consider widening the repair scaffold.
+
+### Not established
+
+No calibration result, no positive release on a corrected document, no audit, one
+model at temperature 0. Production untouched throughout.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 2)
 
 ## Checkpoint 2 — release-override repair accepted; calibration frozen, not run

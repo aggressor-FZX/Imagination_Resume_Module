@@ -25,6 +25,9 @@
     "cal_ops_wrong_record",
     "cal_ops_omitted"
   ],
-  "max_calls": 27,
-  "max_spend_usd": 1.0
+  "max_logical_calls": 27,
+  "attempts_per_call": 3,
+  "max_requests": 81,
+  "max_spend_usd": 1.0,
+  "ceiling_statement": "81 HTTP requests is a HARD ceiling, checked before every attempt including retries. $1.00 is enforced against OBSERVED cost only and is not a proof of maximum spend."
 }

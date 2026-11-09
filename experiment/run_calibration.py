@@ -62,7 +62,7 @@ from experiment.calibration_cases import (  # noqa: E402
     cases_fingerprint as calibration_fingerprint,
 )
 from experiment.cases_v2 import CASES_V2, SOURCES, by_id as by_v2_id  # noqa: E402
-from experiment.runner_v2 import RunBudget  # noqa: E402
+from experiment.provider_v2 import RequestMeter  # noqa: E402
 
 # The retained matrix ran every cell under ONE mode: `imaginative`
 # (verified from `results/comparison-v2b-20261109/attempts.json`, 28/28 cells).
@@ -77,8 +77,16 @@ MODE = "imaginative"
 FAMILIAR = CASES_V2
 UNFAMILIAR = CALIBRATION_CASES
 
-# One first call each, plus one re-review each at most. Computed, not guessed.
-DEFAULT_MAX_CALLS = len(FAMILIAR) + len(UNFAMILIAR) * 2
+# ONE first logical call each, plus ONE re-review at most. These are LOGICAL CALLS;
+# the hard ceiling is a REQUEST ceiling, because one logical call can send up to
+# `ATTEMPTS_PER_CALL` HTTP requests and each of those may be billed.
+MAX_LOGICAL_CALLS = len(FAMILIAR) + len(UNFAMILIAR) * 2
+ATTEMPTS_PER_CALL = 3
+# The hard, provable ceiling. Retries of a failing call are still requests, so the
+# ceiling must be expressed in requests or it is only a description.
+DEFAULT_MAX_REQUESTS = MAX_LOGICAL_CALLS * ATTEMPTS_PER_CALL
+# Advisory only: enforced against OBSERVED cost, and explicitly NOT a proof of
+# maximum spend. `RequestMeter.cost_is_known` says whether it can be trusted.
 DEFAULT_MAX_SPEND_USD = 1.00
 
 
@@ -105,14 +113,26 @@ def freeze() -> dict:
         "calibration_fixture_fingerprint": calibration_fingerprint(),
         "familiar_cases": [c.case_id for c in FAMILIAR],
         "unfamiliar_cases": [c.case_id for c in UNFAMILIAR],
-        "max_calls": DEFAULT_MAX_CALLS,
+        "max_logical_calls": MAX_LOGICAL_CALLS,
+        "attempts_per_call": ATTEMPTS_PER_CALL,
+        "max_requests": DEFAULT_MAX_REQUESTS,
         "max_spend_usd": DEFAULT_MAX_SPEND_USD,
+        "ceiling_statement": (
+            f"{DEFAULT_MAX_REQUESTS} HTTP requests is a HARD ceiling, checked before "
+            "every attempt including retries. "
+            f"${DEFAULT_MAX_SPEND_USD:.2f} is enforced against OBSERVED cost only "
+            "and is not a proof of maximum spend."),
     }
 
 
-async def review_one(ask, budget: RunBudget, frozen_instructions: str,
+async def review_one(ask, meter: RequestMeter, frozen_instructions: str,
                      case, *, familiar: bool) -> dict:
-    """Review one draft and, only where a proposal exists, re-review it exactly."""
+    """Review one draft and, only where a proposal exists, re-review it exactly.
+
+    All accounting goes through `meter`, which is per REQUEST. Re-review cost is
+    recorded on the row, not only in the global meter, so a reader can add up
+    first-call and re-review spend without trusting a subtotal.
+    """
     row: dict = {
         "case_id": case.case_id,
         "group": "familiar" if familiar else "unfamiliar",
@@ -125,16 +145,23 @@ async def review_one(ask, budget: RunBudget, frozen_instructions: str,
         "draft": case.draft_before_trim,
         "sources": dict(sorted(case.sources.items())),
         "first_decision": None,
+        "first_valid": None,
         "first_response": "",
         "first_finish_reason": "",
         "first_cost_usd": 0.0,
         "first_latency_s": 0.0,
+        "first_requests": 0,
+        "first_usage_missing": None,
         "first_error": "",
         "repair_status": "not_attempted",
         "proposed_document": case.draft_before_trim,
         "proposal_drawn": False,
         "re_review_decision": None,
+        "re_review_valid": None,
         "re_review_response": "",
+        "re_review_cost_usd": 0.0,
+        "re_review_requests": 0,
+        "re_review_usage_missing": None,
         "re_review_document_sha256": "",
         "re_review_document_is_proposal": None,
         "re_review_error": "",
@@ -142,9 +169,9 @@ async def review_one(ask, budget: RunBudget, frozen_instructions: str,
         "release_reason": "not_reviewed",
     }
 
-    allowed, why = budget.can_call()
+    allowed, why = meter.can_send()
     if not allowed:
-        row["first_error"] = f"budget:{why}"
+        row["first_error"] = f"meter:{why}"
         row["release_reason"] = "budget_exhausted"
         return row
 
@@ -157,14 +184,16 @@ async def review_one(ask, budget: RunBudget, frozen_instructions: str,
         row["release_reason"] = "operational:" + type(exc).__name__
         return row
 
-    budget.record(call.cost_usd)
     row |= {"first_response": call.text,
             "first_finish_reason": call.finish_reason,
             "first_cost_usd": call.cost_usd,
-            "first_latency_s": call.latency_s}
+            "first_latency_s": call.latency_s,
+            "first_requests": call.requests_sent,
+            "first_usage_missing": call.usage_missing}
 
     first = dc.decide_from_text(call.text, case.draft_before_trim, case.sources)
     row["first_decision"] = first.decision or None
+    row["first_valid"] = first.ok
     row["first_structural_problems"] = list(first.structural_problems)
 
     if not first.ok:
@@ -197,9 +226,9 @@ async def review_one(ask, budget: RunBudget, frozen_instructions: str,
         proposed.encode("utf-8")).hexdigest()
     row["re_review_document_is_proposal"] = True
 
-    allowed, why = budget.can_call()
+    allowed, why = meter.can_send()
     if not allowed:
-        row["re_review_error"] = f"budget:{why}"
+        row["re_review_error"] = f"meter:{why}"
         row["release_reason"] = "budget_exhausted_before_re_review"
         return row
 
@@ -210,17 +239,45 @@ async def review_one(ask, budget: RunBudget, frozen_instructions: str,
         row["release_reason"] = "re_review_error:" + type(exc).__name__
         return row
 
-    budget.record(call.cost_usd)
-    row["re_review_response"] = call.text
+    row |= {"re_review_response": call.text,
+            "re_review_cost_usd": call.cost_usd,
+            "re_review_requests": call.requests_sent,
+            "re_review_usage_missing": call.usage_missing}
     second = dc.decide_from_text(call.text, proposed, case.sources)
     row["re_review_decision"] = second.decision or None
+    row["re_review_valid"] = bool(second.decision) and not second.structural_problems
     row["re_review_structural_problems"] = list(second.structural_problems)
 
-    if second.ok and second.decision == dc.DECISION_APPROVE:
+    if row["re_review_valid"] and second.decision == dc.DECISION_APPROVE:
         row["release"], row["release_reason"] = True, "corrected_document_llm_approved"
     else:
         row["release_reason"] = "re_review_not_approved"
     return row
+
+
+def agreement(row: dict) -> str:
+    """Classify one first answer. Item 1: exact match, on a valid answer only.
+
+    The previous version compared booleans —
+
+        (decision == "approve") == (expected == "approve")
+
+    — so `cannot_assess` on a `revise` case scored as AGREEMENT (both `False`), and
+    a structurally invalid `revise` scored as agreement whenever the case expected
+    `revise`. Agreement now requires a valid answer AND an exact decision match;
+    `cannot_assess`, invalid answers and operational failures are their own classes
+    and are never counted in the agreement rate.
+    """
+    if row.get("first_error"):
+        return "operational_failure"
+    decision = row.get("first_decision")
+    if decision is None:
+        return "operational_failure"
+    if not row.get("first_valid"):
+        return "invalid_response"
+    if decision == "cannot_assess":
+        return "cannot_assess"
+    return "agree" if decision == row["expected"] else "disagree"
 
 
 def summarise(rows: list[dict]) -> dict:
@@ -231,34 +288,63 @@ def summarise(rows: list[dict]) -> dict:
     out: dict = {}
     for name in ("familiar", "unfamiliar"):
         selected = group(name)
-        decided = [r for r in selected if r["first_decision"]]
-        agree = [r for r in decided
-                 if (r["first_decision"] == "approve") == (r["expected"] == "approve")]
+        classes = {c: sum(1 for r in selected if agreement(r) == c)
+                   for c in ("agree", "disagree", "cannot_assess",
+                             "invalid_response", "operational_failure")}
+        # Only agree+disagree form a success/failure rate. The other three are
+        # outcomes about the run or the envelope, not verdicts about the document.
+        rated = classes["agree"] + classes["disagree"]
+
+        # Item 2: approval counts ONLY when the re-review was valid and said
+        # `approve`. A valid re-review that said `revise` is a refusal, and an
+        # invalid re-review is neither.
+        valid_re_reviews = [r for r in selected if r.get("re_review_valid")]
+        approvals = sum(1 for r in valid_re_reviews
+                        if r["re_review_decision"] == "approve")
+
         out[name] = {
             "cases": len(selected),
-            "operational_failures": sum(1 for r in selected if r["first_error"]),
-            "decisions": {d: sum(1 for r in decided if r["first_decision"] == d)
-                          for d in ("approve", "revise", "cannot_assess")},
-            "agrees_with_expectation": len(agree),
-            "disagrees_with_expectation": len(decided) - len(agree),
-            "no_decision": len(selected) - len(decided),
+            "agreement_classes": classes,
+            "rate_denominator": rated,
+            "agrees_with_expectation": classes["agree"],
+            "disagrees_with_expectation": classes["disagree"],
             "proposals_drawn": sum(1 for r in selected if r["proposal_drawn"]),
             "scaffold_refusals": {
                 s: sum(1 for r in selected if r["repair_status"] == s)
                 for s in sorted({r["repair_status"] for r in selected})
                 if s != "proposed_exact_owned_source_bullet"},
-            "corrected_document_approved": sum(
-                1 for r in selected if r["re_review_decision"] == "approve"),
-            "re_reviews_valid": sum(
-                1 for r in selected if r["re_review_document_is_proposal"]),
+            "re_reviews_attempted": sum(
+                1 for r in selected if r.get("re_review_response")),
+            "re_reviews_valid": len(valid_re_reviews),
+            "invalid_re_reviews": sum(
+                1 for r in selected if r.get("re_review_decision")
+                and not r.get("re_review_valid")),
+            "corrected_document_approved": approvals,
             "released": sum(1 for r in selected if r["release"]),
             "release_reasons": {
                 s: sum(1 for r in selected if r["release_reason"] == s)
                 for s in sorted({r["release_reason"] for r in selected})},
-            "cost_usd": round(sum(r["first_cost_usd"] for r in selected), 6),
+            "requests_first": sum(r.get("first_requests") or 0 for r in selected),
+            "requests_re_review": sum(r.get("re_review_requests") or 0
+                                      for r in selected),
+            "cost_first_usd": round(sum(r["first_cost_usd"] for r in selected), 6),
+            "cost_re_review_usd": round(
+                sum(r.get("re_review_cost_usd") or 0.0 for r in selected), 6),
+            "cost_total_usd": round(
+                sum(r["first_cost_usd"] + (r.get("re_review_cost_usd") or 0.0)
+                    for r in selected), 6),
+            "usage_missing": sum(
+                1 for r in selected
+                if r.get("first_usage_missing") or r.get("re_review_usage_missing")),
         }
     out["pair_separation"] = _pair_separation(rows)
-    out["total_cost_usd"] = round(sum(r["first_cost_usd"] for r in rows), 6)
+    out["cost_first_usd"] = round(sum(r["first_cost_usd"] for r in rows), 6)
+    out["cost_re_review_usd"] = round(
+        sum(r.get("re_review_cost_usd") or 0.0 for r in rows), 6)
+    out["total_cost_usd"] = round(out["cost_first_usd"] + out["cost_re_review_usd"],
+                                  6)
+    out["requests_total"] = sum((r.get("first_requests") or 0)
+                               + (r.get("re_review_requests") or 0) for r in rows)
     return out
 
 
@@ -274,20 +360,32 @@ def _pair_separation(rows: list[dict]) -> dict:
         if case_id not in index:
             continue
         baseline = mutation["baseline"]
-        key = f"{baseline} > {case_id}"
-        pairs[key] = {
-            "baseline_decision": (index.get(baseline) or {}).get("first_decision"),
-            "variant_decision": index[case_id]["first_decision"],
+        base_row = index.get(baseline) or {}
+        variant = index[case_id]
+        base_decision = base_row.get("first_decision")
+        variant_decision = variant["first_decision"]
+        # Separation requires the faithful member to be APPROVED. A faithful draft
+        # that is refused has not been separated from a refused defective draft —
+        # both got the same answer, which is the failure this control exists to
+        # expose. The defective member must be a REFUSAL (`revise` or
+        # `cannot_assess`); an invalid response is not a separation either.
+        separated = (base_decision == "approve"
+                     and variant_decision in ("revise", "cannot_assess")
+                     and bool(variant.get("first_valid")))
+        pairs[f"{baseline} > {case_id}"] = {
+            "baseline_case": baseline,
+            "variant_case": case_id,
+            "baseline_decision": base_decision,
+            "variant_decision": variant_decision,
             "expected_baseline": "approve",
             "expected_variant": "revise",
-            "separated": ((index.get(baseline) or {}).get("first_decision") == "approve"
-                          and index[case_id]["first_decision"] in
-                          ("revise", "cannot_assess")),
+            "separated": separated,
         }
     return pairs
 
 
-def render(frozen: dict, summary: dict, rows: list[dict]) -> str:
+def render(frozen: dict, summary: dict, rows: list[dict],
+           meter: dict | None = None) -> str:
     lines = [
         "# Bounded calibration — refined instructions, unfamiliar paired controls",
         "",
@@ -297,8 +395,10 @@ def render(frozen: dict, summary: dict, rows: list[dict]) -> str:
         f"- instructions sha256: `{frozen['instructions_sha256']}`",
         f"- contract fingerprint: `{frozen['contract_fingerprint']}`",
         f"- fixture fingerprint: `{frozen['calibration_fixture_fingerprint']}`",
-        f"- call ceiling: {frozen['max_calls']} · spend ceiling: "
-        f"${frozen['max_spend_usd']:.2f}",
+        f"- logical-call ceiling: {frozen['max_logical_calls']} "
+        f"({frozen['attempts_per_call']} attempts each)",
+        f"- **hard request ceiling: {frozen['max_requests']}**",
+        f"- observed-cost ceiling: ${frozen['max_spend_usd']:.2f}",
         "",
         "The four axes are reported separately and are never summed.",
         "",
@@ -306,22 +406,30 @@ def render(frozen: dict, summary: dict, rows: list[dict]) -> str:
     for name in ("familiar", "unfamiliar"):
         s = summary[name]
         lines += [f"## {name.capitalize()} cases ({s['cases']})", "",
-                  f"- **initial judgement** — decisions `{s['decisions']}`, agrees "
-                  f"{s['agrees_with_expectation']}, disagrees "
-                  f"{s['disagrees_with_expectation']}, no decision "
-                  f"{s['no_decision']}, operational failures "
-                  f"{s['operational_failures']}",
+                  f"- **initial judgement** — classes `{s['agreement_classes']}`, "
+                  f"rate denominator **{s['rate_denominator']}** "
+                  f"(agrees {s['agrees_with_expectation']}, disagrees "
+                  f"{s['disagrees_with_expectation']})",
                   f"- **edit applicability** — proposals drawn "
                   f"{s['proposals_drawn']}; scaffold refusals "
                   f"`{s['scaffold_refusals']}`",
-                  f"- **corrected-document approval** — approvals of the exact "
-                  f"proposal: {s['corrected_document_approved']} of "
-                  f"{s['re_reviews_valid']} valid re-reviews",
+                  f"- **corrected-document approval** — "
+                  f"{s['corrected_document_approved']} approved of "
+                  f"{s['re_reviews_valid']} valid re-reviews "
+                  f"({s['re_reviews_attempted']} attempted, "
+                  f"{s['invalid_re_reviews']} invalid)",
                   f"- **release** — {s['released']} released; reasons "
                   f"`{s['release_reasons']}`",
-                  f"- cost: ${s['cost_usd']:.6f}", ""]
+                  f"- requests: {s['requests_first']} first + "
+                  f"{s['requests_re_review']} re-review",
+                  f"- cost: ${s['cost_first_usd']:.6f} first + "
+                  f"${s['cost_re_review_usd']:.6f} re-review = "
+                  f"**${s['cost_total_usd']:.6f}**", ""]
 
     lines += ["## Per-pair separation (unfamiliar controls only)", "",
+              "Separation requires the faithful member to be APPROVED and the "
+              "defective member to receive a VALID refusal. Two refusals are not a "
+              "separation.", "",
               "| pair (baseline > variant) | baseline decision | variant decision | "
               "separated |", "|---|---|---|---|"]
     for key, value in summary["pair_separation"].items():
@@ -333,14 +441,31 @@ def render(frozen: dict, summary: dict, rows: list[dict]) -> str:
               "Every row below cites the exact passage the reviewer named, so the "
               "judgement can be checked against the source rather than taken on "
               "trust. `—` means the reviewer named no passage.", "",
-              "| case | expected | decision | first named passage | why |",
-              "|---|---|---|---|---|"]
+              "| case | group | expected | decision | first named passage | why |",
+              "|---|---|---|---|---|---|"]
     for row in rows:
         passage, why = _first_objection(row)
-        lines.append(f"| `{row['case_id']}` | `{row['expected']}` | "
+        lines.append(f"| `{row['case_id']}` | {row['group']} | "
+                     f"`{row['expected']}` | "
                      f"`{row['first_decision'] or row['first_error'] or '—'}` | "
                      f"{_cell(passage)} | {_cell(why)} |")
-    lines += ["", f"Total cost: ${summary['total_cost_usd']:.6f}", ""]
+
+    lines += ["", "## Accounting", "",
+              f"- first-call requests: {summary['requests_total']} total requests "
+              "across all cases (retries included)",
+              f"- cost, first calls: ${summary['cost_first_usd']:.6f}",
+              f"- cost, re-reviews: ${summary['cost_re_review_usd']:.6f}",
+              f"- **cost, total: ${summary['total_cost_usd']:.6f}**", ""]
+    if meter:
+        lines += [f"- requests sent / ceiling: {meter['requests_sent']} / "
+                  f"{meter['max_requests']}",
+                  f"- billable responses: {meter['billable_requests']}, "
+                  f"unmetered: {meter['unmetered_requests']}",
+                  f"- cost known: **{meter['cost_is_known']}**", "",
+                  f"> {meter['ceiling_statement']}"]
+        if meter.get("unmetered_caveat"):
+            lines += ["", f"> **WARNING:** {meter['unmetered_caveat']}"]
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -377,22 +502,23 @@ async def main_async(out_dir: pathlib.Path, *, dry_run: bool) -> dict:
     if dry_run:
         return {"dry_run": True, "frozen": frozen,
                 "would_review": [c.case_id for c in FAMILIAR + UNFAMILIAR],
-                "max_calls": frozen["max_calls"]}
+                "max_logical_calls": frozen["max_logical_calls"],
+                "max_requests": frozen["max_requests"]}
 
     from experiment.provider_v2 import make_asker
 
-    budget = RunBudget(max_calls=frozen["max_calls"],
-                       max_cost_usd=frozen["max_spend_usd"])
+    meter = RequestMeter(max_requests=frozen["max_requests"],
+                         max_cost_usd=frozen["max_spend_usd"])
     ledger: list[dict] = []
-    ask = make_asker(ledger=ledger)
+    ask = make_asker(ledger=ledger, meter=meter)
 
     rows: list[dict] = []
     for case in FAMILIAR:
-        rows.append(await review_one(ask, budget, frozen["instructions"], case,
+        rows.append(await review_one(ask, meter, frozen["instructions"], case,
                                      familiar=True))
         print(f"  familiar {case.case_id:26s} -> {rows[-1]['first_decision'] or rows[-1]['first_error']}")
     for case in UNFAMILIAR:
-        rows.append(await review_one(ask, budget, frozen["instructions"], case,
+        rows.append(await review_one(ask, meter, frozen["instructions"], case,
                                      familiar=False))
         print(f"  unfamiliar {case.case_id:24s} -> {rows[-1]['first_decision'] or rows[-1]['first_error']}")
 
@@ -403,11 +529,13 @@ async def main_async(out_dir: pathlib.Path, *, dry_run: bool) -> dict:
                          f"{sorted(used)} != {frozen['instructions_sha256']}")
 
     summary = summarise(rows)
-    payload = {"frozen": frozen, "budget": budget.to_dict(),
+    meter_dict = meter.to_dict()
+    payload = {"frozen": frozen, "meter": meter_dict,
                "summary": summary, "rows": rows, "ledger": ledger}
     (out_dir / "calibration.json").write_text(json.dumps(payload, indent=2) + "\n")
-    (out_dir / "CALIBRATION.md").write_text(render(frozen, summary, rows))
-    return {"budget": budget.to_dict(), "summary": summary}
+    (out_dir / "CALIBRATION.md").write_text(
+        render(frozen, summary, rows, meter_dict))
+    return {"meter": meter_dict, "summary": summary}
 
 
 def main() -> int:
@@ -417,7 +545,9 @@ def main() -> int:
                     help="build and validate the frozen plan without any provider call")
     args = ap.parse_args()
     result = asyncio.run(main_async(pathlib.Path(args.out), dry_run=args.dry_run))
-    print(json.dumps(result, indent=2)[:4000])
+    # Printed in full: a truncated JSON blob is unparseable, and this output is
+    # meant to be machine-readable by whoever authorises the run.
+    print(json.dumps(result, indent=2))
     return 0
 
 

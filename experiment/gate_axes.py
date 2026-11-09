@@ -58,6 +58,7 @@ from collections import Counter
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+import decision_contract as dc  # noqa: E402
 from experiment.binding_candidate import run_binding  # noqa: E402
 from experiment.cases_v2 import CASES_V2, SOURCES, by_id  # noqa: E402
 
@@ -104,6 +105,42 @@ def classify_answer(raw: str) -> str:
     return "prose"
 
 
+# The semantic-agreement classes. Each is reported in its own column and only
+# `agree`/`disagree` reach a success/failure denominator.
+AGREE = "agree"
+DISAGREE = "disagree"
+CANNOT_ASSESS = "cannot_assess"
+INVALID_RESPONSE = "invalid_response"
+OPERATIONAL_FAILURE = "operational_failure"
+
+
+def semantic_agreement(decision: str | None, ok: bool,
+                       expected: str) -> str:
+    """Classify one answer against the preregistered label.
+
+    Item 1 of the brief: agreement requires a VALID EXACT decision match. The
+    previous version compared booleans —
+
+        (decision == "approve") == (expected == "approve")
+
+    — which silently counted `cannot_assess` on a `revise` case as agreement,
+    because both sides evaluate to `False`. A withhold is not a revision request;
+    crediting it as one inflates the reviewer's apparent accuracy. The same
+    comparison also counted a structurally invalid `revise` (an envelope code
+    could not use) as agreement whenever the case expected `revise`.
+
+    So: `cannot_assess`, invalid responses and operational failures are their own
+    outcomes and are never folded into agree or disagree.
+    """
+    if decision is None:
+        return OPERATIONAL_FAILURE
+    if not ok:
+        return INVALID_RESPONSE
+    if decision == CANNOT_ASSESS:
+        return CANNOT_ASSESS
+    return AGREE if decision == expected else DISAGREE
+
+
 def build() -> dict:
     attempts = json.loads(RUN.read_text())
     rows: list[dict] = []
@@ -133,6 +170,8 @@ def build() -> dict:
                                    else "no response retained (truncated)",
                 "axis_initial_judgment": None,
                 "axis_initial_decision": None,
+                "axis_initial_structural_problems": [],
+                "axis_agreement": None,
                 "axis_agrees_with_expectation": None,
                 "axis_edit_applicability": None,
                 "axis_repair_status": None,
@@ -140,6 +179,9 @@ def build() -> dict:
                 "axis_corrected_document_approval": None,
                 "axis_corrected_document_note": "outside the denominator",
                 "axis_re_review_document_identity": None,
+                "axis_re_review_decision": None,
+                "axis_re_review_valid": None,
+                "axis_gate_released_on_proposal": None,
                 "axis_release": None,
                 "axis_release_reason": None,
             }
@@ -155,14 +197,28 @@ def build() -> dict:
         proposal_drawn = first_pass.proposed_document != draft
         result, docs_seen = first_pass, first_seen
 
+        # Whether the answer was structurally usable AT ALL. A parsed decision word
+        # is not enough: `decide_from_text` can return `revise` while rejecting the
+        # envelope (`revise_without_correction`, `passage_not_in_draft`). Those are
+        # invalid responses, not judgements.
+        first_ok = bool(first_pass.initial_decision) and not \
+            first_pass.initial_problems
+        agreement = semantic_agreement(decision, first_ok, case.expectation)
+
         # ── Axis 1: the decision, and whether it matches the preregistration ──
-        agrees = (None if decision is None
-                  else (decision == "approve") == (case.expectation == "approve"))
         row |= {
             "excluded_reason": None,
             "axis_initial_judgment": decision,
             "axis_initial_decision": decision,
-            "axis_agrees_with_expectation": agrees,
+            "axis_initial_structural_problems": list(first_pass.initial_problems),
+            "axis_agreement": agreement,
+            # Kept as a three-valued convenience flag for the paired table, but
+            # the AUTHORITY is `axis_agreement`: True only for an exact match and
+            # False only for a valid mismatch. `None` here means "not a judgement".
+            "axis_agrees_with_expectation": (
+                True if agreement == AGREE
+                else False if agreement == DISAGREE
+                else None),
         }
 
         # ── Axis 2: could the scaffold build a proposal at all? ──────────────
@@ -201,18 +257,42 @@ def build() -> dict:
             reasons.append("the retained re-review answered about a DIFFERENT "
                            "document; it cannot validate or invalidate this proposal")
 
+        # Item 2 of the brief: approval counts only when the re-review is VALID and
+        # says `approve`. Gate release is a different fact — it also requires the
+        # proposal to have been applicable — so reading it as "the re-review
+        # approved" would attribute a scaffold property to the reviewer. The
+        # re-review's own parsed decision is the authority here.
+        re_review_decision: str | None = None
+        re_review_ok = False
         if not proposal_drawn or not recheck or identity != "same_document":
             approval, note = None, "; ".join(reasons)
         else:
             # Only here is the retained answer a judgement about this proposal.
             result, docs_seen = _replay(draft, first, recheck)
-            approval = "approved" if result.release else "not_approved"
-            note = "validated: the re-review saw exactly the proposed document"
+            second = dc.decide_from_text(recheck, result.proposed_document, SOURCES)
+            re_review_decision = second.decision or None
+            re_review_ok = bool(second.decision) and not second.structural_problems
+            if not re_review_ok:
+                approval = "invalid_re_review"
+                note = ("the re-review answered the right document but its answer "
+                        "was not a usable verdict: "
+                        + ", ".join(second.structural_problems[:4]))
+            elif second.decision == dc.DECISION_APPROVE:
+                approval = "approved"
+                note = "valid re-review of exactly the proposed document said approve"
+            else:
+                approval = "not_approved"
+                note = ("valid re-review of exactly the proposed document said "
+                        f"{second.decision!r}")
 
         row |= {
             "axis_corrected_document_approval": approval,
             "axis_corrected_document_note": note,
             "axis_re_review_document_identity": identity,
+            "axis_re_review_decision": re_review_decision,
+            "axis_re_review_valid": re_review_ok if approval else None,
+            "axis_gate_released_on_proposal": (
+                bool(result.release) if approval else None),
         }
 
         # ── Axis 4: release, and the rule that produced it ───────────────────
@@ -248,9 +328,20 @@ def build() -> dict:
             "different contract; a truncated cell has no answer at all."),
         "axis_1_initial_judgment": {
             "decisions": count("axis_initial_decision", denominator),
+            "agreement": count("axis_agreement", denominator),
+            # Denominator for a success/failure RATE. `cannot_assess`, invalid
+            # responses and operational failures are reported in `agreement` too,
+            # but they are not verdicts about the document, so they are excluded
+            # from the rate rather than counted as failures.
+            "rate_denominator": sum(1 for r in denominator
+                                    if r["axis_agreement"] in (AGREE, DISAGREE)),
             "agrees_with_expectation": count("axis_agrees_with_expectation", denominator),
-            "caveat": ("Agreement with the preregistered expectation is one "
-                       "mechanical fact, not evidence the objection was correct."),
+            "rule": ("Agreement requires a valid answer and an EXACT match with the "
+                     "preregistered decision. cannot_assess, invalid responses and "
+                     "operational failures are reported separately and never "
+                     "counted as either agreement or disagreement."),
+            "caveat": ("Agreement is one mechanical fact, not evidence the objection "
+                       "was correct."),
         },
         "axis_2_edit_applicability": {
             "status": count("axis_edit_applicability", denominator),
@@ -262,6 +353,11 @@ def build() -> dict:
             "status": count("axis_corrected_document_approval", denominator),
             "re_review_document_identity": count(
                 "axis_re_review_document_identity", denominator),
+            "re_review_decision": count("axis_re_review_decision", denominator),
+            "rule": ("Approval counts only when the re-review answered the EXACT "
+                     "proposed document and its own decision was a valid `approve`. "
+                     "Gate release is recorded separately because it also depends on "
+                     "proposal applicability."),
             "caveat": ("A retained re-review of a different document is reported as "
                        "no observation, never as an approval or a refusal."),
         },
@@ -299,7 +395,11 @@ def render(summary: dict) -> str:
         "### Axis 1 — initial judgment",
         "",
         f"- decisions: `{a1['decisions']}`",
-        f"- agrees with preregistered expectation: `{a1['agrees_with_expectation']}`",
+        f"- **agreement classes:** `{a1['agreement']}`",
+        f"- success/failure denominator (valid exact matches only): "
+        f"**{a1['rate_denominator']}**",
+        f"- agrees / disagrees: `{a1['agrees_with_expectation']}`",
+        f"- *{a1['rule']}*",
         f"- *{a1['caveat']}*",
         "",
         "### Axis 2 — edit applicability (a property of the scaffold)",
@@ -311,7 +411,9 @@ def render(summary: dict) -> str:
         "### Axis 3 — approval of the exact proposed document",
         "",
         f"- `{a3['status']}`",
+        f"- re-review decisions: `{a3['re_review_decision']}`",
         f"- re-review document identity: `{a3['re_review_document_identity']}`",
+        f"- *{a3['rule']}*",
         f"- *{a3['caveat']}*",
         "",
         "### Axis 4 — release",
