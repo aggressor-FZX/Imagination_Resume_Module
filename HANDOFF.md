@@ -62,33 +62,59 @@ the repair had nothing to work with. Withholding stands.
 
 ## Deploy requirement — ACTION REQUIRED
 
-The visitor fix spans **two services** and only one half is deployed.
+The guest fix spans **two services**. Imaginator is live; the orchestrator half is
+pushed but NOT merged.
 
-| Service | Commit | State |
+| Service | Ref | State |
 |---|---|---|
-| imaginator | `4945b0b` | **pushed to `master`; deploy live** |
-| orchestrator-backend | `visitor-owner-export` | **pushed; NOT merged** |
+| imaginator | `a6ad23b` (`master`) | pushed; deploying |
+| orchestrator-backend | `guest-publication-trust` | **pushed; NOT merged** |
 
 `backend/server.cjs` also carries unrelated in-progress work on
-`employment-type-search` (the ResumeBuilder publication UI: `ResumeBuilder.tsx`,
-`publication.ts`, `resumeExportService.ts`, snapshots, docs, e2e notes). Pushing
-that branch to a deploy-linked `master` would ship all of it, so the single-file
-change was isolated onto `visitor-owner-export`, branched from `origin/master`,
-with only `backend/server.cjs` modified (51 insertions, 4 hunks, `node --check`
-clean).
+`employment-type-search` (the ResumeBuilder publication UI). Pushing that branch to
+a deploy-linked `master` would ship all of it, so the backend change was isolated
+onto `guest-publication-trust`, branched from `origin/master`, containing only
+`backend/server.cjs`, `backend/services/guestSession.js` and its test
+(194 insertions into `server.cjs`, `node --check` clean, 23 tests pass in
+isolation).
 
-**To finish:** open a PR from `visitor-owner-export` → `master` and merge, so
-Render deploys. No PR tooling is installed on this box; use the GitHub UI.
+**To finish — three steps, in order:**
 
-Until that merge the orchestrator **discards** visitor-owned approvals rather than
-forwarding them: the Imaginator now issues them (`x-cogito-visitor-id`), but the
-orchestrator neither forwards the header on analyze nor accepts a visitor owner on
-export. Net effect today: unchanged behaviour, no regression — the free-trial fix
-is simply not in effect yet.
+1. Open a PR from `guest-publication-trust` → `master` and merge it (no PR tooling
+   is installed here; use the GitHub UI).
+2. Set **`GUEST_CONTEXT_SECRET`** (≥16 chars) on `orchestrator-backend`. Without
+   it `POST /api/guest/session` returns 503 and `readGuestContext` returns
+   `guest_context_unconfigured` — the pipeline deliberately falls back to the old
+   withholding behaviour rather than trusting unauthenticated input, so the guest
+   fix stays inert (and the reason will keep appearing in measurements).
+3. Then run the live validation (below).
 
-The remaining work on `employment-type-search` is the frontend UI for `retryable`
-and `publication_owner_kind` (item 1 of "next" in
-`docs/FAILURE_MODE_REMEDIATION_2026-11-08.md`).
+Until 1 and 2 are done the orchestrator **discards** guest-owned approvals: it
+neither forwards a guest context on analyze nor accepts one on export. Net effect
+today is unchanged behaviour, not a regression.
+
+## Live validation to run after merge + secret
+
+Signed-out, real session:
+
+- a signed-out analysis completes and returns `publication_owner_kind: "guest"`
+  with a `publication_receipt`;
+- **both** downloads (PDF and DOCX) succeed from that session;
+- a second browser profile with a different fingerprint gets its **own** receipt,
+  and profile A's receipt is refused in profile B (`receipt_owner_mismatch`);
+- sending profile A's receipt from a shell with a forged `X-Visitor-ID` is
+  refused (no signed `guest_ctx`, so no owner);
+- signing in mid-session surfaces `receipt_owner_guest_signed_in`, and a fresh
+  analysis while signed in exports normally with
+  `publication_owner_kind: "account"`.
+
+## Measurement, not estimation
+
+`scripts/measure_withhold_mix.py` reports the ACTUAL mix from live events. Baseline
+(24h window, **predating** the deploy): 19 runs, 11 approved, 8 withheld (42%);
+6 of 8 infrastructure. Re-run after deploy and compare — the documented predictions
+are falsifiable on purpose. The earlier "4 of 9 withholds removed" was a claim
+about what the code permits, not a measurement.
 
 ## Verification commands
 

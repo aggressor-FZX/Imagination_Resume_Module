@@ -120,7 +120,11 @@ asymmetry is deliberate, and is why the retry lives in the review path only.
 
 ## Shipped, larger than planned
 
-### 4. Free-trial visitors can now receive a resume — **1**
+### 4. Free-trial guests can now receive a resume — **1**
+
+> **Trust model revised.** The first version bound the approval to the
+> `X-Visitor-ID` header. That was unsound and has been replaced; see
+> "Guest trust model" below. The summary here describes the final design.
 
 This was the worst finding, and the fix is more than a message tweak.
 
@@ -133,35 +137,64 @@ the approval genuinely happened.
 
 The fix keeps the security invariant rather than weakening it:
 
-- New `x-cogito-visitor-id` header, separate from the account header. A visitor
-  has no account, so the owner header is legitimately empty; sending a device id
-  there would mint an approval that *looks* account-owned.
-- `resolve_publication_owner(request)` prefers a signed-in account, else falls
-  back to the visitor, and reports which kind it used.
-- The visitor owner is **namespaced** `visitor:<id>`. An account id is a verified
-  login; a device id is a clearable cookie. If they could produce the same
-  receipt owner, a visitor approval would be indistinguishable from an account
-  approval at export.
-- Malformed, absent, or browser-`fallback_` ids yield **no owner**, so the
-  approval is withheld rather than bound to something untrustworthy.
-- `server.cjs` forwards the visitor id on both analyze branches (SSE and JSON),
-  reading it from the `X-Visitor-ID` header the client already sends (the
-  multipart body is parsed later than that call).
-- The export route now accepts a visitor owner, presenting the same
-  `visitor:<id>` value the receipt was bound to.
-- New `publication_owner_kind` field (`account` | `visitor`) tells the client
-  which kind of approval it holds.
+- `server.cjs` resolves a **server-verified guest context**; the approval owner is
+  `guest:<hash>` derived from it, sent in its own `x-cogito-guest-id` header.
+  A signed-in account always takes precedence.
+- The export route resolves the owner through the same verified context, and names
+  the guest→account transition explicitly (`receipt_owner_guest_signed_in`)
+  instead of reporting a receipt that merely "could not be verified".
+- The guest capability is cleared on every sign-in so a device capability cannot
+  outlive a verified session. Deliberately NOT cleared on logout: a guest who
+  never signed in must keep the context that lets them download what they paid
+  for.
+- New `publication_owner_kind` field (`account` | `guest`) tells the client which
+  kind of approval it holds.
 
-Proven offline end-to-end:
+### Guest trust model — why `X-Visitor-ID` is not an owner
+
+The first version of this fix bound the approval to `X-Visitor-ID`. **That was
+unsound.** The value is chosen by the client (the FingerprintJS SDK writes it to
+`localStorage`), and the server's `fp_visitor_id` cookie is itself populated from
+`req.body.visitorId` (`controllers/fingerprintController.js`). Neither channel
+proves provenance, so anyone who typed another person's visitor id would be handed
+that person's **approved resume** — full contact details and employment history.
+
+The replacement requires BOTH of:
+
+1. a `guest_ctx` cookie **this server minted**, carrying an HMAC over the visitor
+   id and its issue time; and
+2. a `credits.free_trials` row for that id, written server-side when an allowance
+   is disbursed — checked at mint time (`POST /api/guest/session`).
+
+Neither is sufficient alone. (1) rejects a forged context because the HMAC cannot
+be recomputed without the key. (2) rejects a cookie never backed by a real
+allowance. The owner is `guest:<hash>` over the id and the **signed** issue time,
+so it differs per guest, can never equal an account id, and does not leak the id.
+
+Fails closed in two places: with no `GUEST_CONTEXT_SECRET` the mint returns 503
+and `readGuestContext` returns `guest_context_unconfigured`, so the pipeline keeps
+its previous withholding behaviour rather than trusting unauthenticated input; and
+a cookie describing a *different* visitor id is a mismatch, not a pass.
+
+Capability semantics, stated honestly: a device cookie can be copied by whoever
+holds it, exactly like a session token. The bar here is "no worse than the
+allowance itself" (100 credits), not bank-grade identity. What matters is that it
+is no longer *worse* — an attacker previously needed only to type a string.
+
+Verified offline end-to-end with a real receipt:
 
 ```
 receipt minted: True
-visitor export: True ok
-account presenting visitor receipt: False receipt_owner_mismatch
+guest export: True ok
+account presenting guest receipt: False receipt_owner_mismatch
 no owner presented: False receipt_owner_mismatch
 ```
 
-A visitor gets their resume and **cannot** spend someone else's approval.
+23 tests (`backend/tests/integration/guestPublicationContext.test.js`): two
+distinct guests cannot use each other's context; forged, edited-id and
+edited-timestamp cookies are refused; expired contexts refused despite a valid
+signature; missing cookie/id/secret fails closed; the browser `fallback_` id can
+never be an owner; account outranks guest; namespaces cannot collide.
 
 ---
 
@@ -254,6 +287,46 @@ Tests updated because their expectation legitimately changed:
   `_uncertain_required_items`, so the static guard follows it. Same defect guarded.
 
 ---
+
+## Measured baseline — and how to compare honestly
+
+`scripts/measure_withhold_mix.py` reads live `correction.end` events and prints the
+real mix. It refuses to estimate: it reports only events it saw, classifies each
+reason by whose failure it was, and states explicitly that a reason's absence is
+absence-of-evidence rather than a fix.
+
+Baseline run, 24h window (this window PREDATES the deploy, so it is the number to
+compare against, not a result):
+
+```
+correction runs  : 19
+  approved       : 11
+  withheld       : 8  (42%)
+
+timeout_initial_review            3  [infrastructure]
+malformed_output                  2  [infrastructure]
+no_op_repair                      1  [infrastructure]
+source_completeness_uncertain     1  [content]
+source_facts_missing              1  [content]
+
+infrastructure 6 / content 2
+```
+
+After the deploy, re-run it and compare. Expected movement, stated as predictions
+so they can fail visibly:
+
+- `timeout_initial_review` should drop toward zero (220s cap, inventory ~46s +
+  review ~60-74s).
+- `malformed_output` should drop, but not to zero: one re-ask per run, so a model
+  that fails the same check twice still withholds.
+- `receipt_unavailable` should disappear entirely once the orchestrator half is
+  merged **and** `GUEST_CONTEXT_SECRET` is set. Without the secret it fails closed
+  and the reason will still appear — that is the intended behaviour, not a bug.
+- `no_op_repair`, `source_completeness_uncertain`, `source_facts_missing` should be
+  UNCHANGED. Those two fixes were reverted; only their message changed.
+
+The earlier "4 of 9 withholds removed" figure is a claim about what the code now
+permits. It is not a measurement, and it should not be repeated as one.
 
 ## Remaining / next
 
