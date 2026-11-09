@@ -383,12 +383,27 @@ def _normalise_problem(value: str) -> str:
     "unsupported: the source does not …"), and emphasis/decorative characters are
     stripped. A genuinely unknown word still fails, so this widens acceptance of
     FORMATTING, never of MEANING.
+
+    A SLASHED pair is resolved rather than rejected. Measured in the v2 matrix
+    (2026-11-09): the reviewer wrote `problem: omitted/misplaced`, which is one
+    observation expressed with two of the contract's own words — it is not an
+    unknown problem, it is two known ones. The first recognised word wins; a value
+    with no recognised word at all still fails.
     """
     text = _strip_markup_wrapping(value).strip()
     if not text:
         return ""
     word = text.split()[0].strip(".:;,()[]*_`'\"")
-    return word.lower()
+    lowered = word.lower()
+    if "/" in lowered or "," in lowered:
+        for part in re.split(r"[/,]", lowered):
+            candidate = part.strip(".:;,()[]*_`'\" ")
+            if candidate in PROBLEMS:
+                return candidate
+        # No recognised part: keep the first fragment so the failure message is
+        # specific about what was actually written.
+        return lowered.split("/")[0].split(",")[0]
+    return lowered
 
 
 def _unquote(value: str) -> str:
@@ -453,11 +468,21 @@ def _parse_sources(raw_sources: str) -> list[str]:
     # thing, and a positional split must handle each. Extract the ids first —
     # that is what resolution needs — then keep any remaining prose as a bare
     # reference so a quote-only citation still resolves.
+    #
+    # Measured 2026-11-09 on the v2 contract probe: the model listed two documents
+    # as `[candidate-main.txt, candidate-supplement.txt]`. Neither id starts with
+    # a number, so the older patterns missed both, the whole bracketed string was
+    # kept as one "id", and the review was rejected `sources_unresolved` — a
+    # correct answer discarded for a comma. Filenames are therefore matched as a
+    # first-class shape.
     ids = re.findall(r"\b([A-Za-z][A-Za-z0-9_.\-]{0,63}\d|\bdoc[A-Za-z0-9_.\-]*)",
                      raw_sources)
     # `doc0`/`doc-1`/`document-0` all match above; also accept a plain named id
     # followed by a colon, e.g. "candidate-main.txt: '…'".
     ids += re.findall(r"\b([A-Za-z0-9_.\-]+\.[A-Za-z0-9]{1,6})\s*:", raw_sources)
+    # A filename-shaped token is an id wherever it appears, comma-separated or not.
+    ids += re.findall(r"\b([A-Za-z0-9_.\-]+\.(?:txt|md|pdf|docx?|json|csv))\b",
+                      raw_sources)
     out: list[str] = []
     for identifier in ids:
         cleaned = identifier.strip("[]().,;:'\"")
@@ -470,11 +495,78 @@ def _parse_sources(raw_sources: str) -> list[str]:
     return [cleaned] if cleaned else []
 
 
+_OMIT_MARKER_RE = re.compile(r"^\s*[\(\[]?\s*omit(?:ted)?\s*[\)\]]?\s*$",
+                             re.IGNORECASE)
+# The marker may itself be quoted before commentary follows it:
+#     "(omit)" (Note: if future evidence confirms …)
+# so optional surrounding quotes are part of the leading-marker pattern.
+_OMIT_LEADING_RE = re.compile(
+    r"""^\s*["'\u201c\u2018]?\s*[\(\[{]?\s*omit(?:ted|s|sion)?\s*[\)\]}]?\s*
+        ["'\u201d\u2019]?\s*[:;\-\u2013\u2014]?\s*""",
+    re.IGNORECASE | re.VERBOSE)
+
+
+def is_omit_marker(value: str) -> bool:
+    """Does this correction say "remove it" rather than "replace it with this"?
+
+    Two shapes count, and both must be treated as removal rather than insertion:
+
+        (omit)
+        (omit) (Note: if future evidence confirms …)
+        "(omit)" (Note: …)
+
+    The last two were measured on the v2 probe (2026-11-09) and were applied as
+    literal replacement text, overwriting a source-backed bullet with a note about
+    the bullet. A correction that OPENS with the marker never becomes content.
+    """
+    text = (value or "").strip()
+    if not text:
+        return False
+    if _OMIT_MARKER_RE.match(text):
+        return True
+    match = _OMIT_LEADING_RE.match(text)
+    if not match:
+        return False
+    remainder = text[match.end():].strip()
+    if not remainder:
+        return True
+    # Any trailing prose means the reviewer is explaining the removal, not
+    # supplying a replacement. Replacement text never starts with an omit verb.
+    return True
+
+
 def _issue_from(fields: dict[str, str]) -> Issue:
     sources = _parse_sources(fields.get("sources", ""))
-    correction = _unquote(fields.get("correction") or "") or None
+    raw_correction = _unquote(fields.get("correction") or "")
+    correction = raw_correction or None
     if correction and correction.lower() in {"(omit)", "omit", "none", "-"}:
         correction = None
+    # An omit marker followed by commentary is still an OMIT, not a replacement.
+    #
+    # Measured on the v2 contract probe (2026-11-09): the reviewer wrote
+    #
+    #     correction: "(omit)" (Note: If future evidence confirms the timeframe …)
+    #
+    # The marker was not the whole value, so the commentary was applied as the
+    # replacement — overwriting a SOURCE-BACKED bullet with a note about it. That
+    # is the deletion hazard `blank correction refused` exists to prevent,
+    # arriving through a different door. A correction that BEGINS with the marker
+    # is now treated as an omission, and the trailing prose is kept as the reason.
+    if correction:
+        marker = _OMIT_LEADING_RE.match(correction)
+        if marker:
+            remainder = correction[marker.end():].strip()
+            if not remainder or remainder.startswith(("(", "[", "—", "-")):
+                merged = dict(fields)
+                if remainder and not merged.get("why"):
+                    merged["why"] = remainder
+                return Issue(
+                    passage=_canonical_passage(merged.get("passage", "")),
+                    problem=PROBLEM_OMITTED,
+                    why=merged.get("why", "").strip(),
+                    sources=sources,
+                    correction=None,
+                )
     return Issue(
         passage=_canonical_passage(fields.get("passage", "")),
         problem=_normalise_problem(fields.get("problem", "")),
@@ -506,6 +598,188 @@ def _check_shape(decision: Decision) -> None:
         decision.structural_problems.append("cannot_assess_without_reason")
 
 
+_EMPHASIS_RE = re.compile(r"\*{1,3}|_{2,3}|`")
+
+
+def _plain(text: str) -> str:
+    """Whitespace-flattened text with Markdown emphasis markers removed.
+
+    Used ONLY to LOCATE a passage in the draft, never to decide what is true.
+    Removing `*` cannot make an invented sentence appear in a document; it only
+    stops a formatting difference from being reported as a missing citation.
+
+    A list marker's spacing is normalised too. The model wrote `-Reduced rework …`
+    where the draft has `- Reduced rework …` (measured in the v2 matrix,
+    2026-11-09), and a single missing space after the dash rejected a correct
+    review. `-` followed by optional space is canonicalised to `- `, which cannot
+    introduce content — only a bullet that already exists.
+    """
+    cleaned = _EMPHASIS_RE.sub("", text or "")
+    cleaned = re.sub(r"(?m)^(\s*[-*+])[ \t]*", r"\1 ", cleaned)
+    return " ".join(cleaned.split())
+
+
+def passage_resolves_in_draft(passage: str, draft: str) -> bool:
+    """Did the reviewer point at content that really exists in the draft?
+
+    Resolution and application are DIFFERENT questions and this function keeps
+    them apart:
+
+      * resolution  — "is this real document content?"  (this function)
+      * application — "what exact text do I replace?"   (`locate_passage`)
+
+    Resolution must tolerate presentation, because the reviewer's job is to
+    identify a problem, not to transcribe the document. Measured on five v2
+    contract probes (2026-11-09), the live model wrote the same real content in at
+    least four surface forms, each of which a strict comparison rejected:
+
+        Inventory Analyst | 08/2023 - Present        (emphasis dropped)
+        **Ridgeline Equipment Services** -- Fife    (emphasis kept)
+        *Inventory Analyst | 08/2023 - Present* - "Maintained parts …"
+                                                     (two lines joined with " - ")
+        Compared quarterly parts usage with …        (line break flattened)
+
+    Application deliberately does NOT get the same tolerance: when the exact span
+    is unclear, refusing is correct, and `apply_revisions_v2` refuses.
+
+    The test is: split the passage into substantive lines/chunks, and require every
+    one of them to be locatable in the draft. Invented content still fails, because
+    a chunk that was never written cannot be located by any of these rules.
+    """
+    if locate_passage(passage, draft) is not None:
+        return True
+
+    flat_passage = " ".join((passage or "").split())
+    if not flat_passage:
+        return False
+
+    chunks = _passage_chunks(passage)
+    if not chunks:
+        return False
+    return all(locate_passage(chunk, draft) is not None for chunk in chunks)
+
+
+def _passage_chunks(passage: str) -> list[str]:
+    """Split a passage into the document fragments it refers to.
+
+    A reviewer often names several adjacent document lines at once, joining them
+    with a dash or a quotation. Those joins are not in the document, so each part
+    has to be checked separately. Only fragments with enough content to be
+    meaningful are returned, so a stray " - " cannot carry a fabricated sentence.
+    """
+    text = (passage or "").strip()
+    if not text:
+        return []
+    # Quoted fragments and dash-separated fragments are the two observed shapes.
+    pieces = re.split(r"""["\u201c]\s*|\s*["\u201d]|\s+-\s+|\s+\u2014\s+|\s+\u2013\s+""",
+                      text)
+    chunks = []
+    for piece in pieces:
+        cleaned = piece.strip().strip(".,;:").strip()
+        # Require real content: a fragment shorter than a few words cannot
+        # establish that a document line exists.
+        if len(_plain(cleaned)) >= 20:
+            chunks.append(cleaned)
+    return chunks
+
+
+def locate_passage(passage: str, draft: str) -> str | None:
+    """Find the real draft text a reviewer's passage refers to.
+
+    The live model restates a record without its Markdown:
+
+        passage:  Ridgeline Equipment Services -- Fife, WA Inventory Analyst |
+        draft:    **Ridgeline Equipment Services** -- Fife, WA
+                  *Inventory Analyst | 08/2023 - Present*
+
+    The passage is CORRECT and its evidence is real; it simply drops emphasis and
+    joins two wrapped lines. Measured on the v2 contract probe (2026-11-09), this
+    rejected correct reviews as `passage_not_in_draft` in 3 of 4 attempts.
+
+    Returns the EXACT draft substring when found, so the caller can apply a
+    correction to real text rather than to the reviewer's re-typed version. Returns
+    None when the passage is genuinely absent — an invented passage still fails,
+    because stripping emphasis cannot conjure text that was never written.
+    """
+    passage = (passage or "").strip()
+    if not passage:
+        return None
+    flat_draft = " ".join((draft or "").split())
+    flat_passage = " ".join(passage.split())
+    if flat_passage and flat_passage in flat_draft:
+        return flat_passage
+
+    plain_passage_form = _plain(passage)
+    plain_draft_form = _plain(draft)
+    if not plain_passage_form or plain_passage_form not in plain_draft_form:
+        return None
+
+    # Walk the draft building the SAME normalised form `_plain` produces, while
+    # remembering where each normalised character came from. Matching on that walk
+    # keeps the search and the map in step; normalising one way and locating
+    # another is how a "matches" result ends up pointing at the wrong span.
+    plain_chars: list[str] = []
+    origin: list[int] = []
+    pending_space = False
+    at_line_start = True
+    after_marker = False
+    for index, character in enumerate(draft or ""):
+        if character == "\n":
+            pending_space = True
+            at_line_start = True
+            after_marker = False
+            continue
+        if character.isspace():
+            # Whitespace immediately after a list marker is absorbed by the
+            # normalised marker spacing, so it must not add a SECOND space. Getting
+            # this wrong made `- Reduced` in the draft normalise to `-  Reduced`
+            # here while `_plain` produced `- Reduced`.
+            if after_marker:
+                continue
+            pending_space = True
+            continue
+        if character in "*_`":
+            continue
+        if pending_space and plain_chars:
+            plain_chars.append(" ")
+            origin.append(index)
+            pending_space = False
+        if at_line_start and character in "-*+":
+            # Reproduce `_plain`'s list-marker normalisation: the marker is kept,
+            # and exactly one space follows it whether or not the draft has one.
+            #
+            # This applies at the FIRST line too. An earlier version required
+            # `plain_chars` to be non-empty, so a passage beginning `-Reduced …`
+            # produced `-Reduced` here while `_plain` produced `- Reduced` — the
+            # search and the map disagreed and a correct review was rejected.
+            plain_chars.append(character)
+            origin.append(index)
+            plain_chars.append(" ")
+            origin.append(index)
+            at_line_start = False
+            pending_space = False
+            after_marker = True
+            continue
+        at_line_start = False
+        after_marker = False
+        plain_chars.append(character)
+        origin.append(index)
+    plain = "".join(plain_chars)
+    position = plain.find(plain_passage_form)
+    if position < 0:
+        return None
+    start_index = origin[position]
+    end_index = origin[position + len(plain_passage_form) - 1] + 1
+    # Return the RAW draft span, exactly as it appears in the document.
+    #
+    # An emphasis-STRIPPED version would be more readable, but it would not occur
+    # in the draft and so could never be replaced — the correction would be
+    # silently reported as applicable and then do nothing. Returning the raw span
+    # is what makes `apply_revisions_v2` edit real text; readability is not worth
+    # an edit that cannot land.
+    return draft[start_index:end_index]
+
+
 def resolve_references(decision: Decision, draft: str,
                        sources: dict[str, str]) -> Decision:
     """Check that the passages and source references RESOLVE. Nothing more.
@@ -530,22 +804,41 @@ def resolve_references(decision: Decision, draft: str,
             issue.passage_resolves = passage == OMITTED_MARKER
         elif passage in flat_draft:
             issue.passage_resolves = True
-        elif issue.problem == PROBLEM_OMITTED and passage in flat_sources:
-            # `omitted` means the fact is ABSENT from the draft, so "the exact
-            # draft text affected" cannot be satisfied by construction — there is
-            # no such text. The model therefore quotes the SOURCE text that is
-            # missing, which is the useful thing to report.
-            #
-            # Observed on the retained run (2026-11-09): the reviewer correctly
-            # identified a dropped source fact, quoted the source line, and was
-            # rejected with `passage_not_in_draft` — a nonsensical complaint for
-            # an omission. Quoting the source is accepted here ONLY when the
-            # problem is `omitted` AND the text really is in a source. An
-            # invented passage still fails both tests.
-            issue.passage_resolves = True
-            issue.reports_omission = True
         else:
-            issue.passage_resolves = False
+            # Not literally present. Try the presentation-tolerant resolvers before
+            # concluding anything: the model routinely restates a bolded record
+            # without its Markdown, joins two lines with a dash, or quotes several
+            # adjacent lines at once. Those are formatting differences, not missing
+            # citations.
+            #
+            # RESOLUTION tolerates presentation. APPLICATION does not: only
+            # `locate_passage` may edit, and it returns an exact draft span or
+            # nothing (see `apply_revisions_v2`).
+            located = locate_passage(issue.passage, draft)
+            if located is not None:
+                issue.passage_resolves = True
+                issue.passage = located
+            elif passage_resolves_in_draft(issue.passage, draft):
+                # The reviewer named several real fragments at once. Keep the
+                # passage as written (there is no single span to replace) but
+                # record that its content is genuinely in the document.
+                issue.passage_resolves = True
+            elif issue.problem == PROBLEM_OMITTED and passage in flat_sources:
+                # `omitted` means the fact is ABSENT from the draft, so "the exact
+                # draft text affected" cannot be satisfied by construction — there
+                # is no such text. The model therefore quotes the SOURCE text that
+                # is missing, which is the useful thing to report.
+                #
+                # Observed on the retained run (2026-11-09): the reviewer correctly
+                # identified a dropped source fact, quoted the source line, and was
+                # rejected with `passage_not_in_draft` — a nonsensical complaint
+                # for an omission. Quoting the source is accepted here ONLY when
+                # the problem is `omitted` AND the text really is in a source. An
+                # invented passage still fails both tests.
+                issue.passage_resolves = True
+                issue.reports_omission = True
+            else:
+                issue.passage_resolves = False
 
         if not issue.sources:
             # No reference offered. Acceptable for an omission (the fact is

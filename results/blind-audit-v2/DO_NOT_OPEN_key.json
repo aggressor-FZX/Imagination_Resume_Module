@@ -1,0 +1,137 @@
+{
+  "OUT-01": {
+    "case_id": "wrong_record_attribution",
+    "cell": "revised+advisory",
+    "sha256": "e4ea5a779da2a2378feb8f6ab20a1772ae7aefb7f59b7a2b42e85c083ceaa2b9"
+  },
+  "OUT-02": {
+    "case_id": "unsupported_method",
+    "cell": "current+enabled",
+    "sha256": "9bc6856fb944165a0b0865a0d2429ff5575303d739e7f574362194133f67ac06"
+  },
+  "OUT-03": {
+    "case_id": "faithful_paraphrase",
+    "cell": "current+enabled",
+    "sha256": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7"
+  },
+  "OUT-04": {
+    "case_id": "transferable_skill",
+    "cell": "revised+enabled",
+    "sha256": "1a9642cf16f160cbe6c557b4d92e71858b7a24c187458619458f895e5ff973b2"
+  },
+  "OUT-05": {
+    "case_id": "missing_fact",
+    "cell": "revised+enabled",
+    "sha256": "3b51d82d7d15a5929d3527bdfe47ba1a3caff176554f0df05cd6f820f2275336"
+  },
+  "OUT-06": {
+    "case_id": "omitted_record",
+    "cell": "current+enabled",
+    "sha256": "99e392de879f9d07113651e436471819ef50db505b9d112b4d26fb6827ee1722"
+  },
+  "OUT-07": {
+    "case_id": "faithful_paraphrase",
+    "cell": "revised+enabled",
+    "sha256": "e72baaf3847045cd03cc615577c156986f5bafbbf1eda3cca3da384bd06dbc0d"
+  },
+  "OUT-08": {
+    "case_id": "wrong_record_attribution",
+    "cell": "current+enabled",
+    "sha256": "ae00ed8322bb2bbb997ee633961e0020322968a57ed4df504708aef1fd037d92"
+  },
+  "OUT-09": {
+    "case_id": "supported_method",
+    "cell": "revised+enabled",
+    "sha256": "9a1e60bba14f76f940edf813d4c63afbdef0b6ba1fb59df6e1b674b53c0b1cd6"
+  },
+  "OUT-10": {
+    "case_id": "unsupported_method",
+    "cell": "revised+enabled",
+    "sha256": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7"
+  },
+  "OUT-11": {
+    "case_id": "unsupported_method",
+    "cell": "current+advisory",
+    "sha256": "9bc6856fb944165a0b0865a0d2429ff5575303d739e7f574362194133f67ac06"
+  },
+  "OUT-12": {
+    "case_id": "transferable_skill",
+    "cell": "revised+advisory",
+    "sha256": "1a9642cf16f160cbe6c557b4d92e71858b7a24c187458619458f895e5ff973b2"
+  },
+  "OUT-13": {
+    "case_id": "missing_fact",
+    "cell": "revised+advisory",
+    "sha256": "76a3cad23a0eef05d487c18d0f82e5bc603b4a7bcdb284f421c0a206861150ed"
+  },
+  "OUT-14": {
+    "case_id": "supported_method",
+    "cell": "current+enabled",
+    "sha256": "9a1e60bba14f76f940edf813d4c63afbdef0b6ba1fb59df6e1b674b53c0b1cd6"
+  },
+  "OUT-15": {
+    "case_id": "wrong_record_attribution",
+    "cell": "revised+enabled",
+    "sha256": "ae00ed8322bb2bbb997ee633961e0020322968a57ed4df504708aef1fd037d92"
+  },
+  "OUT-16": {
+    "case_id": "missing_fact",
+    "cell": "current+advisory",
+    "sha256": "3b51d82d7d15a5929d3527bdfe47ba1a3caff176554f0df05cd6f820f2275336"
+  },
+  "OUT-17": {
+    "case_id": "supported_method",
+    "cell": "revised+advisory",
+    "sha256": "5f50e1b10d271a31f919810b888611092114c8ea2e47c4037a9d6a9b8ba5164a"
+  },
+  "OUT-18": {
+    "case_id": "faithful_paraphrase",
+    "cell": "current+advisory",
+    "sha256": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7"
+  },
+  "OUT-19": {
+    "case_id": "omitted_record",
+    "cell": "revised+enabled",
+    "sha256": "99e392de879f9d07113651e436471819ef50db505b9d112b4d26fb6827ee1722"
+  },
+  "OUT-20": {
+    "case_id": "transferable_skill",
+    "cell": "current+enabled",
+    "sha256": "1a9642cf16f160cbe6c557b4d92e71858b7a24c187458619458f895e5ff973b2"
+  },
+  "OUT-21": {
+    "case_id": "faithful_paraphrase",
+    "cell": "revised+advisory",
+    "sha256": "498004c26015a1ecb1dc0c0c4eed7fcf4a4706c7dc595ef1123a82a2a5755284"
+  },
+  "OUT-22": {
+    "case_id": "transferable_skill",
+    "cell": "current+advisory",
+    "sha256": "1a9642cf16f160cbe6c557b4d92e71858b7a24c187458619458f895e5ff973b2"
+  },
+  "OUT-23": {
+    "case_id": "omitted_record",
+    "cell": "revised+advisory",
+    "sha256": "99e392de879f9d07113651e436471819ef50db505b9d112b4d26fb6827ee1722"
+  },
+  "OUT-24": {
+    "case_id": "missing_fact",
+    "cell": "current+enabled",
+    "sha256": "3b51d82d7d15a5929d3527bdfe47ba1a3caff176554f0df05cd6f820f2275336"
+  },
+  "OUT-25": {
+    "case_id": "unsupported_method",
+    "cell": "revised+advisory",
+    "sha256": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7"
+  },
+  "OUT-26": {
+    "case_id": "supported_method",
+    "cell": "current+advisory",
+    "sha256": "9a1e60bba14f76f940edf813d4c63afbdef0b6ba1fb59df6e1b674b53c0b1cd6"
+  },
+  "OUT-27": {
+    "case_id": "omitted_record",
+    "cell": "current+advisory",
+    "sha256": "99e392de879f9d07113651e436471819ef50db505b9d112b4d26fb6827ee1722"
+  }
+}

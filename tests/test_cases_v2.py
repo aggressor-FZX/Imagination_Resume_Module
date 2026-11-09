@@ -468,6 +468,66 @@ def test_complete_refusal_of_an_approve_case_is_still_a_false_refusal():
     assert row["scored"] is True
 
 
+def test_operational_failure_is_not_double_counted_as_a_false_refusal():
+    """Measured while reporting the v2 matrix (2026-11-09).
+
+    An operational failure on a `revise` case was counted in BOTH the
+    `false_refusals` and `operational_failures` columns, inflating the failure
+    count for the arm that hit more parser problems. Each attempt belongs to one
+    column, and an operational failure is not evidence about faithfulness.
+    """
+    attempt = AttemptV2(case_id="missing_fact", cell="revised+advisory",
+                        mode="imaginative")
+    attempt.outcome = OUTCOME_OPERATIONAL
+    attempt.outcome_reason = "passage_not_in_draft:something"
+    row = score_v2(attempt, by_id("missing_fact"))
+    assert row["operational_failure"] is True
+    assert row["false_refusal"] is False
+    assert row["false_approval"] is False
+    assert row["correct_approval"] is False
+
+
+def test_operational_failure_on_an_approve_case_is_not_a_false_refusal():
+    attempt = AttemptV2(case_id="faithful_paraphrase", cell="current+advisory",
+                        mode="imaginative")
+    attempt.outcome = OUTCOME_OPERATIONAL
+    attempt.outcome_reason = "truncation"
+    attempt.complete = False
+    row = score_v2(attempt, by_id("faithful_paraphrase"))
+    assert row["false_refusal"] is False
+    assert row["scored"] is False
+
+
+def test_operational_failure_is_never_semantically_correct():
+    """Measured on the v2 matrix (2026-11-09).
+
+    `unsupported_method` expects `revise` and came back `operational_failure`,
+    which scored as semantically CORRECT because "not approved" was compared with
+    "expects revise". The harness had failed to parse the answer; crediting it with
+    a correct judgement is the exact conflation this work removes.
+    """
+    attempt = AttemptV2(case_id="unsupported_method", cell="revised+advisory",
+                        mode="imaginative")
+    attempt.outcome = OUTCOME_OPERATIONAL
+    attempt.outcome_reason = "revise_without_correction,revise_without_actionable_issue"
+    row = score_v2(attempt, by_id("unsupported_method"))
+    assert row["semantic_ok"] is None
+    assert row["operational_failure"] is True
+    assert row["false_approval"] is False
+    assert row["false_refusal"] is False
+
+
+def test_a_real_revise_refusal_counts_as_correct_on_a_revise_case():
+    """The guard must still credit an enabled cell that withholds correctly."""
+    attempt = AttemptV2(case_id="unsupported_method", cell="revised+enabled",
+                        mode="imaginative")
+    attempt.outcome = OUTCOME_REFUSED
+    attempt.outcome_reason = "semantic_revise_unresolved"
+    row = score_v2(attempt, by_id("unsupported_method"))
+    assert row["semantic_ok"] is True
+    assert row["false_refusal"] is False
+
+
 def test_revise_on_a_revise_case_is_correct_behaviour_not_failure():
     attempt = AttemptV2(case_id="unsupported_method", cell="revised+advisory",
                         mode="imaginative")
@@ -642,3 +702,47 @@ def test_markup_variant_does_not_make_an_invented_issue_actionable():
     assert parsed.structural_problems
     assert any("passage_not_in_draft" in p
                for p in parsed.structural_problems)
+
+
+# ══ 10. Two presentation defects measured in the v2 matrix ════════════════
+def test_list_marker_without_space_still_locates():
+    """Measured in the v2 matrix (2026-11-09).
+
+    The reviewer wrote `-Reduced rework …` where the draft has `- Reduced …`. One
+    missing space after the bullet rejected a correct review. The normaliser
+    canonicalises marker spacing, which cannot introduce content — only a bullet
+    that already exists.
+    """
+    draft = by_id("supported_method").draft_before_trim
+    located = dc.locate_passage(
+        "-Reduced rework by 18% through standardizing panel labeling.", draft)
+    assert located is not None
+    assert located in draft
+
+
+def test_slashed_problem_word_resolves_to_a_known_problem():
+    """Measured in the v2 matrix: `problem: omitted/misplaced`.
+
+    That is one observation expressed with TWO of the contract's own words, not an
+    unknown problem. The first recognised word wins.
+    """
+    assert dc._normalise_problem("omitted/misplaced") == dc.PROBLEM_OMITTED
+    assert dc._normalise_problem("unresolved,omitted") == dc.PROBLEM_UNRESOLVED
+
+
+def test_slashed_problem_with_no_known_word_still_fails():
+    """The slash tolerance must not become a way to accept any word."""
+    assert dc._normalise_problem("bogus/weird") not in dc.PROBLEMS
+
+
+def test_slashed_problem_word_passes_shape_check():
+    answer = ("Decision: revise\n\nIssues:\n"
+              "- passage: - Reduced rework by 18% through standardizing panel labeling.\n"
+              "  problem: omitted/misplaced\n"
+              "  sources: [candidate-main.txt]\n"
+              "  why: x\n"
+              "  correction: - Reduced rework by 18%.\n")
+    parsed = dc.decide_from_text(
+        answer, by_id("supported_method").draft_before_trim, SOURCES)
+    assert not any(p.startswith("problem_word_unknown")
+                   for p in parsed.structural_problems)

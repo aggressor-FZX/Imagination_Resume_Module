@@ -1,0 +1,8 @@
+{
+  "cell": "current+advisory",
+  "case_id": "missing_fact",
+  "mode": "imaginative",
+  "outcome": "reference_failure",
+  "expectation": null,
+  "document_sha256": "3b51d82d7d15a5929d3527bdfe47ba1a3caff176554f0df05cd6f820f2275336"
+}

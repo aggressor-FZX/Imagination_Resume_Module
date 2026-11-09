@@ -1,0 +1,85 @@
+# Corrected four-way comparison (v2)
+
+Model: `qwen/qwen3-coder` · 7 frozen cases × 4 cells = 28 attempts.
+Fixture fingerprint: `1aa800a3b14f22fd`
+Budget used: 40 calls, $0.0000 of $2.00.
+
+Preregistered in `results/PREREGISTRATION_V2.md` before the first call.
+
+## Contract probe (non-comparative)
+
+| Check | Result | Detail |
+|---|---|---|
+| `current_reaches_a_verdict` | PASS | decision='approve' complete=True reason=semantic_approve |
+| `revised_reaches_a_verdict` | PASS | decision='revise' complete=True reason=advisory_revise_noted |
+| `mode_distinction_is_observable` | PASS | conservative=approved/advisory_revise_noted, imaginative=approved/advisory_revise_noted |
+
+Probe verdict: **PASS**. These 4 calls are excluded from the matrix totals.
+
+## Per-cell totals
+
+| Cell | Scored | Incomplete | Reference failures | Correct approvals | False approvals | False refusals | Operational | Cost (USD) | Mean latency (s) |
+|---|---|---|---|---|---|---|---|---|---|
+| `current+advisory` | 3/7 | 1 | 3 | 2 | 1 | 0 | 1 | 0.00000 | 9.1 |
+| `current+enabled` | 4/7 | 0 | 3 | 1 | 1 | 1 | 0 | 0.00000 | 7.8 |
+| `revised+advisory` | 7/7 | 0 | 0 | 3 | 2 | 2 | 2 | 0.00000 | 5.3 |
+| `revised+enabled` | 7/7 | 0 | 0 | 0 | 0 | 3 | 0 | 0.00000 | 2.9 |
+
+## Per-case outcomes
+
+| Case | Expected | Cell | Outcome | Reason | Complete |
+|---|---|---|---|---|---|
+| `faithful_paraphrase` | approve | `current+advisory` | approved | semantic_approve | yes |
+| `supported_method` | approve | `current+advisory` | approved | semantic_approve | yes |
+| `unsupported_method` | revise | `current+advisory` | reference_failure | reference_fabricated | yes |
+| `missing_fact` | revise | `current+advisory` | reference_failure | reference_fabricated | yes |
+| `wrong_record_attribution` | revise | `current+advisory` | operational_failure | truncation | NO |
+| `transferable_skill` | approve | `current+advisory` | reference_failure | reference_fabricated | yes |
+| `omitted_record` | revise | `current+advisory` | approved | semantic_approve | yes |
+| `faithful_paraphrase` | approve | `current+enabled` | reference_failure | reference_fabricated | yes |
+| `supported_method` | approve | `current+enabled` | approved | semantic_approve | yes |
+| `unsupported_method` | revise | `current+enabled` | reference_failure | reference_fabricated | yes |
+| `missing_fact` | revise | `current+enabled` | reference_failure | reference_fabricated | yes |
+| `wrong_record_attribution` | revise | `current+enabled` | approved | semantic_approve | yes |
+| `transferable_skill` | approve | `current+enabled` | refused | semantic_revise_unresolved | yes |
+| `omitted_record` | revise | `current+enabled` | refused | semantic_revise_unresolved | yes |
+| `faithful_paraphrase` | approve | `revised+advisory` | approved | advisory_revise_noted | yes |
+| `supported_method` | approve | `revised+advisory` | approved | advisory_revise_noted | yes |
+| `unsupported_method` | revise | `revised+advisory` | operational_failure | revise_without_correction,revise_without_actionable_issue | yes |
+| `missing_fact` | revise | `revised+advisory` | operational_failure | passage_not_in_draft:Built the depot scorecard that supervisors review in the Mon | yes |
+| `wrong_record_attribution` | revise | `revised+advisory` | approved | advisory_revise_noted | yes |
+| `transferable_skill` | approve | `revised+advisory` | approved | advisory_revise_noted | yes |
+| `omitted_record` | revise | `revised+advisory` | approved | advisory_revise_noted | yes |
+| `faithful_paraphrase` | approve | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `supported_method` | approve | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `unsupported_method` | revise | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `missing_fact` | revise | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `wrong_record_attribution` | revise | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `transferable_skill` | approve | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+| `omitted_record` | revise | `revised+enabled` | refused | semantic_revise_unresolved | yes |
+
+## Output budget and truncation
+
+| Cell | finish_reason counts | max completion tokens |
+|---|---|---|
+| `current+advisory` | {'stop': 6} | 2449 |
+| `current+enabled` | {'stop': 7} | 3004 |
+| `revised+advisory` | {'stop': 12} | 393 |
+| `revised+enabled` | {'stop': 9} | 525 |
+
+## Omission handling
+
+| Cell | Case | Cited source | Grounded | Destination | Basis | Applied |
+|---|---|---|---|---|---|---|
+| `revised+advisory` | `faithful_paraphrase` | `candidate-supplement.txt` | yes | - Compared quarterly parts usage with the prior  | anchor_in_draft | no |
+
+`applied` must be `no` everywhere: the harness identifies an omission and never inserts text.
+
+
+## Limits
+
+- 1 of 28 attempts are incomplete and are excluded from approval-quality denominators.
+- Parser acceptance is NOT reported as semantic correctness.
+- `revise` is a workflow, not a failure.
+- A `reference:convention` result means the evidence was real and the offset differed; it is neither a refusal nor fabrication.
+- Expectations are the author's and remain **provisional** until the blind audit. No winner is declared here.
