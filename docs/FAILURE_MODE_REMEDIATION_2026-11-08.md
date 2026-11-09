@@ -356,13 +356,19 @@ so they can fail visibly:
 - `malformed_output` should drop, but not to zero: one re-ask per run, so a model
   that fails the same check twice still withholds.
 - `receipt_unavailable` should disappear entirely once the orchestrator half is
-  merged **and** `GUEST_CONTEXT_SECRET` is set. Without the secret it fails closed
-  and the reason will still appear — that is the intended behaviour, not a bug.
-- `no_op_repair`, `source_completeness_uncertain`, `source_facts_missing` should be
-  UNCHANGED. Those two fixes were reverted; only their message changed.
+  merged. **No secret is required**: `GUEST_CONTEXT_SECRET` was removed with the
+  derived-owner design, because a stored random owner needs no signing key.
+- `source_completeness_uncertain` should now often resolve instead of withholding,
+  via the bounded citation check (see "The traced cause" in `HANDOFF.md`).
+- `no_op_repair` and `source_facts_missing` should be UNCHANGED. Those fixes were
+  reverted; only their message changed.
 
-The earlier "4 of 9 withholds removed" figure is a claim about what the code now
-permits. It is not a measurement, and it should not be repeated as one.
+**Superseded.** The predictions above were written before the live run and before
+the cause was traced. The live run (`5/5 withheld`, `source_completeness_uncertain`
+dominant) showed the earlier "4 of 9 withholds removed" figure was a claim about
+what the code permits, not a measurement. The trace and its fix are recorded in
+`HANDOFF.md`; re-run `scripts/measure_withhold_mix.py` to compare against the
+17:xx baseline rather than trusting this list.
 
 ## Live result after deploy — actual, not estimated
 
@@ -431,7 +437,7 @@ no owner presented: False receipt_owner_mismatch
 
 `POST /api/guest/session` returns **404** live: the orchestrator half is on
 `guest-publication-trust` and NOT merged. The guest-session flow cannot be
-exercised end to end until that merge and `GUEST_CONTEXT_SECRET` are done.
+exercised end to end until that merge is done. No secret needs setting.
 
 ## Remaining / next
 

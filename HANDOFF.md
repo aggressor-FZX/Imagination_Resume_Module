@@ -78,22 +78,12 @@ onto `guest-publication-trust`, branched from `origin/master`, containing only
 (194 insertions into `server.cjs`, `node --check` clean, 23 tests pass in
 isolation).
 
-**To finish — three steps, in order:**
+**To finish:** open a PR from `guest-publication-trust` → `master` and merge it.
+No PR tooling is installed here; use the GitHub UI. **No secret needs setting** —
+`GUEST_CONTEXT_SECRET` was removed with the derived-owner design. The session
+token is the credential; the owner is 256 random bits stored in Redis.
 
-1. Open a PR from `guest-publication-trust` → `master` and merge it (no PR tooling
-   is installed here; use the GitHub UI).
-2. Set **`GUEST_CONTEXT_SECRET`** (≥16 chars) on `orchestrator-backend`. Without
-   it `POST /api/guest/session` returns 503 and `readGuestContext` returns
-   `guest_context_unconfigured` — the pipeline deliberately falls back to the old
-   withholding behaviour rather than trusting unauthenticated input, so the guest
-   fix stays inert (and the reason will keep appearing in measurements).
-3. Then run the live validation (below).
-
-Until 1 and 2 are done the orchestrator **discards** guest-owned approvals: it
-neither forwards a guest context on analyze nor accepts one on export. Net effect
-today is unchanged behaviour, not a regression.
-
-## Live validation to run after merge + secret
+## Live validation to run after merge
 
 Signed-out, real session:
 
@@ -138,8 +128,38 @@ authorization was verified offline against a real receipt (guest ok, account
 refused `receipt_owner_mismatch`, no owner refused).
 
 **Still blocked:** `POST /api/guest/session` returns 404 live — the orchestrator
-half is on `guest-publication-trust` and unmerged, and `GUEST_CONTEXT_SECRET` is
-unset. Merge + set the secret, then the guest flow can be exercised end to end.
+half is on `guest-publication-trust` and unmerged. Merge it (no secret required)
+and the guest flow can be exercised end to end.
+
+## The traced cause, and what changed (session 20)
+
+The 3-of-5 dominant withhold was traced against the **real** engine, not guessed:
+
+```
+phases: [source_inventory, initial_review]   status: withheld
+reason: source_completeness_uncertain        reviews: 1  repairs: 0
+```
+
+The reviewer declined to confirm a REQUIRED source claim and flagged no draft
+line. `repair` may only replace a *flagged* span, so no repair was reachable and
+the run withheld purely on the reviewer's uncertainty.
+
+**Fix:** one bounded question — name the draft line that already carries the fact —
+then verify it. The draft is never edited. Acceptance requires: the cited line
+exists with a non-empty span; the reviewer itself marked that claim `supported`;
+and the span is verbatim in the **item's own** source document. A moved fact still
+withholds, so `[transplanted_qualification]` still fails (rebuilt as a control).
+
+Two things the trace taught, both now encoded:
+- No `continue` after confirming. Re-entering the loop re-asks the same question,
+  the reviewer answers `uncertain` again, and the first version looped 112,377
+  times into `timeout_initial_review`.
+- Six scripted revisions of the trace failed identically until I captured the
+  actual raise site. `_Invalid` accepts a `constraint`, but most raise sites do not
+  pass one, so the message still reads "unspecified". Diagnosing a fail-closed
+  validator from its output alone is not reliable here.
+
+Suite: **1807 passed**, 13 skipped.
 
 ## Measurement, not estimation
 
