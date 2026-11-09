@@ -840,6 +840,14 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
     # The heading is emitted even when the section is empty: REQUIRED_HEADINGS
     # promises it and the delivered markdown keeps it, so dropping it here made
     # the two documents disagree about which sections exist. Measured 2026-11-07.
+    #
+    # This asymmetry with Education/Certifications is DELIBERATE and is recorded
+    # in ``section_contract.EMPTY_SECTION_APPEARANCE``. Making Projects
+    # conditional to match them was tried on 2026-11-08 and reverted: it broke
+    # the accepted guarantee that every promised heading reaches the exported
+    # file, which is pinned by tests/test_export_section_headings.py. A section
+    # set that disagrees between Markdown and the rendered document is the worse
+    # defect, so the promised-heading rule wins and the asymmetry stands.
     add_section_heading("Projects")
     if resume.projects:
         for section in resume.projects:

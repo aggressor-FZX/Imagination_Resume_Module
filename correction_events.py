@@ -26,6 +26,13 @@ _INTEGER_FIELDS = {
     "uncertain_source_claims",
     "required_source_claims",
     "source_claim_total",
+    # Completeness-contract counts. A count of lost sections separates "one
+    # section the writer dropped" from "almost the whole document was empty",
+    # which are different operator diagnoses for the same reason code. The
+    # section NAMES are deliberately not logged: they are few and fixed, but a
+    # count is enough to act on and the allow-list cannot leak text by accident.
+    "missing_sections",
+    "source_backed_sections",
 }
 _FLOAT_FIELDS = {"cost_usd"}
 _IDENTIFIER = re.compile(r"[a-z0-9_]{1,64}\Z")

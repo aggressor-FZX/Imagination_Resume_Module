@@ -2759,6 +2759,48 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 if structure_changes:
                     commentary = ("Correction " + " and ".join(structure_changes)
                                   + "; " + commentary)
+                # ── Completeness contract ────────────────────────────────
+                # Every section the CANDIDATE's documents populate must still
+                # carry content here. A heading that was re-inserted empty is
+                # not completeness: it names a section and delivers nothing,
+                # which is worse than omitting it because the document then
+                # claims a section it does not have.
+                #
+                # Measured 2026-11-08 on ``realistic_candidate``: a writer draft
+                # that omits Professional Experience gets an empty heading from
+                # ``ensure_required_headings``, the employer records vanish, and
+                # nothing deterministic stopped publication. Education, Skills
+                # and Certifications were already protected by their restorers;
+                # Experience and Projects were not, and inventing a restorer for
+                # them would compose prose out of employer records.
+                #
+                # So the answer for a lost section is to REFUSE, not to
+                # synthesise. The contract only fires when the source provides
+                # content the output lost, so a candidate with no projects is
+                # unaffected.
+                try:
+                    from section_contract import shortfall
+                    # ``sources`` is a tuple of SourceDocument, not a mapping.
+                    # The first version of this call used ``.values()``, which
+                    # raised AttributeError on every run; the guarded branch then
+                    # withheld with ``section_contract_unavailable`` and 100+
+                    # legitimate approvals turned into refusals. A contract that
+                    # fails closed is right, but it must be exercised by a test
+                    # that asserts a KNOWN-GOOD document still approves —
+                    # otherwise "fails closed" and "always fails" look identical.
+                    _losses = shortfall(markdown, "\n".join(
+                        document.text for document in sources))
+                except Exception:
+                    # A contract that cannot evaluate must not silently pass a
+                    # document it was never able to check.
+                    return blocked("section_contract_unavailable")
+                if _losses:
+                    events.emit("correction.completeness",
+                                outcome="withheld",
+                                reason="source_section_missing",
+                                missing_sections=len(_losses),
+                                source_backed_sections=len(_losses))
+                    return blocked("source_section_missing")
                 return CorrectionResult(
                     "approved", markdown, None,
                     commentary,
