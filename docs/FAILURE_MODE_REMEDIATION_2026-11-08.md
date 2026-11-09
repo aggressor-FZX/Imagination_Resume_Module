@@ -59,6 +59,16 @@ Now `_review_message_for(reason)` selects between two classes:
 - **content** (`_CONTENT_REASONS`): *"We could not confirm every detail of your
   resume against the document you uploaded…"*
 
+- **actionable** (`_ACTIONABLE_REASONS`, currently `receipt_unavailable`):
+  *"Your resume passed review, but it could not be released to a signed-in
+  account. Please sign in to continue."*
+
+  This class is neither of the other two. Retrying cannot fix it, and it is not a
+  judgement on the document: a receipt that could not be bound to an owner fails
+  identically every time the visitor stays logged out. "Please try again" would be
+  as wrong here as "your resume could not be verified" — both send the user
+  somewhere useless.
+
 An unknown reason defaults to **infrastructure** (retryable, non-accusatory):
 inviting a retry costs one request, while telling someone to re-check a resume
 that was actually fine costs them work.
@@ -230,7 +240,7 @@ OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z \
   --ignore=tests/test_loader_source_preservation_offline.py
 ```
 
-**1781 passed, 13 skipped** (was 1780; +19 new tests in
+**1800 passed, 13 skipped** (was 1780; +20 new tests in
 `tests/test_free_trial_publication_owner.py`).
 
 Tests updated because their expectation legitimately changed:

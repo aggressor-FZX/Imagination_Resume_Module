@@ -359,10 +359,16 @@ _INFRASTRUCTURE_REASONS = frozenset({
     # change a span it had itself flagged. Neither is evidence about the document.
     "malformed_output", "malformed_source_inventory", "no_op_repair",
     "incomplete_review", "correction_failed", "analysis_failed",
-    "receipt_unavailable", "receipt_signing_unavailable",
+    "receipt_signing_unavailable",
     "render_contract_ambiguous", "section_contract_unavailable",
     "source_documents_mismatch",
 })
+
+# A third class, deliberately NOT folded into infrastructure: the user CAN fix it,
+# but not by retrying the same request. "Please try again" would be as wrong here
+# as "your resume could not be verified" -- a receipt that could not be bound to
+# an owner fails identically every time the visitor stays logged out.
+_ACTIONABLE_REASONS = frozenset({"receipt_unavailable"})
 
 # The opposite class: the reviewer could not substantiate something IN the
 # document. Only these may be phrased as a statement about the resume.
@@ -377,6 +383,8 @@ _RETRY_MESSAGE = ("Our review service could not finish checking your resume in "
 _CONTENT_MESSAGE = ("We could not confirm every detail of your resume against "
                     "the document you uploaded. Please review the flagged "
                     "details and try again.")
+_ACTIONABLE_MESSAGE = ("Your resume passed review, but it could not be released "
+                      "to a signed-in account. Please sign in to continue.")
 
 
 def _review_message_for(reason):
@@ -395,6 +403,8 @@ def _review_message_for(reason):
     """
     if reason in _CONTENT_REASONS:
         return _CONTENT_MESSAGE
+    if reason in _ACTIONABLE_REASONS:
+        return _ACTIONABLE_MESSAGE
     return _RETRY_MESSAGE
 
 
@@ -415,7 +425,10 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
     """
     reasons = decision.reason_codes if decision and decision.blocked() else [reason]
     primary = reasons[0]
-    retryable = primary not in _CONTENT_REASONS
+    # True only when repeating the SAME request could succeed. An actionable
+    # reason is neither retryable nor a content judgement: it needs a sign-in.
+    retryable = (primary not in _CONTENT_REASONS
+                 and primary not in _ACTIONABLE_REASONS)
     return AnalysisResponse(
         processing_status="needs_review", requires_review=True,
         review_reason=primary, review_reasons=reasons,

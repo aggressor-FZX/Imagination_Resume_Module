@@ -106,7 +106,6 @@ def test_visitor_owner_can_never_collide_with_an_account_id():
     ("malformed_output", True),
     ("no_op_repair", True),
     ("provider_unavailable", True),
-    ("receipt_unavailable", True),
     # The document could not be substantiated.
     ("source_facts_missing", False),
     ("source_completeness_uncertain", False),
@@ -129,6 +128,29 @@ def test_review_message_never_blames_the_resume_for_our_failures(reason, expect_
         assert "not rejected" in message
     else:
         assert "could not confirm" in message
+
+
+def test_receipt_unavailable_is_actionable_not_retryable():
+    """Retrying cannot fix it, and it is not a judgement on the document.
+
+    A receipt that could not be bound to an owner fails identically every time the
+    visitor stays logged out. "Please try again" would be as wrong here as "your
+    resume could not be verified" -- both send the user somewhere useless.
+    """
+    message = app_module._review_message_for("receipt_unavailable")
+    assert message == app_module._ACTIONABLE_MESSAGE
+    assert "sign in" in message.lower()
+    assert "receipt_unavailable" in app_module._ACTIONABLE_REASONS
+    assert "receipt_unavailable" not in app_module._CONTENT_REASONS
+    # Neither class: it is fixable, but not by repeating the request.
+    withheld = app_module._withhold_correction(
+        reason="receipt_unavailable", pipeline_status="completed",
+        metrics={"calls": [], "failures": [], "total_prompt_tokens": 0,
+                 "total_completion_tokens": 0, "total_tokens": 0,
+                 "estimated_cost_usd": 0.0},
+        start_time=0.0)
+    assert withheld.retryable is False
+    assert withheld.review_message == app_module._ACTIONABLE_MESSAGE
 
 
 def test_an_unknown_reason_is_treated_as_retryable():
