@@ -150,14 +150,19 @@ async def get_api_key(api_key: str = Security(api_key_header)):
 # The header is only meaningful because the request already passed `get_api_key`;
 # an unauthenticated caller cannot set it at all.
 OWNER_IDENTITY_HEADER = "x-cogito-owner-id"
-# Distinct from the account owner. A free-trial visitor has no account, so the
-# account header is legitimately empty; sending a visitor id there would mint an
-# approval that looks account-owned but is device-owned, and export could then
-# not tell the two apart. Keeping it in its own header preserves the type at the
-# point where it matters.
-VISITOR_IDENTITY_HEADER = "x-cogito-visitor-id"
-VISITOR_OWNER_PREFIX = "visitor:"
-_VISITOR_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{11,128}")
+# A guest owner, distinct from an account owner. A signed-out visitor has no
+# account, so the account header is legitimately empty; putting a device value
+# there would mint an approval that LOOKS account-owned and could then be spent
+# under a stale sign-in. Its own header keeps the type explicit.
+#
+# The value is NOT a raw visitor id. The orchestrator derives it as `guest:<hash>`
+# from a signed cookie it minted after checking a real free-trial record (see
+# Login_Landing_page/backend/services/guestSession.js). This service therefore
+# never has to trust a client-chosen string: it only has to check the namespace,
+# and the binding is provided by the orchestrator's signature.
+GUEST_IDENTITY_HEADER = "x-cogito-guest-id"
+GUEST_OWNER_PREFIX = "guest:"
+_GUEST_OWNER_PATTERN = re.compile(r"guest:[A-Za-z0-9_-]{16,128}")
 
 
 def trusted_owner_identity(request) -> Optional[str]:
@@ -175,55 +180,53 @@ def trusted_owner_identity(request) -> Optional[str]:
     return value or None
 
 
-def trusted_visitor_identity(request) -> Optional[str]:
-    """Free-trial device identity from the authenticated request context, or None.
+def trusted_guest_identity(request) -> Optional[str]:
+    """A server-derived guest owner from the request context, or None.
 
     Reads ONLY the dedicated header, for the same reason the account owner does:
     a body field would let the caller nominate whose approval this is.
 
-    The value is namespaced (``visitor:<id>``) so it can never collide with an
-    account id. That distinction is load-bearing: an account id is a verified
-    login, while a device id is a cookie the user can clear. Namespacing keeps
-    every consumer able to tell which kind of claim it is holding, and export
-    refuses a visitor approval when the caller presented an account (upgrade
-    path) so a device-bound approval can never be spent under a stale cookie.
+    The value's provenance lives upstream. The orchestrator mints it as
+    ``guest:<hash>`` from a cookie IT signed after confirming a real
+    ``credits.free_trials`` record, so a client cannot produce this value by
+    typing a visitor id. This function enforces the namespace and shape; it is not
+    a substitute for that signature, and a direct caller speaking to this service
+    without the orchestrator gets no guest owner at all.
 
-    Malformed values are rejected rather than hashed: a short or odd id is a
-    caller bug, and binding an approval to it would silently weaken the binding.
+    The namespace is load-bearing: an account id is a verified login, while a guest
+    owner is a device capability. Keeping them disjoint means export can always
+    tell which claim it holds, and a guest approval can never be spent under a
+    stale sign-in.
     """
     try:
-        raw = request.headers.get(VISITOR_IDENTITY_HEADER)
+        raw = request.headers.get(GUEST_IDENTITY_HEADER)
     except Exception:  # noqa: BLE001
         return None
     value = (raw or "").strip()
-    if not value or not _VISITOR_ID_PATTERN.fullmatch(value):
+    if not value or not _GUEST_OWNER_PATTERN.fullmatch(value):
         return None
-    # A browser fallback id is not a stable device identity, so it must not be
-    # used to bind an approval that survives the session.
-    if value.startswith("fallback_"):
-        return None
-    return VISITOR_OWNER_PREFIX + value
+    return value
 
 
 def resolve_publication_owner(request):
     """The identity an approval may be bound to, and whether it is an account.
 
-    A signed-in account always wins: it is a verified login, and an approval
-    minted under it can be re-verified later. A free-trial visitor is a real
-    person who paid with credits and is entitled to the resume they paid for, so
-    a stable device identity is a legitimate owner -- refusing it discarded
-    completed work for being logged out.
+    A signed-in account always wins: it is a verified login, and an approval minted
+    under it can be re-verified later. A free-trial guest is a real person who paid
+    with credits and is entitled to the resume they paid for, so a server-verified
+    guest capability is a legitimate owner -- refusing it discarded completed work
+    for being logged out.
 
-    Returns ``(owner, is_account)``. ``owner`` is None only when neither identity
-    is available, which means no trustworthy binding exists and the approval must
-    not be issued.
+    Returns ``(owner, is_account)``. ``owner`` is None only when neither identity is
+    available, which means no trustworthy binding exists and the approval must not
+    be issued.
     """
     account = trusted_owner_identity(request)
     if account:
         return account, True
-    visitor = trusted_visitor_identity(request)
-    if visitor:
-        return visitor, False
+    guest = trusted_guest_identity(request)
+    if guest:
+        return guest, False
     return None, False
 
 
@@ -1097,7 +1100,7 @@ async def _analyze_resume_impl(
             # Tells the client which kind of approval it holds, so it can ask for a
             # sign-in before export (account-bound) or not (device-bound).
             output["publication_owner_kind"] = (
-                "account" if owner_is_account else "visitor")
+                "account" if owner_is_account else "guest")
             # The compatibility experience alias must derive from the signed
             # render payload, never from the earlier Drafter output.
             output["experiences"] = [
@@ -1258,7 +1261,7 @@ async def _analyze_resume_impl(
         output = _issue_publication_receipt(output, owner=_owner)
         if _owner:
             output["publication_owner_kind"] = (
-                "account" if _owner_is_account else "visitor")
+                "account" if _owner_is_account else "guest")
 
         ## Validate output schema
         validate_output_schema(output)

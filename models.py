@@ -495,11 +495,11 @@ class AnalysisResponse(BaseModel):
     publication_owner_kind: Optional[str] = Field(
         None,
         description=(
-            "'account' | 'visitor'. Which identity the approval receipt is bound "
-            "to. A 'visitor' approval belongs to a free-trial device and can be "
-            "exported without signing in; an 'account' approval requires the "
-            "matching signed-in user. Declared here because AnalysisResponse "
-            "silently drops undeclared keys."
+            "'account' | 'guest'. Which identity the approval receipt is bound "
+            "to. A 'guest' approval belongs to a free-trial device whose context "
+            "the orchestrator signed, and can be exported without signing in; an "
+            "'account' approval requires the matching signed-in user. Declared "
+            "here because AnalysisResponse silently drops undeclared keys."
         ),
     )
     review_message: Optional[str] = Field(

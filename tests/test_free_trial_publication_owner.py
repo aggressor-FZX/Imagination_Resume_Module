@@ -50,13 +50,20 @@ def _client(headers):
 _REQUEST = []
 
 
+# A guest owner is `guest:<hash>` derived by the ORCHESTRATOR from a cookie it
+# signed. This service never sees a raw visitor id: it only checks the namespace
+# and shape, because the provenance is established upstream. That is the whole
+# point -- a client cannot produce this value by typing an id.
+GUEST_OWNER = "guest:" + "A1b2C3d4E5f6G7h8I9j0K1l2"
+
+
 @pytest.mark.parametrize("headers,expected,is_account", [
-    # A signed-in account always wins, even if a device id is also present.
-    ({"x-cogito-owner-id": "42", "x-cogito-visitor-id": "AbCdEfGhIjK"},
+    # A signed-in account always wins, even if a guest capability is present.
+    ({"x-cogito-owner-id": "42", "x-cogito-guest-id": GUEST_OWNER},
      "42", True),
-    # A free-trial visitor becomes a namespaced owner. Without this the approval
+    # A verified guest capability becomes the owner. Without this the approval
     # was withheld and the resume discarded.
-    ({"x-cogito-visitor-id": "AbCdEfGhIjK"}, "visitor:AbCdEfGhIjK", False),
+    ({"x-cogito-guest-id": GUEST_OWNER}, GUEST_OWNER, False),
 ])
 def test_resolved_owner_and_kind(headers, expected, is_account):
     client, _ = _client(headers)
@@ -66,11 +73,12 @@ def test_resolved_owner_and_kind(headers, expected, is_account):
 
 
 @pytest.mark.parametrize("headers", [
-    {},                                                  # no identity at all
-    {"x-cogito-visitor-id": "short"},                     # below the minimum
-    {"x-cogito-visitor-id": "fallback_abcdefghijk"},      # browser fallback id
-    {"x-cogito-visitor-id": "has spaces in it"},          # not a device id
-    {"x-cogito-visitor-id": "A" * 200},                   # unreasonable length
+    {},                                          # no identity at all
+    {"x-cogito-guest-id": "short"},              # below the minimum
+    {"x-cogito-guest-id": "AbCdEfGhIjK"},        # raw visitor id, no namespace
+    {"x-cogito-guest-id": "fallback_abcdefghijk"},
+    {"x-cogito-guest-id": "guest:has spaces"},   # not a hash
+    {"x-cogito-guest-id": "guest:" + "A" * 200},  # unreasonable length
 ])
 def test_untrustworthy_identity_yields_no_owner(headers):
     """No owner means the approval is withheld -- which is correct here.
@@ -84,19 +92,19 @@ def test_untrustworthy_identity_yields_no_owner(headers):
     assert body["is_account"] is False
 
 
-def test_visitor_owner_can_never_collide_with_an_account_id():
+def test_guest_owner_can_never_collide_with_an_account_id():
     """The namespace is load-bearing.
 
     An account id is a verified login; a device id is a clearable cookie. If the
     two could produce the same receipt owner, a visitor-bound approval would be
     indistinguishable from an account-bound one at export.
     """
-    assert app_module.VISITOR_OWNER_PREFIX.endswith(":")
+    assert app_module.GUEST_OWNER_PREFIX.endswith(":")
     # A numeric account id can never be produced by the visitor path, because the
     # prefix is always applied.
-    visitor_owner = app_module.VISITOR_OWNER_PREFIX + "42"
-    assert visitor_owner != "42"
-    assert not visitor_owner.isdigit()
+    guest_owner = app_module.GUEST_OWNER_PREFIX + "42"
+    assert guest_owner != "42"
+    assert not guest_owner.isdigit()
 
 
 @pytest.mark.parametrize("reason,expect_retry", [
