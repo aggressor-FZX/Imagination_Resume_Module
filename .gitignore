@@ -12,3 +12,6 @@ venv/
 # Real-model synthetic correction captures hold complete resume-shaped text;
 # never commit them. See correction_capture.py.
 captures/
+captures/repro/out.pdf
+captures/repro/out.docx
+captures/repro/approved-markdown.md
