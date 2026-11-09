@@ -150,36 +150,71 @@ The fix keeps the security invariant rather than weakening it:
 - New `publication_owner_kind` field (`account` | `guest`) tells the client which
   kind of approval it holds.
 
-### Guest trust model — why `X-Visitor-ID` is not an owner
+### Guest trust model — three designs, two wrong
 
-The first version of this fix bound the approval to `X-Visitor-ID`. **That was
-unsound.** The value is chosen by the client (the FingerprintJS SDK writes it to
-`localStorage`), and the server's `fp_visitor_id` cookie is itself populated from
-`req.body.visitorId` (`controllers/fingerprintController.js`). Neither channel
-proves provenance, so anyone who typed another person's visitor id would be handed
-that person's **approved resume** — full contact details and employment history.
+**Design 1: `X-Visitor-ID` as the owner.** The value is chosen by the client (the
+FingerprintJS SDK writes it to `localStorage`), and the server's `fp_visitor_id`
+cookie is itself populated from `req.body.visitorId`
+(`controllers/fingerprintController.js`). Neither channel proves provenance.
 
-The replacement requires BOTH of:
+> **Correction to an earlier claim in this document.** I previously wrote that
+> anyone typing another person's visitor id "would be handed that person's
+> approved resume — full contact details and employment history." **That was not
+> established.** There is no retrieval endpoint and no persisted approval in the
+> Imaginator, and export renders markdown the client already supplies, verified
+> against the receipt's content fingerprint. The real exposure was narrower:
+> forged *provenance* (an owner the caller could not be shown to hold) and, via
+> the credit routes, the ability to attribute spend to another visitor's
+> allowance. Stating it as document disclosure overstated what the code can do.
 
-1. a `guest_ctx` cookie **this server minted**, carrying an HMAC over the visitor
-   id and its issue time; and
-2. a `credits.free_trials` row for that id, written server-side when an allowance
-   is disbursed — checked at mint time (`POST /api/guest/session`).
+**Design 2: an HMAC over the visitor id, minted on request.** This looked like it
+fixed design 1 and did not. The mint endpoint signed ANY well-formed visitor id
+after only checking that a `credits.free_trials` row existed for it. **A database
+row is not proof of possession** — it is a fact about the id, not about the
+caller. So the "signature" attested only that the caller could name an id, and
+anyone could obtain a valid context for someone else's id by asking.
 
-Neither is sufficient alone. (1) rejects a forged context because the HMAC cannot
-be recomputed without the key. (2) rejects a cookie never backed by a real
-allowance. The owner is `guest:<hash>` over the id and the **signed** issue time,
-so it differs per guest, can never equal an account id, and does not leak the id.
+**Design 3 (current): an unpredictable server-issued session.**
 
-Fails closed in two places: with no `GUEST_CONTEXT_SECRET` the mint returns 503
-and `readGuestContext` returns `guest_context_unconfigured`, so the pipeline keeps
-its previous withholding behaviour rather than trusting unauthenticated input; and
-a cookie describing a *different* visitor id is a mismatch, not a pass.
+- 256 bits from `crypto.randomBytes` — not guessable, not derivable from any
+  fingerprint. The token carries no identity; the server-side record does.
+- Stored in Redis (reusing the existing client) as `token → {visitorId, issuedAt}`
+  with a TTL, so it is genuinely revocable.
+- **Issuance requires proof of possession**: the caller must present the httpOnly
+  `fp_visitor_id` cookie *the server set*, matching the id it claims. Page script
+  cannot read or forge that cookie, so presenting it is evidence the caller is the
+  browser it was issued to. Naming an id in a body satisfies nothing.
+- **Issuance is idempotent.** Re-initializing reuses the existing session and its
+  owner, so a page refresh cannot orphan a receipt the user already holds.
+- **Fingerprinting stays separate.** `fp_visitor_id` answers "which device" and
+  drives allowance accounting; `guest_sid` answers "what may this browser
+  authorize" and is the only thing that can become an approval owner.
 
-Capability semantics, stated honestly: a device cookie can be copied by whoever
-holds it, exactly like a session token. The bar here is "no worse than the
-allowance itself" (100 credits), not bank-grade identity. What matters is that it
-is no longer *worse* — an attacker previously needed only to type a string.
+Export is authorized against **every owner the request can prove** (account first,
+then a live guest session), because a guest-bound receipt must still export after
+the user signs in — otherwise they would be charged for a second analysis to
+re-issue a document they already own. Each attempt presents one identity; the
+signed receipt accepts exactly one. Ownership is never transferred or re-signed.
+
+The guest session is **NOT cleared on sign-in**, for that reason. Both identities
+coexisting is not an escalation: each unlocks only approvals bound to itself.
+
+#### Revocation, stated accurately
+
+Deleting the record **does** revoke the token: verification is a server-side lookup,
+not a signature the holder keeps, so a deleted session stops working immediately
+(tested). What revocation does **not** do is un-share a token that has already been
+copied to another device — a copy opens its own session under the same visitor id,
+and there is no device binding to appeal to. That is the same property every
+cookie-based session has, and it is why the token is 256 random bits rather than
+anything derived from a fingerprint.
+
+#### The limit this design accepts
+
+Possession of the token **is** the capability. Someone who copies it can use it.
+What design 3 prevents is a caller *obtaining* a session for an id it cannot prove
+— the specific hole in design 2. That distinction is asserted directly in the
+tests so it cannot be quietly lost.
 
 Verified offline end-to-end with a real receipt:
 
@@ -190,11 +225,12 @@ account presenting guest receipt: False receipt_owner_mismatch
 no owner presented: False receipt_owner_mismatch
 ```
 
-23 tests (`backend/tests/integration/guestPublicationContext.test.js`): two
-distinct guests cannot use each other's context; forged, edited-id and
-edited-timestamp cookies are refused; expired contexts refused despite a valid
-signature; missing cookie/id/secret fails closed; the browser `fallback_` id can
-never be an owner; account outranks guest; namespaces cannot collide.
+43 tests: `backend/tests/integration/guestSession.test.js` (25, helper) and
+`guestSessionRoutes.test.js` (18, route-level). Route coverage includes the attack
+that matters — an uncredentialed caller naming an existing visitor id receives
+`403 guest_possession_unproven` and no cookie — plus idempotent re-initialization,
+owner forwarding on analyze, export retry-on-owner-mismatch, and the
+guest → sign-in → download path.
 
 ---
 

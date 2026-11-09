@@ -2426,7 +2426,12 @@ async def export_resume(payload: Dict[str, Any], request: Request, api_key: str 
         _export_markdown = (payload.get("final_written_section_markdown")
                             or _markdown_from_export_payload(payload))
         _receipt = payload.get("publication_receipt")
-        _owner = trusted_owner_identity(request)
+        # Accept either identity the orchestrator may present. It retries each
+        # owner it can prove, so a receipt minted for a guest session exports
+        # normally after the user signs in — without a second, charged analysis.
+        # Which one was presented is decided upstream; here both are equally
+        # valid claims, and the signature decides.
+        _owner = trusted_owner_identity(request) or trusted_guest_identity(request)
         if not _owner:
             logger.warning(
                 "resume.export.blocked",
