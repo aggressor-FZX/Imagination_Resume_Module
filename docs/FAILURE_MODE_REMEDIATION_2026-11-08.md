@@ -364,6 +364,75 @@ so they can fail visibly:
 The earlier "4 of 9 withholds removed" figure is a claim about what the code now
 permits. It is not a measurement, and it should not be repeated as one.
 
+## Live result after deploy — actual, not estimated
+
+Run on 2026-11-09 06:27–06:32 UTC against the live Imaginator (`25c3af16`), five
+real `/analyze` submissions with a guest owner header, reporting SUBMISSION and
+EXPORT separately.
+
+### Submission outcomes (every attempt)
+
+| # | http | correction_status | reason | receipt |
+|---|---|---|---|---|
+| 1 | 200 | withheld | `incomplete_review` | no |
+| 2 | 200 | withheld | `source_completeness_uncertain` | no |
+| 3 | 200 | withheld | `no_op_repair` | no |
+| 4 | 200 | withheld | `source_completeness_uncertain` | no |
+| 5 | 200 | withheld | `source_completeness_uncertain` | no |
+
+`scripts/measure_withhold_mix.py --hours 2` over the same window:
+
+```
+correction runs  : 5
+  approved       : 0
+  withheld       : 5  (100%)
+source_completeness_uncertain  3  [content]
+incomplete_review              1  [infrastructure]
+no_op_repair                   1  [infrastructure]
+```
+
+### What this actually shows
+
+**The deadline fix is live and working.** `correction.budget` events now report
+`budget_ms` of 110,065–131,444 following the real clock
+(`upstream 180000 − reserve 20000 − pipeline_elapsed`), where the old code passed a
+flat 120,000. **Zero timeouts occurred in five runs**, against 3 in the comparable
+pre-deploy window.
+
+**But it did not move the failure rate, because timeouts were no longer the
+dominant cause.** The real message is that my remediation targeted the wrong
+reason. `source_completeness_uncertain` — the reason I implemented a fix for and
+then **reverted** because both attempts approved transplanted content — is now the
+single largest withhold cause (3 of 5). That is the honest finding, and it means:
+
+- the earlier "4 of 9 withholds removed" estimate overstated the practical effect;
+- the biggest remaining win is the citation-aware attribution fix I declined to
+  ship, not the deadline change.
+
+**`incomplete_review` returned**, which the pre-deploy window had not shown. It is
+infrastructure-class and was not part of this remediation.
+
+### Export could not be validated live
+
+No approval was obtained in five attempts, so there was no receipt to export.
+**Item 7's PDF/DOCX download validation is therefore NOT done.** Reporting an
+export result here would require inventing one.
+
+Export authorization itself was verified offline against a real minted receipt:
+
+```
+receipt minted: True
+guest export: True ok
+account presenting guest receipt: False receipt_owner_mismatch
+no owner presented: False receipt_owner_mismatch
+```
+
+### Also still blocked
+
+`POST /api/guest/session` returns **404** live: the orchestrator half is on
+`guest-publication-trust` and NOT merged. The guest-session flow cannot be
+exercised end to end until that merge and `GUEST_CONTEXT_SECRET` are done.
+
 ## Remaining / next
 
 1. **Frontend**: surface `retryable` as a retry affordance, and

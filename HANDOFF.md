@@ -108,6 +108,39 @@ Signed-out, real session:
   analysis while signed in exports normally with
   `publication_owner_kind: "account"`.
 
+## Live result: the deadline fix works; the failure rate did not move
+
+Five real submissions against the live Imaginator (`25c3af16`), 2026-11-09
+06:27–06:32 UTC. **5 of 5 withheld.** Reasons:
+
+```
+source_completeness_uncertain  3
+incomplete_review              1
+no_op_repair                   1
+```
+
+**What is proven:** the deadline fix is live. `correction.budget` now reports
+110,065–131,444 ms following the real clock, instead of a flat 120,000. **Zero
+timeouts in five runs**, versus 3 in the pre-deploy window.
+
+**What this means honestly:** it did not move the failure rate, because timeouts
+were not the dominant cause any more. `source_completeness_uncertain` — the reason
+whose fix I implemented and **reverted** because both attempts approved
+transplanted content — is now the largest single cause (3 of 5). The earlier
+"4 of 9 withholds removed" estimate overstated the practical effect. The biggest
+remaining win is the citation-aware attribution fix, not the deadline change.
+
+`incomplete_review` also reappeared; the pre-deploy window had not shown it.
+
+**Not validated:** PDF/DOCX download. No approval was obtained, so there was no
+receipt to export. Stating an export result would require inventing one. Export
+authorization was verified offline against a real receipt (guest ok, account
+refused `receipt_owner_mismatch`, no owner refused).
+
+**Still blocked:** `POST /api/guest/session` returns 404 live — the orchestrator
+half is on `guest-publication-trust` and unmerged, and `GUEST_CONTEXT_SECRET` is
+unset. Merge + set the secret, then the guest flow can be exercised end to end.
+
 ## Measurement, not estimation
 
 `scripts/measure_withhold_mix.py` reports the ACTUAL mix from live events. Baseline
