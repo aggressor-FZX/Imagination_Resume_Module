@@ -249,12 +249,15 @@ def test_the_empty_section_appearance_is_recorded_in_one_place():
     assert appearance["markdown"] == "heading_without_body"
     assert appearance["pdf"] == "heading_without_body"
     assert appearance["docx"] == "heading_without_body"
-    # The known asymmetry is stated, not hidden.
-    assert "Projects is unconditional" in appearance["note"]
+    # All five core sections are unconditional in every format.
+    assert "All five CORE_SECTIONS are unconditional" in appearance["note"]
+    assert contract.CORE_SECTIONS == (
+        "Professional Experience", "Projects", "Education", "Certifications",
+        "Technical Skills")
 
 
-def test_an_empty_section_is_omitted_from_the_rendered_docx():
-    """Measured behaviour: a section with no content produces no DOCX heading.
+def test_every_core_section_is_present_in_the_rendered_docx():
+    """RESOLVED POLICY: every core section is present, empty, nothing invented.
 
     Education and Certifications are conditional in the builder, so a sparse
     candidate's DOCX simply has no such heading. This pins the appearance the
@@ -281,8 +284,13 @@ def test_an_empty_section_is_omitted_from_the_rendered_docx():
     result = build_resume_from_payload_base64(dict(sparse))
     document = Document(io.BytesIO(base64.b64decode(result["docx_base64"])))
     paragraphs = [p.text.strip() for p in document.paragraphs if p.text.strip()]
-    assert "Education" not in paragraphs
-    assert "Certifications" not in paragraphs
+    # RESOLVED POLICY 2026-11-08: every core section is present, empty, and
+    # nothing is invented under it. This test previously asserted the opposite
+    # (that empty sections vanish), which was the behaviour the policy replaced.
+    for heading in contract.CORE_SECTIONS:
+        assert heading in paragraphs, heading
+    for invented in ("None provided", "Statistical and Predictive Modeling"):
+        assert invented not in paragraphs
 
 
 # ── Scope: what the existing checks already cover ────────────────────────
@@ -347,3 +355,223 @@ def test_the_contract_actually_runs_on_the_approval_path():
     assert result.status == "approved", (result.status, result.reason)
     assert calls["n"] == 1, (
         "the completeness contract was not evaluated on the approval path")
+
+
+# ── The resolved policy, applied and tested in all three formats ────────
+
+def _render_all(payload):
+    """Render Markdown, PDF text and DOCX text for one payload."""
+    import base64
+    import io
+    import shutil
+    import subprocess
+    import tempfile
+    import pathlib
+
+    from docx import Document
+    from resume_builder.build_resume_from_export import (
+        build_resume_from_payload_base64,
+    )
+
+    result = build_resume_from_payload_base64(dict(payload))
+    document = Document(io.BytesIO(base64.b64decode(result["docx_base64"])))
+    docx = "\n".join(p.text for p in document.paragraphs)
+
+    pdf = ""
+    if shutil.which("pdftotext"):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "r.pdf"
+            path.write_bytes(base64.b64decode(result["pdf_base64"]))
+            pdf = subprocess.run(["pdftotext", "-layout", str(path), "-"],
+                                 capture_output=True, text=True).stdout
+    return docx, pdf
+
+
+SPARSE_PAYLOAD = {
+    "name": "Sparse Candidate", "headline": "Electrician",
+    "summary": "Electrician with 10 years in commercial construction.",
+    "skills": [], "experience": [], "education": [],
+    "certifications": [], "projects": [],
+}
+
+
+def test_every_core_section_is_present_in_pdf_and_docx_when_empty():
+    """The policy, applied: all five core sections appear even with no content.
+
+    Measured before this change: Markdown carried all five, while PDF and DOCX
+    carried only ``Projects``. Three artefacts of one run disagreed about which
+    sections exist.
+    """
+    docx, pdf = _render_all(SPARSE_PAYLOAD)
+    for heading in contract.CORE_SECTIONS:
+        assert heading in docx, f"{heading} missing from DOCX"
+        if pdf:
+            assert heading in pdf, f"{heading} missing from PDF"
+
+
+def test_nothing_is_invented_under_an_empty_section():
+    """Present and empty — the heading names a section, it claims nothing.
+
+    This is the other half of the policy. Filling an empty section with
+    placeholder text would be the safe-looking mistake; it is asserted against
+    directly.
+    """
+    docx, pdf = _render_all(SPARSE_PAYLOAD)
+    invented = ("None provided", "N/A", "No experience", "Statistical and "
+                "Predictive Modeling", "Boeing Defense", "Entry 1")
+    for text in (docx, pdf):
+        for phrase in invented:
+            assert phrase not in text, f"{phrase!r} was invented"
+
+
+def test_the_markdown_and_the_rendered_files_agree_on_the_section_set():
+    """One run must not describe its own sections differently per artefact."""
+    docx, pdf = _render_all(SPARSE_PAYLOAD)
+    markdown_sections = set(sp.REQUIRED_HEADINGS)
+    for heading in contract.CORE_SECTIONS:
+        assert heading in markdown_sections, heading
+        assert heading in docx, heading
+        if pdf:
+            assert heading in pdf, heading
+
+
+def test_the_summary_heading_stays_conditional_everywhere():
+    """The one deliberate exception, in all three formats.
+
+    An empty summary heading would claim a summary the candidate never wrote, so
+    it is conditional by product design rather than by renderer.
+    """
+    payload = dict(SPARSE_PAYLOAD)
+    payload["summary"] = ""
+    docx, pdf = _render_all(payload)
+    assert "Professional Summary" not in docx
+    if pdf:
+        assert "Professional Summary" not in pdf
+
+
+# ── Engine-level: the contract ALONE causes the refusal ─────────────────
+#
+# Item 1 of the brief: a case where upstream review genuinely succeeds, a
+# source-backed section is empty, and the new contract is the only thing that
+# refuses. This took work to construct, and the reason matters.
+#
+# For the obvious shape — "the writer deleted every employer record" — the
+# existing per-item check already withholds with ``source_facts_missing``, so the
+# contract never even runs. Asserting that shape here would produce a test that
+# passes on the WRONG mechanism.
+#
+# The shape where the contract is genuinely alone is DISPLACEMENT: every source
+# item is still present verbatim, so the reviewer can legitimately represent all
+# of them, but the content sits under a heading that is not the core section. The
+# per-item checks are satisfied; only a section-level check notices that
+# Professional Experience is now empty while the source populates it.
+
+ENGINE_SOURCE = (
+    "Professional Experience\n"
+    "Alex Example led diagnostics at Acme\n"
+)
+DISPLACED_DRAFT = (
+    "# Candidate\r\n"
+    "## Professional Experience\r\n"
+    "## Additional Notes\r\n"
+    "Alex Example led diagnostics at Acme\r\n"
+)
+INTACT_DRAFT = (
+    "# Candidate\r\n"
+    "## Professional Experience\r\n"
+    "Alex Example led diagnostics at Acme\r\n"
+)
+
+
+def _engine_fixture():
+    import sys
+    sys.path.insert(0, "tests")
+    import test_source_correction as fixture
+    from source_correction import SourceDocument
+    return fixture, SourceDocument("doc", ENGINE_SOURCE)
+
+
+def test_the_contract_alone_causes_source_section_missing():
+    """Upstream review succeeds; only the contract refuses, and nothing publishes.
+
+    The reviewer confirms every line and represents every inventory item, so the
+    per-item and coverage checks pass. Professional Experience is nevertheless
+    empty because its content was displaced. The contract is what stops it.
+    """
+    fixture, source = _engine_fixture()
+    result = fixture.run(DISPLACED_DRAFT, fixture.complete_callback(),
+                         sources=(source,), raw=True)
+
+    assert result.status == "withheld"
+    assert result.reason == "source_section_missing", result.reason
+    assert result.markdown is None, "a withheld run must publish no Markdown"
+    # And the loss is real, not a contract artefact.
+    assert [loss["section"] for loss in
+            contract.shortfall(DISPLACED_DRAFT, ENGINE_SOURCE)] == [
+        "Professional Experience"]
+
+
+def test_the_same_document_with_its_content_in_place_is_approved():
+    """The paired control: identical content, correct section, run approves.
+
+    Without this, the test above would pass for a contract that refuses
+    everything.
+    """
+    fixture, source = _engine_fixture()
+    result = fixture.run(INTACT_DRAFT, fixture.complete_callback(),
+                         sources=(source,), raw=True)
+
+    assert result.status == "approved", (result.status, result.reason)
+    assert result.markdown is not None
+    assert contract.shortfall(INTACT_DRAFT, ENGINE_SOURCE) == []
+
+
+# ── Scope limit: whole-section presence is NOT record-level completeness ─
+#
+# This is the boundary the contract must not be described as crossing. It answers
+# "is this source-backed section still non-empty", NOT "did every qualification
+# survive". The two are different questions and this test states the difference
+# with a case that passes the contract while losing a record.
+
+def test_a_section_with_one_surviving_record_satisfies_the_contract():
+    """The contract passes when ONE record survives and another is lost.
+
+    Both employers are in the source. The output keeps one and drops the other.
+    The contract sees a non-empty Professional Experience and is satisfied. That
+    is its documented limit, not a bug — a section-level check cannot count
+    records it never enumerated against the draft.
+
+    Recording it here keeps the claim honest: passing this contract is NOT proof
+    that every qualification survived. Record-level loss is caught by the
+    per-item coverage check (``source_facts_missing``) and by the reviewer, which
+    is where that question belongs.
+    """
+    source = (
+        "Professional Experience\n"
+        "Northline Fabrication, Inc. -- Spokane, WA\n"
+        "Welder | 03/2012 - 09/2015\n"
+        "Fabricated steel assemblies for 14 contracts.\n"
+        "Kettle Falls Electrical Contractors -- Spokane, WA\n"
+        "Apprentice | 10/2015 - 06/2019\n"
+        "Completed 8,000 apprenticeship hours.\n"
+    )
+    # One employer kept, the other gone entirely.
+    output = (
+        "## Professional Experience\n"
+        "**Northline Fabrication, Inc.** -- Spokane, WA\n"
+        "- Fabricated steel assemblies for 14 contracts.\n"
+    )
+    assert contract.shortfall(output, source) == [], (
+        "the contract is a whole-section check; it is not expected to catch a "
+        "record-level loss, and this assertion documents that limit")
+    # The lost record IS detectable by inspection, just not by this check.
+    assert "Kettle Falls" not in output
+    assert "Kettle Falls" in source
+
+
+def test_the_contract_documents_its_own_scope():
+    """The module says what it does and does not prove, in its own docstring."""
+    doc = contract.__doc__ or ""
+    assert "non-empty" in doc.lower() or "empty" in doc.lower()
+    assert "record" in doc.lower(), (
+        "the module must state that it is not a record-level completeness proof")

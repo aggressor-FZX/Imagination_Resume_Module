@@ -91,6 +91,21 @@ def test_both_formats_retain_representative_supplied_content(pdf_compile, tmp_pa
     {"projects": ["A supplied project detail"]},
 ])
 def test_sparse_outputs_have_no_invented_placeholders(pdf_compile, tmp_path, payload):
+    """Sparse input must produce no fabricated CONTENT.
+
+    This used to also require ``"Technical Skills" not in text``: an empty core
+    section had to disappear from the rendered file. That is no longer the policy.
+    All five core sections are now named in every format, and a candidate with no
+    skills gets an EMPTY Technical Skills section rather than none at all — the
+    same treatment Projects already received. See
+    ``section_contract.EMPTY_SECTION_APPEARANCE``.
+
+    The property this test actually protects is unchanged and is what the
+    assertions below check: nothing is INVENTED. An empty heading names a section;
+    it does not claim a skill, a school or an employer. The template's sample
+    skills content ("Statistical and Predictive Modeling") is the thing that must
+    never appear, and that is asserted separately.
+    """
     result = renderer.build_resume_from_payload_base64(payload)
     docx = docx_text(result["docx_base64"])
     pdf = pdf_text(result["pdf_base64"], pdf_compile, tmp_path)
@@ -98,9 +113,11 @@ def test_sparse_outputs_have_no_invented_placeholders(pdf_compile, tmp_path, pay
         assert "None provided" not in text
         assert "ML and Analytics Projects" not in text
         assert "Entry 1" not in text
-        assert "Technical Skills" not in text
         assert "None" not in text
         assert "{}" not in text
+        # The template's own sample skills must never survive into a real export.
+        assert "Statistical and Predictive Modeling" not in text
+        assert "Boeing Defense" not in text
     if "email" in payload:
         assert "only@example.test" in docx
         assert "|" not in docx

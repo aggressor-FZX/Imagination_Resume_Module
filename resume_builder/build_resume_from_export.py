@@ -541,13 +541,25 @@ def build_summary_block(resume: ResumePayload) -> str:
 
 
 def build_skill_block(resume: ResumePayload) -> str:
+    """Render Technical Skills, heading INCLUDED even when empty.
+
+    See ``section_contract.EMPTY_SECTION_APPEARANCE``: the five core sections are
+    always present in every format. A section the candidate has nothing for is
+    shown as a named, empty section rather than dropped, and nothing is invented
+    to fill it. Keeping the heading makes Markdown, PDF and DOCX agree about
+    which sections exist; dropping it in one renderer and not another was the
+    contradiction this replaces.
+    """
     lines: List[str] = []
     for label, values in resume.skills:
         if not values:
             continue
         lines.append(f"\\textbf{{{latex_escape(label)}:}} {latex_escape(', '.join(values))}")
     if not lines:
-        return ""
+        # Heading without a body: the section exists, the candidate has no skills
+        # to list. Nothing is fabricated.
+        return ("% TECHNICAL SKILLS-------------------------------\n"
+                "\\vspace*{2mm}\n\\section{Technical Skills}\n\\vspace*{1mm}\n")
     return (
         "% TECHNICAL SKILLS-------------------------------\n"
         "\\vspace*{1mm}\n"
@@ -608,8 +620,7 @@ def generate_section_body(section: ResumeSection) -> str:
 
 
 def generate_experience_block(resume: ResumePayload) -> str:
-    if not resume.experience:
-        return ""
+    """Render Professional Experience, heading included even when empty."""
     blocks = []
     blocks.append("% PROFESSIONAL EXPERIENCE-------------------------------\n\\vspace*{2mm}\n\\section{Professional Experience}\n\\vspace*{1mm}\n")
     for section in resume.experience:
@@ -633,16 +644,14 @@ def generate_projects_block(resume: ResumePayload) -> str:
 
 
 def generate_education_block(resume: ResumePayload) -> str:
-    if not resume.education:
-        return ""
+    """Render Education, heading included even when empty."""
     lines = [latex_escape(line) for line in resume.education]
     body = "\\\\\n".join(lines)
     return f"% EDUCATION-------------------------------\n\\vspace*{{2mm}}\n\\section{{Education}}\n\\vspace*{{1mm}}\n{body}\n"
 
 
 def generate_certification_block(resume: ResumePayload) -> str:
-    if not resume.certifications:
-        return ""
+    """Render Certifications, heading included even when empty."""
     lines = [latex_escape(line) for line in resume.certifications]
     body = "\\\\\n".join(lines)
     return f"% CERTIFICATIONS-------------------------------\n\\vspace*{{2mm}}\n\\section{{Certifications}}\n\\vspace*{{1mm}}\n{body}\n"
@@ -819,9 +828,11 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
         set_run(r, size=8)
     
     # ─── PROFESSIONAL EXPERIENCE ───
+    # Unconditional, like the other four core sections. See
+    # section_contract.EMPTY_SECTION_APPEARANCE: a section the candidate has
+    # nothing for is shown as a named, empty section rather than dropped.
+    add_section_heading("Professional Experience")
     if resume.experience:
-        add_section_heading("Professional Experience")
-        
         for section in resume.experience:
             p, r = add_para(sp_before=4, sp_after=0)
             r.text = section.title
@@ -865,27 +876,27 @@ def build_docx(resume: ResumePayload, output_dir: Path, safe_title: str) -> Path
                 set_run(r, size=9)
     
     # ─── EDUCATION ───
+    # Unconditional, like the other four core sections.
+    add_section_heading("Education")
     if resume.education:
-        add_section_heading("Education")
-        
         for line in resume.education:
             p, r = add_para(sp_before=1, sp_after=1)
             r.text = line
             set_run(r, size=9)
     
     # ─── CERTIFICATIONS ───
+    # Unconditional, like the other four core sections.
+    add_section_heading("Certifications")
     if resume.certifications:
-        add_section_heading("Certifications")
-        
         for line in resume.certifications:
             p, r = add_para(sp_before=1, sp_after=1)
             r.text = line
             set_run(r, size=9)
     
     # ─── TECHNICAL SKILLS (last section, after experience/projects/education/certs) ───
+    # Unconditional, like the other four core sections.
+    add_section_heading("Technical Skills")
     if any(values for _, values in resume.skills):
-        add_section_heading("Technical Skills")
-        
         for label, values in resume.skills:
             if not values:
                 continue

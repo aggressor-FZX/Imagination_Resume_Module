@@ -75,28 +75,45 @@ CONTRACTED = (
 # it reads as a mistake or a gap in the candidate's history. Omitting it is the
 # honest appearance.
 #
-# KNOWN ASYMMETRY, deliberately left in place.
+# RESOLVED policy: the five core sections are always present, in every format.
 #
-# ``Projects`` is emitted unconditionally by the DOCX while Education and
-# Certifications are conditional, so a candidate with no projects gets an empty
-# Projects heading in the exported file and a candidate with no education does
-# not. Making Projects conditional to match was tried on 2026-11-08 and REVERTED:
-# it broke the accepted guarantee that every promised heading reaches the exported
-# file, pinned by ``tests/test_export_section_headings.py``.
+# Measured 2026-11-08 on a candidate with no experience, education, projects,
+# certifications or skills:
 #
-# The trade was decided this way on purpose. A section set that disagrees between
-# the Markdown and the rendered document is the worse defect — it means the two
-# artefacts of one run claim different things about which sections exist — so the
-# promised-heading rule wins and this asymmetry stands until both can be satisfied
-# together.
+#   Markdown  Professional Experience, Projects, Education, Certifications,
+#             Technical Skills
+#   PDF       Projects only
+#   DOCX      Projects only
 #
-# IMPORTANT: this constant is documentation of measured behaviour, not a switch.
+# Three artefacts of one run disagreed about which sections exist. The project
+# requirement is that all five CORE sections remain present without inventing
+# content, so the renderers were changed to match the Markdown rather than the
+# other way round: a section the candidate has nothing for is shown as a named,
+# empty section, and nothing is fabricated to fill it.
+#
+# An earlier attempt made ``Projects`` conditional instead, to match
+# Education/Certifications. That was the wrong direction — it satisfied an
+# asymmetry rather than removing it, and it broke the accepted guarantee that
+# every promised heading reaches the exported file.
+CORE_SECTIONS = (
+    "Professional Experience",
+    "Projects",
+    "Education",
+    "Certifications",
+    "Technical Skills",
+)
+
+# "heading_without_body" in every format: the section is named, and empty.
+# "Professional Summary" is the one conditional heading in all three, because an
+# empty summary heading would claim a summary the candidate never wrote; that
+# asymmetry is by product design, not an oversight.
 EMPTY_SECTION_APPEARANCE = {
     "markdown": "heading_without_body",
     "pdf": "heading_without_body",
     "docx": "heading_without_body",
-    "note": "Projects is unconditional in DOCX; Education/Certifications are "
-            "conditional. Reverted on 2026-11-08 - see above.",
+    "note": "All five CORE_SECTIONS are unconditional in every format. Summary "
+            "is conditional everywhere: an empty summary heading claims a "
+            "summary the candidate never wrote.",
 }
 
 _ALIASES = {
