@@ -320,6 +320,13 @@ def parse_decision(raw: Any) -> Decision:
 def _unquote(value: str) -> str:
     """Strip surrounding quotes the model routinely adds around a passage.
 
+    An all-quote value (`""`, `''`) means EMPTY, not two literal characters. The
+    guard below requires len > 2 to avoid stripping a single character, which left
+    `""` untouched — and it was then applied as a replacement, writing quote marks
+    into the résumé. Measured while building the advisory/enabled comparison.
+    """
+    """Strip surrounding quotes the model routinely adds around a passage.
+
     Measured against the live model 2026-11-09: it answered
 
         - passage: "Cut average fault-response time ... troubleshooting protocols."
@@ -330,6 +337,9 @@ def _unquote(value: str) -> str:
     so a passage that legitimately starts or ends with one is untouched.
     """
     text = (value or "").strip()
+    if text and set(text) <= {'"', "'", "\u201c", "\u201d", "\u2018", "\u2019"}:
+        # Nothing but quotes: the model meant "no replacement".
+        return ""
     pairs = (('"', '"'), ("'", "'"), ("\u201c", "\u201d"), ("\u2018", "\u2019"))
     changed = True
     while changed and len(text) >= 2:
