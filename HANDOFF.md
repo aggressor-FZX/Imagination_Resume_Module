@@ -60,11 +60,35 @@ Both look obviously correct; both **approve fabricated content**, caught by
 A correct tie-break needs the citation the reviewer failed to give, which is why
 the repair had nothing to work with. Withholding stands.
 
-## Deploy requirement
+## Deploy requirement — ACTION REQUIRED
 
-The visitor fix spans **two services**. Ship imaginator **and**
-orchestrator-backend together: shipping only one either keeps the old behaviour or
-refuses visitor exports.
+The visitor fix spans **two services** and only one half is deployed.
+
+| Service | Commit | State |
+|---|---|---|
+| imaginator | `4945b0b` | **pushed to `master`; deploy live** |
+| orchestrator-backend | `visitor-owner-export` | **pushed; NOT merged** |
+
+`backend/server.cjs` also carries unrelated in-progress work on
+`employment-type-search` (the ResumeBuilder publication UI: `ResumeBuilder.tsx`,
+`publication.ts`, `resumeExportService.ts`, snapshots, docs, e2e notes). Pushing
+that branch to a deploy-linked `master` would ship all of it, so the single-file
+change was isolated onto `visitor-owner-export`, branched from `origin/master`,
+with only `backend/server.cjs` modified (51 insertions, 4 hunks, `node --check`
+clean).
+
+**To finish:** open a PR from `visitor-owner-export` → `master` and merge, so
+Render deploys. No PR tooling is installed on this box; use the GitHub UI.
+
+Until that merge the orchestrator **discards** visitor-owned approvals rather than
+forwarding them: the Imaginator now issues them (`x-cogito-visitor-id`), but the
+orchestrator neither forwards the header on analyze nor accepts a visitor owner on
+export. Net effect today: unchanged behaviour, no regression — the free-trial fix
+is simply not in effect yet.
+
+The remaining work on `employment-type-search` is the frontend UI for `retryable`
+and `publication_owner_kind` (item 1 of "next" in
+`docs/FAILURE_MODE_REMEDIATION_2026-11-08.md`).
 
 ## Verification commands
 
