@@ -1,4 +1,84 @@
-# Binding-decision experiment handoff — 2026-11-09 (checkpoint 10)
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 11)
+
+## Checkpoint 11 — production approval path built; wiring STOPPED at three controls
+
+**Start here.** Code: `semantic_review/`. Tests: `tests/test_semantic_review_*.py`.
+Branch `experiment/llm-led-approval`, commit `52f3beb`. Suite **2200 passed, 14
+skipped**. No production file changed; `master` still `8d5efa8f`.
+
+The brief for this checkpoint was to integrate the proven prose decision/repair
+workflow into the live service (option 1). Two of the three steps are done. The
+third stops at the boundary the brief said to stop at.
+
+### 1. Done — the production approval path (`semantic_review/`)
+
+`engine.review_and_release()` drives `approve` / `revise → repair → fresh review
+of the EXACT corrected document` / `cannot_assess`, bounded by a call budget and
+a deadline. It returns `CorrectionResult` with **exact field parity** to
+`source_correction.CorrectionResult`, so `app.py`'s release branch needs no
+change.
+
+Preserved deliberately:
+- no span coverage is fabricated — `coverage.level == "prose_issues"`, per-span
+  counts honestly `0`;
+- structure is **checked, never generated**;
+- `revise` is never permission to release (a non-approving re-review withholds).
+
+New mandatory control: the `(omitted)` marker is refused on the **final**
+document. `export_payload()` currently emits it verbatim into
+`experience[].bullets`, i.e. it would print in the PDF and DOCX. Reproduced and
+pinned by `test_7_an_omitted_marker_in_the_final_document_withholds`.
+
+### 2. Done — 31 offline tests, no paid calls
+
+23 integration tests (approval, correction-then-fresh-approval, missing-record
+restoration, wrong-record attribution, cannot_assess, malformed decisions,
+ambiguous edits, unresolvable references, provider failure, required structure,
+the `(omitted)` leak, call/deadline bounds) + 8 blocker tests.
+
+### 3. STOPPED — the three controls between this engine and `/analyze`
+
+**This is a security/contract boundary, so per the brief it stops here rather
+than being worked around.** Each item is pinned by a test in
+`tests/test_semantic_review_live_blockers.py`.
+
+| # | Control | Why it blocks | Proposed change | Consequence |
+|---|---|---|---|---|
+| 1 | `correction_provider._strict_json` requires a JSON **object** | A prose reply raises `ValueError("invalid provider response")` on every call → `provider_error` → **every document withheld** | Accept prose for a new phase, keep the dict requirement for every existing phase | Provider now has two reply dialects; the parse branch must be phase-gated, and a mis-gate silently disables envelope validation for the span phases |
+| 2 | `disclosure._TEXT_FIELDS = {text, quote, contract}` redacts **by key name** | The draft is only redacted while it travels under a covered key. Under any other name it is **not redacted, and still verifies clean** (verification walks the same allowlist) → PII leaves the process with every gate green | Carry the draft under `text`. **No control change needed** | None — verified: PII removed, length preserved, zero disclosure errors |
+| 3 | Reviewer sees the **redacted** draft; repair must edit the **original** | A redacted passage is rejected structurally (`passage_not_in_draft`), so any résumé with a contact line withholds. Fail-closed, but it withholds the normal case | Review the redacted text and apply repair to the redacted text, then restore PII positions using the length-preserving correspondence before export | Requires the export path to re-insert PII, which is a new data flow into the renderer and a new failure mode; **not proposed as safe without review** |
+
+Item **2 needs no change** and is already proven. Items **1 and 3 do.** Item 1 is
+a contract change; item 3 is a security-adjacent change. Neither is applied.
+
+### 4. Not done, and why
+
+- `app.py` is **unchanged**. Wiring it to `semantic_review.engine` without
+  resolving items 1 and 3 would withhold every résumé — the same failure the
+  live-contract probe already demonstrated, with a different cause.
+- **No release approval requested and no website validation.** The brief makes
+  website validation a post-integration step; there is nothing integrated.
+- `.dockerignore` does not exist and `Dockerfile` does `COPY . .`, so
+  `experiment/` (1.0M), `results/` (4.1M) and `docs/` (516K) are in the runtime
+  image. Not yet excluded — no production import needs them, so an exclusion list
+  is safe, but it changes image contents and belongs with the integration deploy,
+  not before it.
+- **Zero authorized budget remains** (5 tokens consumed, 12 requests, $0.006130).
+  No paid calls were made this checkpoint.
+
+### Verification command
+
+```
+env -u CORRECTION_PROVIDER_DISCLOSURE \
+  OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y \
+  IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -o addopts='' \
+  -p no:cacheprovider -q \
+  --ignore=tests/test_loader_source_preservation_offline.py \
+  --ignore=tests/test_exported_outcome_wording_regression.py
+```
+
+---
 
 ## Checkpoint 10 — repair path CLOSED; all 5 documents released; website blocked
 
