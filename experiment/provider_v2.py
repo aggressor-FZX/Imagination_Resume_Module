@@ -86,6 +86,11 @@ class CallResult:
     # True when the provider answered 2xx but reported no usage, so the real cost
     # of that request is unknown rather than zero.
     usage_missing: bool = False
+    # What was pinned, and what actually served the call. Recorded separately
+    # because a pin is an instruction, not a guarantee: if OpenRouter routes
+    # elsewhere the run must show that rather than assume the pin held.
+    provider_pinned: list[str] = field(default_factory=list)
+    provider_reported: str = ""
 
     def to_dict(self) -> dict:
         return dict(self.__dict__)
@@ -211,13 +216,29 @@ def make_asker(api_key: str | None = None, *,
                ledger: list[dict] | None = None,
                meter: RequestMeter | None = None,
                max_attempts: int = 3,
-               sleep_between_retries: bool = True):
+               sleep_between_retries: bool = True,
+               provider_only: list[str] | None = None):
     """Build an async `ask` callable returning a `CallResult`.
 
     Every HTTP attempt — including retries for 429/5xx and for transport errors —
     is metered through `meter` BEFORE it is sent and recorded AFTER, so the request
     count is a real ceiling rather than a description. `sleep_between_retries` is
     exposed so offline tests can exercise the retry path without waiting.
+
+    `provider_only` pins the request to specific provider tags via OpenRouter's
+    `provider: {only: [...]}` body field.
+
+    Why this exists: a model can be served by several providers at different
+    quantizations (MiMo-V2.6-Flash has EIGHT: fp4, bf16 and six fp8 endpoints).
+    Without pinning, OpenRouter may route to a different one per request, so two
+    runs of the same prompt are not necessarily the same model instance. For a
+    comparison that holds everything except the MODEL constant, that would be a
+    silent confound — and a q4 routing would also make the reviewer materially
+    weaker than the fp8 the result is attributed to.
+
+    The response's actual `provider` field is retained on every CallResult, so a
+    reader can verify which endpoint served each call rather than trusting the
+    pin.
     """
     import aiohttp  # imported lazily so offline tests can import this module
 
@@ -229,7 +250,7 @@ def make_asker(api_key: str | None = None, *,
     calls: list[dict] = ledger if ledger is not None else []
 
     async def ask(prompt: str, *, label: str = "") -> CallResult:
-        body = {
+        body: dict = {
             "model": chosen_model,
             "messages": [{"role": "user", "content": prompt}],
             # Deterministic: the comparison is about review policy, so sampling
@@ -237,6 +258,8 @@ def make_asker(api_key: str | None = None, *,
             "temperature": 0,
             "max_tokens": max_tokens,
         }
+        if provider_only:
+            body["provider"] = {"only": list(provider_only)}
         headers = {"Authorization": f"Bearer {key}",
                    "Content-Type": "application/json"}
         if meter is not None:
@@ -336,6 +359,8 @@ def make_asker(api_key: str | None = None, *,
                     max_tokens=max_tokens,
                     model=str(data.get("model") or chosen_model),
                     provider=str(data.get("provider") or ""),
+                    provider_pinned=list(provider_only or []),
+                    provider_reported=str(data.get("provider") or ""),
                     latency_s=latency,
                     retries=list(retries),
                     raw_usage=usage,

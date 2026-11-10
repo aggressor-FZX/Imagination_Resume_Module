@@ -72,6 +72,24 @@ MODELS = [
     "openai/gpt-4o-mini",              # the baseline the brief asks to compare against
 ]
 
+# Per-model provider pin. MiMo-V2.6-Flash is served by EIGHT endpoints (fp4, bf16
+# and six fp8). Without a pin, OpenRouter may route per request, so two calls of the
+# same prompt are not necessarily the same model instance — and an fp4 routing would
+# be materially weaker than the fp8 the result claims to measure.
+#
+# `cohere/fp8` is the requested endpoint and exists (verified against
+# /api/v1/models/xiaomi/mimo-v2.6-flash/endpoints, 8 endpoints, status 0,
+# 1,048,576 context, $0.14/M prompt, $0.28/M completion, 100% uptime last 30m).
+# `makora/fp8` is an fp8 alternative at identical price; it is recorded as the
+# fallback in the plan rather than used, since a second pin would be a second
+# variable.
+PROVIDER_PINS: dict[str, list[str]] = {
+    "xiaomi/mimo-v2.6-flash": ["cohere/fp8"],
+}
+PROVIDER_FALLBACKS: dict[str, list[str]] = {
+    "xiaomi/mimo-v2.6-flash": ["makora/fp8"],
+}
+
 REQUESTED_MODEL = "xiaomi/mimo-v2-flash"
 MODEL_SUBSTITUTION = {
     "requested": REQUESTED_MODEL,
@@ -102,6 +120,9 @@ def budget_for(models: list[str]) -> dict:
     calls = len(CAST) * len(models)
     return {
         "models": models,
+        "provider_pins": {m: PROVIDER_PINS[m] for m in models if m in PROVIDER_PINS},
+        "provider_fallbacks": {m: PROVIDER_FALLBACKS[m] for m in models
+                               if m in PROVIDER_FALLBACKS},
         "cases": [c for c, _g, _f, _e in CAST],
         "logical_calls": calls,
         "attempts_per_call": ATTEMPTS_PER_CALL,
@@ -179,7 +200,14 @@ async def review(ask, meter: RequestMeter, model: str, case_id: str,
     d = dc.decide_from_text(call.text, c.draft_before_trim, c.sources)
     row |= {"response": call.text, "cost_usd": call.cost_usd,
             "requests": call.requests_sent, "usage_missing": call.usage_missing,
-            "decision": d.decision or None}
+            "decision": d.decision or None,
+            # The pin is an instruction; the reported provider is the fact.
+            "provider_pinned": call.provider_pinned,
+            "provider_reported": call.provider_reported,
+            "provider_pin_held": (not call.provider_pinned
+                                   or call.provider_reported in
+                                   [p.split("/")[0].lower()
+                                    for p in call.provider_pinned])}
     row["outcomes"] = classify(case_id, expected, d)
     row["first_objection"] = (
         " ".join((d.issues[0].why or "").split())[:240] if d.issues else "")
@@ -216,6 +244,13 @@ def summarise(rows: list[dict], models: list[str]) -> dict:
                 1 for r in clean if r["decision"] == "approve"
                 and (r.get("outcomes") or {}).get("valid_judgment")),
             "cost_usd": round(sum(r["cost_usd"] for r in mine), 6),
+            # Routing: a pin that did not hold is reported, not assumed away.
+            "provider_pinned": sorted({p for r in mine
+                                       for p in (r.get("provider_pinned") or [])}),
+            "providers_reported": sorted({r.get("provider_reported") or ""
+                                          for r in mine} - {""}),
+            "pin_violations": sum(1 for r in mine
+                                  if r.get("provider_pin_held") is False),
         }
     return out
 
@@ -246,6 +281,19 @@ def render(plan: dict, summary: dict, rows: list[dict]) -> str:
             f"{s['invented_objections']}/{s['clean_cases']} | "
             f"{s['missed_defects']}/{s['defective_cases']} | "
             f"{s['clean_approved']}/{s['clean_cases']} | ${s['cost_usd']:.6f} |")
+
+    lines += ["", "### Endpoint routing", "",
+              "A pin is an instruction; the provider reported in each response is "
+              "the fact. Any mismatch is counted as a violation rather than "
+              "assumed away.", "",
+              "| model | pinned | actually served | violations |",
+              "|---|---|---|---|"]
+    for model in plan["models"]:
+        s = summary[model]
+        pinned = ", ".join(f"`{p}`" for p in s["provider_pinned"]) or "— (unpinned)"
+        served = ", ".join(f"`{p}`" for p in s["providers_reported"]) or "—"
+        lines.append(f"| `{model}` | {pinned} | {served} | "
+                     f"{s['pin_violations']} |")
 
     lines += ["", "## Per case", ""]
     for case_id, _g, probe, expected in CAST:
@@ -291,7 +339,8 @@ async def main_async(out_dir: pathlib.Path, *, plan_only: bool) -> dict:
 
     rows: list[dict] = []
     for model in MODELS:
-        ask = make_asker(model=model, ledger=ledger, meter=meter)
+        ask = make_asker(model=model, ledger=ledger, meter=meter,
+                         provider_only=PROVIDER_PINS.get(model))
         for case_id, _group, _probe, expected in CAST:
             row = await review(ask, meter, model, case_id, expected, instructions)
             rows.append(row)

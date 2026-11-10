@@ -6,6 +6,16 @@
       "xiaomi/mimo-v2.6-flash",
       "openai/gpt-4o-mini"
     ],
+    "provider_pins": {
+      "xiaomi/mimo-v2.6-flash": [
+        "cohere/fp8"
+      ]
+    },
+    "provider_fallbacks": {
+      "xiaomi/mimo-v2.6-flash": [
+        "makora/fp8"
+      ]
+    },
     "cases": [
       "faithful_paraphrase",
       "cal_ops_faithful",

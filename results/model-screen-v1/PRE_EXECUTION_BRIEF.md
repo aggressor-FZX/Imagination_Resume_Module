@@ -23,6 +23,41 @@ I have used it and recorded the substitution in `plan.json` and in every report 
 than making it silently. **If you want a different MiMo variant, say which; otherwise
 the screen proceeds with `v2.6-flash`.**
 
+### Endpoint pinning — `cohere/fp8`
+
+`xiaomi/mimo-v2.6-flash` is served by **eight** endpoints. Verified against
+`GET /api/v1/models/xiaomi/mimo-v2.6-flash/endpoints`:
+
+| Tag | Quant | Prompt $/M | Completion $/M | Uptime 30m | p50 latency | p50 tok/s |
+|---|---|---|---|---|---|---|
+| `darkbloom/fp4` | fp4 | 0.100 | 0.280 | — | — | — |
+| `gmicloud/bf16` | bf16 | 0.112 | 0.224 | — | — | — |
+| **`cohere/fp8`** | **fp8** | **0.140** | **0.280** | **100%** | **517 ms** | **78** |
+| `makora/fp8` | fp8 | 0.140 | 0.280 | 100% | 923 ms | 26 |
+| `deepinfra/fp8` | fp8 | 0.140 | 0.280 | — | — | — |
+| `xiaomi/fp8` | fp8 | 0.140 | 0.280 | — | — | — |
+| `tenstorrent/fp8` | fp8 | 0.165 | 0.330 | — | — | — |
+| `venice/fp8` | fp8 | 0.175 | 0.350 | — | — | — |
+
+Note the title said `cohere/fp8` while the snippet said `makora/fp8`; **both exist**
+as valid tags at identical price. **`cohere/fp8` is pinned** (the title's choice, and
+the better performer of the two: 517 ms p50 vs 923 ms, 78 vs 26 tok/s at the same
+price). `makora/fp8` is recorded as the declared fallback rather than used — a second
+pin in the same run would be a second variable.
+
+Pinning is now implemented in `make_asker(provider_only=[...])`, which sends:
+
+```json
+"provider": { "only": ["cohere/fp8"] }
+```
+
+**Why this matters more than convenience:** without a pin, OpenRouter may route each
+request independently. An `fp4` routing would be a materially weaker model than the
+`fp8` the result is attributed to, and the comparison would be confounded without
+showing it. The response's own `provider` field is retained on every call, so a pin
+that did not hold is **counted as a violation** in the report rather than assumed
+away.
+
 ## 2. Exact case list
 
 Five cases, all reused verbatim from the two existing frozen fixtures. No new drafts,
@@ -84,6 +119,10 @@ already frozen and identical, does a different model simply behave better?**
 ## 5. What will be reported — four outcomes, separately
 
 As required, correctness is **not** inferred from a decision word or a keyword.
+
+Endpoint routing is reported for every model: what was pinned, what the response
+said actually served each call, and a violation count. A pin is an instruction; the
+reported provider is the fact.
 
 | Outcome | How it is decided |
 |---|---|
