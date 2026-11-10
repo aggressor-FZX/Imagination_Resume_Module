@@ -1,3 +1,51 @@
+# JSON semantic review — WIP handoff, 2026-11-09
+
+- **Active branch:** `experiment/llm-led-approval`; previous commit `f96c65e`. This checkpoint is a WIP commit, not a production release.
+- **Live and rollback revision:** `8d5efa8f12a082c06eb9907b6f38dba8e075eeff`, deploy `dep-dbop3b7avr4c73bmi5p0`. Render deploys `master` automatically on commit. Do not merge this WIP into `master`.
+- [x] Added a phase-gated JSON provider adapter and an offline JSON engine prototype, with request and deadline bounds and redacted targets. Existing `/analyze` remains on `source_correction`; the prototype is not integrated.
+- [x] Offline regression: **2360 passed, 14 skipped**, excluding `tests/test_loader_source_preservation_offline.py` (missing `fitz`) and `tests/test_exported_outcome_wording_regression.py` (missing captures fixture). No live model requests in this checkpoint.
+- [x] Reconciled retained one-shot authorizations: no further paid calls are authorized. Prior observed spend is incomplete; the five-token ledger is not the full historical total.
+- **Next steps:**
+  1. Preserve the existing imaginative-mode bridge accept/narrow/remove behavior and bind its resulting state to receipts. The prototype currently withholds nonempty bridge decks; do not bypass this.
+  2. Support safely attributed source records from actual PDF/DOCX extracted text, missing-record insertion, and safe deletions without discarding source-backed paraphrases. Current prototype refuses deletion and cannot repair representative source layouts.
+  3. Remove the duplicate historical runtime workflow only when migration is complete; add actual `/analyze`-to-export tests, including wrong owner and modified content, all required sections and marker controls.
+  4. Verify runtime asset dependencies, add image exclusions, review the production-only diff and release process, and obtain an explicit combined live request/spending ceiling before website analysis and PDF/DOCX inspection.
+- **Intentionally untracked:** `experiment/audit_packet_v3.py` is unrelated pre-existing work and must not be staged.
+- **Verification:** `env -u CORRECTION_PROVIDER_DISCLOSURE OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -o addopts='' -p no:cacheprovider -q --ignore=tests/test_loader_source_preservation_offline.py --ignore=tests/test_exported_outcome_wording_regression.py`
+
+---
+
+# Binding-decision experiment handoff — 2026-11-09 (bridge safety checkpoint; superseded)
+
+- **Active branch / last commit:** `experiment/llm-led-approval` / `f96c65e`. No commit or push.
+- [x] Kept `app.py` on the existing correction path; JSON engine defaults to imaginative and respects the existing 140-second ceiling without authorizing bridge proposals.
+- [x] Added offline tests demonstrating generic JSON approval cannot prove source coverage, attribution or tool support, and that original proposals cannot bind a narrowed bridge. JSON/SSE routes remain on the legacy engine.
+- **Next steps:**
+  1. Design and independently validate source inventory, claim-level evidence/attribution and phrase-scoped bridge decisions before replacing existing correction controls.
+  2. Carry accepted/narrowed/removed bridge state through re-review to receipt issuance, with privacy-safe anchors, bounded provider calls and exact reviewed-text binding.
+  3. Address the separate Imaginator-local multipart route, which currently bypasses source correction, before claiming cross-route coverage.
+- **Uncommitted/dirty files:** `semantic_review/json_engine.py`, `tests/test_semantic_bridge_json.py` and `HANDOFF.md` include this checkpoint; existing unrelated or concurrent work remains in `correction_provider.py`, `semantic_review/__init__.py`, `semantic_review/engine.py`, `experiment/audit_packet_v3.py`, `tests/test_semantic_json_engine.py`, and `tests/test_semantic_provider_adapter.py`. All left unstaged per request.
+- **Verification command:** `env -u CORRECTION_PROVIDER_DISCLOSURE OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/test_semantic_json_engine.py tests/test_semantic_provider_adapter.py tests/test_semantic_bridge_json.py -o addopts='' -p no:cacheprovider -q`
+
+---
+
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 12)
+
+## Checkpoint 12 — JSON operation contract; adapter integration blocked
+
+- **Branch / last commit:** `experiment/llm-led-approval` / `f96c65e`. No commit or push: explicitly requested.
+- [x] Added explicit `replace`, `delete`, and `insert_record` issue shapes, whole-record insertion at a unique section destination, independent nonoverlapping edits, and five mandatory core headings.
+- [x] Fail closed on italic metadata ambiguity and protected targets; re-review the exact edited document. Focused engine and adapter suites: 69 passed.
+- [x] Kept provider and application files untouched during this task.
+- **Dirty files:** `semantic_review/json_engine.py`, `tests/test_semantic_json_engine.py`, and `HANDOFF.md` are intentionally uncommitted. Pre-existing unrelated changes: `correction_provider.py`, `semantic_review/__init__.py`, `semantic_review/engine.py`, `experiment/audit_packet_v3.py`, and `tests/test_semantic_provider_adapter.py`; left untouched.
+- **Next steps:**
+  1. Provider owner must update `SEMANTIC_REVIEW_SCHEMA` and `_validate_semantic_response` in `correction_provider.py` for the operation-specific JSON contract; current adapter rejects every new revise issue. Add adapter integration tests before wiring.
+  2. Independently review the conservative operation constraints and validate on real representative documents; italic metadata and unsupported record formats intentionally withhold edits, and semantic support is not mechanically proven.
+  3. No deployment or live inference was performed; do not treat this checkpoint as production integration.
+- **Verification command:** `env -u CORRECTION_PROVIDER_DISCLOSURE OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/test_semantic_json_engine.py tests/test_semantic_provider_adapter.py -o addopts='' -p no:cacheprovider -q`
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 11)
 
 ## Checkpoint 11 — production approval path built; wiring STOPPED at three controls

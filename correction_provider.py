@@ -10,6 +10,7 @@ import aiohttp
 import correction_protocol
 from disclosure import (
     POLICY_ID,
+    contains_pii,
     payload_disclosure_errors,
     redact_payload,
     verify_disclosure,
@@ -56,6 +57,135 @@ REPAIR_PATH_CALLS = 6
 # carrying the `must_judge` hint, so it cannot be spent by a second repair pass or
 # by a direct caller.
 MAX_CALLS = 7
+
+# This ceiling counts actual POSTs, including transport retries and subsequent
+# caller-initiated format-correction requests, over the provider's lifetime.
+SEMANTIC_REVIEW_VERSION = "semantic_review_v1"
+SEMANTIC_MAX_HTTP_ATTEMPTS = 4
+_SEMANTIC_COMMON_PROPERTIES = {
+    "operation": {"type": "string"},
+    "problem": {"type": "string"},
+    "sources": {"type": "array", "items": {"type": "string"},
+                "minItems": 1, "maxItems": 1},
+    "why": {"type": "string"},
+}
+
+
+def _semantic_issue_schema(operation, target, problems, *, correction=False):
+    properties = {**_SEMANTIC_COMMON_PROPERTIES,
+                  "operation": {"type": "string", "enum": [operation]},
+                  "problem": {"type": "string", "enum": list(problems)},
+                  target: {"type": "string"}}
+    if correction:
+        properties["correction"] = {"type": "string"}
+    return {"type": "object", "properties": properties,
+            "required": list(properties), "additionalProperties": False}
+
+
+SEMANTIC_REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "version": {"type": "string", "enum": [SEMANTIC_REVIEW_VERSION]},
+        "decision": {"type": "string", "enum": ["approve", "revise", "cannot_assess"]},
+        "rationale": {"type": "string"},
+        "issues": {"type": "array", "maxItems": 32, "items": {"oneOf": [
+            _semantic_issue_schema("replace", "passage", ("unsupported", "misattributed"), correction=True),
+            _semantic_issue_schema("delete", "passage", ("unsupported", "misattributed")),
+            _semantic_issue_schema("insert_record", "destination", ("omitted",)),
+        ]}},
+    },
+    "required": ["version", "decision", "rationale", "issues"],
+    "additionalProperties": False,
+}
+
+
+class SemanticFormatError(ValueError):
+    """Only malformed model content is eligible for the engine's format retry."""
+
+
+def _semantic_nested_safe(text, *, depth=0):
+    """Inspect decoded JSON strings, including keys; reject ambiguous escapes.
+
+    The engine embeds JSON inside text fields. Raw-text redaction cannot see a
+    JSON-escaped email. Reject rather than rewrite decoded strings, which would
+    invalidate the engine's IDs and literal text. Literal backslashes in leaves
+    are conservatively forbidden, including malformed or non-JSON escape text.
+    """
+    if depth > 32:
+        return False
+    if isinstance(text, (dict, list)):
+        values = (list(text.keys()) + list(text.values()) if isinstance(text, dict)
+                  else text)
+        return all(_semantic_nested_safe(value, depth=depth + 1) for value in values)
+    if not isinstance(text, str):
+        return not contains_pii(str(text))
+    try:
+        decoded = json.loads(text)
+    except (ValueError, RecursionError):
+        decoded = None
+    if isinstance(decoded, (dict, list, str)):
+        return _semantic_nested_safe(decoded, depth=depth + 1)
+    return "\\" not in text and not contains_pii(text)
+
+
+def _semantic_encoded_safe(text):
+    """Check encoded fields before redaction can corrupt their JSON structure."""
+    try:
+        decoded = json.loads(text)
+    except (ValueError, RecursionError):
+        return "\\" not in text
+    if isinstance(decoded, (dict, list, str)):
+        return _semantic_nested_safe(decoded)
+    return not contains_pii(str(decoded))
+
+
+def _validate_semantic_payload(payload):
+    """Only covered free-text keys and non-sensitive source identifiers may exit."""
+    if (type(payload) is not dict or set(payload) != {"contract", "sources", "text"}
+            or any(type(payload[k]) is not str or not payload[k].strip()
+                   for k in ("contract", "text"))
+            or type(payload["sources"]) is not list or not payload["sources"]):
+        raise ValueError("invalid semantic review payload")
+    ids = set()
+    for source in payload["sources"]:
+        if (type(source) is not dict or set(source) != {"source_id", "text"}
+                or type(source["source_id"]) is not str
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", source["source_id"])
+                or contains_pii(source["source_id"]) or source["source_id"] in ids
+                or type(source["text"]) is not str or not source["text"].strip()):
+            raise ValueError("invalid semantic review payload")
+        ids.add(source["source_id"])
+
+
+def _validate_semantic_response(value):
+    """Validate shape only; grounding and release decisions belong to the engine."""
+    if (type(value) is not dict or set(value) != {"version", "decision", "rationale", "issues"}
+            or value["version"] != SEMANTIC_REVIEW_VERSION
+            or value["decision"] not in ("approve", "revise", "cannot_assess")
+            or type(value["rationale"]) is not str or type(value["issues"]) is not list
+            or len(value["issues"]) > 32):
+        raise SemanticFormatError("invalid semantic review response")
+    for issue in value["issues"]:
+        if type(issue) is not dict:
+            raise SemanticFormatError("invalid semantic review response")
+        op = issue.get("operation")
+        if op == "replace":
+            fields, target, problems = {"passage", "correction"}, "passage", ("unsupported", "misattributed")
+        elif op == "delete":
+            fields, target, problems = {"passage"}, "passage", ("unsupported", "misattributed")
+        elif op == "insert_record":
+            fields, target, problems = {"destination"}, "destination", ("omitted",)
+        else:
+            raise SemanticFormatError("invalid semantic review response")
+        if (set(issue) != fields | {"operation", "problem", "sources", "why"}
+                or type(issue[target]) is not str
+                or type(issue["problem"]) is not str or issue["problem"] not in problems
+                or type(issue["sources"]) is not list
+                or len(issue["sources"]) != 1
+                or any(type(s) is not str for s in issue["sources"])
+                or type(issue["why"]) is not str
+                or (op == "replace" and type(issue["correction"]) is not str)):
+            raise SemanticFormatError("invalid semantic review response")
 
 # --- Transient-failure retry allowance -------------------------------------
 # These are the statuses that mean "this endpoint cannot serve the request *right
@@ -197,12 +327,21 @@ def _strict_json(text):
 
 
 class CorrectionProvider:
-    def __init__(self, api_key, session, *, model=OR_SLUG_DRAFTER, observer=None):
+    def __init__(self, api_key, session, *, model=OR_SLUG_DRAFTER, observer=None,
+                 semantic_schema_supported=False,
+                 semantic_max_http_attempts=SEMANTIC_MAX_HTTP_ATTEMPTS):
+        if (type(semantic_schema_supported) is not bool
+                or type(semantic_max_http_attempts) is not int
+                or not 1 <= semantic_max_http_attempts <= MAX_CALLS):
+            raise ValueError("invalid semantic provider configuration")
         self.api_key = api_key
         self.session = session
         self.model = model
         # Optional sanitized event sink (see correction_events); receives no text.
         self.observer = observer
+        self.semantic_schema_supported = semantic_schema_supported
+        self.semantic_max_http_attempts = semantic_max_http_attempts
+        self._semantic_deadline = None
         # Remaining overall budget offered by the engine, and the timeout actually
         # applied to the last call (for the sanitized event).
         self._remaining_seconds = None
@@ -231,6 +370,10 @@ class CorrectionProvider:
         if (type(remaining_seconds) in (int, float)
                 and math.isfinite(remaining_seconds) and remaining_seconds > 0):
             self._remaining_seconds = float(remaining_seconds)
+            deadline = time.monotonic() + float(remaining_seconds)
+            self._semantic_deadline = min(self._semantic_deadline or deadline, deadline)
+        elif type(remaining_seconds) in (int, float) and remaining_seconds <= 0:
+            self._semantic_deadline = time.monotonic()
 
     def _call_timeout(self):
         """Timeout for this call, sized from the budget the engine offered."""
@@ -289,6 +432,31 @@ class CorrectionProvider:
         self.usage["failures"].append(entry)
 
     async def __call__(self, phase, payload):
+        if phase != "semantic_review":
+            return await self._call(phase, payload)
+        # Exceptions from JSON decoding or transport can include untrusted text.
+        try:
+            return await self._call(phase, payload)
+        except ProviderRateLimited:
+            raise ProviderRateLimited(phase) from None
+        except ProviderUnavailable as exc:
+            raise ProviderUnavailable(phase, exc.status) from None
+        except ProviderRejectedRequest as exc:
+            raise ProviderRejectedRequest(phase, exc.status) from None
+        except ProviderCallTimeout:
+            raise ProviderCallTimeout(phase) from None
+        except PrivacyReviewRequired:
+            raise PrivacyReviewRequired() from None
+        except SemanticFormatError:
+            raise SemanticFormatError("invalid semantic review response") from None
+        except ValueError:
+            # The engine retries ValueError as a format error. Request size,
+            # budget, envelope, and other failures are not format corrections.
+            raise RuntimeError("semantic review provider error") from None
+        except Exception:
+            raise RuntimeError("semantic review provider error") from None
+
+    async def _call(self, phase, payload):
         # A direct caller past the ceiling is rejected before the disclosure gate so
         # "budget exhausted" is the reason it sees, not a privacy error.
         if self.calls >= MAX_CALLS:
@@ -304,7 +472,7 @@ class CorrectionProvider:
                          # The bounded citation question. Permitted as an ordinary
                          # call: it is one question about where a fact already is,
                          # and it cannot write to the draft.
-                         "cite_uncertain"}:
+                         "cite_uncertain", "semantic_review"}:
             raise ValueError("correction call budget exhausted")
         # Recovery headroom is not spendable by an arbitrary caller: it exists only
         # for the engine's single completion re-review, which is the only request
@@ -313,6 +481,13 @@ class CorrectionProvider:
             raise ValueError("correction call budget exhausted")
         if not self.api_key or self.session is None:
             raise ValueError("correction provider unavailable")
+        if phase == "semantic_review":
+            _validate_semantic_payload(payload)
+            if self.attempts >= self.semantic_max_http_attempts:
+                raise ValueError("semantic review HTTP attempt budget exhausted")
+            if (self._semantic_deadline is not None
+                    and time.monotonic() >= self._semantic_deadline):
+                raise ProviderCallTimeout(phase)
         # The engine asks for exact offsets and gapless partitions; live models
         # cannot produce those reliably. Translate to index-only questions here,
         # and translate the answers back to the strict shape the engine verifies.
@@ -364,6 +539,11 @@ class CorrectionProvider:
             raise PrivacyReviewRequired
         if not verify_disclosure(original_payload.get("sources"), approved_policy=policy):
             raise PrivacyReviewRequired
+        if phase == "semantic_review" and not all(
+                _semantic_encoded_safe(text) for text in
+                [outgoing["contract"], outgoing["text"]]
+                + [source["text"] for source in outgoing["sources"]]):
+            raise PrivacyReviewRequired
         # The caller redacts source documents, but draft lines, segment text and
         # claim quotes travel in the same request and were never covered. Apply the
         # same length-preserving substitution to every free-text value actually
@@ -378,8 +558,13 @@ class CorrectionProvider:
             raise PrivacyReviewRequired
         if payload_disclosure_errors(outgoing, approved_policy=policy):
             raise PrivacyReviewRequired
+        if phase == "semantic_review" and not _semantic_nested_safe(outgoing):
+            raise PrivacyReviewRequired
         serialized_payload = json.dumps(outgoing, ensure_ascii=False, allow_nan=False)
         system_content = outgoing["contract"] + " Return only a JSON object."
+        if phase == "semantic_review":
+            system_content += (" The response must match this JSON schema: "
+                               + json.dumps(SEMANTIC_REVIEW_SCHEMA, separators=(",", ":")))
         request = {
             "model": self.model,
             "messages": [
@@ -396,6 +581,12 @@ class CorrectionProvider:
             # this cannot move the request to a third-party URL.
             "provider": {"allow_fallbacks": True},
         }
+        if phase == "semantic_review" and self.semantic_schema_supported:
+            request["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": SEMANTIC_REVIEW_VERSION, "strict": True,
+                "schema": SEMANTIC_REVIEW_SCHEMA,
+            }}
+            request["provider"]["require_parameters"] = True
         # The complete envelope is measured again after redaction, including
         # JSON escaping, because the padded placeholders can change the byte size.
         if len(json.dumps(request, ensure_ascii=True, allow_nan=False).encode("utf-8")) > MAX_REQUEST_BYTES:
@@ -413,6 +604,15 @@ class CorrectionProvider:
         attempt = 0
         try:
             while True:
+                if phase == "semantic_review":
+                    if self.attempts >= self.semantic_max_http_attempts:
+                        raise ValueError("semantic review HTTP attempt budget exhausted")
+                    if self._semantic_deadline is not None:
+                        remaining = self._semantic_deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise ProviderCallTimeout(phase)
+                        call_timeout = min(self._call_timeout(), remaining)
+                        self._last_call_timeout = call_timeout
                 attempt += 1
                 self.attempts += 1
                 # An attempt is only "ok" once the whole envelope has been
@@ -471,10 +671,14 @@ class CorrectionProvider:
                             self._record_transport_failure(
                                 phase, "provider_rejected_request", attempt, attempt_status)
                             raise ProviderRejectedRequest(phase, attempt_status)
-                        remaining = self._retry_budget(started)
+                        remaining = (self._semantic_deadline - time.monotonic()
+                                     if phase == "semantic_review" and self._semantic_deadline is not None
+                                     else self._retry_budget(started))
                         fits = (remaining is None
                                 or remaining - retry_delay >= RETRY_MIN_REMAINING_SECONDS)
-                        if retryable and attempt < RETRY_MAX_ATTEMPTS and fits:
+                        if (retryable and attempt < RETRY_MAX_ATTEMPTS and fits
+                            and (phase != "semantic_review"
+                                 or self.attempts < self.semantic_max_http_attempts)):
                             self._record_transport_failure(
                                 phase, attempt_outcome, attempt, attempt_status)
                             await _sleep(retry_delay)
@@ -501,6 +705,9 @@ class CorrectionProvider:
                         raise ValueError("invalid provider envelope")
                     self._record_usage(data, phase)
                     attempt_recorded = recorded = True
+                    if (phase == "semantic_review" and self._semantic_deadline is not None
+                            and time.monotonic() >= self._semantic_deadline):
+                        raise ProviderCallTimeout(phase)
                     if data.get("model") != self.model:
                         raise ValueError("unexpected provider model")
                     choices = data.get("choices")
@@ -513,9 +720,18 @@ class CorrectionProvider:
                     message = choice.get("message")
                     if type(message) is not dict or type(message.get("content")) is not str:
                         raise ValueError("missing provider content")
-                    parsed = _strict_json(message["content"])
+                    try:
+                        parsed = _strict_json(message["content"])
+                    except (ValueError, RecursionError):
+                        if phase == "semantic_review":
+                            raise SemanticFormatError("invalid semantic review response") from None
+                        raise
                     if type(parsed) is not dict:
+                        if phase == "semantic_review":
+                            raise SemanticFormatError("invalid semantic review response")
                         raise ValueError("invalid provider response")
+                    if phase == "semantic_review":
+                        _validate_semantic_response(parsed)
                     # Fully validated: this is the one place an attempt becomes "ok".
                     attempt_outcome = "ok"
                     if type(data.get("provider")) is str:

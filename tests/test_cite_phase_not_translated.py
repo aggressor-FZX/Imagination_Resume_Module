@@ -66,25 +66,71 @@ def test_an_empty_or_malformed_payload_is_not_a_citation_request():
         assert _is_citation_request(payload) is False
 
 
-def test_the_cite_phase_is_in_the_adapter_allowlist():
-    """An unlisted phase is rejected with the budget message, before the wire.
+def test_the_cite_phase_is_in_the_adapter_allowlist(monkeypatch):
+    """Citation is an ordinary call, not an unknown phase or reserved recovery."""
+    import json
+    import pytest
 
-    Checked by reading the guard's allowlist rather than driving a request: the
-    assertion is about which phases the adapter accepts, and a real call would
-    also need a session, a key, and a disclosure policy.
-    """
-    import inspect
+    monkeypatch.setattr(correction_provider, "_approved_disclosure_available", lambda: True)
 
-    source = inspect.getsource(CorrectionProvider.__call__)
-    allowlist = source[source.index("if phase not in {"):]
-    allowlist = allowlist[:allowlist.index("}")]
-    assert '"cite_uncertain"' in allowlist, (
-        "the citation phase was removed from the adapter allowlist; an unlisted "
-        "phase raises 'correction call budget exhausted' before reaching the wire")
-    # The budget guard must not exclude it either: it is an ordinary call.
-    assert "must_judge" in source, (
-        "the reserved-slot guard changed; re-check that cite_uncertain is not "
-        "mistaken for a repair-path call")
+    class Session:
+        def __init__(self):
+            self.requests = []
+
+        def post(self, url, **kwargs):
+            self.requests.append(kwargs["json"])
+            envelope = {"model": correction_provider.OR_SLUG_DRAFTER,
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1,
+                                  "total_tokens": 2},
+                        "choices": [{"finish_reason": "stop", "message": {
+                            "content": json.dumps({"citations": []})}}]}
+
+            class Response:
+                status = 200
+
+                def __init__(self):
+                    self.content = self
+
+                async def iter_chunked(self, size):
+                    yield json.dumps(envelope).encode()
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *args):
+                    pass
+
+            return Response()
+
+    session = Session()
+    provider = CorrectionProvider("synthetic-key", session)
+    assert asyncio.run(provider("cite_uncertain", CITE_PAYLOAD)) == {"citations": []}
+    sent = json.loads(session.requests[0]["messages"][1]["content"])
+    assert sent == {**CITE_PAYLOAD, "sources": list(CITE_PAYLOAD["sources"])}
+
+    # Give the overlapping shape valid review fields too: without the shape guard
+    # this would successfully translate instead of falling back on malformed input.
+    overlapping = {**CITE_PAYLOAD, "sources": list(CITE_PAYLOAD["sources"]),
+                   "source_claims": [{**CITE_PAYLOAD["source_claims"][0],
+                                      "id": "document-0:0:8", "start": 0,
+                                      "end": 8, "classification": "required"}]}
+    assert asyncio.run(provider("post_patch_review", overlapping)) == {"citations": []}
+    assert json.loads(session.requests[1]["messages"][1]["content"]) == overlapping
+
+    with pytest.raises(ValueError, match="correction call budget exhausted"):
+        asyncio.run(provider("not_a_phase", CITE_PAYLOAD))
+    assert len(session.requests) == 2
+
+    provider.calls = correction_provider.REPAIR_PATH_CALLS
+    with pytest.raises(ValueError, match="correction call budget exhausted"):
+        asyncio.run(provider("cite_uncertain", CITE_PAYLOAD))
+    assert len(session.requests) == 2
+    assert asyncio.run(provider("cite_uncertain", {**CITE_PAYLOAD, "must_judge": []})) == {
+        "citations": []}
+    provider.calls = correction_provider.MAX_CALLS
+    with pytest.raises(ValueError, match="correction call budget exhausted"):
+        asyncio.run(provider("cite_uncertain", {**CITE_PAYLOAD, "must_judge": []}))
+    assert len(session.requests) == 3
 
 
 def test_a_citation_request_is_not_sent_through_the_review_translation():
