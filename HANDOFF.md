@@ -1,3 +1,80 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 10)
+
+## Checkpoint 10 — repair path CLOSED; all 5 documents released; website blocked
+
+**Start here.** Results: `results/gemma-repair-v1/RESULTS.md`.
+Token `gemma-repair-2026-11-09-01` **used once** (guard enforced, ledger recorded).
+
+### 1. Repair gaps closed (`experiment/repair.py`)
+
+Replaces `safe_repair` at the gate. Closes the four gaps the brief names, keeping the
+four safety refusals:
+
+| Gap | Fix |
+|---|---|
+| faithful paraphrase refused | content-token comparison modulo a CLOSED connective list; numbers/dates must match exactly |
+| edit location | located inside one unambiguous employer record |
+| no record restoration | restored at a defined destination, **every line read from the source** |
+| unsupported additions preserved | dropped tokens must be unsourced, or survive elsewhere under their owner |
+
+Still refused: ambiguous target (never first-match), invented dates, merged
+employers, credentials moved into a work record.
+
+### 2. Release path (experiment/release_trace.py) — reaches release
+
+`approve → controls → receipt → release`; `revise → repair → re-review of the EXACT
+corrected document → release only on valid approval`; `cannot_assess / invalid → no
+release`. Required sections checked **before** any receipt is minted.
+
+Two integration defects found and fixed: `verify_receipt` requires the renderer
+payload (now derived from the **approved** markdown), and the receipt verdict is the
+typed `Verdict.PASS_TIER_A.value`, not the string `"approved"`.
+
+### 3. Live run — 8 calls / 20 requests / $0.001262 of $0.05
+
+| Case | First | Repair | Re-review | Edits | Released |
+|---|---|---|---|---|---|
+| `faithful_paraphrase` (control) | approve | — | — | **0** | yes |
+| `cal_ops_faithful` (control) | approve | — | — | **0** | yes |
+| `unsupported_method` | revise | applied | approve | 1 | yes |
+| `wrong_record_attribution` | revise | applied | approve | 1 | yes |
+| `omitted_record` | revise | applied | approve | 1 | yes |
+
+**First release of a corrected document in this entire line of work.** All receipts
+verified; `released_sha == proposed_sha` for all three corrected documents; controls
+byte-identical.
+
+### 4. Website validation is BLOCKED — precisely why
+
+- `imaginator-resume-cowriter` and `orchestrator-backend` are healthy (200).
+- Production reviewer is `OR_SLUG_DRAFTER = "qwen/qwen3-coder"`, **no separate
+  reviewer slug** — the live site has never used Gemma.
+- Production review uses the **span-envelope** contract (`source_correction.py`:
+  `claims`/`representations`, code-point offsets), **not** `decision_contract`.
+  Different protocols; swapping them is a production change.
+- `origin/master` lacks `experiment/repair.py` and `experiment/release_trace.py`;
+  branch is 18 commits ahead of master, master 0 ahead → merging is real.
+- **No `RENDER_API_TOKEN` in this environment**; no deploy can be triggered here.
+
+The authorization says *Production changes: none*, so I did not merge or deploy.
+**No PDF or DOCX was produced by the website, and none is reported.**
+
+### To finish item 6, needed:
+
+1. Approval to merge the experiment into a release branch of
+   `Imagination_Resume_Module` and point the imaginator at it — this replaces the
+   live review protocol and must be an explicit decision.
+2. `RENDER_API_TOKEN`, or a human-triggered deploy.
+3. A signed-in test account (guest auth NOT reopened).
+4. New authorization for the website run's inference.
+
+### Verification
+
+`2153 passed, 14 skipped`; production diff vs `master` empty; ledger shows one
+consumed token, 8 requests, $0.001262.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 9)
 
 ## Checkpoint 9 — inference stopped, rerun incident handled, repair test proposed
