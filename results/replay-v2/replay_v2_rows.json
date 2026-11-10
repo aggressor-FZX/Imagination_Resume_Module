@@ -1,0 +1,476 @@
+[
+  {
+    "cell": "current+advisory",
+    "case_id": "faithful_paraphrase",
+    "mode": "imaginative",
+    "prompt_sha256_16": "fad0370ec75c7ed6",
+    "finish_reason": null,
+    "response_chars": 3904,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3876 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 14.142
+  },
+  {
+    "cell": "current+advisory",
+    "case_id": "supported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "5a50897d82eed105",
+    "finish_reason": null,
+    "response_chars": 3773,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3764 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 9.812
+  },
+  {
+    "cell": "current+advisory",
+    "case_id": "unsupported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "cfa044a41c91f2f3",
+    "finish_reason": null,
+    "response_chars": 3993,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3988 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 15.65
+  },
+  {
+    "cell": "current+advisory",
+    "case_id": "missing_fact",
+    "mode": "imaginative",
+    "prompt_sha256_16": "5cb4396e9424edd3",
+    "finish_reason": null,
+    "response_chars": 3525,
+    "decision": "approve",
+    "category": "reference:convention",
+    "first_failure": "reference_offsets_off",
+    "detail": "10 quote(s) exist in the source but not at the stated offset; 0 correct",
+    "reference": {
+      "offsets_off": 10
+    },
+    "recorded_outcome": "refused",
+    "recorded_reason": "reference_invalid",
+    "cost_usd": 0.0,
+    "latency_s": 6.558
+  },
+  {
+    "cell": "current+advisory",
+    "case_id": "wrong_record_attribution",
+    "mode": "imaginative",
+    "prompt_sha256_16": "ba0b8c9eedcfefdc",
+    "finish_reason": null,
+    "response_chars": 3890,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3883 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 6.078
+  },
+  {
+    "cell": "current+advisory",
+    "case_id": "transferable_skill",
+    "mode": "imaginative",
+    "prompt_sha256_16": "48df69e7b6606fe7",
+    "finish_reason": null,
+    "response_chars": 3755,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Expecting property name enclosed in double quotes at char 3755 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 26.75
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "faithful_paraphrase",
+    "mode": "imaginative",
+    "prompt_sha256_16": "fad0370ec75c7ed6",
+    "finish_reason": null,
+    "response_chars": 3736,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Expecting ',' delimiter at char 3736 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 5.716
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "supported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "5a50897d82eed105",
+    "finish_reason": null,
+    "response_chars": 3869,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Expecting property name enclosed in double quotes at char 3869 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 5.36
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "unsupported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "cfa044a41c91f2f3",
+    "finish_reason": null,
+    "response_chars": 3788,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3784 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 6.253
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "missing_fact",
+    "mode": "imaginative",
+    "prompt_sha256_16": "5cb4396e9424edd3",
+    "finish_reason": null,
+    "response_chars": 3788,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Expecting value at char 3788 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 23.736
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "wrong_record_attribution",
+    "mode": "imaginative",
+    "prompt_sha256_16": "ba0b8c9eedcfefdc",
+    "finish_reason": null,
+    "response_chars": 3810,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Unterminated string starting at at char 3807 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 7.571
+  },
+  {
+    "cell": "current+enabled",
+    "case_id": "transferable_skill",
+    "mode": "imaginative",
+    "prompt_sha256_16": "48df69e7b6606fe7",
+    "finish_reason": null,
+    "response_chars": 3762,
+    "decision": "",
+    "category": "operational:truncation",
+    "first_failure": "response_incomplete",
+    "detail": "Expecting ',' delimiter at char 3762 (unterminated)",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "envelope_not_json",
+    "cost_usd": 0.0,
+    "latency_s": 8.357
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "faithful_paraphrase",
+    "mode": "imaginative",
+    "prompt_sha256_16": "66d7e6cc6ef3896f",
+    "finish_reason": null,
+    "response_chars": 1791,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "detail": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal; revise_without_actionable_issue",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 1
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "cost_usd": 0.0,
+    "latency_s": 4.67
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "supported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "56999e2b8ff737c5",
+    "finish_reason": null,
+    "response_chars": 747,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "revise_without_issues",
+    "detail": "revise_without_issues; revise_without_correction; revise_without_actionable_issue",
+    "reference": null,
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "revise_without_issues",
+    "cost_usd": 0.0,
+    "latency_s": 1.781
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "unsupported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "779c416d9f9b3ce1",
+    "finish_reason": null,
+    "response_chars": 1836,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "detail": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 2
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal,revise_without_actionable_issue",
+    "cost_usd": 0.0,
+    "latency_s": 21.308
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "missing_fact",
+    "mode": "imaginative",
+    "prompt_sha256_16": "ce87542563345fe4",
+    "finish_reason": null,
+    "response_chars": 1647,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:Built the depot scorecard that supervisors review in the Mon",
+    "detail": "passage_not_in_draft:Built the depot scorecard that supervisors review in the Mon; sources_unresolved:candidate-main.txt]: \u201cBuilt the depot scorecard that supervisors review in the M",
+    "reference": {
+      "verdict": "fabricated",
+      "counts": {
+        "resolves": 2,
+        "unresolved": 1
+      },
+      "detail": "1 unresolved reference(s)"
+    },
+    "recorded_outcome": "refused",
+    "recorded_reason": "reference_invalid",
+    "cost_usd": 0.0,
+    "latency_s": 23.388
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "wrong_record_attribution",
+    "mode": "imaginative",
+    "prompt_sha256_16": "bf0c222b3d0f0985",
+    "finish_reason": null,
+    "response_chars": 2115,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:*Ridgeline Equipment Services** -- Fife, WA *Inventory Analy",
+    "detail": "passage_not_in_draft:*Ridgeline Equipment Services** -- Fife, WA *Inventory Analy; sources_unresolved:candidate-main.txt, candidate-supplement.txt; passage_not_in_draft:Prepared the monthly cost summary reviewed by the regional m",
+    "reference": {
+      "verdict": "fabricated",
+      "counts": {
+        "resolves": 2,
+        "unresolved": 1
+      },
+      "detail": "1 unresolved reference(s)"
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal,sources_unresolved:candidate-main.txt, candidate-supplement.txt",
+    "cost_usd": 0.0,
+    "latency_s": 4.518
+  },
+  {
+    "cell": "revised+advisory",
+    "case_id": "transferable_skill",
+    "mode": "imaginative",
+    "prompt_sha256_16": "56e712a8feaca840",
+    "finish_reason": null,
+    "response_chars": 1084,
+    "decision": "revise",
+    "category": "semantic:revise",
+    "first_failure": "",
+    "detail": "",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 1
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "problem_word_unknown:**misattributed**,passage_not_in_draft:*Certified Inventory Control Specialist (CICS)*",
+    "cost_usd": 0.0,
+    "latency_s": 2.229
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "faithful_paraphrase",
+    "mode": "imaginative",
+    "prompt_sha256_16": "66d7e6cc6ef3896f",
+    "finish_reason": null,
+    "response_chars": 825,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "detail": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal; revise_without_actionable_issue",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 1
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "cost_usd": 0.0,
+    "latency_s": 8.942
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "supported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "56999e2b8ff737c5",
+    "finish_reason": null,
+    "response_chars": 2613,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "problem_word_unknown:none",
+    "detail": "problem_word_unknown:none",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 3,
+        "no_reference": 1
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "problem_word_unknown:none",
+    "cost_usd": 0.0,
+    "latency_s": 5.988
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "unsupported_method",
+    "mode": "imaginative",
+    "prompt_sha256_16": "779c416d9f9b3ce1",
+    "finish_reason": null,
+    "response_chars": 1571,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:- Maintain parts availability records for 7 service branches",
+    "detail": "passage_not_in_draft:- Maintain parts availability records for 7 service branches; passage_not_in_draft:- Compared quarterly parts usage against the prior four quar",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 3
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "passage_not_in_draft:- Maintain parts availability records for 7 service branches,passage_not_in_draft:- Compared quarterly parts usage against the prior four quar",
+    "cost_usd": 0.0,
+    "latency_s": 3.608
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "missing_fact",
+    "mode": "imaginative",
+    "prompt_sha256_16": "ce87542563345fe4",
+    "finish_reason": null,
+    "response_chars": 1412,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "detail": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal; sources_unresolved:candidate-main.txt] \u201cBuilt the depot scorecard that supervisors review in the Mo",
+    "reference": {
+      "verdict": "fabricated",
+      "counts": {
+        "resolves": 2,
+        "unresolved": 1
+      },
+      "detail": "1 unresolved reference(s)"
+    },
+    "recorded_outcome": "refused",
+    "recorded_reason": "reference_invalid",
+    "cost_usd": 0.0,
+    "latency_s": 4.155
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "wrong_record_attribution",
+    "mode": "imaginative",
+    "prompt_sha256_16": "bf0c222b3d0f0985",
+    "finish_reason": null,
+    "response_chars": 3723,
+    "decision": "revise",
+    "category": "parse:contract_defect",
+    "first_failure": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal",
+    "detail": "passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal; sources_unresolved:candidate-main.txt, candidate-supplement.txt; passage_not_in_draft:*Certified Inventory Control Specialist (CICS)*",
+    "reference": {
+      "verdict": "fabricated",
+      "counts": {
+        "resolves": 3,
+        "unresolved": 1
+      },
+      "detail": "1 unresolved reference(s)"
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "problem_word_unknown:**misattributed**,problem_word_unknown:**unsupported**,passage_not_in_draft:**Ridgeline Equipment Services** -- Fife, WA *Inventory Anal,sources_unresolved:candidate-main.txt, candidate-supplement.txt,passage_not_in_draft:*Certified Inventory Control Specialist (CICS)*,revise_without_actionable_issue",
+    "cost_usd": 0.0,
+    "latency_s": 10.118
+  },
+  {
+    "cell": "revised+enabled",
+    "case_id": "transferable_skill",
+    "mode": "imaginative",
+    "prompt_sha256_16": "56e712a8feaca840",
+    "finish_reason": null,
+    "response_chars": 1717,
+    "decision": "revise",
+    "category": "semantic:revise",
+    "first_failure": "",
+    "detail": "",
+    "reference": {
+      "verdict": "resolves",
+      "counts": {
+        "resolves": 3
+      }
+    },
+    "recorded_outcome": "operational_failure",
+    "recorded_reason": "problem_word_unknown:**unsupported**,problem_word_unknown:**unsupported**,problem_word_unknown:**misattributed**,passage_not_in_draft:*Reconciled 1,180 fuel invoices against depot dispensing rec,passage_not_in_draft:*Produced the depot scorecard supervisors review in the Mond,passage_not_in_draft:*(omitted)*",
+    "cost_usd": 0.0,
+    "latency_s": 3.124
+  }
+]

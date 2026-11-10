@@ -1,0 +1,58 @@
+{
+  "current+advisory": {
+    "cases": 7,
+    "scored": 3,
+    "incomplete": 1,
+    "reference_failures": 3,
+    "correct_approvals": 2,
+    "false_approvals": 1,
+    "false_refusals": 0,
+    "operational_failures": 1,
+    "semantic_correct": 2,
+    "cost_usd": 0.0,
+    "latency_s_total": 63.45,
+    "latency_s_mean": 9.06
+  },
+  "current+enabled": {
+    "cases": 7,
+    "scored": 4,
+    "incomplete": 0,
+    "reference_failures": 3,
+    "correct_approvals": 1,
+    "false_approvals": 1,
+    "false_refusals": 1,
+    "operational_failures": 0,
+    "semantic_correct": 2,
+    "cost_usd": 0.0,
+    "latency_s_total": 54.35,
+    "latency_s_mean": 7.76
+  },
+  "revised+advisory": {
+    "cases": 7,
+    "scored": 7,
+    "incomplete": 0,
+    "reference_failures": 0,
+    "correct_approvals": 3,
+    "false_approvals": 2,
+    "false_refusals": 0,
+    "operational_failures": 2,
+    "semantic_correct": 3,
+    "cost_usd": 0.0,
+    "latency_s_total": 37.27,
+    "latency_s_mean": 5.32
+  },
+  "revised+enabled": {
+    "cases": 7,
+    "scored": 7,
+    "incomplete": 0,
+    "reference_failures": 0,
+    "correct_approvals": 0,
+    "false_approvals": 0,
+    "false_refusals": 3,
+    "operational_failures": 0,
+    "semantic_correct": 4,
+    "cost_usd": 0.0,
+    "latency_s_total": 20.58,
+    "latency_s_mean": 2.94
+  }
+}

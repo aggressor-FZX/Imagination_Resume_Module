@@ -1,0 +1,42 @@
+{
+  "gemma-repair-2026-11-09-01": {
+    "consumed_at": "2026-11-10T02:12:10+00:00",
+    "status": "completed",
+    "expected_requests": 20,
+    "requests_sent": 8,
+    "cost_usd": 0.001262,
+    "finished_at": "2026-11-10T02:12:17+00:00"
+  },
+  "probe-gemma-live-contract-01": {
+    "consumed_at": "2026-11-10T03:00:31+00:00",
+    "status": "completed",
+    "expected_requests": 8,
+    "requests_sent": 0,
+    "cost_usd": 0.0,
+    "finished_at": "2026-11-10T03:00:44+00:00"
+  },
+  "probe-gemma-live-contract-02": {
+    "consumed_at": "2026-11-10T03:01:39+00:00",
+    "status": "completed",
+    "expected_requests": 8,
+    "requests_sent": 0,
+    "cost_usd": 0.0,
+    "finished_at": "2026-11-10T03:01:53+00:00"
+  },
+  "probe-gemma-live-contract-03": {
+    "consumed_at": "2026-11-10T03:02:21+00:00",
+    "status": "completed",
+    "expected_requests": 8,
+    "requests_sent": 2,
+    "cost_usd": 0.002434,
+    "finished_at": "2026-11-10T03:03:05+00:00"
+  },
+  "probe-gemma-live-contract-04": {
+    "consumed_at": "2026-11-10T03:03:35+00:00",
+    "status": "completed",
+    "expected_requests": 8,
+    "requests_sent": 2,
+    "cost_usd": 0.002434,
+    "finished_at": "2026-11-10T03:04:24+00:00"
+  }
+}

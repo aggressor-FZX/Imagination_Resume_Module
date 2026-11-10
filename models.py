@@ -232,6 +232,24 @@ class AnalysisRequest(BaseModel):
         validation_alias=AliasChoices("job_title", "jobTitle", "target_job_title"),
         description="User-provided job title for O*NET market intel (takes priority over LLM extraction)",
     )
+    # The candidate's own contact header, supplied explicitly by the caller.
+    #
+    # Deliberately NOT inferred from document text: a first line of extracted PDF
+    # text can be a job title, an agency name or a recruiter's email, and binding
+    # any of those as the candidate's identity would print the wrong person on the
+    # deliverable. Only the caller — which knows which file is the candidate's
+    # primary resume — may designate it. Absent means the export header stays
+    # empty; nothing is guessed.
+    candidate_identity: Optional[Dict[str, str]] = Field(
+        None,
+        validation_alias=AliasChoices(
+            "candidate_identity", "candidateIdentity", "profile_header"
+        ),
+        description=(
+            "Candidate contact header supplied by the caller (name, location, "
+            "phone, email, linkedin, github). Never inferred from document text."
+        ),
+    )
     projects: Optional[List[Dict[str, Any]]] = Field(
         None,
         description="Projects from resume (for students/career changers to be treated as experience)",
@@ -310,6 +328,40 @@ class AnalysisRequest(BaseModel):
             if not re.fullmatch(r"\d{2}-\d{4}\.\d{2}", v.strip()):
                 raise ValueError("onet_code must match format XX-XXXX.XX")
         return v
+
+    @field_validator("candidate_identity", mode="before")
+    @classmethod
+    def validate_candidate_identity(cls, v):
+        """A closed, bounded set of contact fields — no free-form passthrough.
+
+        An unknown key is a validation error rather than being silently dropped:
+        dropping it would let a caller believe an identity was approved when it
+        was not. Values must be short single-line strings, because they are
+        written into a PDF/DOCX header.
+        """
+        if v is None:
+            return None
+        if not isinstance(v, dict):
+            raise ValueError("candidate_identity must be an object")
+        allowed = {"name", "location", "phone", "email", "linkedin", "github"}
+        unknown = set(v) - allowed
+        if unknown:
+            raise ValueError(
+                "candidate_identity has unsupported field(s): "
+                + ", ".join(sorted(unknown)))
+        cleaned: Dict[str, str] = {}
+        for key, value in v.items():
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise ValueError(f"candidate_identity.{key} must be a string")
+            text = value.strip()
+            if not text:
+                continue
+            if len(text) > 200 or "\n" in text or "\r" in text:
+                raise ValueError(f"candidate_identity.{key} must be a single short line")
+            cleaned[key] = text
+        return cleaned or None
 
     @field_validator("golden_bullets")
     @classmethod

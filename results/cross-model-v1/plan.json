@@ -1,0 +1,17 @@
+{
+  "mode": "imaginative",
+  "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+  "cases": [
+    "faithful_paraphrase",
+    "cal_ops_faithful",
+    "cal_lab_faithful",
+    "unsupported_method",
+    "cal_ops_unsupported",
+    "omitted_record",
+    "wrong_record_attribution"
+  ],
+  "max_requests": 14,
+  "max_spend_usd": 0.75,
+  "attempts_per_call": 2,
+  "model": "openai/gpt-4o-mini"
+}

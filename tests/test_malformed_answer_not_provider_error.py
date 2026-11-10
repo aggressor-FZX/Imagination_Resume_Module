@@ -81,21 +81,69 @@ def test_phase_event_names_a_malformed_answer():
         "a malformed answer is still reported as callback_error")
 
 
-def test_provider_raises_the_mapped_exception_not_a_generic_one():
-    """The adapter must translate the protocol error, not let it fall through."""
-    import inspect
-
+@pytest.mark.parametrize("answer,constraint", [
+    ({"supported": ["L000001"], "unsupported": ["L000001"]},
+     "duplicate_line_verdict"),
+    ({"supported": ["L000001"], "represented": [9]}, "index_out_of_range"),
+    ({"invented": []}, "response_not_a_dict_or_unknown_key"),
+])
+def test_provider_raises_the_mapped_exception_not_a_generic_one(monkeypatch, answer, constraint):
+    """A served indexed review retains its phase and precise validation failure."""
+    import asyncio
+    import json
     import correction_provider
 
-    source = inspect.getsource(correction_provider.CorrectionProvider.__call__)
-    assert "except correction_protocol.MalformedIndexedResponse" in source
-    assert "raise MalformedReviewAnswer(" in source
-    # The constraint identifier must be carried through, so the specific failed
-    # check is recorded rather than only "malformed".
-    assert 'getattr(exc, "constraint"' in source
-    # And the re-raise list must include it, or the generic handler below
-    # re-labels it as provider_error.
-    assert "MalformedReviewAnswer," in source
+    monkeypatch.setattr(correction_provider, "_approved_disclosure_available", lambda: True)
+    events = []
+
+    class Session:
+        def __init__(self):
+            self.requests = []
+
+        def post(self, url, **kwargs):
+            self.requests.append(kwargs["json"])
+            envelope = {"model": correction_provider.OR_SLUG_DRAFTER,
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1,
+                                  "total_tokens": 2},
+                        "choices": [{"finish_reason": "stop", "message": {
+                            "content": json.dumps(answer)}}]}
+
+            class Response:
+                status = 200
+
+                def __init__(self):
+                    self.content = self
+
+                async def iter_chunked(self, size):
+                    yield json.dumps(envelope).encode()
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *args):
+                    pass
+
+            return Response()
+
+    session = Session()
+    provider = correction_provider.CorrectionProvider("synthetic-key", session,
+                                                       observer=events.append)
+    payload = {"contract": "review", "sources": [{"source_id": "doc", "text": "line one"}],
+               "source_claims": [{"id": "doc:0:8", "source_id": "doc", "start": 0,
+                                  "end": 8, "quote": "line one", "classification": "required"}],
+               "lines": [{"line_id": "L000001", "text": "line one"}]}
+    with pytest.raises(sc.MalformedReviewAnswer) as caught:
+        asyncio.run(provider("initial_review", payload))
+    assert caught.value.phase == "initial_review"
+    assert caught.value.constraint == constraint
+    assert isinstance(caught.value.__cause__, correction_protocol.MalformedIndexedResponse)
+    assert caught.value.__cause__.constraint == constraint
+    assert len(session.requests) == 1
+    wire = json.loads(session.requests[0]["messages"][1]["content"])
+    assert wire["contract"] == correction_protocol.REVIEW_CONTRACT
+    assert "segments" in wire and "source_claims" not in wire
+    assert events[0]["outcome"] == "ok" and events[0]["http_status"] == 200
+    assert not provider.usage["failures"]
 
 
 def test_the_constraint_identifier_reaches_the_phase_event():

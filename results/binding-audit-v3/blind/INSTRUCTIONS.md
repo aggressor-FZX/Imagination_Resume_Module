@@ -1,0 +1,3 @@
+# Blind audit
+
+Judge each entry using the exact sources. For each review assess whether its substantive objections are supported, wrong, or unclear, with source and owner. Judge both reviewed and final documents separately for unsupported facts, misattribution, omission, and injected reviewer commentary; explain whether each is deliverable. Do not infer correctness from formatting, references, withhold, or initial expectations. Mark absent text unassessable. Do not access the sibling private-key.json. Raw response format may reveal the contract; it cannot be fully blinded without altering evidence.

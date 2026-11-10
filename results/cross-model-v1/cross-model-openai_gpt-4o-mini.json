@@ -1,0 +1,656 @@
+{
+  "model": "openai/gpt-4o-mini",
+  "mode": "imaginative",
+  "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+  "meter": {
+    "max_requests": 14,
+    "max_cost_usd": 0.75,
+    "requests_sent": 7,
+    "billable_requests": 7,
+    "unmetered_requests": 0,
+    "logical_calls": 7,
+    "cost_usd": 0.002249,
+    "cost_is_known": true,
+    "ceiling_statement": "The request ceiling is hard: it is checked before every HTTP attempt including retries. The cost ceiling is enforced against observed cost only; it is NOT a proof of maximum spend when any response omits usage.",
+    "unmetered_caveat": null
+  },
+  "rows": [
+    {
+      "case_id": "faithful_paraphrase",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": true,
+      "structural": [],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month with the same month a year earlier.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which conveys a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: \"Compared quarterly parts usage with the prior four quarters to set reorder points.\"\n  problem: unsupported\n  sources: [candidate-supplement.txt, \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The wording \"with\" should be changed to \"against\" to maintain fidelity to the original source.\n  correction: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"\n\nOverall, the draft contains several instances of wording that do not accurately reflect the original source documents, which must be corrected to ensure fidelity to the candidate's experiences.",
+      "cost_usd": 0.0003996135,
+      "error": "",
+      "objections": [
+        {
+          "problem": "unsupported",
+          "passage": "Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.",
+          "why": "The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed.",
+          "correction": "Tracked monthly fuel consumption across 14 depots, comparing each month with the same month a year earlier.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Produced the depot scorecard that supervisors review in the Monday operations meeting.",
+          "why": "The term \"produced\" does not accurately reflect the original wording \"built,\" which conveys a more active role in the creation of the scorecard.",
+          "correction": "Built the depot scorecard that supervisors review in the Monday operations meeting.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Compared quarterly parts usage with the prior four quarters to set reorder points.",
+          "why": "The wording \"with\" should be changed to \"against\" to maintain fidelity to the original source.",
+          "correction": "\"Compared quarterly parts usage against the prior four quarters to set reorder points.\" Overall, the draft contains several instances of wording that do not accurately reflect the original source documents, which must be corrected to ensure fidelity to the candidate's experiences.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "cal_ops_faithful",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": false,
+      "structural": [
+        "problem_word_unknown:synonymous"
+      ],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Audited 260 inbound shipments during 2024 for temperature compliance.\"\n  problem: misattributed\n  sources: [ops-main.txt, \"Audited 260 inbound shipments in 2024 for temperature compliance.\"]\n  why: The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing.\n  correction: \"Audited 260 inbound shipments in 2024 for temperature compliance.\"\n\n- passage: \"Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.\"\n  problem: unsupported\n  sources: [ops-main.txt, \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"]\n  why: The draft uses \"brought down\" instead of \"reduced,\" which alters the wording but does not change the meaning. However, it is important to maintain the original phrasing for accuracy.\n  correction: \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"\n\n- passage: \"Negotiated a carrier contract that cut inbound freight cost by 11%.\"\n  problem: synonymous wording\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The draft uses \"cut\" instead of \"lowered,\" which is synonymous but should retain the original wording for consistency.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nOverall, the draft needs to maintain the original phrasing and context from the source documents to ensure accuracy and fidelity to the candidate's achievements.",
+      "cost_usd": 0.0004189185,
+      "error": "",
+      "objections": [
+        {
+          "problem": "misattributed",
+          "passage": "Audited 260 inbound shipments during 2024 for temperature compliance.",
+          "why": "The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing.",
+          "correction": "Audited 260 inbound shipments in 2024 for temperature compliance.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.",
+          "why": "The draft uses \"brought down\" instead of \"reduced,\" which alters the wording but does not change the meaning. However, it is important to maintain the original phrasing for accuracy.",
+          "correction": "Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "synonymous",
+          "passage": "Negotiated a carrier contract that cut inbound freight cost by 11%.",
+          "why": "The draft uses \"cut\" instead of \"lowered,\" which is synonymous but should retain the original wording for consistency.",
+          "correction": "\"Negotiated a carrier contract that lowered inbound freight cost by 11%.\" Overall, the draft needs to maintain the original phrasing and context from the source documents to ensure accuracy and fidelity to the candidate's achievements.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "cal_lab_faithful",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": true,
+      "structural": [],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Completed total coliform and E. coli assays on 640 drinking-water samples during 2025.\"\n  problem: misattributed\n  sources: [lab-main.txt, \"Ran total coliform and E. coli assays on 640 drinking-water samples in 2025.\"]\n  why: The original source states that the assays were run in 2025, but the draft incorrectly states \"completed,\" which implies the work was finished in that year rather than conducted.\n  correction: \"Ran total coliform and E. coli assays on 640 drinking-water samples in 2025.\"\n\n- passage: \"Kept the laboratory's chain-of-custody log for every client sample.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Maintained the lab's chain-of-custody log for all client samples.\"]\n  why: The draft's wording \"every client sample\" is not supported by the source, which states \"all client samples.\" The change alters the meaning slightly.\n  correction: \"Maintained the lab's chain-of-custody log for all client samples.\"\n\n- passage: \"Sent results to the state drinking-water program inside the 24-hour regulatory window.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Reported results to the state drinking-water program within the 24-hour regulatory window.\"]\n  why: The draft's wording \"sent results\" is not supported by the source, which states \"reported results.\" This change alters the meaning.\n  correction: \"Reported results to the state drinking-water program within the 24-hour regulatory window.\"\n\n- passage: \"Entered 1,400 sample receipts into the laboratory information management system.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Logged 1,400 sample receipts into the laboratory information management system.\"]\n  why: The draft's wording \"entered\" is not supported by the source, which states \"logged.\" This change alters the meaning.\n  correction: \"Logged 1,400 sample receipts into the laboratory information management system.\"",
+      "cost_usd": 0.00045738,
+      "error": "",
+      "objections": [
+        {
+          "problem": "misattributed",
+          "passage": "Completed total coliform and E. coli assays on 640 drinking-water samples during 2025.",
+          "why": "The original source states that the assays were run in 2025, but the draft incorrectly states \"completed,\" which implies the work was finished in that year rather than conducted.",
+          "correction": "Ran total coliform and E. coli assays on 640 drinking-water samples in 2025.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Kept the laboratory's chain-of-custody log for every client sample.",
+          "why": "The draft's wording \"every client sample\" is not supported by the source, which states \"all client samples.\" The change alters the meaning slightly.",
+          "correction": "Maintained the lab's chain-of-custody log for all client samples.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Sent results to the state drinking-water program inside the 24-hour regulatory window.",
+          "why": "The draft's wording \"sent results\" is not supported by the source, which states \"reported results.\" This change alters the meaning.",
+          "correction": "Reported results to the state drinking-water program within the 24-hour regulatory window.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Entered 1,400 sample receipts into the laboratory information management system.",
+          "why": "The draft's wording \"entered\" is not supported by the source, which states \"logged.\" This change alters the meaning.",
+          "correction": "Logged 1,400 sample receipts into the laboratory information management system.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "unsupported_method",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": true,
+      "structural": [],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling.\n  correction: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"\n\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The draft changes \"tracked\" to \"monitored,\" which alters the meaning slightly. \"Tracked\" implies a more active role in managing the data than \"monitored.\"\n  correction: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The draft changes \"built\" to \"produced,\" which may imply a different level of involvement in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nOverall, the draft contains unsupported changes that need to be corrected to maintain fidelity to the source documents.",
+      "cost_usd": 0.0003289275,
+      "error": "",
+      "objections": [
+        {
+          "problem": "unsupported",
+          "passage": "Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.",
+          "why": "The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling.",
+          "correction": "Cut rework by 18% by standardizing panel labeling across the terminal fleet.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.",
+          "why": "The draft changes \"tracked\" to \"monitored,\" which alters the meaning slightly. \"Tracked\" implies a more active role in managing the data than \"monitored.\"",
+          "correction": "Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "Produced the depot scorecard that supervisors review in the Monday operations meeting.",
+          "why": "The draft changes \"built\" to \"produced,\" which may imply a different level of involvement in the creation of the scorecard.",
+          "correction": "\"Built the depot scorecard that supervisors review in the Monday operations meeting.\" Overall, the draft contains unsupported changes that need to be corrected to maintain fidelity to the source documents.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "cal_ops_unsupported",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": true,
+      "structural": [],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"cut inbound freight cost by 11% by consolidating LTL lanes onto two regional carriers.\"\n  problem: unsupported\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The draft adds specific details about how the cost was reduced (\"by consolidating LTL lanes onto two regional carriers\") that are not supported by the source document.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "cost_usd": 0.000209979,
+      "error": "",
+      "objections": [
+        {
+          "problem": "unsupported",
+          "passage": "cut inbound freight cost by 11% by consolidating LTL lanes onto two regional carriers.",
+          "why": "The draft adds specific details about how the cost was reduced (\"by consolidating LTL lanes onto two regional carriers\") that are not supported by the source document.",
+          "correction": "\"Negotiated a carrier contract that lowered inbound freight cost by 11%.\" Rules: - approve: no issue requires a change. - revise: you must give at least one usable correction. - cannot_assess: the material you need is missing or unreadable. Say which.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "omitted_record",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "approve",
+      "valid": false,
+      "structural": [
+        "approve_carries_issues"
+      ],
+      "response": "Decision: approve\n\nIssues:\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not fully capture the specific action of \"tracked\" as stated in the source. While synonymous, \"tracked\" conveys a more precise meaning in this context.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which implies a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nOverall, the draft is strong, but these minor adjustments will ensure it remains faithful to the source material.",
+      "cost_usd": 0.0002362635,
+      "error": "",
+      "objections": [
+        {
+          "problem": "unsupported",
+          "passage": "(omitted)",
+          "why": "The term \"monitored\" does not fully capture the specific action of \"tracked\" as stated in the source. While synonymous, \"tracked\" conveys a more precise meaning in this context.",
+          "correction": "Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.",
+          "passage_resolves": true
+        },
+        {
+          "problem": "unsupported",
+          "passage": "(omitted)",
+          "why": "The term \"produced\" does not accurately reflect the original wording \"built,\" which implies a more active role in the creation of the scorecard.",
+          "correction": "\"Built the depot scorecard that supervisors review in the Monday operations meeting.\" Overall, the draft is strong, but these minor adjustments will ensure it remains faithful to the source material.",
+          "passage_resolves": true
+        }
+      ]
+    },
+    {
+      "case_id": "wrong_record_attribution",
+      "model_label": "openai/gpt-4o-mini",
+      "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+      "decision": "revise",
+      "valid": true,
+      "structural": [],
+      "response": "Decision: revise\n\nIssues:\n- passage: \"reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners.\n  correction: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "cost_usd": 0.000198099,
+      "error": "",
+      "objections": [
+        {
+          "problem": "misattributed",
+          "passage": "reconciled 1,180 fuel invoices each quarter.",
+          "why": "The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners.",
+          "correction": "\"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\" Rules: - approve: no issue requires a change. - revise: you must give at least one usable correction. - cannot_assess: the material you need is missing or unreadable. Say which.",
+          "passage_resolves": true
+        }
+      ]
+    }
+  ],
+  "ledger": [
+    {
+      "label": "openai/gpt-4o-mini:faithful_paraphrase",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month with the same month a year earlier.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which conveys a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: \"Compared quarterly parts usage with the prior four quarters to set reorder points.\"\n  problem: unsupported\n  sources: [candidate-supplement.txt, \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The wording \"with\" should be changed to \"against\" to maintain fidelity to the original source.\n  correction: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"\n\nOverall, the draft contains several instances of wording that do not accurately reflect the original source documents, which must be corrected to ensure fidelity to the candidate's experiences.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1327,
+      "completion_tokens": 341,
+      "total_tokens": 1668,
+      "cost_usd": 0.0003996135,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 4.465,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1327,
+        "completion_tokens": 341,
+        "total_tokens": 1668,
+        "cost": 0.0003996135,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00040365,
+          "upstream_inference_prompt_cost": 0.00019905,
+          "upstream_inference_completions_cost": 0.0002046
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:cal_ops_faithful",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Audited 260 inbound shipments during 2024 for temperature compliance.\"\n  problem: misattributed\n  sources: [ops-main.txt, \"Audited 260 inbound shipments in 2024 for temperature compliance.\"]\n  why: The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing.\n  correction: \"Audited 260 inbound shipments in 2024 for temperature compliance.\"\n\n- passage: \"Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.\"\n  problem: unsupported\n  sources: [ops-main.txt, \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"]\n  why: The draft uses \"brought down\" instead of \"reduced,\" which alters the wording but does not change the meaning. However, it is important to maintain the original phrasing for accuracy.\n  correction: \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"\n\n- passage: \"Negotiated a carrier contract that cut inbound freight cost by 11%.\"\n  problem: synonymous wording\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The draft uses \"cut\" instead of \"lowered,\" which is synonymous but should retain the original wording for consistency.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nOverall, the draft needs to maintain the original phrasing and context from the source documents to ensure accuracy and fidelity to the candidate's achievements.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1365,
+      "completion_tokens": 364,
+      "total_tokens": 1729,
+      "cost_usd": 0.0004189185,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 7.252,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1365,
+        "completion_tokens": 364,
+        "total_tokens": 1729,
+        "cost": 0.0004189185,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00042315,
+          "upstream_inference_prompt_cost": 0.00020475,
+          "upstream_inference_completions_cost": 0.0002184
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:cal_lab_faithful",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Completed total coliform and E. coli assays on 640 drinking-water samples during 2025.\"\n  problem: misattributed\n  sources: [lab-main.txt, \"Ran total coliform and E. coli assays on 640 drinking-water samples in 2025.\"]\n  why: The original source states that the assays were run in 2025, but the draft incorrectly states \"completed,\" which implies the work was finished in that year rather than conducted.\n  correction: \"Ran total coliform and E. coli assays on 640 drinking-water samples in 2025.\"\n\n- passage: \"Kept the laboratory's chain-of-custody log for every client sample.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Maintained the lab's chain-of-custody log for all client samples.\"]\n  why: The draft's wording \"every client sample\" is not supported by the source, which states \"all client samples.\" The change alters the meaning slightly.\n  correction: \"Maintained the lab's chain-of-custody log for all client samples.\"\n\n- passage: \"Sent results to the state drinking-water program inside the 24-hour regulatory window.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Reported results to the state drinking-water program within the 24-hour regulatory window.\"]\n  why: The draft's wording \"sent results\" is not supported by the source, which states \"reported results.\" This change alters the meaning.\n  correction: \"Reported results to the state drinking-water program within the 24-hour regulatory window.\"\n\n- passage: \"Entered 1,400 sample receipts into the laboratory information management system.\"\n  problem: unsupported\n  sources: [lab-main.txt, \"Logged 1,400 sample receipts into the laboratory information management system.\"]\n  why: The draft's wording \"entered\" is not supported by the source, which states \"logged.\" This change alters the meaning.\n  correction: \"Logged 1,400 sample receipts into the laboratory information management system.\"",
+      "finish_reason": "stop",
+      "prompt_tokens": 1388,
+      "completion_tokens": 423,
+      "total_tokens": 1811,
+      "cost_usd": 0.00045738,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 8.028,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1388,
+        "completion_tokens": 423,
+        "total_tokens": 1811,
+        "cost": 0.00045738,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.000462,
+          "upstream_inference_prompt_cost": 0.0002082,
+          "upstream_inference_completions_cost": 0.0002538
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:unsupported_method",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling.\n  correction: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"\n\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The draft changes \"tracked\" to \"monitored,\" which alters the meaning slightly. \"Tracked\" implies a more active role in managing the data than \"monitored.\"\n  correction: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The draft changes \"built\" to \"produced,\" which may imply a different level of involvement in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nOverall, the draft contains unsupported changes that need to be corrected to maintain fidelity to the source documents.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1331,
+      "completion_tokens": 365,
+      "total_tokens": 1696,
+      "cost_usd": 0.0003289275,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 4.189,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1331,
+        "completion_tokens": 365,
+        "total_tokens": 1696,
+        "cost": 0.0003289275,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1152,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00033225,
+          "upstream_inference_prompt_cost": 0.00011325,
+          "upstream_inference_completions_cost": 0.000219
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:cal_ops_unsupported",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"cut inbound freight cost by 11% by consolidating LTL lanes onto two regional carriers.\"\n  problem: unsupported\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The draft adds specific details about how the cost was reduced (\"by consolidating LTL lanes onto two regional carriers\") that are not supported by the source document.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1378,
+      "completion_tokens": 153,
+      "total_tokens": 1531,
+      "cost_usd": 0.000209979,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 2.455,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1378,
+        "completion_tokens": 153,
+        "total_tokens": 1531,
+        "cost": 0.000209979,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1152,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002121,
+          "upstream_inference_prompt_cost": 0.0001203,
+          "upstream_inference_completions_cost": 9.18e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:omitted_record",
+      "text": "Decision: approve\n\nIssues:\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not fully capture the specific action of \"tracked\" as stated in the source. While synonymous, \"tracked\" conveys a more precise meaning in this context.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which implies a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nOverall, the draft is strong, but these minor adjustments will ensure it remains faithful to the source material.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1275,
+      "completion_tokens": 223,
+      "total_tokens": 1498,
+      "cost_usd": 0.0002362635,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 3.294,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1275,
+        "completion_tokens": 223,
+        "total_tokens": 1498,
+        "cost": 0.0002362635,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1152,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00023865,
+          "upstream_inference_prompt_cost": 0.00010485,
+          "upstream_inference_completions_cost": 0.0001338
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    },
+    {
+      "label": "openai/gpt-4o-mini:wrong_record_attribution",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners.\n  correction: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1338,
+      "completion_tokens": 159,
+      "total_tokens": 1497,
+      "cost_usd": 0.000198099,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 2.3,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1338,
+        "completion_tokens": 159,
+        "total_tokens": 1497,
+        "cost": 0.000198099,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1280,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002001,
+          "upstream_inference_prompt_cost": 0.0001047,
+          "upstream_inference_completions_cost": 9.54e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false
+    }
+  ],
+  "models": [
+    "openai/gpt-4o-mini"
+  ],
+  "per_case": {
+    "faithful_paraphrase": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": true,
+          "objections": 3,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": false,
+            "defect_fully_detected": null,
+            "approved_clean_draft": false,
+            "clean_refused": true
+          },
+          "first_objection": "[unsupported] The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed."
+        }
+      },
+      "probe": "clean_paraphrase"
+    },
+    "cal_ops_faithful": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": false,
+          "objections": 3,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": true,
+            "defect_fully_detected": null,
+            "approved_clean_draft": false,
+            "clean_refused": true
+          },
+          "first_objection": "[misattributed] The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing."
+        }
+      },
+      "probe": "clean_paraphrase"
+    },
+    "cal_lab_faithful": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": true,
+          "objections": 4,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": true,
+            "defect_fully_detected": null,
+            "approved_clean_draft": false,
+            "clean_refused": true
+          },
+          "first_objection": "[misattributed] The original source states that the assays were run in 2025, but the draft incorrectly states \"completed,\" which implies the work was finished in that year rather than conducted."
+        }
+      },
+      "probe": "source_backed_concurrency"
+    },
+    "unsupported_method": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": true,
+          "objections": 3,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": false,
+            "defect_fully_detected": true,
+            "approved_clean_draft": null,
+            "clean_refused": null
+          },
+          "first_objection": "[unsupported] The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling."
+        }
+      },
+      "probe": "unsupported_method"
+    },
+    "cal_ops_unsupported": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": true,
+          "objections": 1,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": false,
+            "defect_fully_detected": true,
+            "approved_clean_draft": null,
+            "clean_refused": null
+          },
+          "first_objection": "[unsupported] The draft adds specific details about how the cost was reduced (\"by consolidating LTL lanes onto two regional carriers\") that are not supported by the source document."
+        }
+      },
+      "probe": "unsupported_method"
+    },
+    "omitted_record": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "approve",
+          "valid": false,
+          "objections": 2,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": false,
+            "defect_fully_detected": false,
+            "approved_clean_draft": null,
+            "clean_refused": null
+          },
+          "first_objection": "[unsupported] The term \"monitored\" does not fully capture the specific action of \"tracked\" as stated in the source. While synonymous, \"tracked\" conveys a more precise meaning in this context."
+        }
+      },
+      "probe": "omission_or_wrong_record"
+    },
+    "wrong_record_attribution": {
+      "models": {
+        "openai/gpt-4o-mini": {
+          "decision": "revise",
+          "valid": true,
+          "objections": 1,
+          "checks": {
+            "concurrency_claimed_impossible": false,
+            "synonymy_objected": false,
+            "defect_fully_detected": true,
+            "approved_clean_draft": null,
+            "clean_refused": null
+          },
+          "first_objection": "[misattributed] The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners."
+        }
+      },
+      "probe": "omission_or_wrong_record"
+    }
+  },
+  "openai/gpt-4o-mini": {
+    "cases": 7,
+    "usable_answers": 5,
+    "errors": 0,
+    "concurrency_claims": 0,
+    "synonymy_objections": 2,
+    "clean_approved": 0,
+    "defect_fully_detected": 3,
+    "cost_usd": 0.002249
+  }
+}

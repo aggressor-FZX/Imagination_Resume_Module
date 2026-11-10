@@ -103,6 +103,9 @@ class CorrectionResult:
     # reviewer reported that fact missing. Counted separately from repairs, which
     # remove unsupported additions; a restoration adds a supported one.
     restore_calls: int = 0
+    # None means no final deck was supplied (legacy direct callers); an empty
+    # tuple is an authoritative empty deck and must not fall back to proposals.
+    final_bridges: tuple[dict[str, Any], ...] | None = None
 
 
 Callback = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -1798,8 +1801,8 @@ def _apply_bridge_decisions(
         }
         history[decision.bridge_id] = record
         outcome.applied.append(record)
-        if decision.decision == "narrow":
-            # New wording in the draft has not been reviewed yet.
+        if decision.decision in {"narrow", "remove"} and edited != markdown:
+            # Any changed document, including a removal, needs a full review.
             outcome.requires_review = True
     return edited, outcome
 
@@ -2533,7 +2536,8 @@ async def _invoke(callback: Callback, phase: str, payload: dict[str, Any], timeo
 async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
                   *, timeout_seconds: float = 120.0,
                   observer: Callable[[dict[str, Any]], None] | None = None,
-                  permitted_bridges: list[dict[str, Any]] | None = None) -> CorrectionResult:
+                  permitted_bridges: list[dict[str, Any]] | None = None,
+                  require_bridge_decisions: bool = False) -> CorrectionResult:
     """Run the correction and report sanitized phase events to ``observer``.
 
     ``observer`` receives dicts whose values are numbers or fixed identifiers only
@@ -2553,7 +2557,8 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
     prior_token = _ACTIVE_PRIOR_COVERAGE.set({})
     try:
         result = await _correct_body(markdown, sources, callback, timeout_seconds,
-                                     events, permitted_bridges=permitted_bridges)
+                                     events, permitted_bridges=permitted_bridges,
+                                     require_bridge_decisions=require_bridge_decisions)
     finally:
         _ACTIVE_PRIOR_COVERAGE.reset(prior_token)
         _ACTIVE_BRIDGES.reset(token)
@@ -2563,7 +2568,8 @@ async def correct(markdown: str, sources: tuple[SourceDocument, ...], callback: 
 
 async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], callback: Callback,
                         timeout_seconds: float, events: _Events,
-                        permitted_bridges: list[dict[str, Any]] | None = None) -> CorrectionResult:
+                        permitted_bridges: list[dict[str, Any]] | None = None,
+                        require_bridge_decisions: bool = False) -> CorrectionResult:
     """Review, optionally patch, and re-review; failures never return the draft.
 
     Sources must be a nonempty tuple of uniquely identified candidate documents.
@@ -2771,11 +2777,17 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                 response.get("bridge_decisions")
                 if isinstance(response, dict) else None
             ) or {}
+            if require_bridge_decisions and set(bridge_decisions) != {
+                    b['id'] for b in (permitted_bridges or [])}:
+                return blocked("unresolved_claims")
             if bridge_decisions:
                 markdown, bridge_outcome = _apply_bridge_decisions(
                     markdown, bridge_decisions, permitted_bridges,
                     bridge_history,
                 )
+                if require_bridge_decisions and (bridge_outcome.rejected or
+                    len(bridge_outcome.applied) != len(permitted_bridges or [])):
+                    return blocked("unresolved_claims")
                 if bridge_outcome.bridges is not None:
                     # Carry the updated records forward: a narrowed bridge keeps
                     # its anchor and gains the new wording, and a removed bridge
@@ -3124,7 +3136,8 @@ async def _correct_body(markdown: str, sources: tuple[SourceDocument, ...], call
                     commentary,
                     Coverage("model_assisted_not_proof", len(lines), len(claims), supported,
                              sum(c["verdict"] == "structural" for c in claims)), reviews, repairs,
-                    restorations)
+                    restorations,
+                    tuple(dict(bridge) for bridge in (permitted_bridges or ())))
             if repairs == 2:
                 return blocked("unresolved_claims")
             # Skill restoration adds a review to the original two-repair path.

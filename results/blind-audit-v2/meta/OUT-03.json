@@ -1,0 +1,8 @@
+{
+  "cell": "current+enabled",
+  "case_id": "faithful_paraphrase",
+  "mode": "imaginative",
+  "outcome": "reference_failure",
+  "expectation": null,
+  "document_sha256": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7"
+}

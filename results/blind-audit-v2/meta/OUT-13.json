@@ -1,0 +1,8 @@
+{
+  "cell": "revised+advisory",
+  "case_id": "missing_fact",
+  "mode": "imaginative",
+  "outcome": "operational_failure",
+  "expectation": null,
+  "document_sha256": "76a3cad23a0eef05d487c18d0f82e5bc603b4a7bcdb284f421c0a206861150ed"
+}

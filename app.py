@@ -379,6 +379,7 @@ _CONTENT_REASONS = frozenset({
     "source_facts_missing", "source_completeness_uncertain",
     "source_section_missing", "attribution_conflict", "unresolved_claims",
     "no_supported_claims", "no_required_source_claims", "invalid_input",
+    "identity_header_unverified",
 })
 
 _RETRY_MESSAGE = ("Our review service could not finish checking your resume in "
@@ -445,6 +446,7 @@ def _withhold_correction(*, reason, pipeline_status, metrics, start_time, decisi
             "unresolved_claims": "The reviewer flagged unresolved claims after two correction attempts; independent review against the source is required.",
             "source_facts_missing": "The reviewer reported a source fact missing; independent review of the original source is required.",
             "source_section_missing": "A section present in your uploaded document arrived empty; independent review is required.",
+            "identity_header_unverified": "The generated document has an unverified header; independent review is required before release.",
             "privacy_redaction_failed": "Personal identifiers could not be removed without changing the source text; independent review is required.",
             "provider_rate_limited": "The correction service was temporarily busy; no unverified rewrite was issued. Please retry.",
             "provider_unavailable": "The correction service could not be reached after retrying; no unverified rewrite was issued. Please retry.",
@@ -546,12 +548,18 @@ def _correction_observer(correlation_id):
     return observe
 
 
+def _correction_engine():
+    """Select the existing engine unless JSON review is explicitly enabled."""
+    return (os.getenv("CORRECTION_ENGINE", "legacy") or "legacy").strip().lower()
+
+
 async def _run_source_correction(markdown, source_documents, api_key, request, *,
                                  timeout_seconds=120.0, observer=None, capture=None,
-                                 permitted_bridges=None):
+                                 permitted_bridges=None, mode=None):
     """Use the application session when available, otherwise close a local session."""
     from disclosure import redact_sources
 
+    started = asyncio.get_running_loop().time()
     # Length-preserving redaction keeps every code-point offset valid, so the
     # engine's exact-citation contract still holds after the sensitive
     # characters are removed. When correspondence cannot be proven, withhold.
@@ -572,9 +580,43 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
 
     async def run(session):
         wrapped = live_capture.CapturingSession(session, capture) if capture else session
-        provider = CorrectionProvider(api_key, wrapped, observer=observer)
+        schema_supported = (os.getenv("CORRECTION_SEMANTIC_JSON_SCHEMA_SUPPORTED", "")
+                            .strip().lower() in {"1", "true", "yes", "on"})
+        provider = CorrectionProvider(api_key, wrapped, observer=observer,
+                                      semantic_schema_supported=schema_supported)
         if capture is not None:
             provider = _PhaseRecordingProvider(provider, capture)
+        engine = _correction_engine()
+        if engine not in {"legacy", "semantic_json"}:
+            return None, provider
+        if engine == "semantic_json":
+            from semantic_review.json_engine import correct as semantic_correct
+            from source_correction import CorrectionResult
+            originals = dict(source_documents)
+            if permitted_bridges is not None:
+                if type(permitted_bridges) is not list or any(
+                        type(b) is not dict or type(b.get("source_id")) is not str
+                        or b["source_id"] not in originals
+                        or type(b.get("quote_start")) is not int
+                        or type(b.get("quote_end")) is not int
+                        or type(b.get("evidence_quote")) is not str
+                        or not 0 <= b["quote_start"] < b["quote_end"] <= len(originals[b["source_id"]])
+                        or originals[b["source_id"]][b["quote_start"]:b["quote_end"]] != b["evidence_quote"]
+                        for b in permitted_bridges):
+                    return CorrectionResult("withheld", None, "unresolved_claims",
+                        "Content withheld; independent review is required.", None, 0, 0), provider
+            remaining = timeout_seconds - (asyncio.get_running_loop().time() - started)
+            if remaining <= 0:
+                return CorrectionResult("withheld", None, "timeout_initial_review",
+                    "Content withheld; independent review is required.", None, 0, 0), provider
+            semantic = await semantic_correct(
+                markdown, sources, provider, timeout_seconds=remaining,
+                observer=observer, permitted_bridges=permitted_bridges, mode=mode)
+            if asyncio.get_running_loop().time() - started >= timeout_seconds:
+                return CorrectionResult("withheld", None, "timeout_initial_review",
+                    "Content withheld; independent review is required.", None,
+                    semantic.review_calls, semantic.repair_calls, semantic.restore_calls), provider
+            return semantic, provider
         result = await correct(markdown, sources, provider,
                                timeout_seconds=timeout_seconds, observer=observer,
                                permitted_bridges=permitted_bridges)
@@ -995,13 +1037,25 @@ async def _analyze_resume_impl(
                 b for b in ((analysis_result or {}).get("skill_bridges") or [])
                 if isinstance(b, dict) and b.get("skill")
             ]
+            _effective_mode, _effective_policy = _mode_from_payload(payload)
+            _semantic_json = _correction_engine() == "semantic_json"
+            if _semantic_json:
+                # Do not silently discard malformed server records before validation.
+                _permitted_bridges = (analysis_result or {}).get("skill_bridges")
+                if _permitted_bridges is None:
+                    _permitted_bridges = []
+                if ((analysis_result or {}).get("skill_inference_mode", _effective_mode) != _effective_mode
+                        or (analysis_result or {}).get("skill_inference_policy_version", _effective_policy) != _effective_policy):
+                    return _withhold_correction(reason="invalid_input", pipeline_status=status,
+                        metrics=metrics, start_time=start_time)
+            correction_deadline = time.monotonic() + correction_budget
             try:
                 correction, provider = await _run_source_correction(
                     draft, source_documents_snapshot, api_keys[0], request,
                     timeout_seconds=correction_budget,
                     observer=_correction_observer(correlation_id),
                     capture=live_capture_record,
-                    permitted_bridges=_permitted_bridges)
+                    permitted_bridges=_permitted_bridges, mode=_effective_mode)
             except Exception:
                 metrics["failures"].append({"stage": "source_correction", "usage_unknown": True})
                 finish_capture(reason="provider_error")
@@ -1030,6 +1084,7 @@ async def _analyze_resume_impl(
                     # A retryable 5xx outlived the retry allowance, and a request
                     # the provider refused outright (auth/schema/model).
                     "provider_unavailable", "provider_rejected_request",
+                    "source_section_missing", "section_contract_unavailable",
                     "timeout_source_inventory", "timeout_initial_review",
                     "timeout_repair", "timeout_post_patch_review",
                     "provider_call_timeout_source_inventory",
@@ -1044,7 +1099,32 @@ async def _analyze_resume_impl(
                     skill_inference_mode=_w_mode,
                     skill_inference_policy_version=_w_policy)
 
+            if (_semantic_json
+                    and not isinstance(correction.final_bridges, tuple)):
+                return _withhold_correction(reason="unresolved_claims", pipeline_status=status,
+                    metrics=metrics, start_time=start_time)
+
             final_markdown = correction.markdown
+            # The candidate's contact header, when the caller supplied one.
+            # This is the ONLY identity source. Extracted document text is never
+            # parsed for a name: a first line can be a job title, an agency or a
+            # recruiter's address, and signing that would print the wrong person
+            # on the deliverable.
+            candidate_identity = getattr(payload, "candidate_identity", None)
+            if candidate_identity is not None and not isinstance(candidate_identity, dict):
+                candidate_identity = None
+            if _semantic_json:
+                # An unscoped preamble is a generated header line. Even when an
+                # identity was supplied, the reviewed document may disagree with
+                # it, and this path cannot prove which is the candidate's. Refuse
+                # rather than sign a document whose printed header is unverified.
+                segments = publication_gate.approved_segments(final_markdown)
+                if segments and segments[0].get("section") is None:
+                    finish_capture(correction_result=correction, reason="identity_header_unverified")
+                    return _withhold_correction(reason="identity_header_unverified",
+                        pipeline_status=status, metrics=metrics, start_time=start_time,
+                        skill_inference_mode=_effective_mode,
+                        skill_inference_policy_version=_effective_policy)
             support = tier_a_verifier.verify_metrics(final_markdown, payload.resume_text)
             missing_entities = unsupported_entities(final_markdown, payload.resume_text)
             decision = publication_gate.decide(
@@ -1080,18 +1160,30 @@ async def _analyze_resume_impl(
                 "run_metrics": metrics,
                 "processing_time_seconds": time.time() - start_time,
                 "skill_inference_mode": (analysis_result or {}).get(
-                    "skill_inference_mode"),
+                    "skill_inference_mode", _effective_mode if _semantic_json else None),
                 "skill_inference_policy_version": (analysis_result or {}).get(
-                    "skill_inference_policy_version"),
+                    "skill_inference_policy_version", _effective_policy if _semantic_json else None),
                 "skill_bridges": _surviving_bridges(
-                    (analysis_result or {}).get("skill_bridges"), final_markdown),
+                    (list(correction.final_bridges) if correction.final_bridges is not None
+                     else _permitted_bridges), final_markdown),
             }, decision)
+            if _semantic_json:
+                # Raw evidence and rationale never leave the server in this path.
+                output["skill_bridges"] = [
+                    {key: b.get(key) for key in ("id", "skill", "origin", "source_id", "policy_version")}
+                    for b in output["skill_bridges"]
+                ]
             # A free-trial visitor is a legitimate owner: they spent credits for
             # this resume. Binding only to a signed-in account discarded an
             # already-corrected document purely because the user was logged out
             # (measured: 1 of 20 runs, 2026-11-08).
             owner, owner_is_account = resolve_publication_owner(request)
-            output = _issue_publication_receipt(output, owner=owner)
+            # Identity is signed as part of the render payload, so a later export
+            # cannot inject a name the approval never covered. When the caller
+            # supplied none, the signed header stays empty and export must send the
+            # same empty header. Free-form source text is never consulted here.
+            output = _issue_publication_receipt(
+                output, owner=owner, identity=candidate_identity)
             if not owner or not output.get("publication_receipt") or not output.get("approved_export_payload"):
                 finish_capture(correction_result=correction, decision=decision,
                                reason="receipt_unavailable")
@@ -1108,8 +1200,20 @@ async def _analyze_resume_impl(
                  "snippet": "\n".join(item.get("bullets", []))}
                 for item in output["approved_export_payload"]["experience"]
             ]
+            response = AnalysisResponse(**output)
+            if _semantic_json and time.monotonic() >= correction_deadline:
+                finish_capture(correction_result=correction, reason="timeout_initial_review")
+                return _withhold_correction(reason="timeout_post_patch_review" if correction.repair_calls
+                    else "timeout_initial_review", pipeline_status=status, metrics=metrics,
+                    start_time=start_time, skill_inference_mode=_effective_mode,
+                    skill_inference_policy_version=_effective_policy)
             finish_capture(correction_result=correction, decision=decision, reason="approved")
-            return AnalysisResponse(**output)
+            if _semantic_json and time.monotonic() >= correction_deadline:
+                return _withhold_correction(reason="timeout_post_patch_review" if correction.repair_calls
+                    else "timeout_initial_review", pipeline_status=status, metrics=metrics,
+                    start_time=start_time, skill_inference_mode=_effective_mode,
+                    skill_inference_policy_version=_effective_policy)
+            return response
 
         # Step 2: Run Generation
         logger.info("run_generation.start", extra={"request_id": request_id})
@@ -1422,8 +1526,7 @@ def _surviving_bridges(bridges, final_markdown):
     """
     if not isinstance(bridges, list):
         return []
-    text = (final_markdown or "").casefold()
-    import re as _re
+    from skill_bridge_decisions import find_occurrences
 
     surviving = []
     for bridge in bridges:
@@ -1432,11 +1535,8 @@ def _surviving_bridges(bridges, final_markdown):
         skill = bridge.get("skill")
         if not isinstance(skill, str) or not skill.strip():
             continue
-        label = " ".join(skill.casefold().split())
-        if not label:
-            continue
-        # Word-bounded: a label must appear as itself, not inside another word.
-        if _re.search(r"(?<![a-z0-9])" + _re.escape(label) + r"(?![a-z0-9])", text):
+        # Match within lines as in the JSON engine, including whitespace variation.
+        if any(find_occurrences(line, skill) for line in (final_markdown or "").splitlines()):
             surviving.append(bridge)
     return surviving
 

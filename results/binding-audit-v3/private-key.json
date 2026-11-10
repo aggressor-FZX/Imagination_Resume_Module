@@ -1,0 +1,142 @@
+{
+  "AUDIT-01": {
+    "index": 24,
+    "cell": "revised+enabled",
+    "case_id": "missing_fact"
+  },
+  "AUDIT-02": {
+    "index": 18,
+    "cell": "revised+advisory",
+    "case_id": "wrong_record_attribution"
+  },
+  "AUDIT-03": {
+    "index": 8,
+    "cell": "current+enabled",
+    "case_id": "supported_method"
+  },
+  "AUDIT-04": {
+    "index": 17,
+    "cell": "revised+advisory",
+    "case_id": "missing_fact"
+  },
+  "AUDIT-05": {
+    "index": 26,
+    "cell": "revised+enabled",
+    "case_id": "transferable_skill"
+  },
+  "AUDIT-06": {
+    "index": 25,
+    "cell": "revised+enabled",
+    "case_id": "wrong_record_attribution"
+  },
+  "AUDIT-07": {
+    "index": 21,
+    "cell": "revised+enabled",
+    "case_id": "faithful_paraphrase"
+  },
+  "AUDIT-08": {
+    "index": 10,
+    "cell": "current+enabled",
+    "case_id": "missing_fact"
+  },
+  "AUDIT-09": {
+    "index": 20,
+    "cell": "revised+advisory",
+    "case_id": "omitted_record"
+  },
+  "AUDIT-10": {
+    "index": 22,
+    "cell": "revised+enabled",
+    "case_id": "supported_method"
+  },
+  "AUDIT-11": {
+    "index": 12,
+    "cell": "current+enabled",
+    "case_id": "transferable_skill"
+  },
+  "AUDIT-12": {
+    "index": 2,
+    "cell": "current+advisory",
+    "case_id": "unsupported_method"
+  },
+  "AUDIT-13": {
+    "index": 23,
+    "cell": "revised+enabled",
+    "case_id": "unsupported_method"
+  },
+  "AUDIT-14": {
+    "index": 16,
+    "cell": "revised+advisory",
+    "case_id": "unsupported_method"
+  },
+  "AUDIT-15": {
+    "index": 7,
+    "cell": "current+enabled",
+    "case_id": "faithful_paraphrase"
+  },
+  "AUDIT-16": {
+    "index": 6,
+    "cell": "current+advisory",
+    "case_id": "omitted_record"
+  },
+  "AUDIT-17": {
+    "index": 3,
+    "cell": "current+advisory",
+    "case_id": "missing_fact"
+  },
+  "AUDIT-18": {
+    "index": 14,
+    "cell": "revised+advisory",
+    "case_id": "faithful_paraphrase"
+  },
+  "AUDIT-19": {
+    "index": 0,
+    "cell": "current+advisory",
+    "case_id": "faithful_paraphrase"
+  },
+  "AUDIT-20": {
+    "index": 27,
+    "cell": "revised+enabled",
+    "case_id": "omitted_record"
+  },
+  "AUDIT-21": {
+    "index": 11,
+    "cell": "current+enabled",
+    "case_id": "wrong_record_attribution"
+  },
+  "AUDIT-22": {
+    "index": 13,
+    "cell": "current+enabled",
+    "case_id": "omitted_record"
+  },
+  "AUDIT-23": {
+    "index": 4,
+    "cell": "current+advisory",
+    "case_id": "wrong_record_attribution"
+  },
+  "AUDIT-24": {
+    "index": 19,
+    "cell": "revised+advisory",
+    "case_id": "transferable_skill"
+  },
+  "AUDIT-25": {
+    "index": 9,
+    "cell": "current+enabled",
+    "case_id": "unsupported_method"
+  },
+  "AUDIT-26": {
+    "index": 15,
+    "cell": "revised+advisory",
+    "case_id": "supported_method"
+  },
+  "AUDIT-27": {
+    "index": 1,
+    "cell": "current+advisory",
+    "case_id": "supported_method"
+  },
+  "AUDIT-28": {
+    "index": 5,
+    "cell": "current+advisory",
+    "case_id": "transferable_skill"
+  }
+}

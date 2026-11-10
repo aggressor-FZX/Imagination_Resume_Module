@@ -1,0 +1,20 @@
+{
+  "replay_version": "v2",
+  "attempts": 24,
+  "by_axis": {
+    "operational": 11,
+    "format": 0,
+    "parse": 10,
+    "reference": 1,
+    "semantic": 2
+  },
+  "by_category": {
+    "operational:truncation": 11,
+    "reference:convention": 1,
+    "parse:contract_defect": 10,
+    "semantic:revise": 2
+  },
+  "semantic_verdicts": {
+    "transferable_skill": "semantic:revise"
+  }
+}
