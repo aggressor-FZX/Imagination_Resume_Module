@@ -1105,10 +1105,19 @@ async def _analyze_resume_impl(
                     metrics=metrics, start_time=start_time)
 
             final_markdown = correction.markdown
+            # The candidate's contact header, when the caller supplied one.
+            # This is the ONLY identity source. Extracted document text is never
+            # parsed for a name: a first line can be a job title, an agency or a
+            # recruiter's address, and signing that would print the wrong person
+            # on the deliverable.
+            candidate_identity = getattr(payload, "candidate_identity", None)
+            if candidate_identity is not None and not isinstance(candidate_identity, dict):
+                candidate_identity = None
             if _semantic_json:
-                # An unscoped preamble can be a name, title, recruiter, or other
-                # text. Review/redaction does not establish an identity binding;
-                # never release a generated header while dropping it from export.
+                # An unscoped preamble is a generated header line. Even when an
+                # identity was supplied, the reviewed document may disagree with
+                # it, and this path cannot prove which is the candidate's. Refuse
+                # rather than sign a document whose printed header is unverified.
                 segments = publication_gate.approved_segments(final_markdown)
                 if segments and segments[0].get("section") is None:
                     finish_capture(correction_result=correction, reason="identity_header_unverified")
@@ -1169,10 +1178,12 @@ async def _analyze_resume_impl(
             # already-corrected document purely because the user was logged out
             # (measured: 1 of 20 runs, 2026-11-08).
             owner, owner_is_account = resolve_publication_owner(request)
-            # Free-form source headers do not establish whose identity they carry.
-            # Do not append inferred identity after the review, including when a
-            # generated header disagrees or several source documents are present.
-            output = _issue_publication_receipt(output, owner=owner)
+            # Identity is signed as part of the render payload, so a later export
+            # cannot inject a name the approval never covered. When the caller
+            # supplied none, the signed header stays empty and export must send the
+            # same empty header. Free-form source text is never consulted here.
+            output = _issue_publication_receipt(
+                output, owner=owner, identity=candidate_identity)
             if not owner or not output.get("publication_receipt") or not output.get("approved_export_payload"):
                 finish_capture(correction_result=correction, decision=decision,
                                reason="receipt_unavailable")
