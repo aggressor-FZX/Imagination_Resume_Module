@@ -1,3 +1,63 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 8)
+
+## Checkpoint 8 — five-case four-model screen RUN; gemma-4-31b satisfies the criterion
+
+**Start here.** Results: `results/model-screen-v1/RESULTS.md`. Data `screen.json`.
+
+### Budget — with a disclosure
+
+Authorized run: **20 calls / 40 requests / $0.005143**, 0 unmetered, 0 operational
+failures, 0 retries.
+
+> **An inadvertent second run was executed.** While regenerating the report I passed
+> `--authorized --out /tmp/nonexistent` to what I intended as a no-op; it re-ran the
+> whole screen (**21 requests, $0.004223**). Combined **$0.009366**, still under the
+> $0.10 ceiling. Stray artifact deleted; **all reported results come from the first,
+> authorized run only**. This violated "run once" and is recorded, not hidden.
+
+### Headline
+
+| model | valid | detection | invented | missed | clean approved | cost |
+|---|---|---|---|---|---|---|
+| **`google/gemma-4-31b-it`** | **5/5** | **3/3** | **0/2** | **0/3** | **2/2** | **$0.000828** |
+| `google/gemini-2.5-flash-lite` | 4/5 | 2/3 | 1/2 | 1/3 | 1/2 | $0.001220 |
+| `xiaomi/mimo-v2.6-flash` | 2/5 | 1/3 | 0/2 | 2/3 | 2/2 | $0.001430 |
+| `openai/gpt-4o-mini` | 1/5 | 2/3 | 2/2 | 1/3 | 0/2 | $0.001665 |
+
+**gemma-4-31b is the first model to satisfy the judgement half of the criterion**:
+approved both faithful drafts with zero issues, and named all three defects without
+inventing any. It is also the cheapest. **"We might just need a smarter model" was
+correct on this evidence.**
+
+`cohere/fp8` served all 5 MiMo calls; the `makora/fp8` fallback was never needed.
+
+### Three measurement limitations understate MiMo — do not quote its 2/5 naively
+
+1. **`decision_missing` discards the whole answer.** `parse_decision` returns before
+   parsing issues, so two of MiMo's five answers scored zero despite containing
+   complete, correct issue blocks. A diagnostic re-parse (no new calls) recovers them:
+   `wrong_record_attribution` then meets all five criteria.
+2. **The rubric's absence-phrase list is too narrow** — "the source **never states**"
+   is not in it, so correct reasoning scores `None` rather than passing.
+3. **`approve` + issues is invalid** (correctly), which hides the issues it carried.
+
+MiMo's honest range: **2–4/5 valid, 1–2/3 detections, 0 invented** either way.
+
+### Next steps
+
+1. **Proceed with `google/gemma-4-31b-it`** to a bounded repair/release test — the
+   only untested element of the success criterion.
+2. **Fix `decision_missing` so issues are still parsed.** It silently converts correct
+   detections into zeros for any model that omits the decision line.
+3. Unchanged blockers: no independent human audit; no re-review has ever released a
+   corrected document.
+
+### Verification
+
+`2119 passed, 14 skipped`; production diff vs `master` empty.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 7)
 
 ## Checkpoint 7 — review status corrected, count fixed, model screen staged (NO CALLS)

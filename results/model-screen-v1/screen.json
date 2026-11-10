@@ -1,0 +1,1631 @@
+{
+  "plan": {
+    "models": [
+      "google/gemma-4-31b-it",
+      "google/gemini-2.5-flash-lite",
+      "xiaomi/mimo-v2.6-flash",
+      "openai/gpt-4o-mini"
+    ],
+    "provider_pins": {
+      "xiaomi/mimo-v2.6-flash": [
+        "cohere/fp8"
+      ]
+    },
+    "provider_fallbacks": {
+      "xiaomi/mimo-v2.6-flash": [
+        "makora/fp8"
+      ]
+    },
+    "cases": [
+      "faithful_paraphrase",
+      "cal_ops_faithful",
+      "unsupported_method",
+      "wrong_record_attribution",
+      "omitted_record"
+    ],
+    "logical_calls": 20,
+    "attempts_per_call": 2,
+    "max_requests": 40,
+    "max_spend_usd": 0.1,
+    "max_tokens": 8192,
+    "mode": "imaginative",
+    "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+    "ceiling_statement": "Request ceiling is HARD, checked before every HTTP attempt including retries. The $0.10 figure is enforced against OBSERVED cost only and is not a proof of maximum spend; any response without usage is recorded as unknown spend, not zero.",
+    "observed_requests": 20,
+    "observed_cost_usd": 0.005143,
+    "cost_is_known": true
+  },
+  "model_substitution": {
+    "requested": "xiaomi/mimo-v2-flash",
+    "used": "xiaomi/mimo-v2.6-flash",
+    "reason": "xiaomi/mimo-v2-flash is not present in the OpenRouter catalogue; xiaomi/mimo-v2.6-flash is the nearest available MiMo Flash."
+  },
+  "meter": {
+    "max_requests": 40,
+    "max_cost_usd": 0.1,
+    "requests_sent": 20,
+    "billable_requests": 20,
+    "unmetered_requests": 0,
+    "logical_calls": 20,
+    "cost_usd": 0.005143,
+    "cost_is_known": true,
+    "ceiling_statement": "The request ceiling is hard: it is checked before every HTTP attempt including retries. The cost ceiling is enforced against observed cost only; it is NOT a proof of maximum spend when any response omits usage.",
+    "unmetered_caveat": null
+  },
+  "rows": [
+    {
+      "model": "google/gemma-4-31b-it",
+      "case_id": "faithful_paraphrase",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve",
+      "error": "",
+      "cost_usd": 0.0001416294,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "approve",
+        "structural": [],
+        "issues": 0,
+        "actual_detection": null,
+        "invented_objection": false,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "google/gemma-4-31b-it",
+      "case_id": "cal_ops_faithful",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve",
+      "error": "",
+      "cost_usd": 0.0001482624,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "approve",
+        "structural": [],
+        "issues": 0,
+        "actual_detection": null,
+        "invented_objection": false,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "google/gemma-4-31b-it",
+      "case_id": "unsupported_method",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for the achievement, which is not present in the source.\n  correction: Cut rework by 18% through standardizing panel labeling across the terminal fleet.",
+      "error": "",
+      "cost_usd": 0.0001790514,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 1,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": false,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": null,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": false,
+            "problem_used": "unsupported"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The draft adds \"targeted quality audits\" as a method for the achievement, which is not present in the source."
+    },
+    {
+      "model": "google/gemma-4-31b-it",
+      "case_id": "wrong_record_attribution",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [candidate-main.txt: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The draft attributes the fuel invoice reconciliation (which occurred at Harborline Transit Authority) to the role at Cascade Freight Partners.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "error": "",
+      "cost_usd": 0.0001795068,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 1,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": true,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": true,
+            "problem_used": "misattributed"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The draft attributes the fuel invoice reconciliation (which occurred at Harborline Transit Authority) to the role at Cascade Freight Partners."
+    },
+    {
+      "model": "google/gemma-4-31b-it",
+      "case_id": "omitted_record",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: (omitted)\n  problem: omitted\n  sources: [candidate-supplement.txt: \"Ridgeline Equipment Services -- Fife, WA Inventory Analyst | 08/2023 - Present\"]\n  why: The draft completely omits a current professional role and its associated achievements.\n  correction: **Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.",
+      "error": "",
+      "cost_usd": 0.0001793088,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 1,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": true,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": true,
+            "problem_used": "omitted"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The draft completely omits a current professional role and its associated achievements."
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "case_id": "faithful_paraphrase",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve\n\nIssues:\n- passage: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The source uses \"Tracked\" while the draft uses \"Monitored\". While synonymous, the source also states \"fuel consumption\" while the draft states \"fuel use\". This is a minor change in wording but the core meaning is preserved.\n- passage: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The source uses \"each quarter\" while the draft uses \"every quarter\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The source uses \"Built\" while the draft uses \"Produced\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Maintained parts availability records for 7 service branches.\n  problem: unsupported\n  sources: [candidate-supplement.txt: \"Maintain parts availability records for 7 service branches.\"]\n  why: The source uses \"Maintain\" while the draft uses \"Maintained\". This is a tense change and does not alter the meaning.\n- passage: Compared quarterly parts usage with the prior four quarters to set reorder points.\n  problem: unsupported\n  sources: [candidate-supplement.txt: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The source uses \"against\" while the draft uses \"with\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: No issues found.\n- passage: Prepared the monthly cost summary that the regional manager reviewed.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Prepared the monthly cost summary reviewed by the regional manager.\"]\n  why: The source uses \"reviewed by the regional manager\" while the draft uses \"that the regional manager reviewed\". This is a synonymous phrasing and does not alter the meaning.",
+      "error": "",
+      "cost_usd": 0.000368379,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "approve",
+        "structural": [
+          "approve_carries_issues"
+        ],
+        "issues": 7,
+        "actual_detection": null,
+        "invented_objection": true,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": "The source uses \"Tracked\" while the draft uses \"Monitored\". While synonymous, the source also states \"fuel consumption\" while the draft states \"fuel use\". This is a minor change in wording but the core meaning is preserved."
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "case_id": "cal_ops_faithful",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve\n\nIssues:\n- none",
+      "error": "",
+      "cost_usd": 0.000149292,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "approve",
+        "structural": [],
+        "issues": 0,
+        "actual_detection": null,
+        "invented_objection": false,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "case_id": "unsupported_method",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"and targeted quality audits\" which is not supported by the source document.\n  correction: Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The draft uses \"Produced\" instead of \"Built\". While similar, \"Built\" implies creation from scratch, which is a more specific action than \"Produced\". The source uses \"Built\".\n  correction: Built the depot scorecard that supervisors review in the Monday operations meeting.",
+      "error": "",
+      "cost_usd": 0.000223047,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 2,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": false,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": null,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": false,
+            "problem_used": "unsupported"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The draft adds \"and targeted quality audits\" which is not supported by the source document."
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "case_id": "wrong_record_attribution",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [candidate-main.txt: Prepared the monthly cost summary reviewed by the regional manager. | candidate-main.txt: Reconciled 1,180 fuel invoices against depot dispensing records each quarter.]\n  why: The draft attributes the reconciliation of 1,180 fuel invoices to Cascade Freight Partners, but the source document states this achievement occurred at Harborline Transit Authority.\n  correction: Prepared the monthly cost summary that the regional manager reviewed.\n\n- passage: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n  problem: omitted\n  sources: [candidate-main.txt: Reconciled 1,180 fuel invoices against depot dispensing records each quarter.]\n  why: The draft omits the detail that the invoices were reconciled against depot dispensing records.\n  correction: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.",
+      "error": "",
+      "cost_usd": 0.000231759,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 2,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": true,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": true,
+            "problem_used": "misattributed"
+          },
+          "issues_mentioning_fact": 2
+        }
+      },
+      "first_objection": "The draft attributes the reconciliation of 1,180 fuel invoices to Cascade Freight Partners, but the source document states this achievement occurred at Harborline Transit Authority."
+    },
+    {
+      "model": "google/gemini-2.5-flash-lite",
+      "case_id": "omitted_record",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n  problem: omitted\n  sources: [candidate-main.txt: Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.]\n  why: The draft omits the specific metric of \"14 depots\" which was present in the source document.\n  correction: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: omitted\n  sources: [candidate-main.txt: Built the depot scorecard that supervisors review in the Monday operations meeting.]\n  why: The draft omits the specific detail that the scorecard is reviewed in the \"Monday operations meeting\".\n  correction: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n- passage: Prepared the monthly cost summary that the regional manager reviewed.\n  problem: omitted\n  sources: [candidate-main.txt: Prepared the monthly cost summary reviewed by the regional manager.]\n  why: The draft omits the specific detail that the summary was reviewed by the \"regional manager\".\n  correction: Prepared the monthly cost summary that the regional manager reviewed.",
+      "error": "",
+      "cost_usd": 0.000247401,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 3,
+        "actual_detection": false,
+        "invented_objection": null,
+        "missed_defect": true,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {},
+          "issues_mentioning_fact": 0
+        }
+      },
+      "first_objection": "The draft omits the specific metric of \"14 depots\" which was present in the source document."
+    },
+    {
+      "model": "xiaomi/mimo-v2.6-flash",
+      "case_id": "faithful_paraphrase",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve\n\nIssues:\n- (none)",
+      "error": "",
+      "cost_usd": 0.0003207204,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "approve",
+        "structural": [],
+        "issues": 0,
+        "actual_detection": null,
+        "invented_objection": false,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "xiaomi/mimo-v2.6-flash",
+      "case_id": "cal_ops_faithful",
+      "expected": "approve",
+      "decision": "approve",
+      "response": "Decision: approve\n\nIssues:\n- (no issues requiring change)\n\nAll draft content is supported by the source documents:\n- The professional summary matches `ops-main.txt` verbatim.\n- Pioneer Cold Storage bullets are faithful paraphrases of `ops-main.txt` (\"cut\" for \"lowered\", \"brought down\" for \"reduced\", \"during 2024\" for \"in 2024\" \u2014 meaning preserved).\n- Gorge Logistics Partners entry, including dates and both bullets, matches `ops-supplement.txt`.\n- Baker Valley Distribution entry matches `ops-main.txt`.\n- Both certifications are present, each under its own source record.\n- The concurrent Pioneer (01/2022\u2013Present) and Gorge (06/2023\u2013Present) timelines are stated by the sources; overlapping employment is a fact, not a contradiction.",
+      "error": "",
+      "cost_usd": 0.0002803878,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "approve",
+        "structural": [],
+        "issues": 0,
+        "actual_detection": null,
+        "invented_objection": false,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "xiaomi/mimo-v2.6-flash",
+      "case_id": "unsupported_method",
+      "expected": "revise",
+      "decision": null,
+      "response": "Issues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt \u2014 \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The source attributes the 18% rework reduction solely to standardizing panel labeling. \"Targeted quality audits\" is an additional method the source never states was used; under the Imaginative policy this is a specific activity/method attached to a specific achievement, not a permitted generalization of a demonstrated capability.\n  correction: Cut rework by 18% by standardizing panel labeling across the terminal fleet.",
+      "error": "",
+      "cost_usd": 0.000345114,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": null,
+        "structural": [
+          "decision_missing"
+        ],
+        "issues": 0,
+        "actual_detection": false,
+        "invented_objection": null,
+        "missed_defect": true,
+        "detection_detail": {
+          "owner_required": false,
+          "criteria": {},
+          "issues_mentioning_fact": 0
+        }
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "xiaomi/mimo-v2.6-flash",
+      "case_id": "wrong_record_attribution",
+      "expected": "revise",
+      "decision": null,
+      "response": "Issues:\n- passage: \"Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, Cascade Freight Partners: \"Prepared the monthly cost summary reviewed by the regional manager.\"; candidate-main.txt, Harborline Transit Authority: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The 1,180-invoice reconciliation is a Harborline Transit Authority achievement, not a Cascade Freight Partners one. The draft grafts it onto the Cascade bullet, moving a quantified fact to a different employer. The Cascade source supports only preparing the monthly cost summary for the regional manager.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "error": "",
+      "cost_usd": 0.00014457564,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": null,
+        "structural": [
+          "decision_missing"
+        ],
+        "issues": 0,
+        "actual_detection": false,
+        "invented_objection": null,
+        "missed_defect": true,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {},
+          "issues_mentioning_fact": 0
+        }
+      },
+      "first_objection": ""
+    },
+    {
+      "model": "xiaomi/mimo-v2.6-flash",
+      "case_id": "omitted_record",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: (omitted) \u2014 the entire **Ridgeline Equipment Services** entry is missing from the draft's Professional Experience section\n  problem: omitted\n  sources: [candidate-supplement.txt: \"**Ridgeline Equipment Services** -- Fife, WA / *Inventory Analyst | 08/2023 - Present* / - Maintain parts availability records for 7 service branches. / - Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The supplement documents a current employer, title, location, dates, and two substantive bullets. Dropping it removes a whole concurrent role (08/2023 \u2013 Present alongside the Harborline role) and the record that supports the CICS certification context. Overlapping dates are stated by the source and are not a defect.\n  correction: Insert the following entry above the Certifications section (and after the Cascade Freight Partners entry):\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.\n\nAll other passages check out: \"Monitored \u2026 comparing\" faithfully paraphrases \"Tracked \u2026 compared\", \"every quarter\" matches \"each quarter\", \"Produced\" matches \"Built\", and \"that the regional manager reviewed\" preserves the passive source meaning. The CICS certification is directly supported by the supplement, and the summary's \"nine years\" matches the source's \"9 years\".",
+      "error": "",
+      "cost_usd": 0.0003392928,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "revise",
+        "structural": [
+          "passage_not_in_draft:(omitted) \u2014 the entire **Ridgeline Equipment Services** entr",
+          "revise_without_actionable_issue"
+        ],
+        "issues": 1,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": true,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": true,
+            "problem_used": "omitted"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The supplement documents a current employer, title, location, dates, and two substantive bullets. Dropping it removes a whole concurrent role (08/2023 \u2013 Present alongside the Harborline role) and the record that supports the CICS certificat"
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "case_id": "faithful_paraphrase",
+      "expected": "approve",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month with the same month a year earlier.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which conveys a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: \"Compared quarterly parts usage with the prior four quarters to set reorder points.\"\n  problem: unsupported\n  sources: [candidate-supplement.txt, \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The wording \"with\" should be corrected to \"against\" to maintain fidelity to the source.\n  correction: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"\n\nOverall, the draft contains several instances of wording that do not accurately reflect the original source material, which needs to be corrected to ensure fidelity to the candidate's documented experiences.",
+      "error": "",
+      "cost_usd": 0.0004002075,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": true,
+        "decision": "revise",
+        "structural": [],
+        "issues": 3,
+        "actual_detection": null,
+        "invented_objection": true,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": "The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed."
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "case_id": "cal_ops_faithful",
+      "expected": "approve",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Audited 260 inbound shipments during 2024 for temperature compliance.\"\n  problem: misattributed\n  sources: [ops-main.txt, \"Audited 260 inbound shipments in 2024 for temperature compliance.\"]\n  why: The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing.\n  correction: \"Audited 260 inbound shipments in 2024 for temperature compliance.\"\n\n- passage: \"Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.\"\n  problem: synonymous wording that alters meaning\n  sources: [ops-main.txt, \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"]\n  why: The phrase \"brought down\" changes the meaning slightly from \"reduced,\" which is more precise in this context.\n  correction: \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"\n\n- passage: \"Negotiated a carrier contract that cut inbound freight cost by 11%.\"\n  problem: synonymous wording that alters meaning\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The term \"cut\" is less formal than \"lowered\" and may imply a different connotation regarding the negotiation process.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nOverall, the draft needs to maintain the precise language used in the source to ensure clarity and accuracy.",
+      "error": "",
+      "cost_usd": 0.0004100085,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "revise",
+        "structural": [
+          "problem_word_unknown:synonymous",
+          "problem_word_unknown:synonymous"
+        ],
+        "issues": 3,
+        "actual_detection": null,
+        "invented_objection": true,
+        "missed_defect": false,
+        "detection_detail": null
+      },
+      "first_objection": "The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing."
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "case_id": "unsupported_method",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling.\n  correction: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"\n\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: synonymous wording\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The change from \"tracked\" to \"monitored\" alters the original wording but does not change the meaning. However, \"tracked\" is a more precise term in this context.\n  correction: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: synonymous wording\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The change from \"built\" to \"produced\" alters the original wording but does not change the meaning. However, \"built\" is a more accurate term in this context.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"",
+      "error": "",
+      "cost_usd": 0.0003247695,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "revise",
+        "structural": [
+          "problem_word_unknown:synonymous",
+          "problem_word_unknown:synonymous"
+        ],
+        "issues": 3,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": false,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": null,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": false,
+            "problem_used": "unsupported"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling."
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "case_id": "wrong_record_attribution",
+      "expected": "revise",
+      "decision": "revise",
+      "response": "Decision: revise\n\nIssues:\n- passage: \"reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners.\n  correction: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"\n\n- passage: \"produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which is more appropriate in this context.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "error": "",
+      "cost_usd": 0.000252747,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "revise",
+        "structural": [
+          "passage_not_in_draft:produced the depot scorecard that supervisors review in the "
+        ],
+        "issues": 2,
+        "actual_detection": true,
+        "invented_objection": null,
+        "missed_defect": false,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {
+            "fact": true,
+            "in_source": true,
+            "in_draft": true,
+            "owner": true,
+            "correction": true,
+            "complete": true,
+            "owner_applicable": true,
+            "problem_used": "misattributed"
+          },
+          "issues_mentioning_fact": 1
+        }
+      },
+      "first_objection": "The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners."
+    },
+    {
+      "model": "openai/gpt-4o-mini",
+      "case_id": "omitted_record",
+      "expected": "revise",
+      "decision": "approve",
+      "response": "Decision: approve\n\nIssues:\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not fully capture the specific activity of \"tracked monthly fuel consumption,\" which is more precise and supported by the source.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which is more specific and supported by the source.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Prepared the monthly cost summary reviewed by the regional manager.\"]\n  why: The phrase \"that the regional manager reviewed\" is less direct than the original \"reviewed by the regional manager,\" which is more precise and supported by the source.\n  correction: \"Prepared the monthly cost summary reviewed by the regional manager.\"\n\nOverall, the draft is strong but requires these specific corrections to ensure fidelity to the source documents.",
+      "error": "",
+      "cost_usd": 0.0002772495,
+      "requests": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI",
+      "provider_pin_held": true,
+      "outcomes": {
+        "valid_judgment": false,
+        "decision": "approve",
+        "structural": [
+          "approve_carries_issues"
+        ],
+        "issues": 3,
+        "actual_detection": false,
+        "invented_objection": null,
+        "missed_defect": true,
+        "detection_detail": {
+          "owner_required": true,
+          "criteria": {},
+          "issues_mentioning_fact": 0
+        }
+      },
+      "first_objection": "The term \"monitored\" does not fully capture the specific activity of \"tracked monthly fuel consumption,\" which is more precise and supported by the source."
+    }
+  ],
+  "summary": {
+    "google/gemma-4-31b-it": {
+      "cases": 5,
+      "operational_failures": 0,
+      "valid_judgment": 5,
+      "actual_detection": 3,
+      "defective_cases": 3,
+      "invented_objections": 0,
+      "clean_cases": 2,
+      "missed_defects": 0,
+      "clean_approved": 2,
+      "cost_usd": 0.000828,
+      "provider_pinned": [],
+      "providers_reported": [
+        "CoreWeave"
+      ],
+      "pin_violations": 0
+    },
+    "google/gemini-2.5-flash-lite": {
+      "cases": 5,
+      "operational_failures": 0,
+      "valid_judgment": 4,
+      "actual_detection": 2,
+      "defective_cases": 3,
+      "invented_objections": 1,
+      "clean_cases": 2,
+      "missed_defects": 1,
+      "clean_approved": 1,
+      "cost_usd": 0.00122,
+      "provider_pinned": [],
+      "providers_reported": [
+        "Google AI Studio"
+      ],
+      "pin_violations": 0
+    },
+    "xiaomi/mimo-v2.6-flash": {
+      "cases": 5,
+      "operational_failures": 0,
+      "valid_judgment": 2,
+      "actual_detection": 1,
+      "defective_cases": 3,
+      "invented_objections": 0,
+      "clean_cases": 2,
+      "missed_defects": 2,
+      "clean_approved": 2,
+      "cost_usd": 0.00143,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "providers_reported": [
+        "Cohere"
+      ],
+      "pin_violations": 0
+    },
+    "openai/gpt-4o-mini": {
+      "cases": 5,
+      "operational_failures": 0,
+      "valid_judgment": 1,
+      "actual_detection": 2,
+      "defective_cases": 3,
+      "invented_objections": 2,
+      "clean_cases": 2,
+      "missed_defects": 1,
+      "clean_approved": 0,
+      "cost_usd": 0.001665,
+      "provider_pinned": [],
+      "providers_reported": [
+        "OpenAI"
+      ],
+      "pin_violations": 0
+    }
+  },
+  "ledger": [
+    {
+      "label": "google/gemma-4-31b-it:faithful_paraphrase",
+      "text": "Decision: approve",
+      "finish_reason": "stop",
+      "prompt_tokens": 1417,
+      "completion_tokens": 4,
+      "total_tokens": 1421,
+      "cost_usd": 0.0001416294,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.578,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1417,
+        "completion_tokens": 4,
+        "total_tokens": 1421,
+        "cost": 0.0001416294,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00014306,
+          "upstream_inference_prompt_cost": 0.0001417,
+          "upstream_inference_completions_cost": 1.36e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "google/gemma-4-31b-it:cal_ops_faithful",
+      "text": "Decision: approve",
+      "finish_reason": "stop",
+      "prompt_tokens": 1484,
+      "completion_tokens": 4,
+      "total_tokens": 1488,
+      "cost_usd": 0.0001482624,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.458,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1484,
+        "completion_tokens": 4,
+        "total_tokens": 1488,
+        "cost": 0.0001482624,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00014976,
+          "upstream_inference_prompt_cost": 0.0001484,
+          "upstream_inference_completions_cost": 1.36e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "google/gemma-4-31b-it:unsupported_method",
+      "text": "Decision: revise\n\nIssues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for the achievement, which is not present in the source.\n  correction: Cut rework by 18% through standardizing panel labeling across the terminal fleet.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1421,
+      "completion_tokens": 114,
+      "total_tokens": 1535,
+      "cost_usd": 0.0001790514,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.164,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1421,
+        "completion_tokens": 114,
+        "total_tokens": 1535,
+        "cost": 0.0001790514,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1312,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018086,
+          "upstream_inference_prompt_cost": 0.0001421,
+          "upstream_inference_completions_cost": 3.876e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "google/gemma-4-31b-it:wrong_record_attribution",
+      "text": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [candidate-main.txt: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The draft attributes the fuel invoice reconciliation (which occurred at Harborline Transit Authority) to the role at Cascade Freight Partners.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1429,
+      "completion_tokens": 113,
+      "total_tokens": 1542,
+      "cost_usd": 0.0001795068,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.536,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1429,
+        "completion_tokens": 113,
+        "total_tokens": 1542,
+        "cost": 0.0001795068,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1344,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018132,
+          "upstream_inference_prompt_cost": 0.0001429,
+          "upstream_inference_completions_cost": 3.842e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "google/gemma-4-31b-it:omitted_record",
+      "text": "Decision: revise\n\nIssues:\n- passage: (omitted)\n  problem: omitted\n  sources: [candidate-supplement.txt: \"Ridgeline Equipment Services -- Fife, WA Inventory Analyst | 08/2023 - Present\"]\n  why: The draft completely omits a current professional role and its associated achievements.\n  correction: **Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1359,
+      "completion_tokens": 133,
+      "total_tokens": 1492,
+      "cost_usd": 0.0001793088,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.26,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1359,
+        "completion_tokens": 133,
+        "total_tokens": 1492,
+        "cost": 0.0001793088,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1216,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018112,
+          "upstream_inference_prompt_cost": 0.0001359,
+          "upstream_inference_completions_cost": 4.522e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "google/gemini-2.5-flash-lite:faithful_paraphrase",
+      "text": "Decision: approve\n\nIssues:\n- passage: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The source uses \"Tracked\" while the draft uses \"Monitored\". While synonymous, the source also states \"fuel consumption\" while the draft states \"fuel use\". This is a minor change in wording but the core meaning is preserved.\n- passage: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The source uses \"each quarter\" while the draft uses \"every quarter\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The source uses \"Built\" while the draft uses \"Produced\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Maintained parts availability records for 7 service branches.\n  problem: unsupported\n  sources: [candidate-supplement.txt: \"Maintain parts availability records for 7 service branches.\"]\n  why: The source uses \"Maintain\" while the draft uses \"Maintained\". This is a tense change and does not alter the meaning.\n- passage: Compared quarterly parts usage with the prior four quarters to set reorder points.\n  problem: unsupported\n  sources: [candidate-supplement.txt: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The source uses \"against\" while the draft uses \"with\". This is a synonymous phrasing and does not alter the meaning.\n- passage: Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: No issues found.\n- passage: Prepared the monthly cost summary that the regional manager reviewed.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Prepared the monthly cost summary reviewed by the regional manager.\"]\n  why: The source uses \"reviewed by the regional manager\" while the draft uses \"that the regional manager reviewed\". This is a synonymous phrasing and does not alter the meaning.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1405,
+      "completion_tokens": 579,
+      "total_tokens": 1984,
+      "cost_usd": 0.000368379,
+      "max_tokens": 8192,
+      "model": "google/gemini-2.5-flash-lite",
+      "provider": "Google AI Studio",
+      "latency_s": 1.858,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1405,
+        "completion_tokens": 579,
+        "total_tokens": 1984,
+        "cost": 0.000368379,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0003721,
+          "upstream_inference_prompt_cost": 0.0001405,
+          "upstream_inference_completions_cost": 0.0002316
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio"
+    },
+    {
+      "label": "google/gemini-2.5-flash-lite:cal_ops_faithful",
+      "text": "Decision: approve\n\nIssues:\n- none",
+      "finish_reason": "stop",
+      "prompt_tokens": 1472,
+      "completion_tokens": 9,
+      "total_tokens": 1481,
+      "cost_usd": 0.000149292,
+      "max_tokens": 8192,
+      "model": "google/gemini-2.5-flash-lite",
+      "provider": "Google AI Studio",
+      "latency_s": 0.58,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1472,
+        "completion_tokens": 9,
+        "total_tokens": 1481,
+        "cost": 0.000149292,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0001508,
+          "upstream_inference_prompt_cost": 0.0001472,
+          "upstream_inference_completions_cost": 3.6e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio"
+    },
+    {
+      "label": "google/gemini-2.5-flash-lite:unsupported_method",
+      "text": "Decision: revise\n\nIssues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"and targeted quality audits\" which is not supported by the source document.\n  correction: Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: unsupported\n  sources: [candidate-main.txt: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The draft uses \"Produced\" instead of \"Built\". While similar, \"Built\" implies creation from scratch, which is a more specific action than \"Produced\". The source uses \"Built\".\n  correction: Built the depot scorecard that supervisors review in the Monday operations meeting.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1409,
+      "completion_tokens": 211,
+      "total_tokens": 1620,
+      "cost_usd": 0.000223047,
+      "max_tokens": 8192,
+      "model": "google/gemini-2.5-flash-lite",
+      "provider": "Google AI Studio",
+      "latency_s": 0.973,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1409,
+        "completion_tokens": 211,
+        "total_tokens": 1620,
+        "cost": 0.000223047,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002253,
+          "upstream_inference_prompt_cost": 0.0001409,
+          "upstream_inference_completions_cost": 8.44e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio"
+    },
+    {
+      "label": "google/gemini-2.5-flash-lite:wrong_record_attribution",
+      "text": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [candidate-main.txt: Prepared the monthly cost summary reviewed by the regional manager. | candidate-main.txt: Reconciled 1,180 fuel invoices against depot dispensing records each quarter.]\n  why: The draft attributes the reconciliation of 1,180 fuel invoices to Cascade Freight Partners, but the source document states this achievement occurred at Harborline Transit Authority.\n  correction: Prepared the monthly cost summary that the regional manager reviewed.\n\n- passage: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n  problem: omitted\n  sources: [candidate-main.txt: Reconciled 1,180 fuel invoices against depot dispensing records each quarter.]\n  why: The draft omits the detail that the invoices were reconciled against depot dispensing records.\n  correction: Reconciled 1,180 fuel invoices against depot dispensing records every quarter.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1417,
+      "completion_tokens": 231,
+      "total_tokens": 1648,
+      "cost_usd": 0.000231759,
+      "max_tokens": 8192,
+      "model": "google/gemini-2.5-flash-lite",
+      "provider": "Google AI Studio",
+      "latency_s": 0.939,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1417,
+        "completion_tokens": 231,
+        "total_tokens": 1648,
+        "cost": 0.000231759,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002341,
+          "upstream_inference_prompt_cost": 0.0001417,
+          "upstream_inference_completions_cost": 9.24e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio"
+    },
+    {
+      "label": "google/gemini-2.5-flash-lite:omitted_record",
+      "text": "Decision: revise\n\nIssues:\n- passage: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n  problem: omitted\n  sources: [candidate-main.txt: Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.]\n  why: The draft omits the specific metric of \"14 depots\" which was present in the source document.\n  correction: Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\n- passage: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n  problem: omitted\n  sources: [candidate-main.txt: Built the depot scorecard that supervisors review in the Monday operations meeting.]\n  why: The draft omits the specific detail that the scorecard is reviewed in the \"Monday operations meeting\".\n  correction: Produced the depot scorecard that supervisors review in the Monday operations meeting.\n- passage: Prepared the monthly cost summary that the regional manager reviewed.\n  problem: omitted\n  sources: [candidate-main.txt: Prepared the monthly cost summary reviewed by the regional manager.]\n  why: The draft omits the specific detail that the summary was reviewed by the \"regional manager\".\n  correction: Prepared the monthly cost summary that the regional manager reviewed.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1347,
+      "completion_tokens": 288,
+      "total_tokens": 1635,
+      "cost_usd": 0.000247401,
+      "max_tokens": 8192,
+      "model": "google/gemini-2.5-flash-lite",
+      "provider": "Google AI Studio",
+      "latency_s": 2.685,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1347,
+        "completion_tokens": 288,
+        "total_tokens": 1635,
+        "cost": 0.000247401,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002499,
+          "upstream_inference_prompt_cost": 0.0001347,
+          "upstream_inference_completions_cost": 0.0001152
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "Google AI Studio"
+    },
+    {
+      "label": "xiaomi/mimo-v2.6-flash:faithful_paraphrase",
+      "text": "Decision: approve\n\nIssues:\n- (none)",
+      "finish_reason": "stop",
+      "prompt_tokens": 1368,
+      "completion_tokens": 473,
+      "total_tokens": 1841,
+      "cost_usd": 0.0003207204,
+      "max_tokens": 8192,
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provider": "Cohere",
+      "latency_s": 1.797,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1368,
+        "completion_tokens": 473,
+        "total_tokens": 1841,
+        "cost": 0.0003207204,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00032396,
+          "upstream_inference_prompt_cost": 0.00019152,
+          "upstream_inference_completions_cost": 0.00013244
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 460,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere"
+    },
+    {
+      "label": "xiaomi/mimo-v2.6-flash:cal_ops_faithful",
+      "text": "Decision: approve\n\nIssues:\n- (no issues requiring change)\n\nAll draft content is supported by the source documents:\n- The professional summary matches `ops-main.txt` verbatim.\n- Pioneer Cold Storage bullets are faithful paraphrases of `ops-main.txt` (\"cut\" for \"lowered\", \"brought down\" for \"reduced\", \"during 2024\" for \"in 2024\" \u2014 meaning preserved).\n- Gorge Logistics Partners entry, including dates and both bullets, matches `ops-supplement.txt`.\n- Baker Valley Distribution entry matches `ops-main.txt`.\n- Both certifications are present, each under its own source record.\n- The concurrent Pioneer (01/2022\u2013Present) and Gorge (06/2023\u2013Present) timelines are stated by the sources; overlapping employment is a fact, not a contradiction.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1431,
+      "completion_tokens": 296,
+      "total_tokens": 1727,
+      "cost_usd": 0.0002803878,
+      "max_tokens": 8192,
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provider": "Cohere",
+      "latency_s": 1.207,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1431,
+        "completion_tokens": 296,
+        "total_tokens": 1727,
+        "cost": 0.0002803878,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00028322,
+          "upstream_inference_prompt_cost": 0.00020034,
+          "upstream_inference_completions_cost": 8.288e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 113,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere"
+    },
+    {
+      "label": "xiaomi/mimo-v2.6-flash:unsupported_method",
+      "text": "Issues:\n- passage: Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n  problem: unsupported\n  sources: [candidate-main.txt \u2014 \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The source attributes the 18% rework reduction solely to standardizing panel labeling. \"Targeted quality audits\" is an additional method the source never states was used; under the Imaginative policy this is a specific activity/method attached to a specific achievement, not a permitted generalization of a demonstrated capability.\n  correction: Cut rework by 18% by standardizing panel labeling across the terminal fleet.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1372,
+      "completion_tokens": 559,
+      "total_tokens": 1931,
+      "cost_usd": 0.000345114,
+      "max_tokens": 8192,
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provider": "Cohere",
+      "latency_s": 2.609,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1372,
+        "completion_tokens": 559,
+        "total_tokens": 1931,
+        "cost": 0.000345114,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0003486,
+          "upstream_inference_prompt_cost": 0.00019208,
+          "upstream_inference_completions_cost": 0.00015652
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 410,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere"
+    },
+    {
+      "label": "xiaomi/mimo-v2.6-flash:wrong_record_attribution",
+      "text": "Issues:\n- passage: \"Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, Cascade Freight Partners: \"Prepared the monthly cost summary reviewed by the regional manager.\"; candidate-main.txt, Harborline Transit Authority: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The 1,180-invoice reconciliation is a Harborline Transit Authority achievement, not a Cascade Freight Partners one. The draft grafts it onto the Cascade bullet, moving a quantified fact to a different employer. The Cascade source supports only preparing the monthly cost summary for the regional manager.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1381,
+      "completion_tokens": 473,
+      "total_tokens": 1854,
+      "cost_usd": 0.00014457564,
+      "max_tokens": 8192,
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provider": "Cohere",
+      "latency_s": 1.761,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1381,
+        "completion_tokens": 473,
+        "total_tokens": 1854,
+        "cost": 0.00014457564,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1312,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.000146036,
+          "upstream_inference_prompt_cost": 1.3596e-05,
+          "upstream_inference_completions_cost": 0.00013244
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 301,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere"
+    },
+    {
+      "label": "xiaomi/mimo-v2.6-flash:omitted_record",
+      "text": "Decision: revise\n\nIssues:\n- passage: (omitted) \u2014 the entire **Ridgeline Equipment Services** entry is missing from the draft's Professional Experience section\n  problem: omitted\n  sources: [candidate-supplement.txt: \"**Ridgeline Equipment Services** -- Fife, WA / *Inventory Analyst | 08/2023 - Present* / - Maintain parts availability records for 7 service branches. / - Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The supplement documents a current employer, title, location, dates, and two substantive bullets. Dropping it removes a whole concurrent role (08/2023 \u2013 Present alongside the Harborline role) and the record that supports the CICS certification context. Overlapping dates are stated by the source and are not a defect.\n  correction: Insert the following entry above the Certifications section (and after the Cascade Freight Partners entry):\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.\n\nAll other passages check out: \"Monitored \u2026 comparing\" faithfully paraphrases \"Tracked \u2026 compared\", \"every quarter\" matches \"each quarter\", \"Produced\" matches \"Built\", and \"that the regional manager reviewed\" preserves the passive source meaning. The CICS certification is directly supported by the supplement, and the summary's \"nine years\" matches the source's \"9 years\".",
+      "finish_reason": "stop",
+      "prompt_tokens": 1312,
+      "completion_tokens": 568,
+      "total_tokens": 1880,
+      "cost_usd": 0.0003392928,
+      "max_tokens": 8192,
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provider": "Cohere",
+      "latency_s": 1.983,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1312,
+        "completion_tokens": 568,
+        "total_tokens": 1880,
+        "cost": 0.0003392928,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00034272,
+          "upstream_inference_prompt_cost": 0.00018368,
+          "upstream_inference_completions_cost": 0.00015904
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 234,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [
+        "cohere/fp8"
+      ],
+      "provider_reported": "Cohere"
+    },
+    {
+      "label": "openai/gpt-4o-mini:faithful_paraphrase",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not accurately reflect the original wording \"tracked,\" which is a more precise description of the activity performed.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month with the same month a year earlier.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which conveys a more active role in the creation of the scorecard.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: \"Compared quarterly parts usage with the prior four quarters to set reorder points.\"\n  problem: unsupported\n  sources: [candidate-supplement.txt, \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"]\n  why: The wording \"with\" should be corrected to \"against\" to maintain fidelity to the source.\n  correction: \"Compared quarterly parts usage against the prior four quarters to set reorder points.\"\n\nOverall, the draft contains several instances of wording that do not accurately reflect the original source material, which needs to be corrected to ensure fidelity to the candidate's documented experiences.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1327,
+      "completion_tokens": 342,
+      "total_tokens": 1669,
+      "cost_usd": 0.0004002075,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 6.384,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1327,
+        "completion_tokens": 342,
+        "total_tokens": 1669,
+        "cost": 0.0004002075,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00040425,
+          "upstream_inference_prompt_cost": 0.00019905,
+          "upstream_inference_completions_cost": 0.0002052
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI"
+    },
+    {
+      "label": "openai/gpt-4o-mini:cal_ops_faithful",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Audited 260 inbound shipments during 2024 for temperature compliance.\"\n  problem: misattributed\n  sources: [ops-main.txt, \"Audited 260 inbound shipments in 2024 for temperature compliance.\"]\n  why: The draft states \"during 2024,\" which implies the auditing occurred throughout the entire year, while the source specifies it was for the year 2024 without indicating it was ongoing.\n  correction: \"Audited 260 inbound shipments in 2024 for temperature compliance.\"\n\n- passage: \"Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.\"\n  problem: synonymous wording that alters meaning\n  sources: [ops-main.txt, \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"]\n  why: The phrase \"brought down\" changes the meaning slightly from \"reduced,\" which is more precise in this context.\n  correction: \"Reduced dock-to-stock time from 5.5 hours to 3.2 hours over eight months.\"\n\n- passage: \"Negotiated a carrier contract that cut inbound freight cost by 11%.\"\n  problem: synonymous wording that alters meaning\n  sources: [ops-main.txt, \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"]\n  why: The term \"cut\" is less formal than \"lowered\" and may imply a different connotation regarding the negotiation process.\n  correction: \"Negotiated a carrier contract that lowered inbound freight cost by 11%.\"\n\nOverall, the draft needs to maintain the precise language used in the source to ensure clarity and accuracy.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1365,
+      "completion_tokens": 349,
+      "total_tokens": 1714,
+      "cost_usd": 0.0004100085,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 4.095,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1365,
+        "completion_tokens": 349,
+        "total_tokens": 1714,
+        "cost": 0.0004100085,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00041415,
+          "upstream_inference_prompt_cost": 0.00020475,
+          "upstream_inference_completions_cost": 0.0002094
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI"
+    },
+    {
+      "label": "openai/gpt-4o-mini:unsupported_method",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for cutting rework, which is not supported by the source. The source only states that rework was cut by standardizing panel labeling.\n  correction: \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"\n\n- passage: \"Monitored monthly fuel use across 14 depots, comparing each month with the same month a year earlier.\"\n  problem: synonymous wording\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The change from \"tracked\" to \"monitored\" alters the original wording but does not change the meaning. However, \"tracked\" is a more precise term in this context.\n  correction: \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"\n\n- passage: \"Produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: synonymous wording\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The change from \"built\" to \"produced\" alters the original wording but does not change the meaning. However, \"built\" is a more accurate term in this context.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"",
+      "finish_reason": "stop",
+      "prompt_tokens": 1331,
+      "completion_tokens": 358,
+      "total_tokens": 1689,
+      "cost_usd": 0.0003247695,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 4.199,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1331,
+        "completion_tokens": 358,
+        "total_tokens": 1689,
+        "cost": 0.0003247695,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1152,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00032805,
+          "upstream_inference_prompt_cost": 0.00011325,
+          "upstream_inference_completions_cost": 0.0002148
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI"
+    },
+    {
+      "label": "openai/gpt-4o-mini:wrong_record_attribution",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"reconciled 1,180 fuel invoices each quarter.\"\n  problem: misattributed\n  sources: [candidate-main.txt, \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The reconciliation of 1,180 fuel invoices is attributed to the wrong role; it belongs to the Fuel Reporting Analyst position at Harborline Transit Authority, not the Cost Reporting Coordinator position at Cascade Freight Partners.\n  correction: \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"\n\n- passage: \"produced the depot scorecard that supervisors review in the Monday operations meeting.\"\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which is more appropriate in this context.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\nRules:\n- approve: no issue requires a change.\n- revise: you must give at least one usable correction.\n- cannot_assess: the material you need is missing or unreadable. Say which.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1338,
+      "completion_tokens": 251,
+      "total_tokens": 1589,
+      "cost_usd": 0.000252747,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 3.34,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1338,
+        "completion_tokens": 251,
+        "total_tokens": 1589,
+        "cost": 0.000252747,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1280,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0002553,
+          "upstream_inference_prompt_cost": 0.0001047,
+          "upstream_inference_completions_cost": 0.0001506
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI"
+    },
+    {
+      "label": "openai/gpt-4o-mini:omitted_record",
+      "text": "Decision: approve\n\nIssues:\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Tracked monthly fuel consumption across 14 depots and compared each month against the same month in the prior year.\"]\n  why: The term \"monitored\" does not fully capture the specific activity of \"tracked monthly fuel consumption,\" which is more precise and supported by the source.\n  correction: \"Tracked monthly fuel consumption across 14 depots, comparing each month against the same month in the prior year.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"]\n  why: The term \"produced\" does not accurately reflect the original wording \"built,\" which is more specific and supported by the source.\n  correction: \"Built the depot scorecard that supervisors review in the Monday operations meeting.\"\n\n- passage: (omitted)\n  problem: unsupported\n  sources: [candidate-main.txt, \"Prepared the monthly cost summary reviewed by the regional manager.\"]\n  why: The phrase \"that the regional manager reviewed\" is less direct than the original \"reviewed by the regional manager,\" which is more precise and supported by the source.\n  correction: \"Prepared the monthly cost summary reviewed by the regional manager.\"\n\nOverall, the draft is strong but requires these specific corrections to ensure fidelity to the source documents.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1275,
+      "completion_tokens": 292,
+      "total_tokens": 1567,
+      "cost_usd": 0.0002772495,
+      "max_tokens": 8192,
+      "model": "openai/gpt-4o-mini",
+      "provider": "OpenAI",
+      "latency_s": 3.686,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1275,
+        "completion_tokens": 292,
+        "total_tokens": 1567,
+        "cost": 0.0002772495,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1152,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00028005,
+          "upstream_inference_prompt_cost": 0.00010485,
+          "upstream_inference_completions_cost": 0.0001752
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "OpenAI"
+    }
+  ],
+  "summary_note": "provider_pin_held recomputed on rows and summary from provider_pinned + provider_reported (case-insensitive); the stored value predated that fix. No new calls."
+}

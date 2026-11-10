@@ -206,8 +206,11 @@ async def review(ask, meter: RequestMeter, model: str, case_id: str,
             # The pin is an instruction; the reported provider is the fact.
             "provider_pinned": call.provider_pinned,
             "provider_reported": call.provider_reported,
+            # Case-insensitive on BOTH sides. OpenRouter reports "Cohere" while
+            # the pin is "cohere/fp8"; comparing those case-sensitively counted
+            # every correct call as a violation.
             "provider_pin_held": (not call.provider_pinned
-                                   or call.provider_reported in
+                                   or call.provider_reported.lower() in
                                    [p.split("/")[0].lower()
                                     for p in call.provider_pinned])}
     row["outcomes"] = classify(case_id, expected, d)
@@ -259,7 +262,9 @@ def summarise(rows: list[dict], models: list[str]) -> dict:
 
 def render(plan: dict, summary: dict, rows: list[dict]) -> str:
     lines = [
-        "# Five-case, three-model screen", "",
+        f"# Five-case screen — {len(plan['models'])} models", "",
+        f"Cases: {len(plan['cases'])} · models: {len(plan['models'])} · "
+        f"logical calls: {plan['logical_calls']}", "",
         "Reused frozen drafts and sources. No repairs, no production change, no "
         "automatic dismissal of objections.", "",
         f"- mode: `{plan['mode']}`",
