@@ -370,17 +370,67 @@ async def main_async(out_dir: pathlib.Path, *, plan_only: bool) -> dict:
 
 
 def main() -> int:
+    """CLI with three SEPARATE paths: inspect, render, execute.
+
+    Rendering was previously the same path as execution, and passing --authorized to
+    what was meant as a no-op executed a second full run. `--render` takes no
+    authorization, touches no provider code, and cannot dispatch.
+    """
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="results/model-screen-v1")
-    ap.add_argument("--plan", action="store_true", help="print the plan; no calls")
-    ap.add_argument("--authorized", action="store_true",
-                    help="execute the run (requires explicit authorization)")
+    ap.add_argument("--plan", action="store_true",
+                    help="print the plan; never dispatches")
+    ap.add_argument("--render", metavar="ARTIFACT",
+                    help="re-render the report from a recorded artifact; never "
+                         "dispatches and needs no authorization")
+    ap.add_argument("--authorized", metavar="TOKEN",
+                    help="execute the run; requires a NEW once-only token")
+    ap.add_argument("--ledger", default="results/.authorizations.json")
     args = ap.parse_args()
-    if not (args.plan or args.authorized):
-        ap.error("pass --plan to inspect, or --authorized to execute")
-    result = asyncio.run(main_async(pathlib.Path(args.out),
-                                    plan_only=args.plan))
-    print(json.dumps(result, indent=2))
+
+    # ── Render: network-free, no authorization, cannot dispatch ─────────────
+    if args.render:
+        from experiment.authorization import render_from_artifact
+        target = pathlib.Path(args.out) / "SCREEN.md"
+        written = render_from_artifact(pathlib.Path(args.render), target)
+        print(f"rendered {written} from {args.render} (no calls)")
+        return 0
+
+    if args.plan:
+        result = asyncio.run(main_async(pathlib.Path(args.out), plan_only=True))
+        print(json.dumps(result, indent=2))
+        return 0
+
+    if not args.authorized:
+        ap.error("pass --plan to inspect, --render ARTIFACT to re-render, or "
+                 "--authorized TOKEN to execute")
+
+    # ── Execute: once-only guard, claimed BEFORE any provider client ────────
+    from experiment.authorization import (
+        AuthorizationError, consume_authorization, record_outcome,
+    )
+    plan = budget_for(MODELS)
+    try:
+        consume_authorization(args.authorized,
+                              expected_requests=plan["max_requests"],
+                              ledger=pathlib.Path(args.ledger))
+    except AuthorizationError as exc:
+        print(f"REFUSED: {exc}")
+        return 2
+
+    try:
+        result = asyncio.run(main_async(pathlib.Path(args.out), plan_only=False))
+    except BaseException:
+        record_outcome(args.authorized, requests_sent=0, cost_usd=0.0,
+                       status="failed", ledger=pathlib.Path(args.ledger))
+        raise
+
+    meter = result.get("meter", {})
+    entry = record_outcome(args.authorized,
+                           requests_sent=meter.get("requests_sent", 0),
+                           cost_usd=meter.get("cost_usd", 0.0),
+                           ledger=pathlib.Path(args.ledger))
+    print(json.dumps({"authorization": entry, "result": result}, indent=2))
     return 0
 
 

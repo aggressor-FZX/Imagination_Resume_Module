@@ -1,3 +1,79 @@
+# Binding-decision experiment handoff — 2026-11-09 (checkpoint 9)
+
+## Checkpoint 9 — inference stopped, rerun incident handled, repair test proposed
+
+**Start here. No provider calls are authorized.** Both screens are closed and will not
+be repeated. Gemma is the **screening winner, not a production-qualified replacement.**
+
+### 1. Unauthorized rerun — recorded, not hidden
+
+`results/model-screen-v1/INCIDENT_unauthorized_rerun.md`.
+
+- **Request breach: 41 against a stated 40.** The ceiling held per invocation (20 and
+  21) while the aggregate went over — the limit was enforced per process, not per
+  authorization.
+- **Spend not breached**: $0.009366 instrumented against $0.10.
+- **Evidence partially destroyed.** `rm -rf /tmp/nonexistent` deleted that run's rows,
+  raw responses and per-call providers. Not in git, no trash copy. What survives was
+  recorded before deletion: 20 rows, 21 requests, $0.004223, one retry.
+- **Provider-side reconciliation is inconclusive and is NOT claimed.** `usage` rose
+  0.1107 while `limit_remaining` rose 0.360 — the credit pool changed between reads, so
+  the delta cannot be attributed to this work. My instrumented meter is the only
+  evidence, and it is self-reported.
+- **No result anywhere came from the inadvertent run.**
+
+### 2. Structural fixes so it cannot recur
+
+`experiment/authorization.py` + CLI restructure:
+
+- **`--render ARTIFACT`** — network-free. Reads a recorded file, writes markdown, takes
+  no `ask` callable, imports no provider code. Regenerating a report no longer needs the
+  execution path. A test parses its signature and body to prove it cannot dispatch.
+- **Once-only token.** `--authorized TOKEN` claims the token *before* the run and
+  refuses a second consumption. Fails closed: a crashed run still blocks a retry.
+- **Cumulative accounting.** The ledger sums requests across invocations, so 20+21=41 is
+  one visible number rather than two compliant ones.
+- 11 tests in `tests/test_authorization_guard.py`.
+
+### 3. Gemma repair-and-release test — proposed, awaiting authorization
+
+`results/gemma-repair-v1/PROPOSAL.md`.
+
+Four required behaviours plus **two untouched paired controls**:
+`faithful_paraphrase` (familiar) and `cal_ops_faithful` (unfamiliar) — if an edit is
+applied to either, the run is void.
+
+| Limit | Value |
+|---|---|
+| Cases | 5 |
+| Logical calls | **10 max** (5 first + 5 re-review) |
+| Hard request ceiling | **20** (2 attempts each, cumulative) |
+| Observed-cost stop | **$0.05** (projected $0.0017) |
+| Re-runs | **0** (guard-enforced) |
+
+Every changed document gets a **new review of that exact text**; the re-review prompt
+is asserted to contain the proposal and raises otherwise. Model: `google/gemma-4-31b-it`
+only, no pin, **reported provider recorded per call**. No instruction change.
+
+Verified predictions before the run: `safe_repair` returns
+`omission_requires_explicit_destination` for the restoration case, so that document is
+expected to be **correctly withheld, not repaired** — recorded as a successful refusal,
+not a failed repair.
+
+### 4. Website test — outline only, not authorised
+
+Proposed **only after** the repair path succeeds: one real PDF/DOCX through the
+document reader → orchestrator → Imaginator → Gemma review → gate, asserting the
+download renders and the released document is the one that was reviewed. Own
+authorization, own limits.
+
+### Verification
+
+`2130 passed, 14 skipped`; production diff vs `master` empty; no authorization ledger
+entry exists yet.
+
+---
+
 # Binding-decision experiment handoff — 2026-11-09 (checkpoint 8)
 
 ## Checkpoint 8 — five-case four-model screen RUN; gemma-4-31b satisfies the criterion
