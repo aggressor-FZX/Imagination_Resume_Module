@@ -33,15 +33,16 @@ SUCCESS = {"choices": [{"message": {"content": "Decision: approve\n"},
 
 
 class _Resp:
-    def __init__(self, status, payload=None):
+    def __init__(self, status, payload=None, *, detail="err"):
         self.status = status
         self._payload = payload or {}
+        self._detail = detail
 
     async def json(self):
         return self._payload
 
     async def text(self):
-        return "err"
+        return self._detail
 
     async def __aenter__(self):
         return self
@@ -156,3 +157,133 @@ def test_the_plan_declares_pins_and_fallbacks():
     assert plan["provider_fallbacks"] == {"xiaomi/mimo-v2.6-flash": ["makora/fp8"]}
     # Unpinned models must not appear in the pin map at all.
     assert set(plan["provider_pins"]) == {"xiaomi/mimo-v2.6-flash"}
+
+
+# ══ Provider fallback: cohere first, makora only if cohere cannot serve ══════
+
+class _ScriptedSession:
+    """Serves a per-pin sequence, so the chain can be exercised deterministically."""
+
+    def __init__(self, by_pin: dict[str, list]):
+        self.by_pin = {k: list(v) for k, v in by_pin.items()}
+        self.bodies: list[dict] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def post(self, _url, *, headers=None, json=None):
+        self.bodies.append(json)
+        pin = ",".join(json.get("provider", {}).get("only", []))
+        queue = self.by_pin.get(pin)
+        if not queue:
+            raise AssertionError(f"no scripted response for pin {pin!r}")
+        return queue.pop(0)
+
+
+def _install_scripted(monkeypatch, by_pin):
+    session = _ScriptedSession(by_pin)
+    monkeypatch.setitem(sys.modules, "aiohttp", types.SimpleNamespace(
+        ClientSession=lambda **_: session, ClientTimeout=lambda **_: None))
+    return session
+
+
+def _run_chain(monkeypatch, by_pin, *, primary=("cohere/fp8",),
+               fallback=("makora/fp8",)):
+    session = _install_scripted(monkeypatch, by_pin)
+    meter = RequestMeter(max_requests=10, max_cost_usd=1.0)
+    ask = make_asker(api_key="k", model="xiaomi/mimo-v2.6-flash", meter=meter,
+                     provider_only=list(primary),
+                     provider_fallback=list(fallback),
+                     sleep_between_retries=False, max_attempts=1)
+    try:
+        result = asyncio.run(ask("prompt", label="c"))
+        error = None
+    except Exception as exc:  # noqa: BLE001
+        result, error = None, exc
+    return session, meter, result, error
+
+
+def test_cohere_serves_the_call_and_makora_is_never_tried(monkeypatch):
+    ok = {**SUCCESS, "provider": "Cohere"}
+    session, _m, result, error = _run_chain(
+        monkeypatch, {"cohere/fp8": [_Resp(200, ok)], "makora/fp8": []})
+    assert error is None
+    assert result.provider_reported == "Cohere"
+    assert [b.get("provider", {}).get("only") for b in session.bodies] == \
+        [["cohere/fp8"]], "the fallback must not be contacted at all"
+
+
+def test_a_routing_failure_on_cohere_advances_to_makora(monkeypatch):
+    """`no endpoints found` means cohere cannot serve it, so try the other one.
+
+    The DETAIL text carries the routing phrase, because the adapter raises
+    `http_<code>: <detail>` and the detector reads that message.
+    """
+    mak = {**SUCCESS, "provider": "Makora"}
+    session, _m, result, error = _run_chain(monkeypatch, {
+        "cohere/fp8": [_Resp(404, detail="no endpoints found for cohere/fp8")],
+        "makora/fp8": [_Resp(200, mak)],
+    })
+    assert error is None, error
+    assert result is not None
+    assert result.provider_reported == "Makora"
+    # Both providers were actually contacted, in order, and the pin is recorded
+    # as the one that SERVED the call, not the one we hoped for.
+    assert [b.get("provider", {}).get("only") for b in session.bodies] == \
+        [["cohere/fp8"], ["makora/fp8"]]
+    assert result.provider_pinned == ["makora/fp8"]
+
+
+def test_a_bare_404_does_not_advance_the_chain(monkeypatch):
+    """A 404 with no routing phrase is an ordinary failure, not a routing failure."""
+    _s, _m, result, error = _run_chain(monkeypatch, {
+        "cohere/fp8": [_Resp(404, detail="not found")],
+        "makora/fp8": [_Resp(200, {**SUCCESS, "provider": "Makora"})],
+    })
+    assert error is not None, "must surface, not silently switch endpoint"
+    assert result is None
+
+
+def test_an_auth_error_does_not_advance_the_chain(monkeypatch):
+    """A key problem must be reported, not masked by asking another provider."""
+    _s, _m, result, error = _run_chain(monkeypatch, {
+        "cohere/fp8": [_Resp(401, detail="no auth credentials found")],
+        "makora/fp8": [_Resp(200, {**SUCCESS, "provider": "Makora"})],
+    })
+    assert error is not None and result is None
+    assert "401" in str(error)
+
+
+def test_a_bad_answer_does_not_trigger_the_fallback(monkeypatch):
+    """A refusal is still a review. Re-asking another endpoint would be best-of-two."""
+    refusal = {"choices": [{"message": {"content": "Decision: revise\n\nIssues:\n- none\n"},
+                            "finish_reason": "stop"}],
+               "usage": {"cost": 0.001}, "provider": "Cohere"}
+    session, _m, result, error = _run_chain(
+        monkeypatch, {"cohere/fp8": [_Resp(200, refusal)], "makora/fp8": []})
+    assert error is None
+    assert result.provider_reported == "Cohere"
+    assert len(session.bodies) == 1, "no second provider may be asked"
+    assert result.text.startswith("Decision: revise")
+
+
+def test_routing_failure_detector_is_narrow():
+    """Auth, rate-limit and server errors must NOT be treated as routing failures."""
+    from experiment.provider_v2 import _is_routing_failure
+    for msg in ("http_400: no endpoints found", "http_404: no endpoints found",
+                "provider returned error", "model not available"):
+        assert _is_routing_failure(msg) is True, msg
+    for msg in ("http_401: no auth credentials found", "http_429: rate limited",
+                "http_500: upstream exploded", "http_502: bad gateway",
+                "http_400: invalid request json"):
+        assert _is_routing_failure(msg) is False, msg
+
+
+def test_the_screen_requests_the_cohere_then_makora_chain():
+    from experiment.model_screen import MODELS, PROVIDER_FALLBACKS, PROVIDER_PINS
+    assert "xiaomi/mimo-v2.6-flash" in MODELS
+    assert PROVIDER_PINS["xiaomi/mimo-v2.6-flash"] == ["cohere/fp8"]
+    assert PROVIDER_FALLBACKS["xiaomi/mimo-v2.6-flash"] == ["makora/fp8"]

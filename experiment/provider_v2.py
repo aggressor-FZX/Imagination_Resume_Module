@@ -62,6 +62,37 @@ class TruncatedResponse(RuntimeError):
     """
 
 
+class ProviderRoutingError(RuntimeError):
+    """No endpoint could SERVE the request. Distinct from a bad answer.
+
+    This is the only condition that advances the provider chain. It must not be
+    conflated with a model that answered badly: a refusal, a malformed envelope or
+    an unusable objection is still a review, and silently re-asking a different
+    endpoint would turn one answer into a best-of-two.
+    """
+
+
+# Phrases OpenRouter returns when the pinned provider cannot serve a model. Kept
+# narrow on purpose: matching broadly would convert ordinary failures (auth, rate
+# limit, bad request) into a provider fallback and mask them.
+_ROUTING_FAILURE_MARKERS = (
+    "no endpoints found",
+    "no allowed providers",
+    "provider returned error",
+    "not available on",
+    "no available provider",
+    "model not available",
+    "provider is not available",
+    "unsupported provider",
+)
+
+
+def _is_routing_failure(message: str) -> bool:
+    """True when the error means the pinned provider could not serve the request."""
+    low = (message or "").lower()
+    return any(marker in low for marker in _ROUTING_FAILURE_MARKERS)
+
+
 @dataclass
 class CallResult:
     """Everything one provider call produced. Nothing is summarised away."""
@@ -217,7 +248,8 @@ def make_asker(api_key: str | None = None, *,
                meter: RequestMeter | None = None,
                max_attempts: int = 3,
                sleep_between_retries: bool = True,
-               provider_only: list[str] | None = None):
+               provider_only: list[str] | None = None,
+               provider_fallback: list[str] | None = None):
     """Build an async `ask` callable returning a `CallResult`.
 
     Every HTTP attempt — including retries for 429/5xx and for transport errors —
@@ -239,6 +271,13 @@ def make_asker(api_key: str | None = None, *,
     The response's actual `provider` field is retained on every CallResult, so a
     reader can verify which endpoint served each call rather than trusting the
     pin.
+
+    `provider_fallback` is tried ONLY when the primary pin cannot serve the
+    request at all — OpenRouter returns "no endpoints match" / "not available" /
+    "provider" errors. It is NOT used when the model answered badly. A provider
+    that returns a refusal, a malformed envelope or a low-quality objection has
+    still produced a REVIEW, and silently re-asking a different endpoint would turn
+    one answer into a best-of-two — a different experiment from the one described.
     """
     import aiohttp  # imported lazily so offline tests can import this module
 
@@ -250,6 +289,41 @@ def make_asker(api_key: str | None = None, *,
     calls: list[dict] = ledger if ledger is not None else []
 
     async def ask(prompt: str, *, label: str = "") -> CallResult:
+        """One logical review call, with provider fallback on routing failure.
+
+        The provider chain is `[provider_only, provider_fallback]`. A fallback is
+        attempted only for ROUTING failures — see the module docstring. Any other
+        error propagates exactly as before.
+        """
+        chain: list[list[str] | None] = []
+        if provider_only:
+            chain.append(list(provider_only))
+        if provider_fallback and list(provider_fallback) != list(provider_only or []):
+            chain.append(list(provider_fallback))
+        if not chain:
+            chain = [None]
+
+        last_exc: Exception | None = None
+        for attempt_index, pin in enumerate(chain):
+            try:
+                return await _ask_try(prompt, label=label, pin=pin)
+            except ProviderRoutingError as exc:
+                last_exc = exc
+                if attempt_index + 1 >= len(chain):
+                    break
+                # Recorded so a reader can see that the primary pin was
+                # unavailable and which endpoint actually served the answer.
+                if meter is not None:
+                    meter.attempts.append({
+                        "label": label, "attempt": 0,
+                        "status": "provider_unavailable"
+                                  + (":" + ",".join(pin) if pin else ""),
+                        "cost_usd": None, "usage_reported": False})
+                continue
+        raise last_exc if last_exc else RuntimeError("no provider in chain")
+
+    async def _ask_try(prompt: str, *, label: str,
+                       pin: list[str] | None) -> CallResult:
         body: dict = {
             "model": chosen_model,
             "messages": [{"role": "user", "content": prompt}],
@@ -258,8 +332,8 @@ def make_asker(api_key: str | None = None, *,
             "temperature": 0,
             "max_tokens": max_tokens,
         }
-        if provider_only:
-            body["provider"] = {"only": list(provider_only)}
+        if pin:
+            body["provider"] = {"only": list(pin)}
         headers = {"Authorization": f"Bearer {key}",
                    "Content-Type": "application/json"}
         if meter is not None:
@@ -359,7 +433,7 @@ def make_asker(api_key: str | None = None, *,
                     max_tokens=max_tokens,
                     model=str(data.get("model") or chosen_model),
                     provider=str(data.get("provider") or ""),
-                    provider_pinned=list(provider_only or []),
+                    provider_pinned=list(pin or []),
                     provider_reported=str(data.get("provider") or ""),
                     latency_s=latency,
                     retries=list(retries),
@@ -385,6 +459,11 @@ def make_asker(api_key: str | None = None, *,
                 # An HTTP >=400 already recorded above; re-raise without a second
                 # retry so a deterministic client error is not billed three times.
                 if str(exc).startswith("http_"):
+                    # A routing failure is distinct from a bad answer: it means no
+                    # endpoint could serve the request, so the provider chain may
+                    # advance. Everything else is re-raised as-is.
+                    if _is_routing_failure(str(exc)):
+                        raise ProviderRoutingError(str(exc)) from exc
                     raise
                 if not recorded:
                     # Safety net. If a new branch raises without metering, the

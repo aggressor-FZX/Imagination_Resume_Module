@@ -83,6 +83,8 @@ MODELS = [
 # `makora/fp8` is an fp8 alternative at identical price; it is recorded as the
 # fallback in the plan rather than used, since a second pin would be a second
 # variable.
+# Policy (user, 2026-11-09): "use 2.6, try cohere, if that doesn't work use the
+# other." So: cohere/fp8 first, makora/fp8 only if cohere cannot serve the request.
 PROVIDER_PINS: dict[str, list[str]] = {
     "xiaomi/mimo-v2.6-flash": ["cohere/fp8"],
 }
@@ -340,7 +342,8 @@ async def main_async(out_dir: pathlib.Path, *, plan_only: bool) -> dict:
     rows: list[dict] = []
     for model in MODELS:
         ask = make_asker(model=model, ledger=ledger, meter=meter,
-                         provider_only=PROVIDER_PINS.get(model))
+                         provider_only=PROVIDER_PINS.get(model),
+                         provider_fallback=PROVIDER_FALLBACKS.get(model))
         for case_id, _group, _probe, expected in CAST:
             row = await review(ask, meter, model, case_id, expected, instructions)
             rows.append(row)

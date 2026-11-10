@@ -40,10 +40,20 @@ the screen proceeds with `v2.6-flash`.**
 | `venice/fp8` | fp8 | 0.175 | 0.350 | — | — | — |
 
 Note the title said `cohere/fp8` while the snippet said `makora/fp8`; **both exist**
-as valid tags at identical price. **`cohere/fp8` is pinned** (the title's choice, and
-the better performer of the two: 517 ms p50 vs 923 ms, 78 vs 26 tok/s at the same
-price). `makora/fp8` is recorded as the declared fallback rather than used — a second
-pin in the same run would be a second variable.
+as valid tags at identical price. **Confirmed policy: `cohere/fp8` first, `makora/fp8` if cohere cannot serve the
+request.** `cohere/fp8` is also the better performer (517 ms p50 vs 923 ms, 78 vs
+26 tok/s at the same price).
+
+The fallback advances **only on a routing failure** — OpenRouter reporting that no
+endpoint can serve the model (`no endpoints found`, `provider returned error`,
+`model not available`). It does **not** advance when the model answers badly. A
+refusal, a malformed envelope or a poor objection is still a review, and silently
+re-asking a different endpoint would turn one answer into a best-of-two — a
+different experiment from the one described. Auth errors, rate limits and 5xx are
+likewise surfaced rather than masked.
+
+Every response records which provider actually served it, so a fallback that fired
+is visible in the report rather than inferred.
 
 Pinning is now implemented in `make_asker(provider_only=[...])`, which sends:
 
