@@ -159,6 +159,9 @@ def snapshot_sources(resume_text, documents, supplied):
     return tuple(sources)
 
 
+_FENCE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL)
+
+
 def _strict_json(text):
     def unique(pairs):
         result = {}
@@ -170,6 +173,25 @@ def _strict_json(text):
 
     def reject_constant(_):
         raise ValueError("non-finite JSON number")
+
+    # Tolerate a Markdown code fence around an otherwise valid object.
+    #
+    # Measured 2026-11-09 on the live contract (results/live-contract-probe):
+    # google/gemma-4-31b-it returned a COMPLETE and CORRECT source inventory —
+    # right ids, right code-point offsets, quotes matching the source slices — but
+    # wrapped in ```json ... ```. `_strict_json` rejected it at character 0, so the
+    # whole correction would have withheld. The model's content was right; only the
+    # packaging was not what this parser expected.
+    #
+    # The fence is stripped and nothing else changes: strictness (duplicate-key
+    # rejection, non-finite rejection, no trailing prose) is preserved, and a
+    # response with prose around the object still fails, because the regex anchors
+    # the whole string.
+    stripped = text.strip() if isinstance(text, str) else text
+    if isinstance(stripped, str):
+        match = _FENCE.match(stripped)
+        if match:
+            text = match.group(1)
 
     return json.loads(text, object_pairs_hook=unique, parse_constant=reject_constant)
 
