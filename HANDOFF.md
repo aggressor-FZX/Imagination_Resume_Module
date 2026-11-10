@@ -1,3 +1,106 @@
+# JSON semantic review — state at `bbd4987`, 2026-11-09
+
+## Where things stand
+
+Identity is fixed and pushed. Website delivery is **not** achieved; two blockers
+are outside this repository.
+
+| Item | State |
+|---|---|
+| Pushed revision | `bbd4987b834d8c0dbe75da37c759b8c8fbbed238` on `experiment/llm-led-approval` |
+| Local work beyond that push | none (only untracked `experiment/audit_packet_v3.py`, unrelated) |
+| Production / rollback | `8d5efa8f12a082c06eb9907b6f38dba8e075eeff`, deploy `dep-dbop3b7avr4c73bmi5p0` |
+| Broad regression at this revision | **2514 passed, 14 skipped** (two named exclusions) |
+| Focused identity tests | **21 passed**, real PDF + DOCX rendered and read back |
+| Paid requests this session | **0** |
+
+## Identity: fixed (`bbd4987`)
+
+Root cause: nothing supplied identity. An earlier change correctly removed header
+inference - a first extracted line can be a job title, an agency, or a
+recruiter's address - and left no replacement, so the signed header stayed empty
+and any draft with an unscoped preamble was withheld.
+
+Fix: one explicit optional request field, `candidate_identity`, with a closed
+field set (`name`, `location`, `phone`, `email`, `linkedin`, `github`). Unknown
+keys, non-strings, multi-line and over-long values are validation errors, not
+silently dropped. It is bound into the canonical export payload **before** receipt
+issuance, so tampering, clearing, adding identity after approval, and exporting
+under another owner all fail (409).
+
+Document text is never parsed for a name. Supplemental document headers never
+supply identity. With no designated identity the header stays empty; a conflict
+between documents is not resolved by picking one.
+
+## Blocker 1 - the website never sends an identity
+
+The orchestrator (`Login_Landing_page/backend/server.cjs`) does not send
+`candidate_identity` on `/analyze` or the multi-file route. Through the website the
+signed header is therefore empty and the deliverable has **no name or contact**.
+
+The trusted value exists but is not wired: `users.first_name` / `last_name` are
+real columns and `req.user` is trusted. Forwarding those, or letting the user
+supply them explicitly, is the smallest correct fix. It is a change in a
+**different repository** whose active branch already holds substantial unrelated
+uncommitted work, so it was not made here.
+
+## Blocker 2 - the approved ceiling is not enforceable on this path
+
+The approved allowance is **30 paid requests / $0.10 observed spend**. The
+signed-in website workflow cannot meet it:
+
+- Job search runs unconditionally after the rewrite whenever there is resume text.
+  There is no switch to skip it.
+- Job scoring's own per-batch preflight limit is `MAX_COST_PER_BATCH_USD = 0.10`:
+  **one batch alone may commit the entire approved budget**, before the rewrite,
+  parser, or correction calls are counted.
+- Parser primary/fallback, writer model fallbacks, correction retries and the
+  orchestrator's 3-attempt middleware each multiply requests inside one
+  submission. Nothing reserves budget before dispatch.
+- Cost reporting is asynchronous and best-effort; missing usage reads as zero, so
+  an observed-spend stop cannot prevent a call it has not yet seen.
+
+No new accounting system was built. The smallest honest options:
+
+1. **Resume-only path** - skip job search and scoring on this route. Removes the
+   $0.10 batch exposure and most uncounted calls; still needs per-service request
+   counting to prove <=30.
+2. **Authorize the real exposure** - a ceiling permitting one full website
+   submission, since scoring alone may reach $0.10.
+
+Neither is applied and the existing approval is **not** reinterpreted.
+
+## Excluded suites (both relevant, neither hidden)
+
+- `test_loader_source_preservation_offline.py` - needs `fitz`; **17 passed** in the
+  Loader venv. Concerns real DOCX/PDF extraction.
+- `test_exported_outcome_wording_regression.py` - at this revision **27 passed, 5
+  failed, 2 skipped**; the 5 failures are `FileNotFoundError` for a missing
+  `analysis.raw` capture, not failed assertions. With a read-only in-memory path
+  override to the retained capture, those 5 and both skips pass. Concerns invented
+  outcomes and dropped qualifiers.
+
+## Verification
+
+```
+env -u CORRECTION_PROVIDER_DISCLOSURE \
+  OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y \
+  IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 \
+  /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -o addopts='' \
+  -p no:cacheprovider -q \
+  --ignore=tests/test_loader_source_preservation_offline.py \
+  --ignore=tests/test_exported_outcome_wording_regression.py
+```
+
+## Not done
+
+- No release approval requested, no deploy, no rollback exercised.
+- No website run; no PDF or DOCX produced by the site. **Nothing is claimed about
+  website delivery.**
+- `CORRECTION_ENGINE` still defaults to `legacy`; the JSON path is opt-in.
+
+---
+
 # JSON semantic review — current WIP handoff, 2026-11-09
 
 - **Branch:** `experiment/llm-led-approval`; prior commit `f3666e90fbb257679e64354752c5f3ab1ef90b7d`. This checkpoint is not a release.
