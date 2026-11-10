@@ -1,0 +1,594 @@
+{
+  "model": "google/gemma-4-31b-it",
+  "token": "gemma-repair-2026-11-09-01",
+  "mode": "imaginative",
+  "instructions_sha256": "4261e9cb5b031230aa2a3adf3f818346eab02318dd229b430eca31f166d17e7b",
+  "meter": {
+    "max_requests": 20,
+    "max_cost_usd": 0.05,
+    "requests_sent": 8,
+    "billable_requests": 8,
+    "unmetered_requests": 0,
+    "logical_calls": 8,
+    "cost_usd": 0.001262,
+    "cost_is_known": true,
+    "ceiling_statement": "The request ceiling is hard: it is checked before every HTTP attempt including retries. The cost ceiling is enforced against observed cost only; it is NOT a proof of maximum spend when any response omits usage.",
+    "unmetered_caveat": null
+  },
+  "traces": [
+    {
+      "case_id": "faithful_paraphrase",
+      "original": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintained parts availability records for 7 service branches.\n- Compared quarterly parts usage with the prior four quarters to set reorder points.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "original_sha": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7",
+      "first_decision": "approve",
+      "first_valid": true,
+      "first_problems": [],
+      "first_response": "Decision: approve",
+      "first_issues": [],
+      "repair_status": "not_attempted",
+      "proposed_document": "",
+      "proposed_sha": "",
+      "repair_diff": "",
+      "re_review_decision": "",
+      "re_review_valid": false,
+      "re_review_problems": [],
+      "re_review_document_sha": "",
+      "re_review_response": "",
+      "references_valid": true,
+      "sections": {
+        "Professional Summary": true,
+        "Professional Experience": true
+      },
+      "sections_ok": true,
+      "released": true,
+      "release_reason": "initial_llm_approve",
+      "released_document_sha": "cf1b3c1aeb26c8e426ecf078ada902b714a5d4291655e4774988328547c485c7",
+      "receipt": "eyJmcCI6ImNmMWIzYzFhZWIyNmM4ZTQyNmVjZjA3OGFkYTkwMmI3MTRhNWQ0MjkxNjU1ZTQ3NzQ5ODgzMjg1NDdjNDg1YzciLCJpYXQiOjE3OTQyNzY3MzEsIm93bmVyIjoiZ2VtbWEtcmVwYWlyLXRlc3QiLCJyZW5kZXJfZnAiOiI0MGZmNzhiM2JkMWQwOGRmY2IwYjEwMGEyZGRiNjJhMGUzN2ZiMGU1MmUxZTk5MmRjOGQ1NDk3ODczN2NkYzhmIiwic2IiOjEsInR0bCI6MTgwMCwidiI6NCwidmVyZGljdCI6IlBBU1MgKHRpZXIgQSBvbmx5KSJ9.8a97d313df4e86824cb0ff2d780ee8c68383bfade765a68ea26c0b6010883097",
+      "receipt_reason": "ok",
+      "provider": "",
+      "steps": [
+        "start",
+        "first_review:approve",
+        "structure:ok",
+        "released"
+      ],
+      "role": "control_familiar",
+      "expected": "approve",
+      "edits_applied": false
+    },
+    {
+      "case_id": "cal_ops_faithful",
+      "original": "## Professional Summary\nWarehouse operations coordinator with five years of experience in shift\nscheduling and inbound freight for regional distributors.\n\n## Professional Experience\n**Pioneer Cold Storage** -- Pasco, WA\n*Operations Coordinator | 01/2022 - Present*\n- Scheduled 46 warehouse associates across three shifts every week.\n- Brought dock-to-stock time down from 5.5 hours to 3.2 hours in eight months.\n- Negotiated a carrier contract that cut inbound freight cost by 11%.\n- Audited 260 inbound shipments during 2024 for temperature compliance.\n\n**Gorge Logistics Partners** -- The Dalles, OR\n*Scheduling Analyst | 06/2023 - Present*\n- Built the weekly driver schedule covering 28 routes.\n- Recovered 94% of missed delivery windows in the 2024 peak season.\n\n**Baker Valley Distribution** -- Yakima, WA\n*Inventory Clerk | 04/2019 - 12/2021*\n- Counted cycle inventory across 12,000 stocked SKUs every month.\n- Flagged 130 purchase orders that arrived short against the vendor invoice.\n\n## Certifications\n- Certified Supply Chain Professional (CSCP)\n- OSHA 30-Hour General Industry certification\n",
+      "original_sha": "d3a1e4e2defcb461e3238b273f3256cbdd349de860b067de2c59d57344354c0c",
+      "first_decision": "approve",
+      "first_valid": true,
+      "first_problems": [],
+      "first_response": "Decision: approve\n\nIssues:\nnone",
+      "first_issues": [],
+      "repair_status": "not_attempted",
+      "proposed_document": "",
+      "proposed_sha": "",
+      "repair_diff": "",
+      "re_review_decision": "",
+      "re_review_valid": false,
+      "re_review_problems": [],
+      "re_review_document_sha": "",
+      "re_review_response": "",
+      "references_valid": true,
+      "sections": {
+        "Professional Summary": true,
+        "Professional Experience": true
+      },
+      "sections_ok": true,
+      "released": true,
+      "release_reason": "initial_llm_approve",
+      "released_document_sha": "d3a1e4e2defcb461e3238b273f3256cbdd349de860b067de2c59d57344354c0c",
+      "receipt": "eyJmcCI6ImQzYTFlNGUyZGVmY2I0NjFlMzIzOGIyNzNmMzI1NmNiZGQzNDlkZTg2MGIwNjdkZTJjNTlkNTczNDQzNTRjMGMiLCJpYXQiOjE3OTQyNzY3MzEsIm93bmVyIjoiZ2VtbWEtcmVwYWlyLXRlc3QiLCJyZW5kZXJfZnAiOiI3YTgyNDFjNjQ1MWZiYzlmYTE1NGNkMTYzZTU4ZDQ4ODk2ZmZjNWU0YzkzNGJmY2Y3MjA0ZDc5NjRkNzhmZDY5Iiwic2IiOjEsInR0bCI6MTgwMCwidiI6NCwidmVyZGljdCI6IlBBU1MgKHRpZXIgQSBvbmx5KSJ9.89acc74b110c8dde5331041fcb2a52bb26ca191288e5b6f7b65f6bcdee893533",
+      "receipt_reason": "ok",
+      "provider": "",
+      "steps": [
+        "start",
+        "first_review:approve",
+        "structure:ok",
+        "released"
+      ],
+      "role": "control_unfamiliar",
+      "expected": "approve",
+      "edits_applied": false
+    },
+    {
+      "case_id": "unsupported_method",
+      "original": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintained parts availability records for 7 service branches.\n- Compared quarterly parts usage with the prior four quarters to set reorder points.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "original_sha": "9bc6856fb944165a0b0865a0d2429ff5575303d739e7f574362194133f67ac06",
+      "first_decision": "revise",
+      "first_valid": true,
+      "first_problems": [],
+      "first_response": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [[candidate-main.txt] \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for achieving the rework reduction, which is not mentioned in the source.\n  correction: \"Cut rework by 18% through standardizing panel labeling across the terminal fleet.\"",
+      "first_issues": [
+        {
+          "problem": "unsupported",
+          "passage": "Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.",
+          "why": "The draft adds \"targeted quality audits\" as a method for achieving the rework reduction, which is not mentioned in the source.",
+          "correction": "Cut rework by 18% through standardizing panel labeling across the terminal fleet.",
+          "sources": [
+            "candidate-main.txt"
+          ]
+        }
+      ],
+      "repair_status": "applied",
+      "proposed_document": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintained parts availability records for 7 service branches.\n- Compared quarterly parts usage with the prior four quarters to set reorder points.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% through standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "proposed_sha": "5cb5f3c418ab62f916af495a434e7d4bc1afcf302d5b42abb3542037c6130a18",
+      "repair_diff": "--- before\n+++ after\n@@ -20,3 +20,3 @@\n *Cost Reporting Coordinator | 07/2015 - 03/2019*\n-- Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\n+- Cut rework by 18% through standardizing panel labeling across the terminal fleet.\n - Prepared the monthly cost summary that the regional manager reviewed.",
+      "re_review_decision": "approve",
+      "re_review_valid": true,
+      "re_review_problems": [],
+      "re_review_document_sha": "5cb5f3c418ab62f916af495a434e7d4bc1afcf302d5b42abb3542037c6130a18",
+      "re_review_response": "Decision: approve",
+      "references_valid": true,
+      "sections": {
+        "Professional Summary": true,
+        "Professional Experience": true
+      },
+      "sections_ok": true,
+      "released": true,
+      "release_reason": "corrected_document_llm_approved",
+      "released_document_sha": "5cb5f3c418ab62f916af495a434e7d4bc1afcf302d5b42abb3542037c6130a18",
+      "receipt": "eyJmcCI6IjVjYjVmM2M0MThhYjYyZjkxNmFmNDk1YTQzNGU3ZDRiYzFhZmNmMzAyZDViNDJhYmIzNTQyMDM3YzYxMzBhMTgiLCJpYXQiOjE3OTQyNzY3MzMsIm93bmVyIjoiZ2VtbWEtcmVwYWlyLXRlc3QiLCJyZW5kZXJfZnAiOiJhYjBmNDNiOWFmMTgxYWE0MWVmYzRkNGVjOTEwMGUzYmFlMWUzNzUxZTE4ZjU4ZjdlZGEzYTZiNTJiZWViMGEwIiwic2IiOjEsInR0bCI6MTgwMCwidiI6NCwidmVyZGljdCI6IlBBU1MgKHRpZXIgQSBvbmx5KSJ9.73ec6de806eaf0a57bcaf0327163c1049834a33a2102bd861e41b7f155c16542",
+      "receipt_reason": "ok",
+      "provider": "",
+      "steps": [
+        "start",
+        "first_review:revise",
+        "repair:applied",
+        "re_review:approve",
+        "structure:ok",
+        "released"
+      ],
+      "role": "clause_removal",
+      "expected": "revise",
+      "edits_applied": true
+    },
+    {
+      "case_id": "wrong_record_attribution",
+      "original": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintained parts availability records for 7 service branches.\n- Compared quarterly parts usage with the prior four quarters to set reorder points.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "original_sha": "ae00ed8322bb2bbb997ee633961e0020322968a57ed4df504708aef1fd037d92",
+      "first_decision": "revise",
+      "first_valid": true,
+      "first_problems": [],
+      "first_response": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [[candidate-main.txt] \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The draft attributes the reconciliation of 1,180 fuel invoices to the role at Cascade Freight Partners, but the source documents attribute this activity to the role at Harborline Transit Authority.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "first_issues": [
+        {
+          "problem": "misattributed",
+          "passage": "Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.",
+          "why": "The draft attributes the reconciliation of 1,180 fuel invoices to the role at Cascade Freight Partners, but the source documents attribute this activity to the role at Harborline Transit Authority.",
+          "correction": "Prepared the monthly cost summary reviewed by the regional manager.",
+          "sources": [
+            "candidate-main.txt"
+          ]
+        }
+      ],
+      "repair_status": "applied",
+      "proposed_document": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintained parts availability records for 7 service branches.\n- Compared quarterly parts usage with the prior four quarters to set reorder points.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary reviewed by the regional manager.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "proposed_sha": "2f3708f19dae73b2aef47c5cc39f9da30d12c17f2046d0185ee77755c6f28487",
+      "repair_diff": "--- before\n+++ after\n@@ -21,3 +21,3 @@\n - Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n-- Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n+- Prepared the monthly cost summary reviewed by the regional manager.\n ",
+      "re_review_decision": "approve",
+      "re_review_valid": true,
+      "re_review_problems": [],
+      "re_review_document_sha": "2f3708f19dae73b2aef47c5cc39f9da30d12c17f2046d0185ee77755c6f28487",
+      "re_review_response": "Decision: approve",
+      "references_valid": true,
+      "sections": {
+        "Professional Summary": true,
+        "Professional Experience": true
+      },
+      "sections_ok": true,
+      "released": true,
+      "release_reason": "corrected_document_llm_approved",
+      "released_document_sha": "2f3708f19dae73b2aef47c5cc39f9da30d12c17f2046d0185ee77755c6f28487",
+      "receipt": "eyJmcCI6IjJmMzcwOGYxOWRhZTczYjJhZWY0N2M1Y2MzOWY5ZGEzMGQxMmMxN2YyMDQ2ZDAxODVlZTc3NzU1YzZmMjg0ODciLCJpYXQiOjE3OTQyNzY3MzQsIm93bmVyIjoiZ2VtbWEtcmVwYWlyLXRlc3QiLCJyZW5kZXJfZnAiOiJjNTcyM2YyM2FlNTBjYTUzOGNiNTk4NWUwYWRmNWY1MjkxNGEyNTY5NmJmOWI5YzQ1YmU4NmMzZWI0ZWM3ZjhkIiwic2IiOjEsInR0bCI6MTgwMCwidiI6NCwidmVyZGljdCI6IlBBU1MgKHRpZXIgQSBvbmx5KSJ9.616a036c75551d78b95106debb20818bb0a65cead4403c9b6f3e5a5859c8f709",
+      "receipt_reason": "ok",
+      "provider": "",
+      "steps": [
+        "start",
+        "first_review:revise",
+        "repair:applied",
+        "re_review:approve",
+        "structure:ok",
+        "released"
+      ],
+      "role": "wrong_owner",
+      "expected": "revise",
+      "edits_applied": true
+    },
+    {
+      "case_id": "omitted_record",
+      "original": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "original_sha": "99e392de879f9d07113651e436471819ef50db505b9d112b4d26fb6827ee1722",
+      "first_decision": "revise",
+      "first_valid": true,
+      "first_problems": [],
+      "first_response": "Decision: revise\n\nIssues:\n- passage: (omitted)\n  problem: omitted\n  sources: [candidate-supplement.txt: \"Ridgeline Equipment Services -- Fife, WA Inventory Analyst | 08/2023 - Present\"]\n  why: The draft completely omits a current professional role and its associated achievements.\n  correction: **Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.",
+      "first_issues": [
+        {
+          "problem": "omitted",
+          "passage": "(omitted)",
+          "why": "The draft completely omits a current professional role and its associated achievements.",
+          "correction": "Ridgeline Equipment Services** -- Fife, WA *Inventory Analyst | 08/2023 - Present* - Maintain parts availability records for 7 service branches. - Compared quarterly parts usage against the prior four quarters to set reorder points.",
+          "sources": [
+            "candidate-supplement.txt"
+          ]
+        }
+      ],
+      "repair_status": "applied",
+      "proposed_document": "## Professional Summary\nOperations analyst with nine years of experience in depot reporting and fuel cost\ncontrol across public transit operations.\n\n## Professional Experience\n**Harborline Transit Authority** -- Tacoma, WA\n*Fuel Reporting Analyst | 04/2019 - Present*\n- Monitored monthly fuel use across 14 depots, comparing each month with the same\n  month a year earlier.\n- Reconciled 1,180 fuel invoices against depot dispensing records every quarter.\n- Produced the depot scorecard that supervisors review in the Monday operations\n  meeting.\n\n**Cascade Freight Partners** -- Kent, WA\n*Cost Reporting Coordinator | 07/2015 - 03/2019*\n- Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n- Prepared the monthly cost summary that the regional manager reviewed.\n\n**Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.\n\n## Certifications\n- Certified Inventory Control Specialist (CICS)\n",
+      "proposed_sha": "29d407367190f5d554e9485f7fd5ef4aede22ea79cf2f2500d5944d3cdb1b089",
+      "repair_diff": "--- before\n+++ after\n@@ -18,2 +18,7 @@\n \n+**Ridgeline Equipment Services** -- Fife, WA\n+*Inventory Analyst | 08/2023 - Present*\n+- Maintain parts availability records for 7 service branches.\n+- Compared quarterly parts usage against the prior four quarters to set reorder points.\n+\n ## Certifications",
+      "re_review_decision": "approve",
+      "re_review_valid": true,
+      "re_review_problems": [],
+      "re_review_document_sha": "29d407367190f5d554e9485f7fd5ef4aede22ea79cf2f2500d5944d3cdb1b089",
+      "re_review_response": "Decision: approve\n\nIssues:\n- none",
+      "references_valid": true,
+      "sections": {
+        "Professional Summary": true,
+        "Professional Experience": true
+      },
+      "sections_ok": true,
+      "released": true,
+      "release_reason": "corrected_document_llm_approved",
+      "released_document_sha": "29d407367190f5d554e9485f7fd5ef4aede22ea79cf2f2500d5944d3cdb1b089",
+      "receipt": "eyJmcCI6IjI5ZDQwNzM2NzE5MGY1ZDU1NGU5NDg1ZjdmZDVlZjRhZWRlMjJlYTc5Y2YyZjI1MDBkNTk0NGQzY2RiMWIwODkiLCJpYXQiOjE3OTQyNzY3MzcsIm93bmVyIjoiZ2VtbWEtcmVwYWlyLXRlc3QiLCJyZW5kZXJfZnAiOiJmZjU4MWVkMWZkNTllZjJjOGNjNjVjOWM2NWJkMzBjNTY3YjUxYmNmZDM2Yzc4NjFjZGYyOWZlODAwZTFiZDY1Iiwic2IiOjEsInR0bCI6MTgwMCwidiI6NCwidmVyZGljdCI6IlBBU1MgKHRpZXIgQSBvbmx5KSJ9.3574b42ec242fe63f7acc7a865f3291556429f38c1ce088b2f733f7511a2fbfb",
+      "receipt_reason": "ok",
+      "provider": "",
+      "steps": [
+        "start",
+        "first_review:revise",
+        "repair:applied",
+        "re_review:approve",
+        "structure:ok",
+        "released"
+      ],
+      "role": "record_restoration",
+      "expected": "revise",
+      "edits_applied": true
+    }
+  ],
+  "ledger": [
+    {
+      "label": "repair:0",
+      "text": "Decision: approve",
+      "finish_reason": "stop",
+      "prompt_tokens": 1417,
+      "completion_tokens": 4,
+      "total_tokens": 1421,
+      "cost_usd": 0.0001416294,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.443,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1417,
+        "completion_tokens": 4,
+        "total_tokens": 1421,
+        "cost": 0.0001416294,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00014306,
+          "upstream_inference_prompt_cost": 0.0001417,
+          "upstream_inference_completions_cost": 1.36e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:1",
+      "text": "Decision: approve\n\nIssues:\nnone",
+      "finish_reason": "stop",
+      "prompt_tokens": 1484,
+      "completion_tokens": 9,
+      "total_tokens": 1493,
+      "cost_usd": 0.0001499454,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.533,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1484,
+        "completion_tokens": 9,
+        "total_tokens": 1493,
+        "cost": 0.0001499454,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00015146,
+          "upstream_inference_prompt_cost": 0.0001484,
+          "upstream_inference_completions_cost": 3.06e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:2",
+      "text": "Decision: revise\n\nIssues:\n- passage: \"Cut rework by 18% through standardizing panel labeling and targeted quality audits across the terminal fleet.\"\n  problem: unsupported\n  sources: [[candidate-main.txt] \"Cut rework by 18% by standardizing panel labeling across the terminal fleet.\"]\n  why: The draft adds \"targeted quality audits\" as a method for achieving the rework reduction, which is not mentioned in the source.\n  correction: \"Cut rework by 18% through standardizing panel labeling across the terminal fleet.\"",
+      "finish_reason": "stop",
+      "prompt_tokens": 1421,
+      "completion_tokens": 118,
+      "total_tokens": 1539,
+      "cost_usd": 0.0001803978,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.197,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1421,
+        "completion_tokens": 118,
+        "total_tokens": 1539,
+        "cost": 0.0001803978,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1312,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018222,
+          "upstream_inference_prompt_cost": 0.0001421,
+          "upstream_inference_completions_cost": 4.012e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:3",
+      "text": "Decision: approve",
+      "finish_reason": "stop",
+      "prompt_tokens": 1417,
+      "completion_tokens": 4,
+      "total_tokens": 1421,
+      "cost_usd": 0.0001416294,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.331,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1417,
+        "completion_tokens": 4,
+        "total_tokens": 1421,
+        "cost": 0.0001416294,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1344,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00014306,
+          "upstream_inference_prompt_cost": 0.0001417,
+          "upstream_inference_completions_cost": 1.36e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:4",
+      "text": "Decision: revise\n\nIssues:\n- passage: Prepared the monthly cost summary that the regional manager reviewed and reconciled 1,180 fuel invoices each quarter.\n  problem: misattributed\n  sources: [[candidate-main.txt] \"Reconciled 1,180 fuel invoices against depot dispensing records each quarter.\"]\n  why: The draft attributes the reconciliation of 1,180 fuel invoices to the role at Cascade Freight Partners, but the source documents attribute this activity to the role at Harborline Transit Authority.\n  correction: Prepared the monthly cost summary reviewed by the regional manager.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1429,
+      "completion_tokens": 127,
+      "total_tokens": 1556,
+      "cost_usd": 0.0001842192,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.242,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1429,
+        "completion_tokens": 127,
+        "total_tokens": 1556,
+        "cost": 0.0001842192,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1344,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018608,
+          "upstream_inference_prompt_cost": 0.0001429,
+          "upstream_inference_completions_cost": 4.318e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:5",
+      "text": "Decision: approve",
+      "finish_reason": "stop",
+      "prompt_tokens": 1417,
+      "completion_tokens": 4,
+      "total_tokens": 1421,
+      "cost_usd": 0.0001416294,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.362,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1417,
+        "completion_tokens": 4,
+        "total_tokens": 1421,
+        "cost": 0.0001416294,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1344,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00014306,
+          "upstream_inference_prompt_cost": 0.0001417,
+          "upstream_inference_completions_cost": 1.36e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:6",
+      "text": "Decision: revise\n\nIssues:\n- passage: (omitted)\n  problem: omitted\n  sources: [candidate-supplement.txt: \"Ridgeline Equipment Services -- Fife, WA Inventory Analyst | 08/2023 - Present\"]\n  why: The draft completely omits a current professional role and its associated achievements.\n  correction: **Ridgeline Equipment Services** -- Fife, WA\n*Inventory Analyst | 08/2023 - Present*\n- Maintain parts availability records for 7 service branches.\n- Compared quarterly parts usage against the prior four quarters to set reorder points.",
+      "finish_reason": "stop",
+      "prompt_tokens": 1359,
+      "completion_tokens": 133,
+      "total_tokens": 1492,
+      "cost_usd": 0.0001793088,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 1.646,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1359,
+        "completion_tokens": 133,
+        "total_tokens": 1492,
+        "cost": 0.0001793088,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1216,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.00018112,
+          "upstream_inference_prompt_cost": 0.0001359,
+          "upstream_inference_completions_cost": 4.522e-05
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    },
+    {
+      "label": "repair:7",
+      "text": "Decision: approve\n\nIssues:\n- none",
+      "finish_reason": "stop",
+      "prompt_tokens": 1416,
+      "completion_tokens": 10,
+      "total_tokens": 1426,
+      "cost_usd": 0.00014355,
+      "max_tokens": 8192,
+      "model": "google/gemma-4-31b-it",
+      "provider": "CoreWeave",
+      "latency_s": 0.496,
+      "retries": [],
+      "raw_usage": {
+        "prompt_tokens": 1416,
+        "completion_tokens": 10,
+        "total_tokens": 1426,
+        "cost": 0.00014355,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 1280,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.000145,
+          "upstream_inference_prompt_cost": 0.0001416,
+          "upstream_inference_completions_cost": 3.4e-06
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "truncated": false,
+      "requests_sent": 1,
+      "usage_missing": false,
+      "provider_pinned": [],
+      "provider_reported": "CoreWeave"
+    }
+  ]
+}

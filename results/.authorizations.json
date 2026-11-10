@@ -1,0 +1,10 @@
+{
+  "gemma-repair-2026-11-09-01": {
+    "consumed_at": "2026-11-10T02:12:10+00:00",
+    "status": "completed",
+    "expected_requests": 20,
+    "requests_sent": 8,
+    "cost_usd": 0.001262,
+    "finished_at": "2026-11-10T02:12:17+00:00"
+  }
+}
