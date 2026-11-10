@@ -149,7 +149,14 @@ async def run_binding(draft: str, sources: dict[str, str], *,
     if first.decision == dc.DECISION_CANNOT_ASSESS:
         result.release_reason = 'llm_cannot_assess'
         return result
-    proposed, result.repair_status = safe_repair(draft, sources, first.issues)
+    # `apply_repair` supersedes `safe_repair`: it accepts a faithful paraphrase of a
+    # source bullet instead of demanding byte-identity, locates the target inside its
+    # own owner record, and can restore a missing record from the source. It keeps
+    # every refusal that makes those safe (ambiguous target, invented dates, merged
+    # employers, moved credentials). `safe_repair` is retained unchanged so the
+    # earlier runs remain reproducible.
+    from experiment.repair import apply_repair
+    proposed, result.repair_status = apply_repair(draft, sources, first.issues)
     result.proposed_document = proposed
     if proposed == draft:
         result.release_reason = 'revision_unresolved'

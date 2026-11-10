@@ -45,12 +45,16 @@ def test_audit_packet_preserves_all_retained_fields(tmp_path):
 
 
 APPROVE = 'Decision: approve\n\nIssues:\n- none\n'
+# The passage must exist in the draft the test builds, or the review is
+# `passage_not_in_draft` and no repair is ever attempted.
 REVISE = ('Decision: revise\n\nIssues:\n'
-          '- passage: Cut rework by 18% through targeted quality audits.\n'
+          '- passage: Cut rework by 18% through standardizing panel labeling and '
+          'targeted quality audits.\n'
           '  problem: unsupported\n'
           '  sources: [candidate-main.txt]\n'
           '  why: unsupported method\n'
-          '  correction: Cut rework by 18% by standardizing panel labeling across the terminal fleet.\n')
+          '  correction: Cut rework by 18% through standardizing panel labeling '
+          'across the terminal fleet.\n')
 
 
 def run(draft, answers, rules=None):
@@ -83,11 +87,16 @@ def test_all_retained_revise_releases_do_not_release_on_first_review():
 @pytest.mark.parametrize('second,allowed', [(APPROVE, True), ('Decision: revise\n', False),
                                            ('Decision: cannot_assess\n', False), ('not a decision', False)])
 def test_correction_requires_new_valid_approval(second, allowed):
+    # The draft carries the SOURCED method PLUS an appended unsourced clause — the
+    # real defect shape. A draft that lacked the sourced method as well would make
+    # the correction ADD content, and `apply_repair` correctly refuses that; such a
+    # fixture would be testing the wrong thing.
     draft = ('## Professional Experience\n**Cascade Freight Partners** -- Kent, WA\n'
              '*Cost Reporting Coordinator | 07/2015 - 03/2019*\n'
-             '- Cut rework by 18% through targeted quality audits.\n')
+             '- Cut rework by 18% through standardizing panel labeling and targeted '
+             'quality audits.\n')
     result, calls = run(draft, [REVISE, second])
-    assert result.repair_status == 'proposed_exact_owned_source_bullet'
+    assert result.repair_status == 'applied'
     assert len(calls) == 2 and calls[1] == result.proposed_document and calls[1] != draft
     assert result.release is allowed
 
