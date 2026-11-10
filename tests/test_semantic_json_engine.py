@@ -130,7 +130,7 @@ def test_multiple_nonoverlapping_edits_in_one_record():
 
 @pytest.mark.parametrize('index', [0, 1])
 @pytest.mark.parametrize('problem', ['unsupported', 'misattributed'])
-def test_delete_refuses_even_apparently_unsupported_material(index, problem):
+def test_delete_uses_model_judgment_and_requires_fresh_approval(index, problem):
     draft = DRAFT.replace('**Beta**', '- Imaginary claim.\n**Beta**')
     def select(payload):
         doc, src = views(payload)
@@ -139,8 +139,11 @@ def test_delete_refuses_even_apparently_unsupported_material(index, problem):
         return answer('revise', [item])
     reviewer = Reviewer(select, answer())
     result = run(reviewer, draft=draft)
-    assert result.status == 'withheld' and result.reason == 'unresolved_claims'
-    assert result.markdown is None and result.repair_calls == 0 and len(reviewer.calls) == 1
+    assert result.status == 'approved' and result.repair_calls == 1
+    assert len(reviewer.calls) == 2
+    assert ('Managed inventory. using a fictional tool' not in result.markdown) == (index == 0)
+    assert ('Imaginary claim.' not in result.markdown) == (index == 1)
+    assert views(reviewer.calls[1][1])[0]['document'] == result.markdown
 
 
 @pytest.mark.parametrize('paraphrase', [
@@ -148,21 +151,31 @@ def test_delete_refuses_even_apparently_unsupported_material(index, problem):
     'Oversaw stock and invented an automated warehouse.',
     'Supervised the flow of goods.',
 ])
-def test_delete_refuses_supported_paraphrases_without_literal_overlap(paraphrase):
+def test_delete_does_not_pretend_literal_matching_can_verify_model_judgment(paraphrase):
     draft = SOURCE.replace('Managed inventory.', paraphrase)
     def select(payload):
         doc, src = views(payload)
         return answer('revise', [delete(doc['records'][0]['passages'][0]['id'],
                                         src[0]['records'][0]['id'])])
     assert 'Managed inventory.' not in paraphrase and paraphrase not in SOURCE
-    reviewer = Reviewer(select, answer())
+    # An incorrect reviewer can propose deleting a supported paraphrase. A fresh
+    # reviewer must catch it; structural validation is not semantic proof.
+    reviewer = Reviewer(select, answer('cannot_assess'))
     result = run(reviewer, draft=draft)
     assert result.reason == 'unresolved_claims' and result.markdown is None
-    assert result.repair_calls == 0 and len(reviewer.calls) == 1
+    assert result.repair_calls == 1 and len(reviewer.calls) == 2
+
+
+def test_delete_does_not_use_literal_source_overlap_as_a_veto():
+    # A structurally valid but mistaken pair of reviewer judgments can still lose
+    # sourced material. This documents the model-led policy, not a safety proof.
+    result = run(Reviewer(lambda p: selected_delete(p, 'Acme'), answer()), draft=SOURCE)
+    assert result.status == 'approved' and result.repair_calls == 1
+    assert 'Managed inventory.' not in result.markdown
 
 
 @pytest.mark.parametrize('extracted_first', [True, False])
-def test_delete_refuses_fact_from_unindexed_extracted_document_in_either_order(extracted_first):
+def test_reviewer_sees_cross_document_fact_in_either_order(extracted_first):
     fixture_path = Path(__file__).parent / 'fixtures/tier_b/extracted_format_excerpt.json'
     fixture = json.loads(fixture_path.read_text(encoding='utf-8'))
     extracted = fixture['sources']['document-1']['text']
@@ -179,17 +192,17 @@ def test_delete_refuses_fact_from_unindexed_extracted_document_in_either_order(e
         indexed = [record for document in src for record in document['records']
                    if record['owner'] == 'Acme']
         assert len(indexed) == 1
-        assert any('Riverbend Facilities Group' in document['document'] and not document['records']
+        assert any(any('Riverbend Facilities Group' in record['owner'] for record in document['records'])
                    for document in src)
         return answer('revise', [delete(doc['records'][0]['passages'][0]['id'], indexed[0]['id'])])
-    reviewer = Reviewer(select, answer())
+    reviewer = Reviewer(select, answer('cannot_assess'))
     result = run(reviewer, draft=draft, sources=sources)
     assert result.reason == 'unresolved_claims' and result.markdown is None
-    assert result.repair_calls == 0 and len(reviewer.calls) == 1
+    assert result.repair_calls == 1 and len(reviewer.calls) == 2
 
 
 @pytest.mark.parametrize('delete_first', [True, False])
-def test_delete_rejects_entire_mixed_edit_batch(delete_first):
+def test_delete_and_replace_in_same_batch(delete_first):
     draft = DRAFT.replace('**Beta**', '- Oversaw stock.\n**Beta**')
     def batch(payload):
         doc, src = views(payload)
@@ -199,8 +212,174 @@ def test_delete_rejects_entire_mixed_edit_batch(delete_first):
         return answer('revise', list(reversed(items)) if delete_first else items)
     reviewer = Reviewer(batch, answer())
     result = run(reviewer, draft=draft)
-    assert result.reason == 'unresolved_claims' and result.markdown is None
+    assert result.status == 'approved' and result.repair_calls == 1
+    assert 'fictional tool' not in result.markdown and 'Oversaw stock.' not in result.markdown
+    assert len(reviewer.calls) == 2
+
+
+def extracted_fixture():
+    path = Path(__file__).parent / 'fixtures/tier_b/extracted_format_excerpt.json'
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def selected_delete(payload, draft_owner, source_owner=None, problem='unsupported'):
+    doc, sources = views(payload)
+    record = next(r for r in doc['records'] if draft_owner in r['owner'])
+    source = next(r for s in sources for r in s['records']
+                  if (source_owner or draft_owner) in r['owner'])
+    item = delete(record['passages'][0]['id'], source['id'])
+    item['problem'] = problem
+    return answer('revise', [item])
+
+
+def test_retained_docx_extraction_maps_all_employers_and_batches_edits():
+    fixture = extracted_fixture()
+    sources = {k: v['text'] for k, v in fixture['sources'].items()}
+    draft = '## Professional Summary\nExisting summary.\n' + fixture['draft']['text']
+
+    def batch(payload):
+        doc, extracted = views(payload)
+        records = [r for s in extracted for r in s['records']]
+        assert [r['owner'].replace('SYNTHETIC-ONLY ', '') for r in records] == [
+            'Northline Fabrication, Inc.', 'Kettle Falls Electrical Contractors',
+            'Pend Oreille Power Systems', 'Riverbend Facilities Group']
+        items = []
+        for owner in ('Northline Fabrication, Inc.', 'Riverbend Facilities Group'):
+            item = selected_delete(payload, owner)['issues'][0]
+            items.append(item)
+        assert 'Professional Experience' == records[-1]['section']
+        return answer('revise', items)
+
+    reviewer = Reviewer(batch, answer())
+    result = run(reviewer, draft=draft, sources=sources)
+    assert result.status == 'approved' and result.repair_calls == 1 and result.review_calls == 2
+    assert 'ensuring consistent uptime' not in result.markdown
+    assert 'ensuring system uptime' not in result.markdown
+    assert 'Reduced after-hours callouts' in result.markdown
+    assert views(reviewer.calls[1][1])[0]['document'] == result.markdown
+
+
+def test_retained_marked_source_maps_provenance_and_dated_role():
+    path = Path(__file__).parent / 'fixtures/tier_b/run10_excerpt.json'
+    sources = json.loads(path.read_text(encoding='utf-8'))['sources']
+    draft = ('## Professional Summary\nExisting summary.\n## Professional Experience\n'
+             '**Cascade Power Solutions, LLC** -- Example City, WA\n'
+             '*Journeyman Electrician | 03/2020 – Present*\n'
+             '- Unsupported claim.\n- Remaining work.\n## Projects\n'
+             '## Education\n- Education.\n## Certifications\n- Certification.\n'
+             '## Technical Skills\n- Skills.\n')
+    result = run(Reviewer(lambda p: selected_delete(p, 'Cascade Power Solutions'), answer()),
+                 draft=draft, sources=sources)
+    assert result.status == 'approved' and result.repair_calls == 1
+    assert 'Unsupported claim.' not in result.markdown
+
+
+@pytest.mark.parametrize('fixture_name,owner,role,date,location', [
+    ('Holloway_ElecWA25.txt', 'Cascade Power Solutions, LLC', 'Journeyman Electrician',
+     'March 2020 – Present', 'Example City, WA'),
+    ('Whitfield_AdminNC25.txt', 'Example Community Services', 'Administrative Coordinator',
+     'January 2021 – Present', 'Example City, NC'),
+])
+def test_retained_pdf_style_header_and_role_are_mapped(fixture_name, owner, role, date, location):
+    source = (Path(__file__).parent / 'fixtures/parsing_fidelity' / fixture_name).read_text()
+    draft = (f'## Professional Experience\n**{owner}** -- {location}\n'
+             f'*{role} | {date}*\n- An unsupported assertion.\n- Remaining work.\n'
+             '## Projects\n## Education\n- Existing education.\n'
+             '## Certifications\n- Existing certification.\n## Technical Skills\n- Existing skills.\n')
+    reviewer = Reviewer(lambda p: selected_delete(p, owner), answer())
+    result = run(reviewer, draft=draft, sources={'pdf': source})
+    assert result.status == 'approved' and result.repair_calls == 1
+    assert 'unsupported assertion' not in result.markdown
+    assert len(views(reviewer.calls[0][1])[1][0]['records']) == 2
+
+
+@pytest.mark.parametrize('mutation', ['wrong_owner', 'wrong_role', 'wrong_dates', 'wrong_location',
+                                      'wrong_section', 'duplicate_source', 'duplicate_draft',
+                                      'duplicate_section', 'protected_target', 'protected_identity',
+                                      'protected_source', 'wrapped', 'unknown_record', 'corporate_header',
+                                      'duplicate_source_section', 'bad_source_id', 'bad_target_id'])
+def test_deletion_structural_refusals_are_distinct_from_model_refusal(mutation):
+    fixture = extracted_fixture()
+    sources = {k: v['text'] for k, v in fixture['sources'].items()}
+    draft = fixture['draft']['text']
+    owner = 'Riverbend Facilities Group'
+    if mutation == 'wrong_role': draft = draft.replace('Maintenance Electrician |', 'Electrician |')
+    if mutation == 'wrong_dates': draft = draft.replace('03/2023 – Present', '03/2022 – Present')
+    if mutation == 'wrong_location': draft = draft.replace("Coeur d'Alene, ID", 'Elsewhere, ID')
+    if mutation == 'wrong_section': draft = draft.replace('## Professional Experience', '## Projects', 1)
+    if mutation == 'duplicate_source': sources['extra'] = sources['document-1']
+    if mutation == 'duplicate_draft':
+        draft = draft.replace('## Projects', '**Riverbend Facilities Group** -- Coeur d\'Alene, ID\n'
+                              '*Maintenance Electrician | 03/2023 – Present*\n- Other.\n## Projects')
+    if mutation == 'duplicate_section': draft += '\n## Professional Experience\n'
+    if mutation == 'protected_target': draft = draft.replace('ensuring system uptime.', 'contact a@example.test.')
+    if mutation == 'protected_source':
+        sources['document-1'] = sources['document-1'].replace('6 commercial properties.',
+                                                               '6 commercial properties. a@example.test')
+    if mutation == 'protected_identity':
+        draft = draft.replace('Riverbend Facilities Group', 'Riverbend Facilities Group a@example.test')
+        sources['document-1'] = sources['document-1'].replace('Riverbend Facilities Group',
+                                                               'Riverbend Facilities Group a@example.test')
+    if mutation == 'wrapped': draft = draft.replace('ensuring system uptime.\n', 'ensuring\n  system uptime.\n')
+    if mutation == 'unknown_record':
+        sources['document-1'] = sources['document-1'].replace('Education\n', 'Unknown Employer\n- Work.\nEducation\n')
+    if mutation == 'corporate_header':
+        sources['document-1'] = sources['document-1'].replace('Education\n', 'Unknown Employer Inc.\n'
+                                                               'Other role\nEducation\n')
+    if mutation == 'duplicate_source_section':
+        sources['document-1'] = sources['document-1'].replace('Education\n', 'Professional Experience\n'
+                                                               'Unknown Employer\nEducation\n')
+
+    def proposal(payload):
+        if mutation == 'wrapped':
+            doc, src = views(payload)
+            passages = next(r for r in doc['records'] if owner in r['owner'])['passages']
+            assert len(passages) == 1 and 'Reduced after-hours' in passages[0]['text']
+            return answer('revise', [delete('missing', src[1]['records'][0]['id'])])
+        result = selected_delete(payload, owner, 'Northline' if mutation == 'wrong_owner' else None)
+        if mutation == 'bad_source_id': result['issues'][0]['sources'] = ['invented']
+        if mutation == 'bad_target_id': result['issues'][0]['passage'] = 'invented'
+        return result
+
+    reviewer = Reviewer(proposal)
+    result = run(reviewer, draft=draft, sources=sources)
+    assert result.status == 'withheld' and result.reason == 'unresolved_claims'
     assert result.repair_calls == 0 and len(reviewer.calls) == 1
+
+
+def test_successful_patch_is_withheld_when_fresh_review_again_requests_revision():
+    reviewer = Reviewer(lambda p: selected_delete(p, 'Acme'), answer('revise', [delete('p', 'r')]))
+    result = run(reviewer)
+    assert result.reason == 'unresolved_claims' and result.repair_calls == 1
+    assert result.markdown is None and len(reviewer.calls) == 2
+
+
+def test_fresh_approval_still_requires_source_backed_section_completeness():
+    fixture = extracted_fixture()
+    reviewer = Reviewer(lambda p: selected_delete(p, 'Riverbend Facilities Group'), answer())
+    result = run(reviewer, draft=fixture['draft']['text'],
+                 sources={k: v['text'] for k, v in fixture['sources'].items()})
+    assert result.reason == 'source_section_missing' and result.repair_calls == 1
+    assert len(reviewer.calls) == 2 and result.markdown is None
+
+
+def test_delete_duplicate_target_rejects_entire_batch():
+    def conflict(payload):
+        item = selected_delete(payload, 'Acme')['issues'][0]
+        return answer('revise', [item, copy.deepcopy(item)])
+    reviewer = Reviewer(conflict)
+    result = run(reviewer)
+    assert result.reason == 'unresolved_claims' and result.repair_calls == 0
+    assert len(reviewer.calls) == 1
+
+
+def test_delete_uses_crlf_boundaries_and_preserves_other_lines():
+    draft = DRAFT.replace('\n', '\r\n')
+    result = run(Reviewer(lambda p: selected_delete(p, 'Acme'), answer()), draft=draft,
+                 sources={'one': SOURCE.replace('\n', '\r\n')})
+    assert result.status == 'approved'
+    assert '**Acme** -- City\r\n**Beta** -- City' in result.markdown
+    assert '\n' not in result.markdown.replace('\r\n', '')
 
 
 def test_replace_cannot_discard_literal_bullet_from_another_owner():

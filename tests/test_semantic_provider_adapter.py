@@ -87,6 +87,29 @@ def test_schema_only_on_explicit_opt_in(approved):
     assert request["provider"]["require_parameters"] is True
 
 
+def test_schema_accepts_bridge_decisions_without_changing_source_only_shape(approved):
+    answer = {**ANSWER, "bridge_decisions": [
+        {"id": "bridge-01-test", "decision": "narrow", "replacement": "reporting"}]}
+    session = Session([(200, envelope(json.dumps(answer)))])
+    provider = cp.CorrectionProvider("fake", session, model=MODEL, semantic_schema_supported=True)
+    assert run(provider) == answer
+    schema = session.requests[0]["response_format"]["json_schema"]["schema"]
+    assert "bridge_decisions" in schema["properties"]
+    assert "bridge_decisions" not in schema["required"]
+
+
+@pytest.mark.parametrize("decision", [
+    {"id": "b", "decision": "accept"},
+    {"id": "b", "decision": "invent", "replacement": ""},
+    {"id": "b", "decision": "accept", "replacement": "", "extra": "x"},
+])
+def test_malformed_bridge_decisions_are_format_errors(approved, decision):
+    answer = {**ANSWER, "bridge_decisions": [decision]}
+    provider = cp.CorrectionProvider("fake", Session([(200, envelope(json.dumps(answer)))]), model=MODEL)
+    with pytest.raises(cp.SemanticFormatError):
+        run(provider)
+
+
 @pytest.mark.parametrize("mutation", [
     lambda p: p.update(draft="a@example.test"),
     lambda p: p.update(_hidden="a@example.test"),

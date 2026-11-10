@@ -182,10 +182,15 @@ def _line_is_only_the_label(line: str, label: str) -> bool:
     Removing or rewriting such a line cannot destroy a candidate fact, because
     there is nothing else on it.
     """
+    if not isinstance(label, str) or not label.strip():
+        return False
     residue = re.sub(r"[*_`#]", " ", line or "")
     residue = re.sub(r"^\s*[-\u2022*+]\s*", " ", residue)
     residue = " ".join(residue.casefold().split())
-    residue = re.sub(_word_bounded(label), " ", residue)
+    pattern = _word_bounded(label)
+    if not re.search(pattern, residue):
+        return False
+    residue = re.sub(pattern, " ", residue)
     residue = re.sub(r"[^a-z0-9]+", " ", residue).strip()
     return not residue
 

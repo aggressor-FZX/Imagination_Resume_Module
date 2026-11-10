@@ -1234,6 +1234,13 @@ def verify_receipt(receipt: Optional[str], *, markdown: Optional[str],
     matching fingerprint is required; a v4 receipt is refused with
     ``receipt_policy_unbound`` rather than silently treated as equivalent.
     """
+    if isinstance(policy_state, dict) and "surviving_bridges" in policy_state:
+        bridges = policy_state["surviving_bridges"]
+        if (not isinstance(bridges, list) or any(
+                not isinstance(b, dict) or not isinstance(b.get("id"), str)
+                or not b["id"] or not isinstance(b.get("skill"), str)
+                or not b["skill"] for b in bridges)):
+            return False, "receipt_policy_mismatch"
     declared_policy_fp = policy_fingerprint(policy_state)
     if not receipt or not isinstance(receipt, str) or "." not in receipt:
         return False, "receipt_missing"

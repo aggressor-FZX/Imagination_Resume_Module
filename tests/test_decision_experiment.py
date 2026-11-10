@@ -138,7 +138,10 @@ def test_the_production_correction_engine_is_not_modified_by_the_experiment():
     signature = inspect.signature(source_correction._correct_body)
     assert list(signature.parameters) == [
         "markdown", "sources", "callback", "timeout_seconds", "events",
-        "permitted_bridges"]
+        "permitted_bridges", "require_bridge_decisions"]
+    added_parameter = signature.parameters["require_bridge_decisions"]
+    assert added_parameter.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+    assert added_parameter.default is False
     # The production contract still describes the span/inventory obligation.
     assert "representations" in source_correction._REVIEW_CONTRACT
     assert "claims" in source_correction._REVIEW_CONTRACT

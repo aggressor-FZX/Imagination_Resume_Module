@@ -71,13 +71,15 @@ _SEMANTIC_COMMON_PROPERTIES = {
 }
 
 
-def _semantic_issue_schema(operation, target, problems, *, correction=False):
+def _semantic_issue_schema(operation, target, problems, *, correction=False, source_passage=False):
     properties = {**_SEMANTIC_COMMON_PROPERTIES,
                   "operation": {"type": "string", "enum": [operation]},
                   "problem": {"type": "string", "enum": list(problems)},
                   target: {"type": "string"}}
     if correction:
         properties["correction"] = {"type": "string"}
+    if source_passage:
+        properties["source_passage"] = {"type": "string"}
     return {"type": "object", "properties": properties,
             "required": list(properties), "additionalProperties": False}
 
@@ -92,7 +94,14 @@ SEMANTIC_REVIEW_SCHEMA = {
             _semantic_issue_schema("replace", "passage", ("unsupported", "misattributed"), correction=True),
             _semantic_issue_schema("delete", "passage", ("unsupported", "misattributed")),
             _semantic_issue_schema("insert_record", "destination", ("omitted",)),
+            _semantic_issue_schema("insert_passage", "destination", ("omitted",), source_passage=True),
         ]}},
+        "bridge_decisions": {"type": "array", "maxItems": 6, "items": {
+            "type": "object", "properties": {
+                "id": {"type": "string"},
+                "decision": {"type": "string", "enum": ["accept", "narrow", "remove"]},
+                "replacement": {"type": "string"},
+            }, "required": ["id", "decision", "replacement"], "additionalProperties": False}},
     },
     "required": ["version", "decision", "rationale", "issues"],
     "additionalProperties": False,
@@ -159,12 +168,22 @@ def _validate_semantic_payload(payload):
 
 def _validate_semantic_response(value):
     """Validate shape only; grounding and release decisions belong to the engine."""
-    if (type(value) is not dict or set(value) != {"version", "decision", "rationale", "issues"}
+    if (type(value) is not dict or set(value) not in (
+            {"version", "decision", "rationale", "issues"},
+            {"version", "decision", "rationale", "issues", "bridge_decisions"})
             or value["version"] != SEMANTIC_REVIEW_VERSION
             or value["decision"] not in ("approve", "revise", "cannot_assess")
             or type(value["rationale"]) is not str or type(value["issues"]) is not list
             or len(value["issues"]) > 32):
         raise SemanticFormatError("invalid semantic review response")
+    if "bridge_decisions" in value:
+        decisions = value["bridge_decisions"]
+        if (type(decisions) is not list or len(decisions) > 6 or any(
+                type(item) is not dict or set(item) != {"id", "decision", "replacement"}
+                or any(type(item[k]) is not str for k in item)
+                or item["decision"] not in ("accept", "narrow", "remove")
+                for item in decisions)):
+            raise SemanticFormatError("invalid semantic review response")
     for issue in value["issues"]:
         if type(issue) is not dict:
             raise SemanticFormatError("invalid semantic review response")
@@ -175,6 +194,8 @@ def _validate_semantic_response(value):
             fields, target, problems = {"passage"}, "passage", ("unsupported", "misattributed")
         elif op == "insert_record":
             fields, target, problems = {"destination"}, "destination", ("omitted",)
+        elif op == "insert_passage":
+            fields, target, problems = {"destination", "source_passage"}, "destination", ("omitted",)
         else:
             raise SemanticFormatError("invalid semantic review response")
         if (set(issue) != fields | {"operation", "problem", "sources", "why"}
@@ -184,6 +205,7 @@ def _validate_semantic_response(value):
                 or len(issue["sources"]) != 1
                 or any(type(s) is not str for s in issue["sources"])
                 or type(issue["why"]) is not str
+                or (op == "insert_passage" and type(issue["source_passage"]) is not str)
                 or (op == "replace" and type(issue["correction"]) is not str)):
             raise SemanticFormatError("invalid semantic review response")
 
@@ -332,7 +354,7 @@ class CorrectionProvider:
                  semantic_max_http_attempts=SEMANTIC_MAX_HTTP_ATTEMPTS):
         if (type(semantic_schema_supported) is not bool
                 or type(semantic_max_http_attempts) is not int
-                or not 1 <= semantic_max_http_attempts <= MAX_CALLS):
+                or not 1 <= semantic_max_http_attempts <= SEMANTIC_MAX_HTTP_ATTEMPTS):
             raise ValueError("invalid semantic provider configuration")
         self.api_key = api_key
         self.session = session
@@ -772,6 +794,9 @@ class CorrectionProvider:
             # only key is "restorations" is NOT the strict form even though the key
             # matches. Skipping translation there returned answers the engine could
             # never accept, and every restoration failed as source_facts_missing.
+            if (phase == "semantic_review" and self._semantic_deadline is not None
+                    and time.monotonic() >= self._semantic_deadline):
+                raise ProviderCallTimeout(phase)
             if translated is None:
                 return parsed
             if phase == "restore":

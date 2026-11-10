@@ -48,8 +48,18 @@ def run(draft: str, answers: list[str], sources=None, **kw):
 
 def test_the_result_is_field_compatible_with_the_live_caller():
     """`app.py` unpacks this type; a missing field would break the release branch."""
-    assert set(CorrectionResult.__dataclass_fields__) == \
-        set(sc.CorrectionResult.__dataclass_fields__)
+    original_fields = {
+        "status", "markdown", "reason", "commentary", "coverage",
+        "review_calls", "repair_calls", "restore_calls",
+    }
+    assert set(CorrectionResult.__dataclass_fields__) == original_fields
+    assert set(sc.CorrectionResult.__dataclass_fields__) == original_fields | {"final_bridges"}
+    original_args = ("approved", "document", None, "", None, 1, 0, 0)
+    semantic = CorrectionResult(*original_args)
+    legacy = sc.CorrectionResult(*original_args)
+    assert all(getattr(semantic, field) == getattr(legacy, field) for field in original_fields)
+    assert legacy.final_bridges is None
+    assert sc.CorrectionResult(*original_args, final_bridges=()).final_bridges == ()
 
 
 def test_production_package_imports_no_experiment_runner():

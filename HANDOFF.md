@@ -1,4 +1,23 @@
-# JSON semantic review — WIP handoff, 2026-11-09
+# JSON semantic review — current WIP handoff, 2026-11-09
+
+- **Branch:** `experiment/llm-led-approval`; prior commit `f3666e90fbb257679e64354752c5f3ab1ef90b7d`. This checkpoint is not a release.
+- **Live / rollback:** `8d5efa8f12a082c06eb9907b6f38dba8e075eeff`, Render deploy `dep-dbop3b7avr4c73bmi5p0`; production auto-deploys `master`.
+- [x] JSON `/analyze` path is opt-in using `CORRECTION_ENGINE=semantic_json`; unset defaults to `legacy`. Tests cover identified passages, bridge decisions, fresh review and receipt binding. Do not assume semantic approval proves completeness or attribution.
+- [x] Fixed bridge matching against blank lines, added `.dockerignore`, and added offline application/export tests, including real PDF/DOCX rendering. Covered PII is redacted before semantic review.
+- [x] Focused JSON app/provider/export tests: **233 passed**. Broad regression after latest changes: **2493 passed, 14 skipped** with two exclusions below. No paid requests made in this checkpoint.
+- [x] User approved the previously proposed combined **30 paid requests / $0.10 observed-cost ceiling**, stop on unknown usage. Approval does not override release review or permit exceeding the ceiling.
+- **Next steps:**
+  1. Fix identity handling before release: untrusted free-text header inference was removed; current JSON exports omit source name/contact and withhold drafts with unverified generated preambles. Website delivery must retain verified identity without conflicting with approved content.
+  2. Implement or prove enforceable combined pre-dispatch budget across signed-in website parser, writer, correction, job search, workers and retries. The existing per-provider cap is not a shared website limit; billing can be unknown or delayed. Do not submit the paid website workflow until this is solved.
+  3. Inspect semantic review handling of omitted source facts, wrong-owner attribution, bridge state and structural conflicts with adversarial fixtures; semantic approval is model judgment. Review the production-only diff and obtain required release approval before triggering `master` auto-deploy.
+  4. The separate Imaginator multipart endpoint has a distinct release path; do not assert it uses JSON correction. Verify remaining marker variants, all sections and actual signed-in PDF/DOCX delivery.
+- **Excluded suites:** `test_loader_source_preservation_offline.py` needs `fitz` in the workspace venv; **17 passed** in the Loader venv. `test_exported_outcome_wording_regression.py`: **27 passed, 5 failed, 2 skipped** with missing `analysis.raw`; a read-only in-memory path override to the retained capture made the five failed tests and both skipped checks pass. Both concern extraction/factual fidelity and must not be treated as irrelevant.
+- **Uncommitted / intentionally untracked:** `experiment/audit_packet_v3.py` predates this work and must not be staged. Commit only scoped changes listed by `git status`.
+- **Verification:** `env -u CORRECTION_PROVIDER_DISCLOSURE OPENROUTER_API_KEY_1=x OPENROUTER_API_KEY_2=y IMAGINATOR_AUTH_TOKEN=z STAGE_COOLDOWN_SECONDS=0 /home/skystarved/Render_Dockers/.venv/bin/python -m pytest tests/ -o addopts='' -p no:cacheprovider -q --ignore=tests/test_loader_source_preservation_offline.py --ignore=tests/test_exported_outcome_wording_regression.py`
+
+---
+
+# JSON semantic review — WIP handoff, 2026-11-09 (superseded)
 
 - **Active branch:** `experiment/llm-led-approval`; previous commit `f96c65e`. This checkpoint is a WIP commit, not a production release.
 - **Live and rollback revision:** `8d5efa8f12a082c06eb9907b6f38dba8e075eeff`, deploy `dep-dbop3b7avr4c73bmi5p0`. Render deploys `master` automatically on commit. Do not merge this WIP into `master`.

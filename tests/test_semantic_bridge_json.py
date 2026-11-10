@@ -61,7 +61,7 @@ def test_structurally_valid_bridge_is_not_semantic_approval():
     reviewer = Reviewer([answer()])
     result = run(reviewer, mode='imaginative', permitted_bridges=[bridge])
     assert result.status == 'withheld' and result.reason == 'unresolved_claims'
-    assert result.markdown is None and result.review_calls == 0 and not reviewer.calls
+    assert result.markdown is None and result.review_calls == 1 and len(reviewer.calls) == 1
 
 
 @pytest.mark.parametrize('mode', ['conservative', 'imaginative'])
@@ -77,7 +77,7 @@ def test_nonempty_bridge_decks_never_bypass_review_or_mode(mode, mutation):
     reviewer = Reviewer([answer()])
     result = run(reviewer, mode=mode, permitted_bridges=[bridge])
     assert result.reason == 'unresolved_claims' and result.markdown is None
-    assert not reviewer.calls
+    assert len(reviewer.calls) == (1 if mutation == 'valid' and mode == 'imaginative' else 0)
 
 
 @pytest.mark.parametrize('bridges', [{}, (), '', False, 0])
@@ -132,10 +132,9 @@ def test_receipt_policy_binding_depends_on_actual_surviving_bridge_record():
     removed['surviving_bridges'] = []
     assert publication_gate.policy_fingerprint(policy) != publication_gate.policy_fingerprint(narrowed)
     assert publication_gate.policy_fingerprint(policy) != publication_gate.policy_fingerprint(removed)
-    # CorrectionResult exposes no bridge state for the route to sign. Returning a
-    # changed deck privately inside this engine would not update receipt issuance.
+    # An approved source-only deck is explicitly empty, not the original proposals.
     result = run(Reviewer([answer()]), mode='imaginative')
-    assert result.status == 'approved' and not hasattr(result, 'surviving_bridges')
+    assert result.status == 'approved' and result.final_bridges == ()
 
 
 def test_default_is_imaginative_but_does_not_automatically_authorize_bridges():
@@ -216,3 +215,55 @@ def test_analyze_routes_remain_on_existing_review_until_safe_integration(
               if item['stage'] == 'source_correction']
     assert phases == ['source_inventory', 'initial_review', 'repair', 'post_patch_review']
     assert len(session.requests) == 4
+
+
+def bridge_answer(choice, replacement=''):
+    def respond(payload):
+        doc = json.loads(payload['text'])
+        return {**answer(), 'bridge_decisions': [
+            {'id': b['id'], 'decision': choice, 'replacement': replacement}
+            for b in doc.get('bridges', [])]}
+    return respond
+
+
+@pytest.mark.parametrize('choice,replacement,expected', [
+    ('accept', '', 'trend analysis'), ('narrow', 'data analysis', 'data analysis'),
+    ('remove', '', None)])
+def test_final_deck_is_reviewed_and_owned(choice, replacement, expected):
+    original = valid_bridge()
+    draft = SOURCE + '- trend analysis\n'
+    reviewer = Reviewer([bridge_answer(choice, replacement), bridge_answer('accept')])
+    result = run(reviewer, draft=draft, mode='imaginative', permitted_bridges=[original])
+    assert result.status == 'approved'
+    assert original['skill'] == 'trend analysis'
+    assert [b['skill'] for b in result.final_bridges] == ([expected] if expected else [])
+    assert len(reviewer.calls) == (1 if choice == 'accept' else 2)
+    if choice != 'accept':
+        assert 'trend analysis' not in result.markdown
+
+
+@pytest.mark.parametrize('replacement', ['expert analysis', 'data analysis\n- invented', 'data: inventory'])
+def test_bad_narrowing_fails_closed(replacement):
+    reviewer = Reviewer([bridge_answer('narrow', replacement)])
+    result = run(reviewer, draft=SOURCE + '- trend analysis\n',
+                 permitted_bridges=[valid_bridge()])
+    assert result.status == 'withheld'
+
+
+def test_duplicated_bridge_decision_never_approves():
+    def duplicate(payload):
+        out = bridge_answer('accept')(payload)
+        out['bridge_decisions'].append(dict(out['bridge_decisions'][0]))
+        return out
+    result = run(Reviewer([duplicate]), draft=SOURCE + '- trend analysis\n',
+                 permitted_bridges=[valid_bridge()])
+    assert result.status == 'withheld'
+
+
+def test_cannot_remove_a_sourced_skill_line():
+    source = SOURCE + '- trend analysis\n'
+    original = valid_bridge()
+    reviewer = Reviewer([bridge_answer('remove')])
+    result = asyncio.run(correct(source, {'document-1': source}, reviewer,
+                                 permitted_bridges=[original]))
+    assert result.status == 'withheld'

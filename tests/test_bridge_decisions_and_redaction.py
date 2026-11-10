@@ -190,6 +190,37 @@ def test_accept_refuses_a_label_that_is_not_standalone():
     assert rejected[0]["reason"] == "label_not_standalone"
 
 
+@pytest.mark.parametrize("decision", [ACCEPT, NARROW, REMOVE])
+@pytest.mark.parametrize("md", ["\n", "  \r\n", "---\n", "- **\n", "...\n"])
+def test_blank_and_punctuation_only_lines_do_not_match_absent_label(decision, md):
+    payload = {"bridge_id": "b1", "decision": decision, "skill": "trend analysis"}
+    if decision == NARROW:
+        payload["replacement"] = "data analysis"
+
+    text, applied, rejected = apply_decisions(md, [payload])
+
+    assert text == md
+    assert applied == []
+    reason = "label_not_standalone" if decision == ACCEPT else "embedded_label_requires_repair"
+    assert rejected == [{"bridge_id": "b1", "reason": reason}]
+
+
+@pytest.mark.parametrize("decision", [ACCEPT, NARROW, REMOVE])
+def test_decisions_preserve_unrelated_blank_and_punctuation_lines(decision):
+    md = "## Skills\r\n\r\n---\r\n- **Trend Analysis**\r\n...\r\n- reporting\r\n"
+    payload = {"bridge_id": "b1", "decision": decision, "skill": "trend analysis"}
+    if decision == NARROW:
+        payload["replacement"] = "data analysis"
+
+    text, applied, rejected = apply_decisions(md, [payload])
+
+    expected_line = {ACCEPT: "- **Trend Analysis**\r\n",
+                     NARROW: "- data analysis\r\n", REMOVE: ""}[decision]
+    assert text == "## Skills\r\n\r\n---\r\n" + expected_line + "...\r\n- reporting\r\n"
+    assert len(applied) == 1
+    assert rejected == []
+
+
 def test_invalid_decision_is_rejected_without_touching_the_text():
     text, applied, rejected = apply_decisions(
         SKILLS_MD, [{"bridge_id": "b1", "decision": NARROW, "skill": "trend analysis"}]
