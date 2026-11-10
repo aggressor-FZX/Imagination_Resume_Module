@@ -1,3 +1,71 @@
+# JSON semantic review — state at `2f48cef`, 2026-11-09
+
+## Where things stand
+
+Both halves of the website path are implemented on separate branches. Nothing is
+deployed, no paid call has been made, and website delivery is **not** achieved.
+
+| Item | State |
+|---|---|
+| Imaginator branch | `experiment/llm-led-approval` at `2f48cef` |
+| Orchestrator branch | `feat/candidate-identity-release` at `bda7699` (from `master` `5b91e5c`) |
+| Production / rollback (both services) | Imaginator `8d5efa8f`, deploy `dep-dbop3b7avr4c73bmi5p0`; orchestrator `master` `5b91e5c` |
+| Authorized budget | 30 paid requests / $0.10 observed, stop on unknown usage |
+| Paid requests used | **0** |
+
+## What is implemented
+
+**Imaginator (`2f48cef`).** `candidate_identity` is one explicit optional request
+field with a closed field set, bound into the canonical export payload before
+receipt issuance. Document text is never parsed for a name. Tampering, clearing,
+adding identity after approval, and wrong-owner export all fail (409). 21 tests
+render real PDF and DOCX and read the text back. Broad regression 2514 passed.
+
+**Orchestrator (`bda7699`).** The candidate-confirmed identity is forwarded on
+both paths that reach the Imaginator, with an explicit confirmation UI (six
+fields, empty by default, sent only when confirmed). Nothing is derived from the
+authenticated account. `resume_only=true` skips job search and ATS scoring before
+dispatch and announces the skip; defaults off. 20 unit + 14 integration tests,
+driving the real handler and asserting on the outbound request. Adjacent route
+suites still pass (28/28).
+
+## The residual budget limitation, stated exactly
+
+A résumé-only run's request **floor** is 11 (parser 2 models x 2 resilience
+attempts = 4, three Imaginator stages, correction 4 HTTP attempts). The floor
+fits the authorized 30.
+
+The ceiling is **not enforced**. There is no global pre-dispatch request or cost
+counter in the Imaginator client or the orchestrator. Imaginator stages can fall
+back to additional models, and `openrouter_safe_client` has no
+`reserve_request`/`SpendCeiling`. So a run can exceed 30 requests or $0.10, and
+observed-spend reporting is asynchronous and best-effort — a missing usage reads
+as zero, so it cannot stop a call it has not yet seen.
+
+`resume_only` removes the largest uncounted source (job search and its scoring,
+whose per-batch preflight limit alone is $0.10). It does **not** make the ceiling
+guaranteed.
+
+## Required approvals (not yet requested/granted)
+
+1. **Release** of `feat/candidate-identity-release` into orchestrator `master`
+   (auto-deploys) and of `experiment/llm-led-approval` into Imaginator `master`.
+   Rollback for both is recorded above.
+2. **Configuration**: set `CORRECTION_ENGINE=semantic_json` on
+   `imaginator-resume-cowriter` for the validation run. It defaults to `legacy`,
+   so production behaviour is unchanged without this.
+3. **Budget alternative**, if a guaranteed ceiling is required before the run: a
+   pre-dispatch counter in `openrouter_safe_client` plus the orchestrator parser
+   path. That is accounting work this task was told not to build. Otherwise the
+   approval is "one résumé-only submission, actual spend observed afterwards and
+   reported, ceiling not guaranteed".
+
+## Nothing claimed
+
+No deploy, no website run, no PDF or DOCX produced by the site.
+
+---
+
 # JSON semantic review — state at `bbd4987`, 2026-11-09
 
 ## Where things stand
