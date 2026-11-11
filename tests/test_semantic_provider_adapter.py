@@ -14,7 +14,7 @@ from source_correction import PrivacyReviewRequired, ProviderCallTimeout, Provid
 
 MODEL = "test/configurable-model"
 ANSWER = {"version": cp.SEMANTIC_REVIEW_VERSION, "decision": "approve",
-          "rationale": "supported", "issues": []}
+          "rationale": "supported", "issues": [], "bridge_decisions": []}
 PAYLOAD = {"contract": "Evaluate the document.", "text": "Contact a@example.test",
            "sources": [{"source_id": "resume", "text": "source evidence"}]}
 
@@ -95,7 +95,7 @@ def test_schema_accepts_bridge_decisions_without_changing_source_only_shape(appr
     assert run(provider) == answer
     schema = session.requests[0]["response_format"]["json_schema"]["schema"]
     assert "bridge_decisions" in schema["properties"]
-    assert "bridge_decisions" not in schema["required"]
+    assert "bridge_decisions" in schema["required"]
 
 
 @pytest.mark.parametrize("decision", [
@@ -105,6 +105,14 @@ def test_schema_accepts_bridge_decisions_without_changing_source_only_shape(appr
 ])
 def test_malformed_bridge_decisions_are_format_errors(approved, decision):
     answer = {**ANSWER, "bridge_decisions": [decision]}
+    provider = cp.CorrectionProvider("fake", Session([(200, envelope(json.dumps(answer)))]), model=MODEL)
+    with pytest.raises(cp.SemanticFormatError):
+        run(provider)
+
+
+def test_missing_bridge_decisions_array_is_format_error(approved):
+    answer = {k: v for k, v in ANSWER.items() if k != "bridge_decisions"}
+    assert not json_engine._shape(answer)
     provider = cp.CorrectionProvider("fake", Session([(200, envelope(json.dumps(answer)))]), model=MODEL)
     with pytest.raises(cp.SemanticFormatError):
         run(provider)

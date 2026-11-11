@@ -103,7 +103,12 @@ SEMANTIC_REVIEW_SCHEMA = {
                 "replacement": {"type": "string"},
             }, "required": ["id", "decision", "replacement"], "additionalProperties": False}},
     },
-    "required": ["version", "decision", "rationale", "issues"],
+    # bridge_decisions is a required array throughout the common contract:
+    # an empty deck requires [], a non-empty deck requires exactly one valid
+    # decision per supplied id. A missing array is a response-format defect
+    # eligible for the single bounded format correction, never silent accept
+    # or silent remove.
+    "required": ["version", "decision", "rationale", "issues", "bridge_decisions"],
     "additionalProperties": False,
 }
 
@@ -168,22 +173,20 @@ def _validate_semantic_payload(payload):
 
 def _validate_semantic_response(value):
     """Validate shape only; grounding and release decisions belong to the engine."""
-    if (type(value) is not dict or set(value) not in (
-            {"version", "decision", "rationale", "issues"},
-            {"version", "decision", "rationale", "issues", "bridge_decisions"})
+    if (type(value) is not dict or set(value) !=
+            {"version", "decision", "rationale", "issues", "bridge_decisions"}
             or value["version"] != SEMANTIC_REVIEW_VERSION
             or value["decision"] not in ("approve", "revise", "cannot_assess")
             or type(value["rationale"]) is not str or type(value["issues"]) is not list
             or len(value["issues"]) > 32):
         raise SemanticFormatError("invalid semantic review response")
-    if "bridge_decisions" in value:
-        decisions = value["bridge_decisions"]
-        if (type(decisions) is not list or len(decisions) > 6 or any(
-                type(item) is not dict or set(item) != {"id", "decision", "replacement"}
-                or any(type(item[k]) is not str for k in item)
-                or item["decision"] not in ("accept", "narrow", "remove")
-                for item in decisions)):
-            raise SemanticFormatError("invalid semantic review response")
+    decisions = value["bridge_decisions"]
+    if (type(decisions) is not list or len(decisions) > 6 or any(
+            type(item) is not dict or set(item) != {"id", "decision", "replacement"}
+            or any(type(item[k]) is not str for k in item)
+            or item["decision"] not in ("accept", "narrow", "remove")
+            for item in decisions)):
+        raise SemanticFormatError("invalid semantic review response")
     for issue in value["issues"]:
         if type(issue) is not dict:
             raise SemanticFormatError("invalid semantic review response")

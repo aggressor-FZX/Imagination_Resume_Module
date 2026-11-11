@@ -15,6 +15,14 @@ _INTEGER_FIELDS = {
     "max_tokens", "pipeline_elapsed_ms", "prompt_tokens", "completion_tokens",
     "repairs", "request_index", "reserve_ms", "reviews", "total_tokens",
     "upstream_timeout_ms", "http_status",
+    # Bridge-decision validation counts for the privacy-safe validation event.
+    # Counts only, never ids, labels, quotes or model text: they separate "the
+    # model answered approve with no decisions" from "it answered with the
+    # wrong set", which are different diagnoses for the same withhold reason.
+    "expected_bridge_decisions",
+    "received_bridge_decisions",
+    "duplicate_bridge_decisions",
+    "unknown_bridge_decisions",
     # Source-inventory counts at a completeness refusal. Counts, never the
     # claims: they separate "one ambiguous span" from "almost nothing was
     # usable", which are different diagnoses for the same reason code. Text is
@@ -42,7 +50,7 @@ _PROVIDER = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}\Z")
 
 EVENTS = frozenset({"correction.budget", "correction.phase_start", "correction.phase_end",
                     "correction.end", "provider.call",
-                    "correction.completeness"})
+                    "correction.completeness", "correction.bridge_validation"})
 PHASES = frozenset({"source_inventory", "initial_review", "repair", "post_patch_review"})
 # Transport/callback outcomes only; validation results are reported as reasons.
 # ``provider_rate_limited`` and ``provider_unavailable`` were missing from this set
@@ -68,7 +76,13 @@ _FIELDS = (_INTEGER_FIELDS | _FLOAT_FIELDS
               # from a closed set. `malformed_output` alone says only that the
               # answer was unusable, so a live failure could only be
               # re-diagnosed by re-running it.
-              "constraint"})
+              "constraint",
+              # Bridge-validation detail for `correction.bridge_validation`.
+              # All fixed-vocabulary or counts: the overall decision, whether
+              # any expected id is missing/duplicated/unknown, and the exact
+              # withholding reason. No ids, labels, quotes or model text.
+              "decision", "missing_bridge_decisions",
+              "duplicate_bridge_ids", "unknown_bridge_ids"})
 
 
 def _bounded_int(value):
@@ -115,6 +129,15 @@ def sanitize(event):
                 clean[key] = value
         elif key == "finish_reason":
             if value in FINISH_REASONS:
+                clean[key] = value
+        elif key == "decision":
+            if value in {"approve", "revise", "cannot_assess"}:
+                clean[key] = value
+        elif key in {"missing_bridge_decisions", "duplicate_bridge_ids",
+                     "unknown_bridge_ids"}:
+            # Presence flags only: whether any expected id is missing, any id
+            # is duplicated, or any id is unknown. Never the ids themselves.
+            if type(value) is bool:
                 clean[key] = value
         elif key in {"status", "reason", "timeout_category"}:
             if type(value) is str and _IDENTIFIER.fullmatch(value):

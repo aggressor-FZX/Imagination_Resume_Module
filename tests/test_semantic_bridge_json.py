@@ -46,8 +46,10 @@ class Reviewer:
 
 
 def answer(decision='approve', issues=None):
+    # bridge_decisions is a required array throughout the common contract:
+    # an empty deck requires [], a non-empty deck requires one decision per id.
     return {'version': 'semantic_review_v1', 'decision': decision,
-            'rationale': '', 'issues': issues or []}
+            'rationale': '', 'issues': issues or [], 'bridge_decisions': []}
 
 
 def run(reviewer, *, draft=SOURCE, **kwargs):
@@ -113,7 +115,7 @@ def test_source_only_policy_survives_format_retry_and_full_rereview():
             'why': 'unsupported method', 'correction': QUOTE,
         }])
 
-    reviewer = Reviewer([{}, revise, answer()])
+    reviewer = Reviewer([{'bad': 'shape'}, revise, answer()])
     result = run(reviewer, draft=draft, mode='imaginative', permitted_bridges=[])
     assert result.status == 'approved' and result.markdown == SOURCE
     assert (result.review_calls, result.repair_calls) == (3, 1)
@@ -377,3 +379,120 @@ def test_pii_bridge_without_originals_fails_closed():
                                  permitted_bridges=[bridge]))
     assert result.status == 'withheld' and result.reason == 'unresolved_claims'
     assert not reviewer.calls
+
+
+# --- Required bridge_decisions array throughout the common contract ---
+#
+# The schema, the local shape check and the bridge-specific prompt were
+# inconsistent: the prompt demanded exactly one decision per supplied id, but
+# the schema and _shape left the array optional, so a non-empty deck plus an
+# approval without decisions withheld as unresolved_claims with no retained
+# evidence of which branch failed. The array is now required: an empty deck
+# requires [], a non-empty deck requires exactly one valid decision per id.
+# A missing array is a response-format defect eligible for the single bounded
+# format correction; correction exhausted reports an incomplete review, never
+# unsupported resume claims. Omission is never silently accept or remove.
+
+def test_missing_bridge_decisions_array_gets_single_format_correction():
+    bridge = valid_bridge()
+    draft = SOURCE + '- trend analysis\n'
+    missing = {'version': 'semantic_review_v1', 'decision': 'approve',
+               'rationale': '', 'issues': []}
+    events = []
+    reviewer = Reviewer([missing, bridge_answer('accept')])
+    result = asyncio.run(correct(draft, SOURCES, reviewer, mode='imaginative',
+                                 permitted_bridges=[bridge],
+                                 observer=events.append))
+    assert result.status == 'approved'
+    assert [b['skill'] for b in result.final_bridges] == ['trend analysis']
+    # One format correction only: the first answer failed shape, the retry passed.
+    assert result.review_calls == 2 and len(reviewer.calls) == 2
+    # The validation event fires for the accepted retry only; the missing-array
+    # answer failed shape before validation. No ids or text in the event.
+    assert len(events) == 1 and events[0]['received_bridge_decisions'] == 1
+    assert events[0]['missing_bridge_decisions'] is False
+
+
+def test_missing_bridge_decisions_twice_is_incomplete_not_unsupported():
+    bridge = valid_bridge()
+    missing = {'version': 'semantic_review_v1', 'decision': 'approve',
+               'rationale': '', 'issues': []}
+    reviewer = Reviewer([missing, missing])
+    result = run(reviewer, draft=SOURCE + '- trend analysis\n',
+                 mode='imaginative', permitted_bridges=[bridge])
+    assert result.status == 'withheld' and result.reason == 'malformed_output'
+    assert result.review_calls == 2 and len(reviewer.calls) == 2
+
+
+def test_empty_deck_requires_explicit_empty_array():
+    missing = {'version': 'semantic_review_v1', 'decision': 'approve',
+               'rationale': '', 'issues': []}
+    reviewer = Reviewer([missing, answer()])
+    result = run(reviewer, mode='imaginative', permitted_bridges=[])
+    assert result.status == 'approved' and result.markdown == SOURCE
+    assert result.review_calls == 2 and len(reviewer.calls) == 2
+
+
+@pytest.mark.parametrize('mutation', ['missing', 'duplicated', 'unknown'])
+def test_bridge_validation_event_records_counts_and_flags_without_text(mutation):
+    from correction_events import sanitize
+
+    bridge = valid_bridge()
+    draft = SOURCE + '- trend analysis\n'
+    if mutation == 'missing':
+        decisions = []
+    elif mutation == 'duplicated':
+        decisions = [{'id': bridge['id'], 'decision': 'accept', 'replacement': ''},
+                     {'id': bridge['id'], 'decision': 'accept', 'replacement': ''}]
+    else:
+        decisions = [{'id': 'forged-id', 'decision': 'accept', 'replacement': ''}]
+    response = {'version': 'semantic_review_v1', 'decision': 'approve',
+                'rationale': 'private rationale', 'issues': [],
+                'bridge_decisions': decisions}
+    events = []
+    reviewer = Reviewer([response])
+    result = asyncio.run(correct(draft, SOURCES, reviewer, mode='imaginative',
+                                 permitted_bridges=[bridge],
+                                 observer=events.append))
+    assert result.status == 'withheld' and result.reason == 'unresolved_claims'
+    assert len(events) == 1
+    event = events[0]
+    assert event['event'] == 'correction.bridge_validation'
+    assert event['decision'] == 'approve'
+    assert event['expected_bridge_decisions'] == 1
+    assert event['received_bridge_decisions'] == len(decisions)
+    # missing: an expected id got no decision. duplicated: the same id twice
+    # (the expected id IS present, so missing is false — the defect is the
+    # duplicate, not an absence). unknown: a decision for an id outside the
+    # deck, which also leaves the expected id missing, so both flags are true.
+    assert event['missing_bridge_decisions'] == (mutation in ('missing', 'unknown'))
+    assert event['duplicate_bridge_ids'] == (mutation == 'duplicated')
+    assert event['unknown_bridge_ids'] == (mutation == 'unknown')
+    # Privacy: the sanitized event carries counts and flags only, never ids,
+    # labels, quotes, rationale or model text.
+    clean = sanitize({**event, 'reason': 'unresolved_claims'})
+    assert clean
+    serialized = json.dumps(clean)
+    assert bridge['id'] not in serialized
+    assert 'trend analysis' not in serialized
+    assert 'private rationale' not in serialized
+    assert QUOTE not in serialized
+
+
+def test_bridge_validation_event_on_approved_deck_is_privacy_safe():
+    from correction_events import sanitize
+
+    bridge = valid_bridge()
+    draft = SOURCE + '- trend analysis\n'
+    events = []
+    reviewer = Reviewer([bridge_answer('accept')])
+    result = asyncio.run(correct(draft, SOURCES, reviewer, mode='imaginative',
+                                 permitted_bridges=[bridge],
+                                 observer=events.append))
+    assert result.status == 'approved'
+    assert len(events) == 1
+    clean = sanitize({**events[0], 'reason': 'unresolved_claims'})
+    serialized = json.dumps(clean)
+    assert bridge['id'] not in serialized
+    assert 'trend analysis' not in serialized
+    assert QUOTE not in serialized

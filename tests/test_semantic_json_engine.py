@@ -20,8 +20,10 @@ DRAFT = ("## Professional Experience\n"
 
 
 def answer(decision='approve', issues=None, rationale='private model rationale'):
+    # bridge_decisions is a required array throughout the common contract:
+    # an empty deck requires [], a non-empty deck requires one decision per id.
     return {'version': 'semantic_review_v1', 'decision': decision,
-            'rationale': rationale, 'issues': issues or []}
+            'rationale': rationale, 'issues': issues or [], 'bridge_decisions': []}
 
 
 def issue(passage, source, correction, problem='unsupported'):
@@ -546,7 +548,7 @@ def test_format_retry_is_once_and_never_contains_verdict_hint():
     a, b = r.calls[0][1], r.calls[1][1]
     assert b['text'] == a['text'] and b['sources'] == a['sources']
     assert 'invalid JSON shape' in b['contract'] and 'private model rationale' not in b['contract']
-    assert run(Reviewer({}, {})).reason == 'malformed_output'
+    assert run(Reviewer({'bad': 'shape'}, {'also': 'bad'})).reason == 'malformed_output'
 
 
 @pytest.mark.parametrize('decision', ['cannot_assess', 'revise'])

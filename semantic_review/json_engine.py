@@ -239,22 +239,24 @@ def _bullet_text(line: str) -> str:
 
 
 def _shape(value: Any) -> bool:
-    if (type(value) is not dict or set(value) not in (
-            {'version', 'decision', 'rationale', 'issues'},
-            {'version', 'decision', 'rationale', 'issues', 'bridge_decisions'})):
+    # bridge_decisions is required throughout the common contract: an empty
+    # deck requires [], a non-empty deck requires exactly one valid decision
+    # per supplied id. A missing array is a response-format defect eligible
+    # for the single bounded format correction, never silent accept/remove.
+    if (type(value) is not dict or set(value) !=
+            {'version', 'decision', 'rationale', 'issues', 'bridge_decisions'}):
         return False
     if (value['version'] != VERSION or value['decision'] not in ('approve', 'revise', 'cannot_assess')
             or type(value['rationale']) is not str or type(value['issues']) is not list
             or len(value['issues']) > 32):
         return False
-    if 'bridge_decisions' in value:
-        decisions = value['bridge_decisions']
-        if (type(decisions) is not list or len(decisions) > 6 or any(
-                type(item) is not dict or set(item) != {'id', 'decision', 'replacement'}
-                or any(type(item[k]) is not str for k in item)
-                or item['decision'] not in ('accept', 'narrow', 'remove')
-                for item in decisions)):
-            return False
+    decisions = value['bridge_decisions']
+    if (type(decisions) is not list or len(decisions) > 6 or any(
+            type(item) is not dict or set(item) != {'id', 'decision', 'replacement'}
+            or any(type(item[k]) is not str for k in item)
+            or item['decision'] not in ('accept', 'narrow', 'remove')
+            for item in decisions)):
+        return False
     for item in value['issues']:
         if type(item) is not dict:
             return False
@@ -552,9 +554,28 @@ async def correct(markdown: str, sources: Any, provider, *, timeout_seconds: flo
                 format_retry = True
                 payload = {**payload, 'contract': payload['contract'] + '\nPrevious response had invalid JSON shape. Return only an object matching the specified schema.'}
             decision, issues = answer['decision'], answer['issues']
+            # Privacy-safe bridge-validation record: overall decision, expected
+            # vs received counts, whether any id is missing/duplicated/unknown,
+            # and the exact withholding reason. Counts and flags only — never
+            # ids, labels, quotes, rationale or model text.
             decisions = answer.get('bridge_decisions', [])
-            if (len(decisions) != len(deck) or len({d['id'] for d in decisions}) != len(decisions)
-                    or {d['id'] for d in decisions} != {b['id'] for b in deck}):
+            expected_ids = {b['id'] for b in deck}
+            received_ids = [d['id'] for d in decisions] if type(decisions) is list else []
+            missing = bool(expected_ids - set(received_ids))
+            duplicated = len(received_ids) != len(set(received_ids))
+            unknown = bool(set(received_ids) - expected_ids)
+            if observer is not None:
+                try:
+                    observer({"event": "correction.bridge_validation",
+                              "decision": decision,
+                              "expected_bridge_decisions": len(deck),
+                              "received_bridge_decisions": len(received_ids),
+                              "missing_bridge_decisions": missing,
+                              "duplicate_bridge_ids": duplicated,
+                              "unknown_bridge_ids": unknown})
+                except Exception:
+                    pass
+            if (len(decisions) != len(deck) or duplicated or missing or unknown):
                 return blocked('unresolved_claims')
             if deck:
                 from source_correction import _apply_bridge_decisions
