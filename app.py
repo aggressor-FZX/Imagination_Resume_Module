@@ -609,9 +609,14 @@ async def _run_source_correction(markdown, source_documents, api_key, request, *
             if remaining <= 0:
                 return CorrectionResult("withheld", None, "timeout_initial_review",
                     "Content withheld; independent review is required.", None, 0, 0), provider
+            # Bridge anchors are offsets into the ORIGINAL documents, so the
+            # engine validates them against those. The review itself still runs
+            # on the redacted sources; redaction is length-preserving, so the
+            # offsets are identical in both views.
             semantic = await semantic_correct(
                 markdown, sources, provider, timeout_seconds=remaining,
-                observer=observer, permitted_bridges=permitted_bridges, mode=mode)
+                observer=observer, permitted_bridges=permitted_bridges, mode=mode,
+                original_sources=source_documents)
             if asyncio.get_running_loop().time() - started >= timeout_seconds:
                 return CorrectionResult("withheld", None, "timeout_initial_review",
                     "Content withheld; independent review is required.", None,

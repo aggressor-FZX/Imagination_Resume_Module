@@ -325,7 +325,7 @@ def _payload(draft: str, sources: tuple[tuple[str, str], ...], mode: str, bridge
              'text': json.dumps(doc, ensure_ascii=False)}, draft_records, tuple(source_records), sections)
 
 
-def _bridge_deck(bridges, sources, mode):
+def _bridge_deck(bridges, sources, mode, original_sources=None):
     from skill_bridge import MAX_BRIDGES, ORIGIN_RESEARCHER_INFERENCE, _bridge_id, _is_general_label
     from skill_inference import normalize_mode, policy_version_for
 
@@ -335,7 +335,13 @@ def _bridge_deck(bridges, sources, mode):
         raise ValueError('invalid bridge deck')
     if bridges and mode != 'imaginative':
         raise ValueError('bridge forbidden')
-    source_map = dict(sources)
+    # Bridge anchors are offsets into the ORIGINAL candidate documents, which is
+    # where the Researcher computed them. The review itself runs on redacted
+    # sources, and redaction is length-preserving, so the offsets are identical
+    # in both views. Validating against the redacted text would reject every
+    # bridge whose evidence quote contains a covered PII category, which is
+    # exactly the case the redaction exists to protect.
+    source_map = dict(original_sources if original_sources is not None else sources)
     seen = set()
     labels = set()
     deck = copy.deepcopy(bridges)
@@ -352,7 +358,7 @@ def _bridge_deck(bridges, sources, mode):
                 or bridge.get('origin') != ORIGIN_RESEARCHER_INFERENCE
                 or bridge.get('policy_version') != policy_version_for(normalize_mode(mode))
                 or bridge.get('id') != _bridge_id(skill, sid, start, index)
-                or bridge['id'] in seen or _clean(quote) != source_map[sid][start:end]):
+                or bridge['id'] in seen or quote != source_map[sid][start:end]):
             raise ValueError('invalid bridge anchor')
         seen.add(bridge['id'])
         labels.add(skill.casefold())
@@ -467,7 +473,8 @@ def _apply(draft: str, issues: list, draft_records: tuple, source_records: tuple
 
 
 async def correct(markdown: str, sources: Any, provider, *, timeout_seconds: float = 120.0,
-                  observer=None, permitted_bridges=None, mode: str = 'imaginative') -> CorrectionResult:
+                  observer=None, permitted_bridges=None, mode: str = 'imaginative',
+                  original_sources: Any = None) -> CorrectionResult:
     """Review and optionally repair once; provider receives exactly three keys.
 
     The returned bridge deck is server-owned; a changed deck requires another
@@ -491,7 +498,17 @@ async def correct(markdown: str, sources: Any, provider, *, timeout_seconds: flo
         if permitted_bridges is not None and type(permitted_bridges) is not list:
             return blocked('invalid_input')
         try:
-            deck = _bridge_deck(permitted_bridges, snapshot, mode)
+            # The route passes the original candidate documents as a tuple of
+            # (source_id, text) pairs; accept that shape as well as the dict and
+            # SourceDocument forms _snapshot handles.
+            if original_sources is None:
+                originals = snapshot
+            elif type(original_sources) is tuple and all(
+                    type(item) is tuple and len(item) == 2 for item in original_sources):
+                originals = tuple(original_sources)
+            else:
+                originals = _snapshot(original_sources)
+            deck = _bridge_deck(permitted_bridges, snapshot, mode, originals)
         except ValueError:
             return blocked('unresolved_claims')
         initial_sections = set(section_contract.canonical_sections(markdown))

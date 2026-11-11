@@ -267,3 +267,113 @@ def test_cannot_remove_a_sourced_skill_line():
     result = asyncio.run(correct(source, {'document-1': source}, reviewer,
                                  permitted_bridges=[original]))
     assert result.status == 'withheld'
+
+
+# --- Raw-versus-raw anchor validation against immutable original sources ---
+#
+# Bridge anchors are code-point offsets into the ORIGINAL candidate documents
+# (that is where the Researcher computed them). The reviewer, however, receives
+# redacted text. Redaction is length-preserving, so the offsets are identical in
+# both views, but a redacted quote no longer equals the original slice. The deck
+# must therefore compare the stored quote with the original text, not with its
+# own re-redacted form; otherwise every bridge whose evidence contains a covered
+# PII category is rejected and the whole analysis is withheld.
+
+from disclosure import redact_sources  # noqa: E402
+
+PRIVATE = 'person@example.test'
+PII_SOURCE = (
+    '## Professional Experience\n**Acme** -- City\n'
+    f'- Compared weekly sales for {PRIVATE} to identify trends.\n'
+    '## Projects\n## Education\n## Certifications\n## Technical Skills\n'
+)
+PII_QUOTE = f'Compared weekly sales for {PRIVATE} to identify trends.'
+
+
+def pii_bridge():
+    accepted, rejected = build_bridges(
+        [{'skill': 'trend analysis', 'evidence_quote': PII_QUOTE,
+          'source_id': 'document-1', 'rationale': 'General analytical capability.'}],
+        sources={'document-1': PII_SOURCE}, mode='imaginative')
+    assert len(accepted) == 1 and not rejected
+    bridge = accepted[0].to_dict()
+    assert PII_SOURCE[bridge['quote_start']:bridge['quote_end']] == PII_QUOTE
+    assert PRIVATE in bridge['evidence_quote']
+    return bridge
+
+
+def redacted_view():
+    """Return (redacted SourceDocuments, original pairs) mirroring the live route.
+
+    ``app._run_source_correction`` reviews the redacted documents but passes the
+    immutable originals as ``original_sources``; this helper keeps that exact
+    split so the raw-versus-raw comparison is exercised, not a tautology.
+    """
+    redacted, attestation = redact_sources((('document-1', PII_SOURCE),))
+    assert attestation is not None
+    assert len(redacted[0][1]) == len(PII_SOURCE)
+    assert PRIVATE not in redacted[0][1]
+    originals = (('document-1', PII_SOURCE),)
+    return tuple(SourceDocument(sid, text) for sid, text in redacted), originals
+
+
+def run_pii(reviewer, bridges, *, originals=None, draft=None):
+    sources, redacted = redacted_view()
+    return asyncio.run(correct(
+        draft if draft is not None else PII_SOURCE,
+        sources, reviewer, mode='imaginative', permitted_bridges=bridges,
+        original_sources=redacted if originals is None else originals))
+
+
+def test_pii_quote_validates_raw_versus_raw_against_original_sources():
+    bridge = pii_bridge()
+    # The draft must carry the bridged skill line, otherwise the deck record
+    # does not survive into the final document and is correctly dropped.
+    draft = PII_SOURCE + '- trend analysis\n'
+    reviewer = Reviewer([bridge_answer('accept')])
+    result = run_pii(reviewer, [bridge], draft=draft)
+    assert result.status == 'approved'
+    assert [b['skill'] for b in result.final_bridges] == ['trend analysis']
+    assert result.markdown == draft
+    assert len(reviewer.calls) == 1
+    # The reviewer still saw redacted evidence, never the original address.
+    serialized = json.dumps(reviewer.calls)
+    assert PRIVATE not in serialized
+    assert '[email removed]' in serialized
+
+
+@pytest.mark.parametrize('mutation', ['altered_quote', 'wrong_source_id', 'start_zero_end_zero',
+                                      'end_past_document', 'negative_start', 'start_after_end'])
+def test_pii_bridge_anchor_rejections_are_unchanged(mutation):
+    bridge = pii_bridge()
+    if mutation == 'altered_quote':
+        bridge['evidence_quote'] = bridge['evidence_quote'].replace(
+            PRIVATE, 'otherx@example.test')
+    elif mutation == 'wrong_source_id':
+        bridge['source_id'] = 'other-document'
+    elif mutation == 'start_zero_end_zero':
+        bridge['quote_start'] = bridge['quote_end'] = 0
+    elif mutation == 'end_past_document':
+        bridge['quote_end'] = len(PII_SOURCE) + 1
+    elif mutation == 'negative_start':
+        bridge['quote_start'] = -1
+    elif mutation == 'start_after_end':
+        bridge['quote_start'], bridge['quote_end'] = (bridge['quote_end'],
+                                                      bridge['quote_start'])
+    reviewer = Reviewer([bridge_answer('accept')])
+    result = run_pii(reviewer, [bridge])
+    assert result.status == 'withheld' and result.reason == 'unresolved_claims'
+    assert result.markdown is None
+    assert not reviewer.calls
+
+
+def test_pii_bridge_without_originals_fails_closed():
+    """Omitted original_sources falls back to the redacted snapshot, so a PII
+    anchor cannot be proven and the review is withheld rather than guessed."""
+    sources, _ = redacted_view()
+    bridge = pii_bridge()
+    reviewer = Reviewer([bridge_answer('accept')])
+    result = asyncio.run(correct(PII_SOURCE, sources, reviewer, mode='imaginative',
+                                 permitted_bridges=[bridge]))
+    assert result.status == 'withheld' and result.reason == 'unresolved_claims'
+    assert not reviewer.calls
